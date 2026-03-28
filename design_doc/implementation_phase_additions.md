@@ -65,10 +65,12 @@ This document records implementation details that were added during development 
 
 - A WebSocket endpoint was added at `/v1/tts/stream`.
 - The streaming protocol now uses JSON control events and binary PCM16 frames.
+- `mark` control events are emitted before audio frames so clients can track stream progress without parsing binary payloads.
 - The development backend can now emit PCM chunks incrementally instead of only returning complete WAV files.
 - Stream cancellation is supported through a WebSocket `cancel` control event.
 - Basic in-memory streaming metrics were added and exposed through health data.
 - WebSocket auth, origin checks, and rate limiting reuse the same baseline security policy as protected HTTP endpoints.
+- Edge-case tests were added for invalid first events, invalid payloads, and forbidden origins on WebSocket connections.
 
 ### Why these additions matter
 

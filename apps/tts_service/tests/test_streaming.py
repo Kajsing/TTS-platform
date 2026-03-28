@@ -89,9 +89,15 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
         assert started["job_id"]
 
         binary_frames = 0
+        mark_events = 0
         done_payload = None
         for _ in range(64):
             message_type, payload = _read_next_message(websocket)
+            if message_type == "json" and payload["type"] == "mark":
+                mark_events += 1
+                assert payload["chunk_index"] >= 0
+                assert payload["duration_ms"] >= 1
+                continue
             if message_type == "bytes":
                 binary_frames += 1
                 assert payload
@@ -101,6 +107,7 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
                 break
 
         assert binary_frames > 0
+        assert mark_events == binary_frames
         assert done_payload is not None
         assert done_payload["chunks_sent"] == binary_frames
 
@@ -137,6 +144,10 @@ def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:
         started = websocket.receive_json()
         assert started["type"] == "started"
 
+        first_mark_type, first_mark_payload = _read_next_message(websocket)
+        assert first_mark_type == "json"
+        assert first_mark_payload["type"] == "mark"
+
         first_message_type, first_payload = _read_next_message(websocket)
         assert first_message_type == "bytes"
         assert first_payload
@@ -156,3 +167,50 @@ def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:
     health_response = client.get("/v1/health")
     streaming_metrics = health_response.json()["streaming"]
     assert streaming_metrics["cancelled_streams"] >= 1
+
+
+def test_websocket_stream_rejects_invalid_first_event(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json({"type": "ping"})
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["param"] == "type"
+
+
+def test_websocket_stream_rejects_invalid_payload(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json({"type": "start", "payload": {"voice": "manifest-voice"}})
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["details"]["issues"]
+
+
+def test_websocket_stream_blocks_unapproved_origin(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "security": {
+                "allowed_origins": ["chrome-extension://approved-extension"],
+            }
+        },
+    )
+
+    with client.websocket_connect(
+        "/v1/tts/stream",
+        headers={
+            **auth_headers,
+            "Origin": "chrome-extension://other-extension",
+        },
+    ) as websocket:
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "forbidden_origin"

@@ -253,6 +253,15 @@ def _register_routes(app: FastAPI) -> None:
                     )
                     first_chunk_sent = True
 
+                await websocket.send_json(
+                    {
+                        "type": "mark",
+                        "job_id": stream_id,
+                        "chunk_index": chunk.chunk_index,
+                        "duration_ms": chunk.duration_ms,
+                        "is_last": chunk.is_last,
+                    }
+                )
                 await websocket.send_bytes(chunk.pcm_bytes)
                 chunk_count += 1
                 bytes_sent += len(chunk.pcm_bytes)
