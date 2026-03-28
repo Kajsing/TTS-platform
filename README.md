@@ -4,14 +4,19 @@ Offline-first local text-to-speech platform designed around a stable core domain
 
 ## Current Status
 
-Phase 1 is implemented:
+Phase 2 is implemented:
 
 - repository skeleton
 - engineering guidance documents
 - central configuration model
 - voice registry
 - backend interface
-- `sherpa-onnx` backend stub
+- voice manifest loading
+- text normalization and segmentation
+- `/v1/health`
+- `/v1/voices`
+- `/v1/tts`
+- WAV output via a deterministic development backend
 
 ## Repository Layout
 
@@ -45,4 +50,4 @@ python3 -m pytest -q
 
 ## Next Step
 
-Phase 2 will add the first text pipeline pieces together with `/v1/health`, `/v1/voices`, and `/v1/tts`.
+Phase 3 will add job management and the first security controls such as token auth and origin checks.

@@ -61,3 +61,18 @@ def internal_error(
             details=details or {},
         ),
     )
+
+
+def engine_error(
+    message: str,
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=500,
+        error=ErrorBody(
+            type="engine_error",
+            message=message,
+            details=details or {},
+        ),
+    )

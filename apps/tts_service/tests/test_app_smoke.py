@@ -8,7 +8,6 @@ from tts_service.main import create_app
 
 def test_create_app_bootstraps_registry_from_manifest(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -40,10 +39,9 @@ def test_create_app_bootstraps_registry_from_manifest(
     )
 
     config = AppConfig.from_mapping({"tts": {"default_voice": "manifest-voice"}})
-    monkeypatch.setattr("tts_service.main._repo_root", lambda: tmp_path)
-
-    app = create_app(config=config)
+    app = create_app(config=config, repo_root=tmp_path)
 
     assert app.state.container.voice_registry.default_voice is not None
     assert app.state.container.voice_registry.default_voice.id == "manifest-voice"
     assert app.state.container.backend.name == "sherpa_onnx"
+    assert app.state.container.text_pipeline is not None

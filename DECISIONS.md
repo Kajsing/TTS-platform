@@ -29,3 +29,13 @@ Reasoning:
 - The voice catalog becomes explicit, inspectable, and versionable.
 - The registry no longer depends on backend-specific metadata shape.
 - It prepares later phases for multiple backends without changing the API contract.
+
+## 2026-03-28: Use a deterministic development synthesizer for phase 2
+
+The `sherpa-onnx` backend currently generates deterministic WAV audio with a lightweight local synthesizer instead of real model inference.
+
+Reasoning:
+
+- Phase 2 needs a working `/v1/tts` contract and valid audio output.
+- The service can now be integration-tested end-to-end without downloading models.
+- Later backend work can replace the synthesis internals without changing the API contract.

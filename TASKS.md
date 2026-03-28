@@ -11,9 +11,17 @@
 
 ## Phase 2
 
-- [ ] Implement text normalization
-- [ ] Implement segmentation
-- [ ] Add `/v1/health`
-- [ ] Add `/v1/voices`
-- [ ] Add `/v1/tts`
-- [ ] Add WAV output flow
+- [x] Implement text normalization
+- [x] Implement segmentation
+- [x] Add `/v1/health`
+- [x] Add `/v1/voices`
+- [x] Add `/v1/tts`
+- [x] Add WAV output flow
+
+## Phase 3
+
+- [ ] Add job manager
+- [ ] Add token auth
+- [ ] Add origin control
+- [ ] Add rate limiting
+- [ ] Add cancellation

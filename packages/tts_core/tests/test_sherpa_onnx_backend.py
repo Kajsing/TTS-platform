@@ -23,10 +23,22 @@ def test_sherpa_backend_warmup_validates_voice_id(tmp_path) -> None:
         backend.warmup("missing")
 
 
-def test_sherpa_backend_synthesize_is_explicitly_not_ready(tmp_path) -> None:
+def test_sherpa_backend_synthesize_returns_wav_audio(tmp_path) -> None:
+    backend = SherpaOnnxBackend(models_root=tmp_path)
+
+    request = SynthesisRequest(text="Hello world", voice="sherpa-en-debug")
+
+    result = backend.synthesize(request)
+
+    assert result.audio_bytes[:4] == b"RIFF"
+    assert result.audio_bytes[8:12] == b"WAVE"
+    assert result.sample_rate_hz == 24000
+
+
+def test_sherpa_backend_streaming_is_still_not_ready(tmp_path) -> None:
     backend = SherpaOnnxBackend(models_root=tmp_path)
 
     request = SynthesisRequest(text="Hello world", voice="sherpa-en-debug")
 
     with pytest.raises(BackendNotReadyError):
-        backend.synthesize(request)
+        next(backend.synthesize_stream(request))

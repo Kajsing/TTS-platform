@@ -12,6 +12,7 @@ from .models import (
     VoiceDescriptor,
 )
 from .registry import DuplicateVoiceError, VoiceNotFoundError, VoiceRegistry
+from .text import PreparedText, SentenceSegmenter, TextNormalizer, TextPipeline
 
 __all__ = [
     "AudioChunk",
@@ -23,10 +24,14 @@ __all__ = [
     "SynthesisOptions",
     "SynthesisRequest",
     "SynthesisResult",
+    "PreparedText",
+    "SentenceSegmenter",
     "VoiceManifestError",
     "VoiceCapabilities",
     "VoiceDescriptor",
     "VoiceNotFoundError",
     "VoiceRegistry",
     "load_voice_manifest",
+    "TextNormalizer",
+    "TextPipeline",
 ]
