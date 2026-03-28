@@ -4,7 +4,7 @@ Offline-first local text-to-speech platform designed around a stable core domain
 
 ## Current Status
 
-Phase 2 is implemented:
+Phase 3 is implemented:
 
 - repository skeleton
 - engineering guidance documents
@@ -17,6 +17,9 @@ Phase 2 is implemented:
 - `/v1/voices`
 - `/v1/tts`
 - WAV output via a deterministic development backend
+- `/v1/tts/jobs`
+- token auth for protected endpoints
+- origin filtering and rate limiting
 
 ## Repository Layout
 
@@ -50,4 +53,4 @@ python3 -m pytest -q
 
 ## Next Step
 
-Phase 3 will add job management and the first security controls such as token auth and origin checks.
+Phase 4 will add streaming transport and chunk delivery.

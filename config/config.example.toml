@@ -20,6 +20,10 @@ prebuffer_ms = 200
 [metrics]
 enabled = true
 
+[security]
+allowed_origins = []
+
 [limits]
 max_concurrent_jobs = 2
 max_job_seconds = 300
+requests_per_minute = 30

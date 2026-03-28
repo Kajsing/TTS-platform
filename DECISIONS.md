@@ -39,3 +39,13 @@ Reasoning:
 - Phase 2 needs a working `/v1/tts` contract and valid audio output.
 - The service can now be integration-tested end-to-end without downloading models.
 - Later backend work can replace the synthesis internals without changing the API contract.
+
+## 2026-03-28: Use in-memory security and job primitives for phase 3
+
+Phase 3 introduces token auth, origin filtering, rate limiting, and job management using in-memory service components.
+
+Reasoning:
+
+- It keeps the implementation small and locally testable.
+- It is enough to validate the service contract and localhost threat model for the MVP stages.
+- It avoids overcommitting to persistence and distributed coordination before the platform needs them.

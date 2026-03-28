@@ -3,9 +3,10 @@
 Security baselines for this repository:
 
 - The service is expected to bind to `127.0.0.1` by default.
-- Token-based write protection remains a required design constraint.
+- Token-based write protection is enforced for synthesis and job endpoints.
 - Configuration validation must reject obviously unsafe or broken values.
 - Raw input text should not be logged by default.
-- Future browser integration must use explicit origin allow-lists rather than wildcard CORS.
+- Requests with an `Origin` header are checked against an explicit allow-list.
+- Protected endpoints use in-memory rate limiting as a baseline safeguard.
 
-Phase 1 establishes defaults and documentation only. Enforcement will start in later phases together with API endpoints.
+The current implementation uses a local token file and in-memory guards. This is sufficient for the current localhost MVP stages, but later phases should revisit persistence, rotation workflows, and browser-facing hardening details.

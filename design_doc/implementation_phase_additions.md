@@ -36,6 +36,24 @@ This document records implementation details that were added during development 
 - They reduce the risk of contract churn when the real backend implementation arrives.
 - They provide a better baseline for phase 3 security and job-management work.
 
+## Phase 3
+
+### Added implementation details
+
+- Token bootstrap and token-file loading were added for protected endpoints.
+- Write endpoints now enforce bearer-token auth.
+- Origin filtering was added for requests that carry an `Origin` header.
+- An in-memory rate limiter was added for protected endpoints.
+- An in-memory job manager was added for `/v1/tts/jobs`.
+- Job status and cancellation endpoints were added.
+- A backend status note was added to document the temporary development backend and its current limits.
+
+### Why these additions matter
+
+- They make the localhost API safer by default.
+- They allow asynchronous job orchestration before streaming is introduced.
+- They make the current backend limitations explicit instead of leaving them implicit in the code.
+
 ## Future phases
 
 As later phases are implemented, this file should be extended with:

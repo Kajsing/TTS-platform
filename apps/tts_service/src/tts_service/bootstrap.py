@@ -10,7 +10,10 @@ from tts_core.manifest import load_voice_manifest
 from tts_core.registry import VoiceRegistry
 from tts_core.text import SentenceSegmenter, TextNormalizer, TextPipeline
 
+from .auth import AuthState, initialize_auth
 from .config import AppConfig
+from .jobs import InMemoryJobManager
+from .security import OriginPolicy, RateLimiter
 
 
 @dataclass(slots=True)
@@ -19,6 +22,10 @@ class ApplicationState:
     voice_registry: VoiceRegistry
     backend: SherpaOnnxBackend
     text_pipeline: TextPipeline
+    auth: AuthState
+    origin_policy: OriginPolicy
+    rate_limiter: RateLimiter
+    job_manager: InMemoryJobManager
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -31,6 +38,7 @@ def build_application_state(
     repo_root: Path | None = None,
 ) -> ApplicationState:
     base_path = repo_root or Path.cwd()
+    auth_state = initialize_auth(config.auth, repo_root=base_path)
     manifest_path = base_path / "models" / "MANIFEST.json"
     manifest_voices = load_voice_manifest(manifest_path) if manifest_path.exists() else []
     backend_voices = tuple(manifest_voices) if manifest_voices else (build_stub_voice(),)
@@ -46,6 +54,12 @@ def build_application_state(
         normalizer=TextNormalizer(),
         segmenter=SentenceSegmenter(),
     )
+    origin_policy = OriginPolicy(allowed_origins=config.security.allowed_origins)
+    rate_limiter = RateLimiter(requests_per_minute=config.limits.requests_per_minute)
+    job_manager = InMemoryJobManager(
+        max_workers=config.limits.max_concurrent_jobs,
+        backend=backend,
+    )
     backend_ready = True
     startup_error: str | None = None
     if config.tts.warmup_on_start:
@@ -59,6 +73,10 @@ def build_application_state(
         voice_registry=registry,
         backend=backend,
         text_pipeline=text_pipeline,
+        auth=auth_state,
+        origin_policy=origin_policy,
+        rate_limiter=rate_limiter,
+        job_manager=job_manager,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,

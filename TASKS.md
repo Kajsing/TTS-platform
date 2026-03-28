@@ -20,8 +20,15 @@
 
 ## Phase 3
 
-- [ ] Add job manager
-- [ ] Add token auth
-- [ ] Add origin control
-- [ ] Add rate limiting
-- [ ] Add cancellation
+- [x] Add job manager
+- [x] Add token auth
+- [x] Add origin control
+- [x] Add rate limiting
+- [x] Add cancellation
+
+## Phase 4
+
+- [ ] Add WebSocket endpoint
+- [ ] Add PCM chunk delivery
+- [ ] Add streaming metrics
+- [ ] Add cancellation during stream

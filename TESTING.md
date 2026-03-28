@@ -1,6 +1,6 @@
 # Testing
 
-Current automated coverage focuses on the phase 2 foundation:
+Current automated coverage focuses on the phase 3 foundation:
 
 - configuration loading and environment overrides
 - voice manifest parsing
@@ -10,6 +10,10 @@ Current automated coverage focuses on the phase 2 foundation:
 - `sherpa-onnx` development synthesis behavior
 - API error payload shape
 - application bootstrap smoke test
+- bearer-token enforcement
+- origin filtering
+- rate limiting
+- job creation, status polling, and queued-job cancellation
 
 Run tests with:
 

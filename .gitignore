@@ -9,4 +9,5 @@ dist/
 build/
 *.egg-info/
 config/config.toml
+config/token.txt
 out.wav

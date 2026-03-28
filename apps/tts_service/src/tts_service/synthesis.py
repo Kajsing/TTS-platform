@@ -26,7 +26,12 @@ class SynthesisService:
     default_voice_id: str
     max_chars_per_request: int
 
-    def prepare_request(self, payload: SynthesizeRequestPayload) -> SynthesisExecution:
+    def prepare_request(
+        self,
+        payload: SynthesizeRequestPayload,
+        *,
+        job_id: str | None = None,
+    ) -> SynthesisExecution:
         if len(payload.text) > self.max_chars_per_request:
             raise invalid_request(
                 "Text exceeds max_chars_per_request.",
@@ -84,6 +89,7 @@ class SynthesisService:
                 input_format=payload.options.input_format,
             ),
             language_hint=payload.language_hint,
+            job_id=job_id,
         )
         return SynthesisExecution(
             request=request,
@@ -93,6 +99,9 @@ class SynthesisService:
 
     def synthesize(self, payload: SynthesizeRequestPayload):
         execution = self.prepare_request(payload)
+        return self.synthesize_execution(execution)
+
+    def synthesize_execution(self, execution: SynthesisExecution):
         try:
             return self.backend.synthesize(execution.request)
         except BackendError as exc:

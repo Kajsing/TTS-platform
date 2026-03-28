@@ -26,6 +26,7 @@ class ErrorBody:
 class APIError(Exception):
     status_code: int
     error: ErrorBody
+    headers: dict[str, str] = field(default_factory=dict)
 
     def to_response(self) -> dict[str, object]:
         return {"error": self.error.as_dict()}
@@ -43,6 +44,82 @@ def invalid_request(
             type="invalid_request",
             message=message,
             param=param,
+            details=details or {},
+        ),
+    )
+
+
+def unauthorized(
+    message: str = "Authentication required.",
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=401,
+        error=ErrorBody(
+            type="unauthorized",
+            message=message,
+            details=details or {},
+        ),
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def forbidden_origin(
+    message: str = "Origin is not allowed.",
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=403,
+        error=ErrorBody(
+            type="forbidden_origin",
+            message=message,
+            details=details or {},
+        ),
+    )
+
+
+def not_found(
+    message: str,
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=404,
+        error=ErrorBody(
+            type="not_found",
+            message=message,
+            details=details or {},
+        ),
+    )
+
+
+def conflict(
+    message: str,
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=409,
+        error=ErrorBody(
+            type="conflict",
+            message=message,
+            details=details or {},
+        ),
+    )
+
+
+def rate_limited(
+    message: str = "Rate limit exceeded.",
+    *,
+    details: dict[str, object] | None = None,
+) -> APIError:
+    return APIError(
+        status_code=429,
+        error=ErrorBody(
+            type="rate_limited",
+            message=message,
             details=details or {},
         ),
     )

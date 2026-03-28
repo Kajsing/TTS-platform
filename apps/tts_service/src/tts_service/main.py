@@ -4,7 +4,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
@@ -12,6 +12,7 @@ from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
 from .schemas import SynthesizeRequestPayload
+from .security import enforce_write_access
 from .synthesis import SynthesisService
 
 
@@ -39,7 +40,11 @@ def _repo_root() -> Path:
 def _register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(APIError)
     async def handle_api_error(_, exc: APIError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content=exc.to_response())
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_response(),
+            headers=exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def handle_request_validation_error(_, exc: RequestValidationError) -> JSONResponse:
@@ -85,6 +90,7 @@ def _register_routes(app: FastAPI) -> None:
             "default_voice": default_voice.id if default_voice is not None else None,
             "checks": checks,
             "startup_error": container.startup_error,
+            "auth_enabled": container.auth.enabled,
         }
 
     @app.get("/v1/voices")
@@ -96,17 +102,59 @@ def _register_routes(app: FastAPI) -> None:
         }
 
     @app.post("/v1/tts")
-    async def synthesize(payload: SynthesizeRequestPayload) -> Response:
+    async def synthesize(request: Request, payload: SynthesizeRequestPayload) -> Response:
         container = app.state.container
-        synthesis_service = SynthesisService(
-            voice_registry=container.voice_registry,
-            text_pipeline=container.text_pipeline,
-            backend=container.backend,
-            default_voice_id=container.config.tts.default_voice,
-            max_chars_per_request=container.config.tts.max_chars_per_request,
-        )
+        _enforce_protected_request(container, request)
+        synthesis_service = _build_synthesis_service(container)
         result = synthesis_service.synthesize(payload)
         return Response(content=result.audio_bytes, media_type="audio/wav")
+
+    @app.post("/v1/tts/jobs")
+    async def create_tts_job(
+        request: Request,
+        payload: SynthesizeRequestPayload,
+    ) -> dict[str, object]:
+        container = app.state.container
+        _enforce_protected_request(container, request)
+        job = container.job_manager.create_job(
+            payload,
+            synthesis_service=_build_synthesis_service(container),
+        )
+        return {
+            "job_id": job.job_id,
+            "status": "queued",
+        }
+
+    @app.get("/v1/tts/jobs/{job_id}")
+    async def get_tts_job(request: Request, job_id: str) -> dict[str, object]:
+        container = app.state.container
+        _enforce_protected_request(container, request)
+        return container.job_manager.get_job(job_id).to_payload()
+
+    @app.delete("/v1/tts/jobs/{job_id}")
+    async def cancel_tts_job(request: Request, job_id: str) -> dict[str, object]:
+        container = app.state.container
+        _enforce_protected_request(container, request)
+        return container.job_manager.cancel_job(job_id).to_payload()
+
+
+def _enforce_protected_request(container: object, request: Request) -> None:
+    enforce_write_access(
+        request,
+        auth_state=container.auth,
+        origin_policy=container.origin_policy,
+        rate_limiter=container.rate_limiter,
+    )
+
+
+def _build_synthesis_service(container: object) -> SynthesisService:
+    return SynthesisService(
+        voice_registry=container.voice_registry,
+        text_pipeline=container.text_pipeline,
+        backend=container.backend,
+        default_voice_id=container.config.tts.default_voice,
+        max_chars_per_request=container.config.tts.max_chars_per_request,
+    )
 
 
 app = create_app()
