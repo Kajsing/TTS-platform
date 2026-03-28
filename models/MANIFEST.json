@@ -1,4 +1,22 @@
 {
   "version": 1,
-  "voices": []
+  "voices": [
+    {
+      "id": "sherpa-en-debug",
+      "name": "Sherpa English Debug",
+      "engine": "sherpa_onnx",
+      "language": "en",
+      "sample_rate_hz": 24000,
+      "license": "development-only",
+      "source": "models/voices/sherpa-en-debug",
+      "quality_tier": "development",
+      "latency_tier": "unknown",
+      "tags": ["stub", "debug"],
+      "capabilities": {
+        "supports_pitch": false,
+        "supports_streaming": false,
+        "supports_multi_speaker": false
+      }
+    }
+  ]
 }

@@ -1,3 +1,4 @@
+from .manifest import VoiceManifestError, load_voice_manifest
 from .models import (
     AudioChunk,
     AudioFormat,
@@ -22,8 +23,10 @@ __all__ = [
     "SynthesisOptions",
     "SynthesisRequest",
     "SynthesisResult",
+    "VoiceManifestError",
     "VoiceCapabilities",
     "VoiceDescriptor",
     "VoiceNotFoundError",
     "VoiceRegistry",
+    "load_voice_manifest",
 ]
