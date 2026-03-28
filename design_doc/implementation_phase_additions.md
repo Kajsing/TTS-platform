@@ -42,16 +42,21 @@ This document records implementation details that were added during development 
 
 - Token bootstrap and token-file loading were added for protected endpoints.
 - Write endpoints now enforce bearer-token auth.
+- Token rotation was added through a protected local endpoint.
 - Origin filtering was added for requests that carry an `Origin` header.
 - An in-memory rate limiter was added for protected endpoints.
 - An in-memory job manager was added for `/v1/tts/jobs`.
 - Job status and cancellation endpoints were added.
+- A direct job-result endpoint was added for completed async jobs.
+- Completed jobs now use in-memory retention limits and TTL-based cleanup.
 - A backend status note was added to document the temporary development backend and its current limits.
 
 ### Why these additions matter
 
 - They make the localhost API safer by default.
 - They allow asynchronous job orchestration before streaming is introduced.
+- They keep token lifecycle and async result retrieval explicit instead of hidden in local files or internal state.
+- They prevent the in-memory job table from growing without bounds during development use.
 - They make the current backend limitations explicit instead of leaving them implicit in the code.
 
 ## Future phases

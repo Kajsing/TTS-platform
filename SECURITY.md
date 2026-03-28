@@ -4,6 +4,7 @@ Security baselines for this repository:
 
 - The service is expected to bind to `127.0.0.1` by default.
 - Token-based write protection is enforced for synthesis and job endpoints.
+- Token rotation is available through a protected local endpoint.
 - Configuration validation must reject obviously unsafe or broken values.
 - Raw input text should not be logged by default.
 - Requests with an `Origin` header are checked against an explicit allow-list.

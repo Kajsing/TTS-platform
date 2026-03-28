@@ -32,8 +32,25 @@ def initialize_auth(auth_config: AuthConfig, *, repo_root: Path) -> AuthState:
         return AuthState(enabled=True, token_file=token_file, token=token, generated=False)
 
     token = secrets.token_urlsafe(32)
+    _write_token(token_file, token)
+    return AuthState(enabled=True, token_file=token_file, token=token, generated=True)
+
+
+def rotate_auth_token(auth_state: AuthState) -> AuthState:
+    if not auth_state.enabled:
+        return auth_state
+    token = secrets.token_urlsafe(32)
+    _write_token(auth_state.token_file, token)
+    return AuthState(
+        enabled=True,
+        token_file=auth_state.token_file,
+        token=token,
+        generated=False,
+    )
+
+
+def _write_token(token_file: Path, token: str) -> None:
     file_descriptor = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(file_descriptor, "w", encoding="utf-8") as token_file_handle:
         token_file_handle.write(token)
         token_file_handle.write("\n")
-    return AuthState(enabled=True, token_file=token_file, token=token, generated=True)

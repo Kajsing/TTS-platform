@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
+from .auth import rotate_auth_token
 from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
@@ -109,6 +110,16 @@ def _register_routes(app: FastAPI) -> None:
         result = synthesis_service.synthesize(payload)
         return Response(content=result.audio_bytes, media_type="audio/wav")
 
+    @app.post("/v1/auth/rotate")
+    async def rotate_token(request: Request) -> dict[str, object]:
+        container = app.state.container
+        _enforce_protected_request(container, request)
+        container.auth = rotate_auth_token(container.auth)
+        return {
+            "token": container.auth.token,
+            "token_file": str(container.auth.token_file),
+        }
+
     @app.post("/v1/tts/jobs")
     async def create_tts_job(
         request: Request,
@@ -130,6 +141,13 @@ def _register_routes(app: FastAPI) -> None:
         container = app.state.container
         _enforce_protected_request(container, request)
         return container.job_manager.get_job(job_id).to_payload()
+
+    @app.get("/v1/tts/jobs/{job_id}/result")
+    async def get_tts_job_result(request: Request, job_id: str) -> Response:
+        container = app.state.container
+        _enforce_protected_request(container, request)
+        result = container.job_manager.get_job_result(job_id)
+        return Response(content=result.audio_bytes, media_type="audio/wav")
 
     @app.delete("/v1/tts/jobs/{job_id}")
     async def cancel_tts_job(request: Request, job_id: str) -> dict[str, object]:

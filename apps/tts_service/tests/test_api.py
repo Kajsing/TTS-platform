@@ -95,6 +95,22 @@ def test_tts_endpoint_requires_bearer_token(tmp_path: Path) -> None:
     assert response.json()["error"]["type"] == "unauthorized"
 
 
+def test_tts_endpoint_rejects_invalid_bearer_format(tmp_path: Path) -> None:
+    client, _, _ = build_test_bundle(tmp_path)
+
+    response = client.post(
+        "/v1/tts",
+        headers={"Authorization": "Token not-a-bearer-token"},
+        json={
+            "text": "Hello world",
+            "voice": "manifest-voice",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["type"] == "unauthorized"
+
+
 def test_tts_endpoint_returns_wav_audio(tmp_path: Path) -> None:
     client, auth_headers, _ = build_test_bundle(tmp_path)
 
@@ -264,6 +280,32 @@ def test_rate_limiter_rejects_repeated_write_requests(tmp_path: Path) -> None:
     assert second.json()["error"]["type"] == "rate_limited"
 
 
+def test_rate_limiter_applies_to_job_endpoints(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "limits": {
+                "requests_per_minute": 1,
+            }
+        },
+    )
+
+    first = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    second = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello again", "voice": "manifest-voice"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["type"] == "rate_limited"
+
+
 def test_tts_jobs_flow_returns_completed_status(tmp_path: Path) -> None:
     client, auth_headers, _ = build_test_bundle(tmp_path)
 
@@ -290,6 +332,61 @@ def test_tts_jobs_flow_returns_completed_status(tmp_path: Path) -> None:
     assert status_payload["status"] == "completed"
     assert status_payload["result_available"] is True
     assert status_payload["result_format"] == "wav"
+
+
+def test_tts_job_result_endpoint_returns_audio(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    job_id = create_response.json()["job_id"]
+
+    for _ in range(25):
+        status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+        if status_response.json()["status"] == "completed":
+            break
+        time.sleep(0.02)
+
+    result_response = client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+
+    assert result_response.status_code == 200
+    assert result_response.headers["content-type"] == "audio/wav"
+    assert result_response.content[:4] == b"RIFF"
+
+
+def test_job_status_endpoint_returns_not_found_for_unknown_job(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+
+    response = client.get("/v1/tts/jobs/missing-job-id", headers=auth_headers)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["type"] == "not_found"
+
+
+def test_job_result_endpoint_returns_conflict_until_ready(tmp_path: Path, monkeypatch) -> None:
+    client, auth_headers, app = build_test_bundle(tmp_path)
+    original_synthesize = app.state.container.backend.synthesize
+
+    def delayed_synthesize(self, request):
+        time.sleep(0.15)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", delayed_synthesize)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    job_id = create_response.json()["job_id"]
+
+    result_response = client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+
+    assert result_response.status_code == 409
+    assert result_response.json()["error"]["type"] == "conflict"
 
 
 def test_tts_jobs_can_cancel_a_queued_job(tmp_path: Path, monkeypatch) -> None:
@@ -332,3 +429,68 @@ def test_tts_jobs_can_cancel_a_queued_job(tmp_path: Path, monkeypatch) -> None:
 
     assert cancel_response.status_code == 200
     assert cancel_response.json()["status"] == "cancelled"
+
+
+def test_completed_jobs_are_cleaned_up_after_ttl(tmp_path: Path) -> None:
+    client, auth_headers, app = build_test_bundle(
+        tmp_path,
+        config_data={
+            "limits": {
+                "requests_per_minute": 20,
+                "completed_job_ttl_seconds": 1,
+            }
+        },
+    )
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    job_id = create_response.json()["job_id"]
+
+    for _ in range(25):
+        status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+        if status_response.json()["status"] == "completed":
+            break
+        time.sleep(0.02)
+
+    app.state.container.job_manager._jobs[job_id].updated_at = (
+        app.state.container.job_manager._jobs[job_id].updated_at.replace(year=2020)
+    )
+
+    client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Trigger cleanup", "voice": "manifest-voice"},
+    )
+    missing_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+
+    assert missing_response.status_code == 404
+    assert missing_response.json()["error"]["type"] == "not_found"
+
+
+def test_auth_rotate_endpoint_replaces_token(tmp_path: Path) -> None:
+    client, auth_headers, app = build_test_bundle(tmp_path)
+    old_token = app.state.container.auth.token
+
+    rotate_response = client.post("/v1/auth/rotate", headers=auth_headers)
+
+    assert rotate_response.status_code == 200
+    new_token = rotate_response.json()["token"]
+    assert new_token != old_token
+    assert Path(rotate_response.json()["token_file"]).exists()
+
+    old_token_response = client.post(
+        "/v1/tts",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    new_token_response = client.post(
+        "/v1/tts",
+        headers={"Authorization": f"Bearer {new_token}"},
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+
+    assert old_token_response.status_code == 401
+    assert new_token_response.status_code == 200

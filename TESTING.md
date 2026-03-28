@@ -11,9 +11,12 @@ Current automated coverage focuses on the phase 3 foundation:
 - API error payload shape
 - application bootstrap smoke test
 - bearer-token enforcement
+- invalid bearer-format rejection
+- token rotation
 - origin filtering
 - rate limiting
 - job creation, status polling, and queued-job cancellation
+- job result retrieval and retention cleanup
 
 Run tests with:
 

@@ -18,7 +18,9 @@ Phase 3 is implemented:
 - `/v1/tts`
 - WAV output via a deterministic development backend
 - `/v1/tts/jobs`
+- `/v1/tts/jobs/{job_id}/result`
 - token auth for protected endpoints
+- token rotation for local clients
 - origin filtering and rate limiting
 
 ## Repository Layout

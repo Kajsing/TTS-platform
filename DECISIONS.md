@@ -49,3 +49,5 @@ Reasoning:
 - It keeps the implementation small and locally testable.
 - It is enough to validate the service contract and localhost threat model for the MVP stages.
 - It avoids overcommitting to persistence and distributed coordination before the platform needs them.
+
+Later phase 3 tightening added token rotation, direct async-result retrieval, and TTL-based cleanup while keeping those same primitives in-memory.
