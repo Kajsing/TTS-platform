@@ -1,0 +1,25 @@
+[server]
+host = "127.0.0.1"
+port = 7777
+log_level = "info"
+
+[auth]
+enabled = true
+token_file = "./config/token.txt"
+
+[tts]
+default_voice = "sherpa-en-debug"
+max_chars_per_request = 4000
+warmup_on_start = true
+
+[streaming]
+enabled = true
+audio_frame_ms = 40
+prebuffer_ms = 200
+
+[metrics]
+enabled = true
+
+[limits]
+max_concurrent_jobs = 2
+max_job_seconds = 300
