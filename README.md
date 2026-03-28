@@ -60,6 +60,31 @@ python3 -m pip install -e ".[dev]"
 python3 -m pytest -q
 ```
 
+## CLI Usage
+
+Examples:
+
+```bash
+tts health
+tts list-voices
+tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
+tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
+tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+```
+
+Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
+
+## Benchmarking
+
+Examples:
+
+```bash
+python3 scripts/benchmark.py --token "$TTS_PLATFORM_TOKEN"
+python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
+```
+
+The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
+
 ## Next Step
 
 Phase 6 will add the first browser client prototype.

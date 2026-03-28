@@ -42,4 +42,6 @@ CLI example:
 tts health
 tts list-voices
 tts save "Hello world" --out out.wav
+tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 ```

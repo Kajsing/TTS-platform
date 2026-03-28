@@ -60,17 +60,18 @@ def build_application_state(
     )
     origin_policy = OriginPolicy(allowed_origins=config.security.allowed_origins)
     rate_limiter = RateLimiter(requests_per_minute=config.limits.requests_per_minute)
-    job_manager = InMemoryJobManager(
-        max_workers=config.limits.max_concurrent_jobs,
-        backend=backend,
-        completed_job_ttl_seconds=config.limits.completed_job_ttl_seconds,
-        max_stored_jobs=config.limits.max_stored_jobs,
-    )
-    streaming_metrics = StreamingMetrics()
     observability = ObservabilityState(
         enabled=config.metrics.enabled,
         logger=configure_structured_logging(config.server.log_level),
     )
+    job_manager = InMemoryJobManager(
+        max_workers=config.limits.max_concurrent_jobs,
+        backend=backend,
+        observability=observability,
+        completed_job_ttl_seconds=config.limits.completed_job_ttl_seconds,
+        max_stored_jobs=config.limits.max_stored_jobs,
+    )
+    streaming_metrics = StreamingMetrics()
     backend_ready = True
     startup_error: str | None = None
     if config.tts.warmup_on_start:

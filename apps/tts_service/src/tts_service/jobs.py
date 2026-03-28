@@ -10,6 +10,7 @@ from uuid import uuid4
 from tts_core.models import JobStatus, SynthesisResult, utc_now
 
 from .errors import conflict, not_found
+from .observability import ObservabilityState
 from .schemas import SynthesizeRequestPayload
 from .synthesis import SynthesisExecution, SynthesisService
 
@@ -39,6 +40,7 @@ class JobRecord:
 class InMemoryJobManager:
     max_workers: int
     backend: object
+    observability: ObservabilityState | None = None
     completed_job_ttl_seconds: int = 300
     max_stored_jobs: int = 128
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -72,6 +74,7 @@ class InMemoryJobManager:
                 execution,
                 synthesis_service,
             )
+        self._record_job_event("created")
         return record
 
     def get_job(self, job_id: str) -> JobRecord:
@@ -107,6 +110,7 @@ class InMemoryJobManager:
             if future is not None and future.cancel():
                 record.status = JobStatus.CANCELLED
                 record.updated_at = utc_now()
+                self._record_job_event("cancelled")
                 return record
 
         if self.backend.cancel(job_id):
@@ -114,6 +118,7 @@ class InMemoryJobManager:
                 record = self._jobs[job_id]
                 record.status = JobStatus.CANCELLED
                 record.updated_at = utc_now()
+                self._record_job_event("cancelled")
                 return record
 
         return self.get_job(job_id)
@@ -140,6 +145,7 @@ class InMemoryJobManager:
                     record.status = JobStatus.FAILED
                     record.error_message = str(exc)
                     record.updated_at = utc_now()
+                    self._record_job_event("failed")
             return
 
         with self._lock:
@@ -148,6 +154,7 @@ class InMemoryJobManager:
                 record.status = JobStatus.COMPLETED
                 record.result = result
                 record.updated_at = utc_now()
+                self._record_job_event("completed")
             self._cleanup_locked()
 
     def _cleanup_locked(self) -> None:
@@ -179,3 +186,8 @@ class InMemoryJobManager:
         self._jobs.pop(job_id, None)
         self._executions.pop(job_id, None)
         self._futures.pop(job_id, None)
+        self._record_job_event("cleaned")
+
+    def _record_job_event(self, event: str) -> None:
+        if self.observability is not None:
+            self.observability.job_metrics.record(event)

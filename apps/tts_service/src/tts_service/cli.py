@@ -20,53 +20,102 @@ def main(argv: list[str] | None = None) -> None:
     token = args.token or os.environ.get("TTS_PLATFORM_TOKEN")
     base_url = args.base_url.rstrip("/")
 
-    if args.command == "health":
-        _print_json(_get_json(f"{base_url}/v1/health"))
-        return
+    try:
+        if args.command == "health":
+            _print_json(_get_json(f"{base_url}/v1/health"))
+            return
 
-    if args.command == "list-voices":
-        _print_json(_get_json(f"{base_url}/v1/voices"))
-        return
+        if args.command == "list-voices":
+            _print_json(_get_json(f"{base_url}/v1/voices"))
+            return
 
-    if args.command == "save":
-        _save_audio(
-            base_url=base_url,
-            token=token,
-            text=args.text,
-            voice=args.voice,
-            out_path=Path(args.out),
-        )
-        return
-
-    if args.command == "say":
-        output_path = (
-            Path(args.out)
-            if args.out
-            else Path(tempfile.gettempdir()) / "tts-platform-say.wav"
-        )
-        _save_audio(
-            base_url=base_url,
-            token=token,
-            text=args.text,
-            voice=args.voice,
-            out_path=output_path,
-        )
-        _play_or_report(output_path)
-        return
-
-    if args.command == "stream":
-        asyncio.run(
-            _stream_to_wav(
+        if args.command == "save":
+            _require_token(token, command="save")
+            _save_audio(
                 base_url=base_url,
                 token=token,
                 text=args.text,
                 voice=args.voice,
                 out_path=Path(args.out),
             )
-        )
-        return
+            return
 
-    raise SystemExit(f"Unknown command: {args.command}")
+        if args.command == "say":
+            _require_token(token, command="say")
+            output_path = (
+                Path(args.out)
+                if args.out
+                else Path(tempfile.gettempdir()) / "tts-platform-say.wav"
+            )
+            _save_audio(
+                base_url=base_url,
+                token=token,
+                text=args.text,
+                voice=args.voice,
+                out_path=output_path,
+            )
+            _play_or_report(output_path)
+            return
+
+        if args.command == "stream":
+            _require_token(token, command="stream")
+            asyncio.run(
+                _stream_to_wav(
+                    base_url=base_url,
+                    token=token,
+                    text=args.text,
+                    voice=args.voice,
+                    out_path=Path(args.out),
+                )
+            )
+            return
+
+        if args.command == "rotate-token":
+            _require_token(token, command="rotate-token")
+            _print_json(
+                _post_json(
+                    f"{base_url}/v1/auth/rotate",
+                    token=token,
+                    payload=None,
+                )
+            )
+            return
+
+        if args.command == "job-status":
+            _require_token(token, command="job-status")
+            _print_json(
+                _get_json(
+                    f"{base_url}/v1/tts/jobs/{args.job_id}",
+                    token=token,
+                )
+            )
+            return
+
+        if args.command == "job-result":
+            _require_token(token, command="job-result")
+            out_path = Path(args.out)
+            _download_audio(
+                f"{base_url}/v1/tts/jobs/{args.job_id}/result",
+                token=token,
+                out_path=out_path,
+            )
+            return
+
+        if args.command == "job-cancel":
+            _require_token(token, command="job-cancel")
+            _print_json(
+                _delete_json(
+                    f"{base_url}/v1/tts/jobs/{args.job_id}",
+                    token=token,
+                )
+            )
+            return
+
+        raise SystemExit(f"Unknown command: {args.command}")
+    except httpx.HTTPStatusError as exc:
+        _handle_http_error(exc)
+    except websockets.WebSocketException as exc:
+        raise SystemExit(f"WebSocket error: {exc}") from exc
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -77,6 +126,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("health")
     subparsers.add_parser("list-voices")
+    subparsers.add_parser("rotate-token")
 
     save_parser = subparsers.add_parser("save")
     save_parser.add_argument("text")
@@ -93,6 +143,16 @@ def _build_parser() -> argparse.ArgumentParser:
     stream_parser.add_argument("--voice", default=None)
     stream_parser.add_argument("--out", required=True)
 
+    job_status_parser = subparsers.add_parser("job-status")
+    job_status_parser.add_argument("job_id")
+
+    job_result_parser = subparsers.add_parser("job-result")
+    job_result_parser.add_argument("job_id")
+    job_result_parser.add_argument("--out", required=True)
+
+    job_cancel_parser = subparsers.add_parser("job-cancel")
+    job_cancel_parser.add_argument("job_id")
+
     return parser
 
 
@@ -103,11 +163,38 @@ def _headers(token: str | None) -> dict[str, str]:
     return headers
 
 
-def _get_json(url: str) -> dict[str, object]:
+def _get_json(url: str, *, token: str | None = None) -> dict[str, object]:
     with httpx.Client(timeout=30.0) as client:
-        response = client.get(url)
+        response = client.get(url, headers=_headers(token))
         response.raise_for_status()
         return response.json()
+
+
+def _post_json(
+    url: str,
+    *,
+    token: str | None,
+    payload: dict[str, object] | None,
+) -> dict[str, object]:
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(url, json=payload, headers=_headers(token))
+        response.raise_for_status()
+        return response.json()
+
+
+def _delete_json(url: str, *, token: str | None) -> dict[str, object]:
+    with httpx.Client(timeout=60.0) as client:
+        response = client.delete(url, headers=_headers(token))
+        response.raise_for_status()
+        return response.json()
+
+
+def _download_audio(url: str, *, token: str | None, out_path: Path) -> None:
+    with httpx.Client(timeout=60.0) as client:
+        response = client.get(url, headers=_headers(token))
+        response.raise_for_status()
+    out_path.write_bytes(response.content)
+    print(out_path)
 
 
 def _save_audio(
@@ -166,7 +253,7 @@ async def _stream_to_wav(
                 channels = event["channels"]
                 continue
             if event["type"] == "error":
-                raise SystemExit(json.dumps(event["error"]))
+                raise SystemExit(json.dumps(event["error"], indent=2, sort_keys=True))
             if event["type"] in {"done", "cancelled"}:
                 break
 
@@ -205,3 +292,22 @@ def _play_or_report(audio_path: Path) -> None:
 
 def _print_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _handle_http_error(exc: httpx.HTTPStatusError) -> None:
+    try:
+        payload = exc.response.json()
+    except ValueError:
+        raise SystemExit(f"HTTP {exc.response.status_code}: {exc.response.text}") from exc
+
+    if isinstance(payload, dict) and "error" in payload:
+        raise SystemExit(json.dumps(payload["error"], indent=2, sort_keys=True)) from exc
+    raise SystemExit(json.dumps(payload, indent=2, sort_keys=True)) from exc
+
+
+def _require_token(token: str | None, *, command: str) -> None:
+    if token:
+        return
+    raise SystemExit(
+        f"The '{command}' command requires a token. Use --token or set TTS_PLATFORM_TOKEN."
+    )

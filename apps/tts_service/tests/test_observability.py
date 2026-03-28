@@ -62,3 +62,21 @@ def test_health_exposes_observability_snapshot_and_request_id(tmp_path: Path) ->
     assert snapshot["requests"]["per_endpoint"]["/v1/voices"] >= 1
     assert snapshot["synthesis"]["request_count"] >= 1
     assert snapshot["synthesis"]["modes"]["sync"] >= 1
+
+
+def test_health_exposes_job_observability(tmp_path: Path) -> None:
+    client, auth_headers = build_test_bundle(tmp_path)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello world", "voice": "manifest-voice"},
+    )
+    job_id = create_response.json()["job_id"]
+    client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+    client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+    health_response = client.get("/v1/health")
+
+    snapshot = health_response.json()["observability"]["jobs"]
+    assert snapshot["created_count"] >= 1
+    assert snapshot["completed_count"] >= 1

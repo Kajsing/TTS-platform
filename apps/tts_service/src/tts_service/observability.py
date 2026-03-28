@@ -84,11 +84,45 @@ class SynthesisMetrics:
 
 
 @dataclass(slots=True)
+class JobMetrics:
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    created_count: int = 0
+    completed_count: int = 0
+    failed_count: int = 0
+    cancelled_count: int = 0
+    cleaned_count: int = 0
+
+    def record(self, event: str) -> None:
+        with self._lock:
+            if event == "created":
+                self.created_count += 1
+            elif event == "completed":
+                self.completed_count += 1
+            elif event == "failed":
+                self.failed_count += 1
+            elif event == "cancelled":
+                self.cancelled_count += 1
+            elif event == "cleaned":
+                self.cleaned_count += 1
+
+    def snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "created_count": self.created_count,
+                "completed_count": self.completed_count,
+                "failed_count": self.failed_count,
+                "cancelled_count": self.cancelled_count,
+                "cleaned_count": self.cleaned_count,
+            }
+
+
+@dataclass(slots=True)
 class ObservabilityState:
     enabled: bool
     logger: logging.Logger
     request_metrics: RequestMetrics = field(default_factory=RequestMetrics)
     synthesis_metrics: SynthesisMetrics = field(default_factory=SynthesisMetrics)
+    job_metrics: JobMetrics = field(default_factory=JobMetrics)
 
     def log_http_request(
         self,
@@ -120,4 +154,5 @@ class ObservabilityState:
             "enabled": self.enabled,
             "requests": self.request_metrics.snapshot(),
             "synthesis": self.synthesis_metrics.snapshot(),
+            "jobs": self.job_metrics.snapshot(),
         }

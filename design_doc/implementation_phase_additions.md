@@ -87,6 +87,8 @@ This document records implementation details that were added during development 
 - A public-contract CLI was added with `health`, `list-voices`, `save`, `say`, and `stream` commands.
 - A benchmark script was added to measure HTTP synthesis latency, output duration, and approximate RTF.
 - Audio regression tests were added around waveform structure and rate-sensitive duration changes.
+- Phase 5.1 extended the CLI with job lifecycle commands and clearer token-related failure handling.
+- Phase 5.1 also extended observability with job-level counters and expanded the benchmark script to support streaming mode.
 
 ### Why these additions matter
 
