@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from .bootstrap import build_application_state
 from .config import AppConfig, load_config
-from .errors import APIError
+from .errors import APIError, invalid_request
 from .schemas import SynthesizeRequestPayload
 from .synthesis import SynthesisService
 
@@ -40,6 +41,29 @@ def _register_exception_handlers(app: FastAPI) -> None:
     async def handle_api_error(_, exc: APIError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content=exc.to_response())
 
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(_, exc: RequestValidationError) -> JSONResponse:
+        issues = []
+        first_param: str | None = None
+        for issue in exc.errors():
+            location = issue.get("loc", ())
+            path = ".".join(str(part) for part in location if part != "body")
+            if first_param is None and path:
+                first_param = path
+            issues.append(
+                {
+                    "param": path or None,
+                    "message": issue.get("msg", "Invalid request body."),
+                    "type": issue.get("type"),
+                }
+            )
+        api_error = invalid_request(
+            "Request body validation failed.",
+            param=first_param,
+            details={"issues": issues},
+        )
+        return JSONResponse(status_code=api_error.status_code, content=api_error.to_response())
+
 
 def _register_routes(app: FastAPI) -> None:
     @app.get("/v1/health")
@@ -49,11 +73,18 @@ def _register_routes(app: FastAPI) -> None:
             (datetime.now(timezone.utc) - container.started_at).total_seconds()
         )
         default_voice = container.voice_registry.default_voice
+        checks = {
+            "process_running": True,
+            "backend_ready": container.backend_ready,
+            "default_voice_loaded": container.default_voice_loaded,
+        }
         return {
-            "status": "ok",
+            "status": "ok" if all(checks.values()) else "degraded",
             "version": app.version,
             "uptime_s": uptime_seconds,
             "default_voice": default_voice.id if default_voice is not None else None,
+            "checks": checks,
+            "startup_error": container.startup_error,
         }
 
     @app.get("/v1/voices")

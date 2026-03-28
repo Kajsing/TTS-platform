@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from tts_core.backends.base import BackendError
 from tts_core.backends.sherpa_onnx import SherpaOnnxBackend, build_stub_voice
 from tts_core.manifest import load_voice_manifest
 from tts_core.registry import VoiceRegistry
@@ -19,6 +20,9 @@ class ApplicationState:
     backend: SherpaOnnxBackend
     text_pipeline: TextPipeline
     started_at: datetime
+    backend_ready: bool
+    default_voice_loaded: bool
+    startup_error: str | None = None
 
 
 def build_application_state(
@@ -42,12 +46,21 @@ def build_application_state(
         normalizer=TextNormalizer(),
         segmenter=SentenceSegmenter(),
     )
+    backend_ready = True
+    startup_error: str | None = None
     if config.tts.warmup_on_start:
-        backend.warmup(config.tts.default_voice)
+        try:
+            backend.warmup(config.tts.default_voice)
+        except BackendError as exc:
+            backend_ready = False
+            startup_error = str(exc)
     return ApplicationState(
         config=config,
         voice_registry=registry,
         backend=backend,
         text_pipeline=text_pipeline,
         started_at=datetime.now(timezone.utc),
+        backend_ready=backend_ready,
+        default_voice_loaded=registry.default_voice is not None,
+        startup_error=startup_error,
     )
