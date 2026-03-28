@@ -59,6 +59,23 @@ This document records implementation details that were added during development 
 - They prevent the in-memory job table from growing without bounds during development use.
 - They make the current backend limitations explicit instead of leaving them implicit in the code.
 
+## Phase 4
+
+### Added implementation details
+
+- A WebSocket endpoint was added at `/v1/tts/stream`.
+- The streaming protocol now uses JSON control events and binary PCM16 frames.
+- The development backend can now emit PCM chunks incrementally instead of only returning complete WAV files.
+- Stream cancellation is supported through a WebSocket `cancel` control event.
+- Basic in-memory streaming metrics were added and exposed through health data.
+- WebSocket auth, origin checks, and rate limiting reuse the same baseline security policy as protected HTTP endpoints.
+
+### Why these additions matter
+
+- They create a concrete streaming contract before browser playback work starts.
+- They exercise cancellation and low-latency delivery without waiting for the final backend implementation.
+- They provide a measurable first baseline for later streaming performance work.
+
 ## Future phases
 
 As later phases are implemented, this file should be extended with:

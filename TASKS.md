@@ -28,7 +28,14 @@
 
 ## Phase 4
 
-- [ ] Add WebSocket endpoint
-- [ ] Add PCM chunk delivery
-- [ ] Add streaming metrics
-- [ ] Add cancellation during stream
+- [x] Add WebSocket endpoint
+- [x] Add PCM chunk delivery
+- [x] Add streaming metrics
+- [x] Add cancellation during stream
+
+## Phase 5
+
+- [ ] Add benchmark script
+- [ ] Add broader observability
+- [ ] Add audio regression tests
+- [ ] Add CLI

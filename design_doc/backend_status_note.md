@@ -19,7 +19,7 @@ It does not yet provide:
 
 - actual `sherpa-onnx` runtime integration
 - real voice-specific acoustic behavior
-- streaming audio generation
+- real model-backed streaming audio generation
 - backend-level cancellation of in-flight synthesis
 - production-grade latency or audio quality characteristics
 
@@ -38,6 +38,8 @@ This keeps platform work moving while preserving the backend abstraction.
 ## Implications for phase 3
 
 Phase 3 security and job management are considered valid against the current backend because they exercise the service contract, not the final acoustic implementation.
+
+Phase 4 streaming is also considered valid at the contract level because the development backend now emits PCM chunks and supports cooperative cancellation markers, even though the underlying audio generation is still synthetic.
 
 The main limitation is cancellation:
 

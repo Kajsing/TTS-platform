@@ -9,5 +9,6 @@ Security baselines for this repository:
 - Raw input text should not be logged by default.
 - Requests with an `Origin` header are checked against an explicit allow-list.
 - Protected endpoints use in-memory rate limiting as a baseline safeguard.
+- The streaming WebSocket endpoint uses the same token, origin, and rate-limit checks as protected HTTP write endpoints.
 
 The current implementation uses a local token file and in-memory guards. This is sufficient for the current localhost MVP stages, but later phases should revisit persistence, rotation workflows, and browser-facing hardening details.

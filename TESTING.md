@@ -17,6 +17,9 @@ Current automated coverage focuses on the phase 3 foundation:
 - rate limiting
 - job creation, status polling, and queued-job cancellation
 - job result retrieval and retention cleanup
+- WebSocket auth handling
+- PCM streaming and `done` events
+- stream cancellation and streaming metrics updates
 
 Run tests with:
 

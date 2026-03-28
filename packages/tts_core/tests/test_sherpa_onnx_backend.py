@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from tts_core.backends import BackendNotReadyError, SherpaOnnxBackend
+from tts_core.backends import SherpaOnnxBackend
 from tts_core.models import SynthesisRequest
 from tts_core.registry import VoiceNotFoundError
 
@@ -35,10 +35,17 @@ def test_sherpa_backend_synthesize_returns_wav_audio(tmp_path) -> None:
     assert result.sample_rate_hz == 24000
 
 
-def test_sherpa_backend_streaming_is_still_not_ready(tmp_path) -> None:
+def test_sherpa_backend_streaming_returns_pcm_chunks(tmp_path) -> None:
     backend = SherpaOnnxBackend(models_root=tmp_path)
 
-    request = SynthesisRequest(text="Hello world", voice="sherpa-en-debug")
+    request = SynthesisRequest(
+        text="Hello world",
+        voice="sherpa-en-debug",
+        job_id="stream-job",
+    )
 
-    with pytest.raises(BackendNotReadyError):
-        next(backend.synthesize_stream(request))
+    chunks = list(backend.synthesize_stream(request))
+
+    assert chunks
+    assert chunks[0].job_id == "stream-job"
+    assert chunks[0].pcm_bytes

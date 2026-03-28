@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import math
+import threading
 import wave
 from array import array
 from collections.abc import Iterator, Sequence
@@ -16,8 +17,6 @@ from tts_core.models import (
     VoiceDescriptor,
 )
 from tts_core.registry import VoiceNotFoundError
-
-from .base import BackendNotReadyError
 
 
 def build_stub_voice() -> VoiceDescriptor:
@@ -46,6 +45,8 @@ class SherpaOnnxBackend:
     voices: Sequence[VoiceDescriptor] = field(default_factory=lambda: (build_stub_voice(),))
 
     name: str = "sherpa_onnx"
+    _cancelled_job_ids: set[str] = field(default_factory=set, init=False, repr=False)
+    _cancel_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     def list_voices(self) -> list[VoiceDescriptor]:
         return list(self.voices)
@@ -76,12 +77,52 @@ class SherpaOnnxBackend:
         )
 
     def synthesize_stream(self, request: SynthesisRequest) -> Iterator[AudioChunk]:
-        self._resolve_voice(request.voice)
-        raise BackendNotReadyError("Sherpa-ONNX streaming will be implemented in phase 4.")
-        yield  # pragma: no cover
+        voice = self._resolve_voice(request.voice)
+        job_id = request.job_id or "stream-job"
+        pcm_bytes = self._render_pcm16(
+            request.text,
+            sample_rate_hz=voice.sample_rate_hz,
+            rate=request.prosody.rate,
+            volume=request.prosody.volume,
+            pitch=request.prosody.pitch,
+        )
+        bytes_per_frame = 2
+        chunk_size = max(
+            bytes_per_frame,
+            int(
+                voice.sample_rate_hz
+                * bytes_per_frame
+                * max(request.options.stream_frame_ms, 10)
+                / 1000
+            ),
+        )
+        total_size = len(pcm_bytes)
+        chunk_index = 0
+
+        for start in range(0, total_size, chunk_size):
+            if self._is_cancelled(job_id):
+                self._clear_cancel(job_id)
+                return
+
+            pcm_chunk = pcm_bytes[start : start + chunk_size]
+            duration_ms = int(len(pcm_chunk) / bytes_per_frame / voice.sample_rate_hz * 1000)
+            yield AudioChunk(
+                job_id=job_id,
+                chunk_index=chunk_index,
+                sample_rate_hz=voice.sample_rate_hz,
+                channels=1,
+                pcm_bytes=pcm_chunk,
+                duration_ms=max(duration_ms, 1),
+                is_last=start + chunk_size >= total_size,
+            )
+            chunk_index += 1
+
+        self._clear_cancel(job_id)
 
     def cancel(self, job_id: str) -> bool:
-        return False
+        with self._cancel_lock:
+            self._cancelled_job_ids.add(job_id)
+        return True
 
     def _resolve_voice(self, voice_id: str) -> VoiceDescriptor:
         for voice in self.voices:
@@ -201,3 +242,11 @@ class SherpaOnnxBackend:
             wav_file.setframerate(sample_rate_hz)
             wav_file.writeframes(pcm_bytes)
         return buffer.getvalue()
+
+    def _is_cancelled(self, job_id: str) -> bool:
+        with self._cancel_lock:
+            return job_id in self._cancelled_job_ids
+
+    def _clear_cancel(self, job_id: str) -> None:
+        with self._cancel_lock:
+            self._cancelled_job_ids.discard(job_id)

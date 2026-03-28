@@ -37,6 +37,7 @@ class SynthesisOptions:
     normalize_text: bool = True
     streaming_preferred: bool = False
     input_format: str = "plain_text"
+    stream_frame_ms: int = 40
 
 
 @dataclass(frozen=True, slots=True)

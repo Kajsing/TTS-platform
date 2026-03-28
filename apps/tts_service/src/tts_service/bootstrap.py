@@ -14,6 +14,7 @@ from .auth import AuthState, initialize_auth
 from .config import AppConfig
 from .jobs import InMemoryJobManager
 from .security import OriginPolicy, RateLimiter
+from .streaming import StreamingMetrics
 
 
 @dataclass(slots=True)
@@ -26,6 +27,7 @@ class ApplicationState:
     origin_policy: OriginPolicy
     rate_limiter: RateLimiter
     job_manager: InMemoryJobManager
+    streaming_metrics: StreamingMetrics
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -62,6 +64,7 @@ def build_application_state(
         completed_job_ttl_seconds=config.limits.completed_job_ttl_seconds,
         max_stored_jobs=config.limits.max_stored_jobs,
     )
+    streaming_metrics = StreamingMetrics()
     backend_ready = True
     startup_error: str | None = None
     if config.tts.warmup_on_start:
@@ -79,6 +82,7 @@ def build_application_state(
         origin_policy=origin_policy,
         rate_limiter=rate_limiter,
         job_manager=job_manager,
+        streaming_metrics=streaming_metrics,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,

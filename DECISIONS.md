@@ -51,3 +51,13 @@ Reasoning:
 - It avoids overcommitting to persistence and distributed coordination before the platform needs them.
 
 Later phase 3 tightening added token rotation, direct async-result retrieval, and TTL-based cleanup while keeping those same primitives in-memory.
+
+## 2026-03-29: Add streaming as a WebSocket protocol with binary PCM frames
+
+Phase 4 uses a WebSocket endpoint that exchanges JSON control events and binary PCM16 frames.
+
+Reasoning:
+
+- It keeps control metadata separate from audio payloads.
+- It matches the design goal of low-latency playback without wrapping each chunk as a mini file.
+- It gives later browser playback work a stable protocol to integrate against.

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from tts_core.backends.base import BackendError
-from tts_core.models import AudioFormat, ProsodySettings, SynthesisOptions, SynthesisRequest
+from tts_core.models import (
+    AudioChunk,
+    AudioFormat,
+    ProsodySettings,
+    SynthesisOptions,
+    SynthesisRequest,
+)
 from tts_core.registry import VoiceRegistry
 from tts_core.text import TextPipeline
 
@@ -25,6 +32,7 @@ class SynthesisService:
     backend: object
     default_voice_id: str
     max_chars_per_request: int
+    stream_frame_ms: int = 40
 
     def prepare_request(
         self,
@@ -87,6 +95,7 @@ class SynthesisService:
                 normalize_text=payload.options.normalize_text,
                 streaming_preferred=payload.options.streaming_preferred,
                 input_format=payload.options.input_format,
+                stream_frame_ms=self.stream_frame_ms,
             ),
             language_hint=payload.language_hint,
             job_id=job_id,
@@ -104,6 +113,20 @@ class SynthesisService:
     def synthesize_execution(self, execution: SynthesisExecution):
         try:
             return self.backend.synthesize(execution.request)
+        except BackendError as exc:
+            raise engine_error(
+                str(exc),
+                details={"backend": getattr(self.backend, "name", "unknown")},
+            ) from exc
+        except APIError:
+            raise
+
+    def synthesize_stream_execution(
+        self,
+        execution: SynthesisExecution,
+    ) -> Iterator[AudioChunk]:
+        try:
+            return iter(self.backend.synthesize_stream(execution.request))
         except BackendError as exc:
             raise engine_error(
                 str(exc),
