@@ -13,6 +13,7 @@ from tts_core.text import SentenceSegmenter, TextNormalizer, TextPipeline
 from .auth import AuthState, initialize_auth
 from .config import AppConfig
 from .jobs import InMemoryJobManager
+from .observability import ObservabilityState, configure_structured_logging
 from .security import OriginPolicy, RateLimiter
 from .streaming import StreamingMetrics
 
@@ -28,6 +29,7 @@ class ApplicationState:
     rate_limiter: RateLimiter
     job_manager: InMemoryJobManager
     streaming_metrics: StreamingMetrics
+    observability: ObservabilityState
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -65,6 +67,10 @@ def build_application_state(
         max_stored_jobs=config.limits.max_stored_jobs,
     )
     streaming_metrics = StreamingMetrics()
+    observability = ObservabilityState(
+        enabled=config.metrics.enabled,
+        logger=configure_structured_logging(config.server.log_level),
+    )
     backend_ready = True
     startup_error: str | None = None
     if config.tts.warmup_on_start:
@@ -83,6 +89,7 @@ def build_application_state(
         rate_limiter=rate_limiter,
         job_manager=job_manager,
         streaming_metrics=streaming_metrics,
+        observability=observability,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,

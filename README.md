@@ -4,7 +4,7 @@ Offline-first local text-to-speech platform designed around a stable core domain
 
 ## Current Status
 
-Phase 4 is implemented:
+Phase 5 is implemented:
 
 - repository skeleton
 - engineering guidance documents
@@ -25,6 +25,10 @@ Phase 4 is implemented:
 - `WS /v1/tts/stream`
 - PCM16 streaming frames
 - basic streaming metrics and stream cancellation
+- structured request and synthesis observability
+- `tts` CLI
+- benchmark script
+- audio regression tests
 
 ## Repository Layout
 
@@ -58,4 +62,4 @@ python3 -m pytest -q
 
 ## Next Step
 
-Phase 5 will add benchmark tooling, broader observability, audio regression tests, and a CLI.
+Phase 6 will add the first browser client prototype.

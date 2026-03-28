@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from time import monotonic
 
 from tts_core.backends.base import BackendError
 from tts_core.models import (
@@ -15,6 +16,7 @@ from tts_core.registry import VoiceRegistry
 from tts_core.text import TextPipeline
 
 from .errors import APIError, engine_error, invalid_request
+from .observability import ObservabilityState
 from .schemas import SynthesizeRequestPayload
 
 
@@ -33,6 +35,7 @@ class SynthesisService:
     default_voice_id: str
     max_chars_per_request: int
     stream_frame_ms: int = 40
+    observability: ObservabilityState | None = None
 
     def prepare_request(
         self,
@@ -111,26 +114,45 @@ class SynthesisService:
         return self.synthesize_execution(execution)
 
     def synthesize_execution(self, execution: SynthesisExecution):
+        start_time = monotonic()
         try:
-            return self.backend.synthesize(execution.request)
+            result = self.backend.synthesize(execution.request)
+            self._record_synthesis("sync", "success", start_time)
+            return result
         except BackendError as exc:
+            self._record_synthesis("sync", "failure", start_time)
             raise engine_error(
                 str(exc),
                 details={"backend": getattr(self.backend, "name", "unknown")},
             ) from exc
         except APIError:
+            self._record_synthesis("sync", "failure", start_time)
             raise
 
     def synthesize_stream_execution(
         self,
         execution: SynthesisExecution,
     ) -> Iterator[AudioChunk]:
+        start_time = monotonic()
         try:
-            return iter(self.backend.synthesize_stream(execution.request))
+            for chunk in self.backend.synthesize_stream(execution.request):
+                yield chunk
+            self._record_synthesis("stream", "success", start_time)
         except BackendError as exc:
+            self._record_synthesis("stream", "failure", start_time)
             raise engine_error(
                 str(exc),
                 details={"backend": getattr(self.backend, "name", "unknown")},
             ) from exc
         except APIError:
+            self._record_synthesis("stream", "failure", start_time)
             raise
+
+    def _record_synthesis(self, mode: str, outcome: str, start_time: float) -> None:
+        if self.observability is None:
+            return
+        self.observability.synthesis_metrics.record(
+            mode=mode,
+            outcome=outcome,
+            latency_ms=(monotonic() - start_time) * 1000,
+        )

@@ -61,3 +61,13 @@ Reasoning:
 - It keeps control metadata separate from audio payloads.
 - It matches the design goal of low-latency playback without wrapping each chunk as a mini file.
 - It gives later browser playback work a stable protocol to integrate against.
+
+## 2026-03-29: Keep phase 5 tooling on the public service contract
+
+The CLI and benchmark tooling call the public HTTP and WebSocket interfaces rather than importing private service internals.
+
+Reasoning:
+
+- It validates the real client-facing contract.
+- It avoids creating a second unofficial integration path.
+- It makes the tools useful for both local development and later browser-adjacent testing.

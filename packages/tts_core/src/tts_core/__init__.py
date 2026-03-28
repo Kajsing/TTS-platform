@@ -1,3 +1,4 @@
+from .audio import WavStats, encode_wav_pcm16, inspect_wav
 from .manifest import VoiceManifestError, load_voice_manifest
 from .models import (
     AudioChunk,
@@ -20,6 +21,7 @@ __all__ = [
     "DuplicateVoiceError",
     "JobState",
     "JobStatus",
+    "WavStats",
     "ProsodySettings",
     "SynthesisOptions",
     "SynthesisRequest",
@@ -31,6 +33,8 @@ __all__ = [
     "VoiceDescriptor",
     "VoiceNotFoundError",
     "VoiceRegistry",
+    "encode_wav_pcm16",
+    "inspect_wav",
     "load_voice_manifest",
     "TextNormalizer",
     "TextPipeline",

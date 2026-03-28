@@ -9,13 +9,17 @@ description = "Offline-first local TTS platform"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.115.0,<1.0.0",
+  "httpx>=0.27.0,<1.0.0",
   "uvicorn>=0.30.0,<1.0.0",
   "tomli>=2.0.1; python_version < '3.11'",
+  "websockets>=12.0,<16.0",
 ]
+
+[project.scripts]
+tts = "tts_service.cli:main"
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.27.0,<1.0.0",
   "pytest>=8.2.0,<9.0.0",
   "ruff>=0.6.0,<1.0.0",
 ]

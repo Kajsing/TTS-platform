@@ -1,6 +1,6 @@
 # Testing
 
-Current automated coverage focuses on the phase 3 foundation:
+Current automated coverage focuses on the phase 5 foundation:
 
 - configuration loading and environment overrides
 - voice manifest parsing
@@ -20,6 +20,9 @@ Current automated coverage focuses on the phase 3 foundation:
 - WebSocket auth handling
 - PCM streaming and `done` events
 - stream cancellation and streaming metrics updates
+- observability snapshots and request ids
+- structural audio regression checks
+- rate-sensitive audio regression behavior
 
 Run tests with:
 
@@ -31,4 +34,12 @@ Lint with:
 
 ```bash
 python3 -m ruff check .
+```
+
+CLI example:
+
+```bash
+tts health
+tts list-voices
+tts save "Hello world" --out out.wav
 ```

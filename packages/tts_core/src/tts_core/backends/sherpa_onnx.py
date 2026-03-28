@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import io
 import math
 import threading
-import wave
 from array import array
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tts_core.audio import encode_wav_pcm16
 from tts_core.models import (
     AudioChunk,
     SynthesisRequest,
@@ -235,13 +234,11 @@ class SherpaOnnxBackend:
         sample_rate_hz: int,
         channels: int,
     ) -> bytes:
-        buffer = io.BytesIO()
-        with wave.open(buffer, "wb") as wav_file:
-            wav_file.setnchannels(channels)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(sample_rate_hz)
-            wav_file.writeframes(pcm_bytes)
-        return buffer.getvalue()
+        return encode_wav_pcm16(
+            pcm_bytes,
+            sample_rate_hz=sample_rate_hz,
+            channels=channels,
+        )
 
     def _is_cancelled(self, job_id: str) -> bool:
         with self._cancel_lock:

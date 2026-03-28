@@ -9,6 +9,7 @@ from time import monotonic
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Response as FastAPIResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
@@ -34,6 +35,7 @@ def create_app(
         resolved_config,
         repo_root=repo_root or _repo_root(),
     )
+    _register_middleware(app)
     _register_exception_handlers(app)
     _register_routes(app)
     return app
@@ -76,6 +78,36 @@ def _register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=api_error.status_code, content=api_error.to_response())
 
 
+def _register_middleware(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def observe_http_requests(request: Request, call_next) -> FastAPIResponse:
+        container = app.state.container
+        request_id = request.headers.get("x-request-id", str(uuid4()))
+        start_time = monotonic()
+        response: FastAPIResponse | None = None
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            duration_ms = (monotonic() - start_time) * 1000
+            container.observability.request_metrics.record(
+                endpoint=request.url.path,
+                status_code=status_code,
+                latency_ms=duration_ms,
+            )
+            container.observability.log_http_request(
+                request_id=request_id,
+                method=request.method,
+                endpoint=request.url.path,
+                status_code=status_code,
+                duration_ms=duration_ms,
+            )
+            if response is not None:
+                response.headers["x-request-id"] = request_id
+
+
 def _register_routes(app: FastAPI) -> None:
     @app.get("/v1/health")
     async def health() -> dict[str, object]:
@@ -98,6 +130,7 @@ def _register_routes(app: FastAPI) -> None:
             "startup_error": container.startup_error,
             "auth_enabled": container.auth.enabled,
             "streaming": container.streaming_metrics.snapshot(),
+            "observability": container.observability.snapshot(),
         }
 
     @app.get("/v1/voices")
@@ -327,6 +360,7 @@ def _build_synthesis_service(container: object) -> SynthesisService:
         default_voice_id=container.config.tts.default_voice,
         max_chars_per_request=container.config.tts.max_chars_per_request,
         stream_frame_ms=container.config.streaming.audio_frame_ms,
+        observability=container.observability,
     )
 
 

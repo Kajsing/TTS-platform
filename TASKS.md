@@ -35,7 +35,14 @@
 
 ## Phase 5
 
-- [ ] Add benchmark script
-- [ ] Add broader observability
-- [ ] Add audio regression tests
-- [ ] Add CLI
+- [x] Add benchmark script
+- [x] Add broader observability
+- [x] Add audio regression tests
+- [x] Add CLI
+
+## Phase 6
+
+- [ ] Add MV3 prototype
+- [ ] Add offscreen playback
+- [ ] Add jitter buffer
+- [ ] Add extension auth flow

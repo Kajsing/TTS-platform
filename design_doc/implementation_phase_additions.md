@@ -78,6 +78,22 @@ This document records implementation details that were added during development 
 - They exercise cancellation and low-latency delivery without waiting for the final backend implementation.
 - They provide a measurable first baseline for later streaming performance work.
 
+## Phase 5
+
+### Added implementation details
+
+- Shared audio helpers were added for WAV encoding and structural inspection.
+- Structured request and synthesis observability were added, including request ids and aggregated health snapshots.
+- A public-contract CLI was added with `health`, `list-voices`, `save`, `say`, and `stream` commands.
+- A benchmark script was added to measure HTTP synthesis latency, output duration, and approximate RTF.
+- Audio regression tests were added around waveform structure and rate-sensitive duration changes.
+
+### Why these additions matter
+
+- They improve day-to-day operability without changing the public service contract.
+- They make it easier to spot regressions in audio output and request handling.
+- They give later browser and performance work a concrete baseline for comparison.
+
 ## Future phases
 
 As later phases are implemented, this file should be extended with:
