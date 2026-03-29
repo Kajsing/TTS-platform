@@ -112,6 +112,18 @@ class SherpaOnnxBackend:
     def list_voices(self) -> list[VoiceDescriptor]:
         return list(self.voices)
 
+    def snapshot(self) -> dict[str, object]:
+        with self._runtime_lock:
+            loaded_real_voices = sorted(self._runtime_by_voice_id)
+        return {
+            "name": self.name,
+            "runtime_mode": self.settings.runtime_mode,
+            "provider": self.settings.provider,
+            "configured_real_voices": len(self.voice_runtime_configs),
+            "loaded_real_voices": loaded_real_voices,
+            "module_loaded": self._module_cache is not None,
+        }
+
     def warmup(self, voice_id: str | None = None) -> None:
         if voice_id is None:
             return

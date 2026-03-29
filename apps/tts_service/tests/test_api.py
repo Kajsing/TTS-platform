@@ -1,11 +1,74 @@
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from tts_service.config import AppConfig
 from tts_service.main import create_app
+
+
+def build_fake_sherpa_onnx_module(sample_rate: int = 16000) -> object:
+    class OfflineTtsVitsModelConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class OfflineTtsMatchaModelConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class OfflineTtsKokoroModelConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class OfflineTtsKittenModelConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class OfflineTtsModelConfig:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+    class OfflineTtsConfig:
+        def __init__(self, *, model, rule_fsts: str, max_num_sentences: int) -> None:
+            self.model = model
+            self.rule_fsts = rule_fsts
+            self.max_num_sentences = max_num_sentences
+
+        def validate(self) -> bool:
+            return True
+
+    class GenerationConfig:
+        def __init__(self) -> None:
+            self.sid = 0
+            self.speed = 1.0
+            self.silence_scale = 0.0
+
+    class OfflineTts:
+        def __init__(self, config) -> None:
+            self.config = config
+
+        def generate(self, text: str, generation_config) -> object:
+            frame_count = max(48, len(text) * 8)
+            samples = [0.3 if index % 2 == 0 else -0.3 for index in range(frame_count)]
+            return SimpleNamespace(
+                samples=samples,
+                sample_rate=sample_rate,
+                sid=generation_config.sid,
+            )
+
+    return SimpleNamespace(
+        OfflineTts=OfflineTts,
+        OfflineTtsConfig=OfflineTtsConfig,
+        OfflineTtsKittenModelConfig=OfflineTtsKittenModelConfig,
+        OfflineTtsKokoroModelConfig=OfflineTtsKokoroModelConfig,
+        OfflineTtsMatchaModelConfig=OfflineTtsMatchaModelConfig,
+        OfflineTtsModelConfig=OfflineTtsModelConfig,
+        OfflineTtsVitsModelConfig=OfflineTtsVitsModelConfig,
+        GenerationConfig=GenerationConfig,
+    )
 
 
 def build_test_bundle(
@@ -67,6 +130,8 @@ def test_health_endpoint_returns_service_status(tmp_path: Path) -> None:
     assert response.json()["checks"]["default_voice_loaded"] is True
     assert response.json()["startup_error"] is None
     assert response.json()["auth_enabled"] is True
+    assert response.json()["backend"]["runtime_mode"] == "auto"
+    assert response.json()["backend"]["configured_real_voices"] == 0
 
 
 def test_voices_endpoint_returns_registry(tmp_path: Path) -> None:
@@ -119,6 +184,76 @@ def test_tts_endpoint_returns_wav_audio(tmp_path: Path) -> None:
         headers=auth_headers,
         json={
             "text": "Dr. Smith says hello.",
+            "voice": "manifest-voice",
+            "format": "wav",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert response.content[:4] == b"RIFF"
+
+
+def test_tts_endpoint_can_use_real_backend_runtime_when_configured(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    voice_dir = models_dir / "voices" / "manifest-voice"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake-model", encoding="utf-8")
+    (voice_dir / "tokens.txt").write_text("fake-tokens", encoding="utf-8")
+    (models_dir / "MANIFEST.json").write_text(
+        """
+        {
+          "version": 1,
+          "voices": [
+            {
+              "id": "manifest-voice",
+              "name": "Manifest Voice",
+              "engine": "sherpa_onnx",
+              "language": "en",
+              "sample_rate_hz": 22050,
+              "license": "Apache-2.0",
+              "source": "models/voices/manifest-voice",
+              "backend": {
+                "model_type": "vits",
+                "model": "models/voices/manifest-voice/model.onnx",
+                "tokens": "models/voices/manifest-voice/tokens.txt"
+              }
+            }
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(sys.modules, "sherpa_onnx", build_fake_sherpa_onnx_module())
+    app = create_app(
+        config=AppConfig.from_mapping(
+            {
+                "tts": {"default_voice": "manifest-voice"},
+                "backend": {"mode": "real"},
+            }
+        ),
+        repo_root=tmp_path,
+    )
+    auth_headers = {"Authorization": f"Bearer {app.state.container.auth.token}"}
+    client = TestClient(app)
+
+    health_response = client.get("/v1/health")
+
+    assert health_response.status_code == 200
+    assert health_response.json()["checks"]["backend_ready"] is True
+    assert health_response.json()["backend"]["runtime_mode"] == "real"
+    assert health_response.json()["backend"]["configured_real_voices"] == 1
+    assert health_response.json()["backend"]["loaded_real_voices"] == ["manifest-voice"]
+
+    response = client.post(
+        "/v1/tts",
+        headers=auth_headers,
+        json={
+            "text": "Hello real runtime",
             "voice": "manifest-voice",
             "format": "wav",
         },

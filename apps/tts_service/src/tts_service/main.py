@@ -134,6 +134,7 @@ def _register_routes(app: FastAPI) -> None:
             "checks": checks,
             "startup_error": container.startup_error,
             "auth_enabled": container.auth.enabled,
+            "backend": container.backend.snapshot(),
             "streaming": container.streaming_metrics.snapshot(),
             "observability": container.observability.snapshot(),
         }
