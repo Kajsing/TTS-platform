@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 from tts_core.backends import SherpaOnnxBackend
+from tts_core.backends.base import BackendNotReadyError
+from tts_core.backends.sherpa_onnx import SherpaOnnxBackendSettings
 from tts_core.models import SynthesisRequest
 from tts_core.registry import VoiceNotFoundError
 
@@ -49,3 +51,20 @@ def test_sherpa_backend_streaming_returns_pcm_chunks(tmp_path) -> None:
     assert chunks
     assert chunks[0].job_id == "stream-job"
     assert chunks[0].pcm_bytes
+
+
+def test_sherpa_backend_real_mode_validates_required_assets_before_runtime_import(tmp_path) -> None:
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "vits",
+                "model": "models/voices/sherpa-en-debug/model.onnx",
+                "tokens": "models/voices/sherpa-en-debug/tokens.txt",
+            }
+        },
+    )
+
+    with pytest.raises(BackendNotReadyError, match="missing backend asset"):
+        backend.warmup("sherpa-en-debug")

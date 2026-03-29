@@ -29,6 +29,11 @@ DEFAULT_ALLOWED_ORIGINS: tuple[str, ...] = ()
 DEFAULT_REQUESTS_PER_MINUTE = 30
 DEFAULT_COMPLETED_JOB_TTL_SECONDS = 300
 DEFAULT_MAX_STORED_JOBS = 128
+DEFAULT_BACKEND_MODE = "auto"
+DEFAULT_BACKEND_PROVIDER = "cpu"
+DEFAULT_BACKEND_NUM_THREADS = 1
+DEFAULT_BACKEND_DEBUG = False
+DEFAULT_BACKEND_MAX_NUM_SENTENCES = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +173,36 @@ class LimitsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendConfig:
+    mode: str = DEFAULT_BACKEND_MODE
+    provider: str = DEFAULT_BACKEND_PROVIDER
+    num_threads: int = DEFAULT_BACKEND_NUM_THREADS
+    debug: bool = DEFAULT_BACKEND_DEBUG
+    max_num_sentences: int = DEFAULT_BACKEND_MAX_NUM_SENTENCES
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "BackendConfig":
+        config = cls(
+            mode=str(data.get("mode", DEFAULT_BACKEND_MODE)).lower(),
+            provider=str(data.get("provider", DEFAULT_BACKEND_PROVIDER)).lower(),
+            num_threads=int(data.get("num_threads", DEFAULT_BACKEND_NUM_THREADS)),
+            debug=bool(data.get("debug", DEFAULT_BACKEND_DEBUG)),
+            max_num_sentences=int(
+                data.get("max_num_sentences", DEFAULT_BACKEND_MAX_NUM_SENTENCES)
+            ),
+        )
+        if config.mode not in {"auto", "stub", "real"}:
+            raise ValueError("backend.mode must be one of: auto, stub, real")
+        if config.provider not in {"cpu", "cuda", "coreml"}:
+            raise ValueError("backend.provider must be one of: cpu, cuda, coreml")
+        if config.num_threads <= 0:
+            raise ValueError("backend.num_threads must be positive")
+        if config.max_num_sentences == 0 or config.max_num_sentences < -1:
+            raise ValueError("backend.max_num_sentences must be positive or -1")
+        return config
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     server: ServerConfig = ServerConfig()
     auth: AuthConfig = AuthConfig()
@@ -176,6 +211,7 @@ class AppConfig:
     metrics: MetricsConfig = MetricsConfig()
     security: SecurityConfig = SecurityConfig()
     limits: LimitsConfig = LimitsConfig()
+    backend: BackendConfig = BackendConfig()
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "AppConfig":
@@ -187,6 +223,7 @@ class AppConfig:
             metrics=MetricsConfig.from_mapping(_section(data, "metrics")),
             security=SecurityConfig.from_mapping(_section(data, "security")),
             limits=LimitsConfig.from_mapping(_section(data, "limits")),
+            backend=BackendConfig.from_mapping(_section(data, "backend")),
         )
 
 

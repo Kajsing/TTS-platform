@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,17 @@ class VoiceManifestError(ValueError):
     """Raised when a voice manifest cannot be parsed into valid descriptors."""
 
 
+@dataclass(frozen=True, slots=True)
+class VoiceManifestBundle:
+    voices: tuple[VoiceDescriptor, ...]
+    backend_configs: dict[str, dict[str, Any]]
+
+
 def load_voice_manifest(path: str | Path) -> list[VoiceDescriptor]:
+    return list(load_voice_manifest_bundle(path).voices)
+
+
+def load_voice_manifest_bundle(path: str | Path) -> VoiceManifestBundle:
     manifest_path = Path(path)
     with manifest_path.open("r", encoding="utf-8") as manifest_file:
         payload = json.load(manifest_file)
@@ -27,10 +38,24 @@ def load_voice_manifest(path: str | Path) -> list[VoiceDescriptor]:
     if not isinstance(raw_voices, list):
         raise VoiceManifestError("Voice manifest 'voices' field must be a list.")
 
-    return [_voice_from_mapping(index, raw_voice) for index, raw_voice in enumerate(raw_voices)]
+    voices: list[VoiceDescriptor] = []
+    backend_configs: dict[str, dict[str, Any]] = {}
+    for index, raw_voice in enumerate(raw_voices):
+        voice, backend_config = _voice_from_mapping(index, raw_voice)
+        voices.append(voice)
+        if backend_config is not None:
+            backend_configs[voice.id] = backend_config
+
+    return VoiceManifestBundle(
+        voices=tuple(voices),
+        backend_configs=backend_configs,
+    )
 
 
-def _voice_from_mapping(index: int, raw_voice: Any) -> VoiceDescriptor:
+def _voice_from_mapping(
+    index: int,
+    raw_voice: Any,
+) -> tuple[VoiceDescriptor, dict[str, Any] | None]:
     if not isinstance(raw_voice, dict):
         raise VoiceManifestError(f"Voice entry at index {index} must be an object.")
 
@@ -39,9 +64,12 @@ def _voice_from_mapping(index: int, raw_voice: Any) -> VoiceDescriptor:
         raise VoiceManifestError(
             f"Voice entry at index {index} has invalid 'capabilities' field."
         )
+    backend = raw_voice.get("backend")
+    if backend is not None and not isinstance(backend, dict):
+        raise VoiceManifestError(f"Voice entry at index {index} has invalid 'backend' field.")
 
     try:
-        return VoiceDescriptor(
+        descriptor = VoiceDescriptor(
             id=str(raw_voice["id"]),
             name=str(raw_voice["name"]),
             engine=str(raw_voice["engine"]),
@@ -61,13 +89,15 @@ def _voice_from_mapping(index: int, raw_voice: Any) -> VoiceDescriptor:
             quality_score=_optional_float(raw_voice.get("quality_score")),
             speed_score=_optional_float(raw_voice.get("speed_score")),
             stability_score=_optional_float(raw_voice.get("stability_score")),
-        )
+            )
     except KeyError as exc:
         raise VoiceManifestError(
             f"Voice entry at index {index} is missing required field: {exc.args[0]}"
         ) from exc
     except (TypeError, ValueError) as exc:
         raise VoiceManifestError(f"Voice entry at index {index} is invalid: {exc}") from exc
+
+    return descriptor, dict(backend) if backend is not None else None
 
 
 def _optional_string(value: Any) -> str | None:

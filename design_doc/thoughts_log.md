@@ -43,3 +43,11 @@ This file captures implementation-time thoughts that are worth remembering but a
 - If CLI output grows much more, consider a dedicated usage guide so README stays readable.
 - Phase 6.1 addressed popup voice discovery and basic rebuffering, so the next likely browser targets are better text extraction, stronger extension testability, and more resilient offscreen lifecycle recovery.
 - Phase 6.2 improved all three of those areas partially, so the next browser-focused gaps are now richer MV3 automation, better reader-mode style extraction, and sharper recovery semantics when the service disappears mid-stream.
+
+## Phase 7 Notes
+
+- Phase 7 should start with backend bootstrap and readiness before trying to solve every runtime detail at once.
+- A hidden manifest-side backend configuration block is a good compromise for real model asset mapping. It keeps `/v1/voices` backend-agnostic while still letting the service bind voices to real local assets.
+- An explicit backend runtime mode such as `stub`, `auto`, and `real` helps the repo move from the deterministic development synthesizer toward real inference without breaking all current development flows immediately.
+- `auto` should remain conservative: old manifests without backend asset metadata can still use the stub path, but voices that do declare backend assets should fail clearly if those assets or the runtime are not usable.
+- Truthful readiness is more important than pretending the real backend is active. If a manifest opts into real assets, startup and health should surface model-path or runtime failures instead of silently masking them.

@@ -5,8 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tts_core.backends.base import BackendError
-from tts_core.backends.sherpa_onnx import SherpaOnnxBackend, build_stub_voice
-from tts_core.manifest import load_voice_manifest
+from tts_core.backends.sherpa_onnx import (
+    SherpaOnnxBackend,
+    SherpaOnnxBackendSettings,
+    build_stub_voice,
+)
+from tts_core.manifest import VoiceManifestBundle, load_voice_manifest_bundle
 from tts_core.registry import VoiceRegistry
 from tts_core.text import SentenceSegmenter, TextNormalizer, TextPipeline
 
@@ -44,11 +48,26 @@ def build_application_state(
     base_path = repo_root or Path.cwd()
     auth_state = initialize_auth(config.auth, repo_root=base_path)
     manifest_path = base_path / "models" / "MANIFEST.json"
-    manifest_voices = load_voice_manifest(manifest_path) if manifest_path.exists() else []
-    backend_voices = tuple(manifest_voices) if manifest_voices else (build_stub_voice(),)
+    manifest_bundle = (
+        load_voice_manifest_bundle(manifest_path)
+        if manifest_path.exists()
+        else VoiceManifestBundle(voices=(), backend_configs={})
+    )
+    manifest_voices = list(manifest_bundle.voices)
+    backend_voices = (
+        tuple(manifest_bundle.voices) if manifest_bundle.voices else (build_stub_voice(),)
+    )
     backend = SherpaOnnxBackend(
         models_root=base_path / "models" / "voices",
         voices=backend_voices,
+        settings=SherpaOnnxBackendSettings(
+            runtime_mode=config.backend.mode,
+            provider=config.backend.provider,
+            num_threads=config.backend.num_threads,
+            debug=config.backend.debug,
+            max_num_sentences=config.backend.max_num_sentences,
+        ),
+        voice_runtime_configs=manifest_bundle.backend_configs,
     )
     registry = VoiceRegistry(
         voices=manifest_voices or backend.list_voices(),

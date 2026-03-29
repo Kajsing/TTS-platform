@@ -29,3 +29,10 @@ max_job_seconds = 300
 requests_per_minute = 30
 completed_job_ttl_seconds = 300
 max_stored_jobs = 128
+
+[backend]
+mode = "auto"
+provider = "cpu"
+num_threads = 1
+debug = false
+max_num_sentences = 1
