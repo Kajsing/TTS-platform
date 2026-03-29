@@ -106,12 +106,15 @@ This document records implementation details that were added during development 
 - The browser prototype stores localhost client settings such as base URL, token, preferred voice, buffer thresholds, and page-text limits.
 - The WebSocket streaming contract was extended in practice to accept the bearer token in the initial `start` event for browser clients that cannot attach `Authorization` headers directly.
 - Manual setup guidance was added for allow-listing the extension origin in the service configuration.
+- Phase 6.1 added popup-side service health checks and voice discovery so the browser client can inspect the local service instead of relying on manual voice-id entry.
+- Phase 6.1 also tightened the client playback loop with session-backed state persistence and simple rebuffering behavior after underruns.
 
 ### Why these additions matter
 
 - They validate that the current localhost contracts are usable from a real browser environment.
 - They keep browser-specific playback and UX concerns isolated from the service core.
 - They make the first client integration explicit before later UX or packaging work begins.
+- They reduce a few of the sharpest prototype edges without changing the service-domain boundaries.
 
 ## Future phases
 

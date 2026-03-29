@@ -24,8 +24,9 @@
         </label>
         <label>
           <span>Preferred Voice</span>
-          <input id="voice" type="text" placeholder="Optional voice id">
+          <select id="voice"></select>
         </label>
+        <p id="voice-hint" class="subtle">Use the service default voice or refresh voices from the local service.</p>
         <label>
           <span>Prebuffer (ms)</span>
           <input id="prebuffer-ms" type="number" min="50" step="10">
@@ -46,9 +47,19 @@
       </section>
 
       <section class="panel">
+        <div class="panel-header">
+          <p class="meta-label">Service Status</p>
+          <button id="refresh-service" type="button">Refresh</button>
+        </div>
+        <pre id="service-status" class="status">Loading…</pre>
+      </section>
+
+      <section class="panel">
         <p class="meta-label">Extension Origin</p>
         <p id="extension-origin" class="mono"></p>
         <p class="subtle">Add this origin to the local service allow-list.</p>
+        <p class="meta-label">Allow-List Snippet</p>
+        <pre id="origin-snippet" class="status">Loading…</pre>
       </section>
 
       <section class="panel actions">

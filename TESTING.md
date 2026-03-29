@@ -27,6 +27,14 @@ Current automated coverage focuses on the service and core foundation through ph
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
+Recommended extension checks:
+
+- confirm the popup can load service health and voice discovery from the configured base URL
+- confirm the allow-list snippet matches the current extension origin
+- verify selection playback on a normal web page
+- verify stop and restart behavior after an active stream
+- verify the popup still shows a sensible playback state after reopening it mid-stream
+
 Run tests with:
 
 ```bash
@@ -47,4 +55,12 @@ tts list-voices
 tts save "Hello world" --out out.wav
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
+```
+
+For a lightweight extension syntax check when `node` is available:
+
+```bash
+node --check apps/chrome_extension/src/background.js
+node --check apps/chrome_extension/src/popup.js
+node --check apps/chrome_extension/offscreen/offscreen.js
 ```

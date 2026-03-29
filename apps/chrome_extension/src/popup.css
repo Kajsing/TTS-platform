@@ -51,7 +51,8 @@ label span,
   letter-spacing: 0.08em;
 }
 
-input {
+input,
+select {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px 12px;
@@ -73,6 +74,14 @@ button.primary {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .actions {

@@ -5,6 +5,7 @@ let activeSources = new Set();
 let scheduledUntilTime = 0;
 let latestMark = null;
 let completeWhenDrained = null;
+let needsPrebuffer = true;
 
 let playbackState = {
   status: "idle",
@@ -65,6 +66,7 @@ async function startStream(config) {
   scheduledUntilTime = audioContext.currentTime;
   latestMark = null;
   completeWhenDrained = null;
+  needsPrebuffer = true;
 
   await setState({
     status: "connecting",
@@ -123,8 +125,8 @@ async function startStream(config) {
 async function handleJsonEvent(event, config) {
   if (event.type === "started") {
     await setState({
-      status: "streaming",
-      message: "Streaming audio",
+      status: "buffering",
+      message: "Buffering audio",
       activeStreamId: event.job_id,
       sampleRateHz: event.sample_rate_hz,
       channels: event.channels,
@@ -191,21 +193,14 @@ async function handleBinaryChunk(arrayBuffer, config) {
   });
 
   const bufferedMs = estimateBufferedMs();
-  if (
-    playbackState.status === "streaming" &&
-    bufferedMs < config.lowWatermarkMs
-  ) {
-    playbackState.underrunCount += 1;
-  }
-
   await setState({
     bufferedMs,
     lastEvent: "audio-frame",
   });
-  flushQueue(config);
+  await flushQueue(config);
 }
 
-function flushQueue(config) {
+async function flushQueue(config) {
   if (!audioContext) {
     return;
   }
@@ -214,12 +209,30 @@ function flushQueue(config) {
     scheduledUntilTime = audioContext.currentTime;
   }
 
-  if (
-    queuedChunks.length &&
-    estimateBufferedMs() >= config.prebufferMs &&
-    scheduledUntilTime === audioContext.currentTime
-  ) {
-    scheduledUntilTime = audioContext.currentTime + 0.05;
+  const bufferedMs = estimateBufferedMs();
+  if (needsPrebuffer) {
+    if (bufferedMs < config.prebufferMs) {
+      if (playbackState.status !== "buffering" && !completeWhenDrained) {
+        await setState({
+          status: "buffering",
+          message: "Buffering audio",
+          bufferedMs,
+          lastEvent: "buffering",
+        });
+      }
+      return;
+    }
+
+    needsPrebuffer = false;
+    scheduledUntilTime = Math.max(scheduledUntilTime, audioContext.currentTime + 0.05);
+    if (!completeWhenDrained) {
+      await setState({
+        status: "streaming",
+        message: "Streaming audio",
+        bufferedMs,
+        lastEvent: "buffer-ready",
+      });
+    }
   }
 
   while (queuedChunks.length && scheduledUntilTime > audioContext.currentTime) {
@@ -239,6 +252,21 @@ function flushQueue(config) {
     activeSources.add(source);
     source.onended = () => {
       activeSources.delete(source);
+      if (
+        !completeWhenDrained &&
+        websocket &&
+        websocket.readyState === WebSocket.OPEN &&
+        estimateBufferedMs() <= 0
+      ) {
+        needsPrebuffer = true;
+        playbackState.underrunCount += 1;
+        void setState({
+          status: "buffering",
+          message: "Rebuffering after underrun",
+          bufferedMs: 0,
+          lastEvent: "underrun",
+        });
+      }
       finalizeIfDrained();
     };
   }
@@ -266,6 +294,7 @@ async function stopStream({ notifyServer }) {
   completeWhenDrained = null;
   queuedChunks = [];
   latestMark = null;
+  needsPrebuffer = true;
   if (notifyServer && websocket && websocket.readyState === WebSocket.OPEN) {
     websocket.send(JSON.stringify({ type: "cancel" }));
   }

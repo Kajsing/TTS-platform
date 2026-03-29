@@ -33,6 +33,8 @@ Phase 6 is implemented:
 - offscreen streamed playback
 - extension popup, background worker, and content-script text capture
 - browser-friendly WebSocket start-event auth for the localhost extension flow
+- popup-side service status and voice discovery
+- more deliberate extension-side rebuffering and playback state recovery
 
 ## Repository Layout
 
@@ -99,6 +101,7 @@ The extension currently supports:
 - speaking a trimmed snapshot of the current page
 - offscreen playback of streamed PCM audio
 - local storage of base URL, token, voice, and buffering settings
+- voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.

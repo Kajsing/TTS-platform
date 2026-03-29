@@ -49,7 +49,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(await getConfig());
         return;
       case "tts-extension:get-state":
-        sendResponse({ ...playbackState });
+        sendResponse(await getPlaybackState());
+        return;
+      case "tts-extension:get-service-snapshot":
+        sendResponse(await getServiceSnapshot());
         return;
       case "tts-extension:speak-selection":
         sendResponse(await speakSelection());
@@ -66,6 +69,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ...playbackState,
           ...(message.state ?? {}),
         };
+        await persistPlaybackState(playbackState);
         await updateBadge();
         sendResponse({ ok: true });
         return;
@@ -138,10 +142,20 @@ async function startPlayback({ text, source, tabId }) {
 }
 
 async function stopPlayback() {
-  await ensureOffscreenDocument();
-  await chrome.runtime.sendMessage({
-    type: "tts-extension:stop-stream",
-  });
+  if (await hasOffscreenDocument()) {
+    await chrome.runtime.sendMessage({
+      type: "tts-extension:stop-stream",
+    });
+    return;
+  }
+
+  playbackState = {
+    status: "idle",
+    message: "Ready",
+    activeStreamId: null,
+  };
+  await persistPlaybackState(playbackState);
+  await updateBadge();
 }
 
 async function getConfig() {
@@ -152,6 +166,65 @@ async function getConfig() {
     ...sanitized,
     extensionOrigin: new URL(chrome.runtime.getURL("")).origin,
   };
+}
+
+async function getPlaybackState() {
+  const stored = await chrome.storage.session.get({ playbackState });
+  playbackState = {
+    ...playbackState,
+    ...(stored.playbackState ?? {}),
+  };
+
+  const offscreenReady = await hasOffscreenDocument();
+  if (!offscreenReady && isActivePlaybackStatus(playbackState.status)) {
+    return {
+      ...playbackState,
+      offscreenReady,
+      message: "Playback state may be stale because the offscreen document is unavailable.",
+    };
+  }
+
+  return {
+    ...playbackState,
+    offscreenReady,
+  };
+}
+
+async function getServiceSnapshot() {
+  const config = await getConfig();
+  const snapshot = {
+    baseUrl: config.baseUrl,
+    extensionOrigin: config.extensionOrigin,
+    originConfigSnippet: buildOriginConfigSnippet(config.extensionOrigin),
+    reachable: false,
+    health: null,
+    voices: [],
+    defaultVoice: config.voice || "",
+    authEnabled: true,
+    message: "Service has not been contacted yet.",
+  };
+
+  try {
+    const [healthResponse, voicesResponse] = await Promise.all([
+      fetchJson(config.baseUrl + "/v1/health"),
+      fetchJson(config.baseUrl + "/v1/voices"),
+    ]);
+
+    return {
+      ...snapshot,
+      reachable: true,
+      health: healthResponse,
+      voices: voicesResponse.voices ?? [],
+      defaultVoice: voicesResponse.default_voice ?? "",
+      authEnabled: Boolean(healthResponse.auth_enabled),
+      message: `Connected to local service (${healthResponse.status}).`,
+    };
+  } catch (error) {
+    return {
+      ...snapshot,
+      message: error.message,
+    };
+  }
 }
 
 function sanitizeConfig(config) {
@@ -199,11 +272,8 @@ async function getActiveTab() {
 
 async function ensureOffscreenDocument() {
   const offscreenUrl = "offscreen/offscreen.html";
-  if (chrome.offscreen.hasDocument) {
-    const hasDocument = await chrome.offscreen.hasDocument();
-    if (hasDocument) {
-      return;
-    }
+  if (await hasOffscreenDocument()) {
+    return;
   }
   await chrome.offscreen.createDocument({
     url: offscreenUrl,
@@ -212,10 +282,48 @@ async function ensureOffscreenDocument() {
   });
 }
 
+async function hasOffscreenDocument() {
+  if (!chrome.offscreen?.hasDocument) {
+    return false;
+  }
+  return chrome.offscreen.hasDocument();
+}
+
+async function persistPlaybackState(nextState) {
+  await chrome.storage.session.set({
+    playbackState: nextState,
+  });
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Service request failed with ${response.status} ${response.statusText}.`);
+  }
+  return response.json();
+}
+
+function buildOriginConfigSnippet(extensionOrigin) {
+  return [
+    "[security]",
+    `allowed_origins = ["${extensionOrigin}"]`,
+  ].join("\n");
+}
+
+function isActivePlaybackStatus(status) {
+  return new Set(["connecting", "buffering", "streaming", "draining"]).has(status);
+}
+
 async function updateBadge() {
   const badgeText = {
     idle: "",
     connecting: "...",
+    buffering: "...",
     streaming: "ON",
     draining: "ON",
     done: "",

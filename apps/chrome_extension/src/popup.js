@@ -10,23 +10,83 @@ const fields = {
 
 const statusText = document.querySelector("#status-text");
 const extensionOrigin = document.querySelector("#extension-origin");
+const serviceStatus = document.querySelector("#service-status");
+const originSnippet = document.querySelector("#origin-snippet");
+const voiceHint = document.querySelector("#voice-hint");
 
 async function loadPopup() {
   const config = await sendMessage({ type: "tts-extension:get-config" });
   extensionOrigin.textContent = config.extensionOrigin;
   fields.baseUrl.value = config.baseUrl;
   fields.token.value = config.token;
-  fields.voice.value = config.voice;
   fields.prebufferMs.value = config.prebufferMs;
   fields.lowWatermarkMs.value = config.lowWatermarkMs;
   fields.highWatermarkMs.value = config.highWatermarkMs;
   fields.maxChars.value = config.maxChars;
+  await refreshServiceSnapshot(config.voice);
   await refreshState();
 }
 
 async function refreshState() {
   const state = await sendMessage({ type: "tts-extension:get-state" });
   statusText.textContent = JSON.stringify(state, null, 2);
+}
+
+async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
+  const snapshot = await sendMessage({ type: "tts-extension:get-service-snapshot" });
+  serviceStatus.textContent = JSON.stringify(
+    {
+      reachable: snapshot.reachable,
+      message: snapshot.message,
+      healthStatus: snapshot.health?.status ?? null,
+      defaultVoice: snapshot.defaultVoice || null,
+      voicesDiscovered: snapshot.voices.length,
+      authEnabled: snapshot.authEnabled,
+      checks: snapshot.health?.checks ?? null,
+    },
+    null,
+    2
+  );
+  originSnippet.textContent = snapshot.originConfigSnippet;
+  populateVoiceOptions({
+    voices: snapshot.voices,
+    configuredVoice,
+    defaultVoice: snapshot.defaultVoice,
+  });
+}
+
+function populateVoiceOptions({ voices, configuredVoice, defaultVoice }) {
+  fields.voice.replaceChildren();
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = defaultVoice
+    ? `Use service default (${defaultVoice})`
+    : "Use service default";
+  fields.voice.append(defaultOption);
+
+  let matchedConfiguredVoice = configuredVoice === "";
+  for (const voice of voices) {
+    const option = document.createElement("option");
+    option.value = voice.id;
+    option.textContent = `${voice.name} (${voice.id})`;
+    fields.voice.append(option);
+    if (voice.id === configuredVoice) {
+      matchedConfiguredVoice = true;
+    }
+  }
+
+  if (configuredVoice && !matchedConfiguredVoice) {
+    const configuredOption = document.createElement("option");
+    configuredOption.value = configuredVoice;
+    configuredOption.textContent = `Configured voice (${configuredVoice})`;
+    fields.voice.append(configuredOption);
+  }
+
+  fields.voice.value = configuredVoice || "";
+  voiceHint.textContent = voices.length
+    ? `Discovered ${voices.length} voice(s) from the local service.`
+    : "No voices were discovered yet. Check the base URL and local service startup.";
 }
 
 document.querySelector("#save-config").addEventListener("click", async () => {
@@ -43,6 +103,12 @@ document.querySelector("#save-config").addEventListener("click", async () => {
     type: "tts-extension:save-config",
     config,
   });
+  await refreshServiceSnapshot(config.voice);
+  await refreshState();
+});
+
+document.querySelector("#refresh-service").addEventListener("click", async () => {
+  await refreshServiceSnapshot();
   await refreshState();
 });
 
@@ -67,6 +133,7 @@ setInterval(() => {
 
 loadPopup().catch((error) => {
   statusText.textContent = error.message;
+  serviceStatus.textContent = error.message;
 });
 
 function sendMessage(message) {
