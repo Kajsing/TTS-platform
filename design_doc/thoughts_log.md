@@ -12,6 +12,7 @@ This file captures implementation-time thoughts that are worth remembering but a
 - The browser prototype keeps playback in an offscreen document and leaves the localhost service browser-agnostic apart from one streaming-auth concession.
 - The popup can now inspect local service health and voices directly, which makes the browser prototype less dependent on undocumented setup knowledge.
 - Extension playback state is now mirrored into session storage so popup reopens and service-worker restarts have a better chance of showing useful state.
+- Phase 6.2 added a repo-native extension checker so we have at least one repeatable validation step before a full browser automation story exists.
 
 ## Known Gaps
 
@@ -23,6 +24,7 @@ This file captures implementation-time thoughts that are worth remembering but a
 - The extension currently depends on manual Chrome loading and manual allow-list setup, which is acceptable for the prototype but should not be mistaken for a polished distribution flow.
 - The popup now improves setup, but there is still no automated voice warmup/install flow from the browser side.
 - Rebuffering is better now, but it is still heuristic and not driven by chunk-plan metadata from the domain layer.
+- Text capture is better than a whole-body dump now, but it is still heuristic and page-dependent.
 
 ## Deferred Work
 
@@ -32,6 +34,7 @@ This file captures implementation-time thoughts that are worth remembering but a
 - Revisit browser auth hardening if the extension evolves beyond the current localhost prototype. The `auth_token` field on the first stream event is practical, but it should remain a deliberate compromise rather than spread casually.
 - Consider a dedicated extension usage and troubleshooting guide if phase 6 grows beyond a prototype.
 - If extension complexity keeps growing, consider splitting the popup state/service inspection code from playback-control code so the client remains readable.
+- If a true extension test harness arrives later, the current `check_extension.py` script should probably stay as the fastest structural smoke check rather than being replaced entirely.
 
 ## Next Phase Notes
 
@@ -39,3 +42,4 @@ This file captures implementation-time thoughts that are worth remembering but a
 - The browser prototype confirmed that standard browser WebSockets cannot be treated like CLI clients for auth. Keep that constraint visible in future design choices.
 - If CLI output grows much more, consider a dedicated usage guide so README stays readable.
 - Phase 6.1 addressed popup voice discovery and basic rebuffering, so the next likely browser targets are better text extraction, stronger extension testability, and more resilient offscreen lifecycle recovery.
+- Phase 6.2 improved all three of those areas partially, so the next browser-focused gaps are now richer MV3 automation, better reader-mode style extraction, and sharper recovery semantics when the service disappears mid-stream.

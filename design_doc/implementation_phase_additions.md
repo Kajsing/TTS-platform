@@ -108,6 +108,7 @@ This document records implementation details that were added during development 
 - Manual setup guidance was added for allow-listing the extension origin in the service configuration.
 - Phase 6.1 added popup-side service health checks and voice discovery so the browser client can inspect the local service instead of relying on manual voice-id entry.
 - Phase 6.1 also tightened the client playback loop with session-backed state persistence and simple rebuffering behavior after underruns.
+- Phase 6.2 improved page text capture heuristics, added retry-oriented offscreen lifecycle recovery, and introduced a lightweight extension validation script plus troubleshooting note.
 
 ### Why these additions matter
 
@@ -115,6 +116,7 @@ This document records implementation details that were added during development 
 - They keep browser-specific playback and UX concerns isolated from the service core.
 - They make the first client integration explicit before later UX or packaging work begins.
 - They reduce a few of the sharpest prototype edges without changing the service-domain boundaries.
+- They create a more practical maintenance loop for the extension even before a full MV3 automation harness exists.
 
 ## Future phases
 

@@ -12,6 +12,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
 - recover more deliberately from playback underruns by rebuffering before audio resumes
+- retry offscreen playback startup if the offscreen document has gone stale
+- provide a troubleshooting guide and a lightweight repo-native validation script
 
 ## Before loading the extension
 
@@ -46,9 +48,23 @@ The popup can also refresh service health and voice discovery directly from the 
 5. Save the token and other settings.
 6. Speak a text selection from a normal web page.
 7. Stop playback once and start it again to confirm the offscreen flow recovers cleanly.
+8. Reopen the popup during or after playback and confirm the state still looks sensible.
 
 ## Notes
 
 - Browser WebSocket clients cannot set custom `Authorization` headers, so the prototype sends the bearer token in the first `start` event for `WS /v1/tts/stream`.
 - This token flow is intentionally limited to the localhost MVP shape and should be revisited if the browser client becomes more broadly distributed.
 - The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
+- Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
+
+## Validation
+
+Run the lightweight extension validation script with:
+
+```bash
+python3 scripts/check_extension.py
+```
+
+This checks manifest references, linked popup/offscreen assets, and JavaScript syntax when `node` is available.
+
+For common issues, see [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).

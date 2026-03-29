@@ -49,7 +49,11 @@
       <section class="panel">
         <div class="panel-header">
           <p class="meta-label">Service Status</p>
-          <button id="refresh-service" type="button">Refresh</button>
+          <div class="button-row">
+            <button id="copy-origin" type="button">Copy Origin</button>
+            <button id="copy-snippet" type="button">Copy Snippet</button>
+            <button id="refresh-service" type="button">Refresh</button>
+          </div>
         </div>
         <pre id="service-status" class="status">Loading…</pre>
       </section>
@@ -66,6 +70,11 @@
         <button id="speak-selection" class="primary">Speak Selection</button>
         <button id="speak-page">Speak Page</button>
         <button id="stop-playback">Stop</button>
+      </section>
+
+      <section class="panel">
+        <p class="meta-label">Action Message</p>
+        <p id="action-message" class="subtle">Ready.</p>
       </section>
 
       <section class="panel">

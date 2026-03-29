@@ -34,6 +34,8 @@ Recommended extension checks:
 - verify selection playback on a normal web page
 - verify stop and restart behavior after an active stream
 - verify the popup still shows a sensible playback state after reopening it mid-stream
+- verify the popup can copy the extension origin and allow-list snippet
+- verify page playback prefers readable content over navigation-heavy boilerplate on a normal article page
 
 Run tests with:
 
@@ -60,6 +62,7 @@ python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 For a lightweight extension syntax check when `node` is available:
 
 ```bash
+python3 scripts/check_extension.py
 node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js

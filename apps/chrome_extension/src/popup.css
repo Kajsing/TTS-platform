@@ -84,6 +84,13 @@ button.primary {
   margin-bottom: 8px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -98,6 +105,14 @@ button.primary {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.subtle[data-kind="error"] {
+  color: #9f1d35;
+}
+
+.subtle[data-kind="success"] {
+  color: #1d6f42;
 }
 
 .mono,

@@ -35,6 +35,7 @@ Phase 6 is implemented:
 - browser-friendly WebSocket start-event auth for the localhost extension flow
 - popup-side service status and voice discovery
 - more deliberate extension-side rebuffering and playback state recovery
+- heuristic page-text extraction and a lightweight extension validation script
 
 ## Repository Layout
 
@@ -105,3 +106,5 @@ The extension currently supports:
 - displaying the extension origin so it can be allow-listed in the local service config
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.
+
+For extension-specific setup and troubleshooting, see [README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) and [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).

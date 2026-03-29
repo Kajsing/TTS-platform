@@ -114,9 +114,22 @@ async function startStream(config) {
     });
   };
 
-  websocket.onclose = async () => {
-    if (playbackState.status === "streaming" || playbackState.status === "connecting") {
-      completeWhenDrained = "done";
+  websocket.onclose = async (event) => {
+    websocket = null;
+    if (completeWhenDrained || ["done", "cancelled", "error", "stop"].includes(playbackState.lastEvent)) {
+      finalizeIfDrained();
+      return;
+    }
+
+    if (isActivePlaybackStatus(playbackState.status)) {
+      completeWhenDrained = event.wasClean ? "done" : "interrupted";
+      if (completeWhenDrained === "interrupted") {
+        await setState({
+          status: "interrupted",
+          message: "Stream connection closed unexpectedly",
+          lastEvent: "interrupted",
+        });
+      }
       finalizeIfDrained();
     }
   };
@@ -283,7 +296,7 @@ function finalizeIfDrained() {
   completeWhenDrained = null;
   setState({
     status: finalStatus,
-    message: finalStatus === "done" ? "Playback finished" : "Playback cancelled",
+    message: finalStatusMessage(finalStatus),
     activeStreamId: null,
     bufferedMs: 0,
     lastEvent: finalStatus,
@@ -380,4 +393,21 @@ function snapshotState() {
     ...playbackState,
     bufferedMs: estimateBufferedMs(),
   };
+}
+
+function isActivePlaybackStatus(status) {
+  return new Set(["connecting", "buffering", "streaming", "draining"]).has(status);
+}
+
+function finalStatusMessage(status) {
+  if (status === "done") {
+    return "Playback finished";
+  }
+  if (status === "cancelled") {
+    return "Playback cancelled";
+  }
+  if (status === "interrupted") {
+    return "Playback interrupted";
+  }
+  return "Playback stopped";
 }

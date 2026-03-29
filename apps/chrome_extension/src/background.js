@@ -14,6 +14,8 @@ let playbackState = {
   activeStreamId: null,
 };
 
+void initializeExtensionState();
+
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({
@@ -65,24 +67,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true });
         return;
       case "tts-extension:playback-state":
-        playbackState = {
+        await setPlaybackState({
           ...playbackState,
           ...(message.state ?? {}),
-        };
-        await persistPlaybackState(playbackState);
-        await updateBadge();
+        });
         sendResponse({ ok: true });
         return;
       default:
         sendResponse({ ok: false, message: "Unknown extension message." });
     }
   })().catch((error) => {
-    playbackState = {
+    void setPlaybackState({
       status: "error",
       message: error.message,
       activeStreamId: null,
-    };
-    updateBadge();
+    });
     sendResponse({ ok: false, message: error.message });
   });
 
@@ -122,16 +121,14 @@ async function startPlayback({ text, source, tabId }) {
   if (!config.token) {
     throw new Error("Missing token. Open the popup and save a service token first.");
   }
-  await ensureOffscreenDocument();
-  playbackState = {
+  await setPlaybackState({
     status: "connecting",
     message: `Starting ${source} playback`,
     activeStreamId: null,
     source,
     tabId,
-  };
-  await updateBadge();
-  await chrome.runtime.sendMessage({
+  });
+  const response = await sendOffscreenMessage({
     type: "tts-extension:start-stream",
     payload: {
       ...config,
@@ -139,23 +136,24 @@ async function startPlayback({ text, source, tabId }) {
       extensionOrigin: config.extensionOrigin,
     },
   });
+  if (!response?.ok) {
+    throw new Error(response?.message || "Failed to start offscreen playback.");
+  }
 }
 
 async function stopPlayback() {
   if (await hasOffscreenDocument()) {
-    await chrome.runtime.sendMessage({
+    await sendOffscreenMessage({
       type: "tts-extension:stop-stream",
     });
     return;
   }
 
-  playbackState = {
+  await setPlaybackState({
     status: "idle",
     message: "Ready",
     activeStreamId: null,
-  };
-  await persistPlaybackState(playbackState);
-  await updateBadge();
+  });
 }
 
 async function getConfig() {
@@ -180,7 +178,8 @@ async function getPlaybackState() {
     return {
       ...playbackState,
       offscreenReady,
-      message: "Playback state may be stale because the offscreen document is unavailable.",
+      status: "interrupted",
+      message: "Playback was interrupted because the offscreen document is unavailable.",
     };
   }
 
@@ -295,6 +294,43 @@ async function persistPlaybackState(nextState) {
   });
 }
 
+async function sendOffscreenMessage(message, allowRetry = true) {
+  await ensureOffscreenDocument();
+  try {
+    return await chrome.runtime.sendMessage(message);
+  } catch (error) {
+    if (!allowRetry || !shouldRetryOffscreenMessage(error)) {
+      throw error;
+    }
+    await recreateOffscreenDocument();
+    return chrome.runtime.sendMessage(message);
+  }
+}
+
+async function recreateOffscreenDocument() {
+  if (await hasOffscreenDocument()) {
+    await closeOffscreenDocument();
+  }
+  await ensureOffscreenDocument();
+}
+
+async function closeOffscreenDocument() {
+  if (!chrome.offscreen?.closeDocument) {
+    return;
+  }
+  await chrome.offscreen.closeDocument();
+}
+
+function shouldRetryOffscreenMessage(error) {
+  return String(error?.message || "").includes("Receiving end does not exist");
+}
+
+async function setPlaybackState(nextState) {
+  playbackState = nextState;
+  await persistPlaybackState(playbackState);
+  await updateBadge();
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     method: "GET",
@@ -319,6 +355,24 @@ function isActivePlaybackStatus(status) {
   return new Set(["connecting", "buffering", "streaming", "draining"]).has(status);
 }
 
+async function initializeExtensionState() {
+  const restoredState = await getPlaybackState();
+  if (!restoredState.offscreenReady && isActivePlaybackStatus(restoredState.status)) {
+    await setPlaybackState({
+      status: "interrupted",
+      message: "Recovered after background restart, but playback was no longer active.",
+      activeStreamId: null,
+      source: restoredState.source,
+      tabId: restoredState.tabId,
+      lastEvent: "recovered",
+    });
+    return;
+  }
+
+  playbackState = restoredState;
+  await updateBadge();
+}
+
 async function updateBadge() {
   const badgeText = {
     idle: "",
@@ -328,6 +382,7 @@ async function updateBadge() {
     draining: "ON",
     done: "",
     cancelled: "",
+    interrupted: "ERR",
     error: "ERR",
   }[playbackState.status] ?? "";
 

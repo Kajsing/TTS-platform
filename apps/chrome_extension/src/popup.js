@@ -13,6 +13,7 @@ const extensionOrigin = document.querySelector("#extension-origin");
 const serviceStatus = document.querySelector("#service-status");
 const originSnippet = document.querySelector("#origin-snippet");
 const voiceHint = document.querySelector("#voice-hint");
+const actionMessage = document.querySelector("#action-message");
 
 async function loadPopup() {
   const config = await sendMessage({ type: "tts-extension:get-config" });
@@ -29,24 +30,12 @@ async function loadPopup() {
 
 async function refreshState() {
   const state = await sendMessage({ type: "tts-extension:get-state" });
-  statusText.textContent = JSON.stringify(state, null, 2);
+  statusText.textContent = formatPlaybackState(state);
 }
 
 async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
   const snapshot = await sendMessage({ type: "tts-extension:get-service-snapshot" });
-  serviceStatus.textContent = JSON.stringify(
-    {
-      reachable: snapshot.reachable,
-      message: snapshot.message,
-      healthStatus: snapshot.health?.status ?? null,
-      defaultVoice: snapshot.defaultVoice || null,
-      voicesDiscovered: snapshot.voices.length,
-      authEnabled: snapshot.authEnabled,
-      checks: snapshot.health?.checks ?? null,
-    },
-    null,
-    2
-  );
+  serviceStatus.textContent = formatServiceSnapshot(snapshot);
   originSnippet.textContent = snapshot.originConfigSnippet;
   populateVoiceOptions({
     voices: snapshot.voices,
@@ -90,41 +79,66 @@ function populateVoiceOptions({ voices, configuredVoice, defaultVoice }) {
 }
 
 document.querySelector("#save-config").addEventListener("click", async () => {
-  const config = {
-    baseUrl: fields.baseUrl.value.trim(),
-    token: fields.token.value.trim(),
-    voice: fields.voice.value.trim(),
-    prebufferMs: Number(fields.prebufferMs.value),
-    lowWatermarkMs: Number(fields.lowWatermarkMs.value),
-    highWatermarkMs: Number(fields.highWatermarkMs.value),
-    maxChars: Number(fields.maxChars.value),
-  };
-  await sendMessage({
-    type: "tts-extension:save-config",
-    config,
-  });
-  await refreshServiceSnapshot(config.voice);
-  await refreshState();
+  try {
+    const config = {
+      baseUrl: fields.baseUrl.value.trim(),
+      token: fields.token.value.trim(),
+      voice: fields.voice.value.trim(),
+      prebufferMs: Number(fields.prebufferMs.value),
+      lowWatermarkMs: Number(fields.lowWatermarkMs.value),
+      highWatermarkMs: Number(fields.highWatermarkMs.value),
+      maxChars: Number(fields.maxChars.value),
+    };
+    await sendMessage({
+      type: "tts-extension:save-config",
+      config,
+    });
+    await refreshServiceSnapshot(config.voice);
+    await refreshState();
+    setActionMessage("Settings saved.", "success");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
 });
 
 document.querySelector("#refresh-service").addEventListener("click", async () => {
-  await refreshServiceSnapshot();
-  await refreshState();
+  try {
+    await refreshServiceSnapshot();
+    await refreshState();
+    setActionMessage("Service snapshot refreshed.", "success");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
 });
 
 document.querySelector("#speak-selection").addEventListener("click", async () => {
-  const result = await sendMessage({ type: "tts-extension:speak-selection" });
-  statusText.textContent = JSON.stringify(result, null, 2);
+  await runAction("tts-extension:speak-selection");
 });
 
 document.querySelector("#speak-page").addEventListener("click", async () => {
-  const result = await sendMessage({ type: "tts-extension:speak-page" });
-  statusText.textContent = JSON.stringify(result, null, 2);
+  await runAction("tts-extension:speak-page");
 });
 
 document.querySelector("#stop-playback").addEventListener("click", async () => {
-  const result = await sendMessage({ type: "tts-extension:stop" });
-  statusText.textContent = JSON.stringify(result, null, 2);
+  await runAction("tts-extension:stop");
+});
+
+document.querySelector("#copy-origin").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(extensionOrigin.textContent);
+    setActionMessage("Extension origin copied.", "success");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
+});
+
+document.querySelector("#copy-snippet").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(originSnippet.textContent);
+    setActionMessage("Allow-list snippet copied.", "success");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
 });
 
 setInterval(() => {
@@ -134,8 +148,52 @@ setInterval(() => {
 loadPopup().catch((error) => {
   statusText.textContent = error.message;
   serviceStatus.textContent = error.message;
+  setActionMessage(error.message, "error");
 });
 
 function sendMessage(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+async function runAction(type) {
+  try {
+    const result = await sendMessage({ type });
+    await refreshState();
+    setActionMessage(result.message || "Action completed.", result.ok ? "success" : "error");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
+}
+
+function setActionMessage(message, kind = "info") {
+  actionMessage.textContent = message;
+  actionMessage.dataset.kind = kind;
+}
+
+function formatPlaybackState(state) {
+  const lines = [
+    `Status: ${state.status}`,
+    `Message: ${state.message}`,
+    state.source ? `Source: ${state.source}` : null,
+    state.activeStreamId ? `Stream: ${state.activeStreamId}` : null,
+    state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
+    state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
+    state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
+    state.lastEvent ? `Last Event: ${state.lastEvent}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+function formatServiceSnapshot(snapshot) {
+  const checks = snapshot.health?.checks ?? {};
+  const lines = [
+    `Reachable: ${snapshot.reachable}`,
+    `Message: ${snapshot.message}`,
+    `Health: ${snapshot.health?.status ?? "unavailable"}`,
+    `Default Voice: ${snapshot.defaultVoice || "none"}`,
+    `Voices Discovered: ${snapshot.voices.length}`,
+    `Auth Enabled: ${snapshot.authEnabled}`,
+    Object.keys(checks).length ? `Checks: ${JSON.stringify(checks)}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
 }
