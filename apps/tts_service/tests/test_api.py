@@ -469,6 +469,77 @@ def test_tts_jobs_flow_returns_completed_status(tmp_path: Path) -> None:
     assert status_payload["result_format"] == "wav"
 
 
+def test_tts_jobs_flow_can_use_real_backend_runtime(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    voice_dir = models_dir / "voices" / "manifest-voice"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake-model", encoding="utf-8")
+    (voice_dir / "tokens.txt").write_text("fake-tokens", encoding="utf-8")
+    (models_dir / "MANIFEST.json").write_text(
+        """
+        {
+          "version": 1,
+          "voices": [
+            {
+              "id": "manifest-voice",
+              "name": "Manifest Voice",
+              "engine": "sherpa_onnx",
+              "language": "en",
+              "sample_rate_hz": 22050,
+              "license": "Apache-2.0",
+              "source": "models/voices/manifest-voice",
+              "backend": {
+                "model_type": "vits",
+                "model": "models/voices/manifest-voice/model.onnx",
+                "tokens": "models/voices/manifest-voice/tokens.txt"
+              }
+            }
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(sys.modules, "sherpa_onnx", build_fake_sherpa_onnx_module())
+    app = create_app(
+        config=AppConfig.from_mapping(
+            {
+                "tts": {"default_voice": "manifest-voice"},
+                "backend": {"mode": "real"},
+            }
+        ),
+        repo_root=tmp_path,
+    )
+    auth_headers = {"Authorization": f"Bearer {app.state.container.auth.token}"}
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Hello real backend job", "voice": "manifest-voice"},
+    )
+
+    assert create_response.status_code == 200
+    job_id = create_response.json()["job_id"]
+
+    status_payload = {}
+    for _ in range(25):
+        status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] == "completed":
+            break
+        time.sleep(0.02)
+
+    assert status_payload["status"] == "completed"
+    result_response = client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+    assert result_response.status_code == 200
+    assert result_response.content[:4] == b"RIFF"
+
+
 def test_tts_job_result_endpoint_returns_audio(tmp_path: Path) -> None:
     client, auth_headers, _ = build_test_bundle(tmp_path)
 
