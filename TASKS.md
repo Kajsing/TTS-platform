@@ -46,3 +46,20 @@
 - [x] Add offscreen playback
 - [x] Add jitter buffer
 - [x] Add extension auth flow
+
+## Phase 7
+
+- [x] Add backend runtime config with `stub` / `auto` / `real` modes
+- [x] Add manifest-side backend asset binding for real `sherpa-onnx` voices
+- [x] Make backend readiness and startup errors more truthful
+- [x] Add backend status snapshot to `/v1/health`
+- [x] Prove the real sync path with a fake `sherpa_onnx` runtime in tests
+- [x] Prove the real async job path with a fake `sherpa_onnx` runtime in tests
+- [x] Prove the real streaming path with a fake `sherpa_onnx` runtime in tests
+- [x] Add async job benchmarking mode to `scripts/benchmark.py`
+- [x] Add a first-class chunk planning component in `tts_core`
+- [x] Route sync, jobs, and streaming through the shared chunk-planning flow
+- [ ] Improve chunk-plan heuristics beyond sentence grouping and simple pause hints
+- [ ] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
+- [ ] Tighten cancellation semantics for running real-backend work
+- [ ] Add stronger docs for model asset layout, manifest conventions, and backend setup

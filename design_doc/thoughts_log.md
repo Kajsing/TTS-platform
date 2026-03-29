@@ -59,3 +59,11 @@ This file captures implementation-time thoughts that are worth remembering but a
 - Chunk planning is now worth making real even before true incremental backend generation exists. A domain-level plan lets sync, jobs, and streaming share the same text-execution structure instead of each mode inventing its own splitting behavior.
 - The first chunk-planning pass can stay intentionally simple: sentence-based grouping with pause hints is already a big improvement over hiding all chunk behavior inside backend implementation details.
 - Even with a chunk plan, the current service may still synthesize one planned chunk at a time and then re-encode. That is not the final performance shape, but it is a clean transitional architecture because it makes plan boundaries explicit without changing public contracts.
+
+## Next Session Starting Point
+
+- The repo is in a good checkpoint state after the first large Phase 7 pass.
+- Current validation status: `python3 -m pytest -q` passes with 61 tests, and `python3 -m ruff check .` passes.
+- The service now has real-backend configuration, truthful readiness reporting, fake-runtime coverage for sync/jobs/streaming, async job benchmarking, and a first chunk planner.
+- The highest-value next task is probably to improve chunk-plan quality and then tighten the streaming path so it can move toward true incremental backend generation rather than full planned-chunk synthesis followed by PCM frame slicing.
+- If the next session needs a smaller starting slice, model/setup documentation is also a good target because the backend asset conventions now exist in code but are not yet explained clearly for humans.
