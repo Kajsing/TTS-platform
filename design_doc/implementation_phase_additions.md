@@ -96,6 +96,23 @@ This document records implementation details that were added during development 
 - They make it easier to spot regressions in audio output and request handling.
 - They give later browser and performance work a concrete baseline for comparison.
 
+## Phase 6
+
+### Added implementation details
+
+- A first Chrome MV3 prototype was added under `apps/chrome_extension`.
+- The prototype uses a popup, background service worker, content script, and offscreen document instead of embedding browser behavior in the localhost service.
+- Offscreen playback now consumes the existing WebSocket streaming contract and schedules PCM chunks with a small local prebuffer.
+- The browser prototype stores localhost client settings such as base URL, token, preferred voice, buffer thresholds, and page-text limits.
+- The WebSocket streaming contract was extended in practice to accept the bearer token in the initial `start` event for browser clients that cannot attach `Authorization` headers directly.
+- Manual setup guidance was added for allow-listing the extension origin in the service configuration.
+
+### Why these additions matter
+
+- They validate that the current localhost contracts are usable from a real browser environment.
+- They keep browser-specific playback and UX concerns isolated from the service core.
+- They make the first client integration explicit before later UX or packaging work begins.
+
 ## Future phases
 
 As later phases are implemented, this file should be extended with:

@@ -19,7 +19,12 @@ from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
 from .schemas import SynthesizeRequestPayload
-from .security import enforce_headers_access, enforce_write_access
+from .security import (
+    enforce_headers_access,
+    enforce_write_access,
+    extract_bearer_token_from_headers,
+    validate_auth_token,
+)
 from .synthesis import SynthesisService
 
 
@@ -206,6 +211,7 @@ def _register_routes(app: FastAPI) -> None:
                 auth_state=container.auth,
                 origin_policy=container.origin_policy,
                 rate_limiter=container.rate_limiter,
+                require_auth=False,
             )
         except APIError as exc:
             await websocket.send_json({"type": "error", "error": exc.to_response()["error"]})
@@ -219,6 +225,10 @@ def _register_routes(app: FastAPI) -> None:
                     "First WebSocket event must be a start event.",
                     param="type",
                 )
+
+            header_token = extract_bearer_token_from_headers(websocket.headers)
+            provided_token = header_token or initial_message.get("auth_token")
+            validate_auth_token(container.auth, provided_token)
 
             payload = SynthesizeRequestPayload.model_validate(initial_message.get("payload", {}))
             stream_id = str(uuid4())

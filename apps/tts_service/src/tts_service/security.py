@@ -86,8 +86,7 @@ def enforce_write_access(
         return
 
     provided_token = extract_bearer_token(request)
-    if provided_token is None or provided_token != auth_state.token:
-        raise unauthorized()
+    validate_auth_token(auth_state, provided_token)
 
 
 def enforce_headers_access(
@@ -97,15 +96,22 @@ def enforce_headers_access(
     auth_state: AuthState,
     origin_policy: OriginPolicy,
     rate_limiter: RateLimiter,
+    require_auth: bool = True,
 ) -> None:
     origin_policy.validate(headers.get("origin"))
     rate_limiter.check(client_host)
 
-    if not auth_state.enabled:
+    if not auth_state.enabled or not require_auth:
         return
 
     provided_token = extract_bearer_token_from_headers(headers)
-    if provided_token is None or provided_token != auth_state.token:
+    validate_auth_token(auth_state, provided_token)
+
+
+def validate_auth_token(auth_state: AuthState, token: str | None) -> None:
+    if not auth_state.enabled:
+        return
+    if token is None or token != auth_state.token:
         raise unauthorized()
 
 

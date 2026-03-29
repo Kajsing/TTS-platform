@@ -71,3 +71,13 @@ Reasoning:
 - It validates the real client-facing contract.
 - It avoids creating a second unofficial integration path.
 - It makes the tools useful for both local development and later browser-adjacent testing.
+
+## 2026-03-29: Accept browser streaming auth in the first WebSocket start event
+
+The WebSocket streaming endpoint still supports bearer headers, but it also accepts the token in the initial `start` message for browser-based clients.
+
+Reasoning:
+
+- Standard browser WebSocket clients cannot attach arbitrary `Authorization` headers in the same way as non-browser clients.
+- The Chrome extension prototype should reuse the existing streaming endpoint instead of introducing a separate browser-only transport.
+- Keeping this compromise scoped to localhost preserves the public contract while acknowledging a browser platform constraint.

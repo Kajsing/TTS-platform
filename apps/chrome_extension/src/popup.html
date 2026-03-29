@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TTS Platform</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <section class="panel">
+        <h1>TTS Platform</h1>
+        <p class="subtle">MV3 prototype for the local localhost service.</p>
+      </section>
+
+      <section class="panel">
+        <label>
+          <span>Base URL</span>
+          <input id="base-url" type="url" placeholder="http://127.0.0.1:7777">
+        </label>
+        <label>
+          <span>Token</span>
+          <input id="token" type="password" placeholder="Paste local service token">
+        </label>
+        <label>
+          <span>Preferred Voice</span>
+          <input id="voice" type="text" placeholder="Optional voice id">
+        </label>
+        <label>
+          <span>Prebuffer (ms)</span>
+          <input id="prebuffer-ms" type="number" min="50" step="10">
+        </label>
+        <label>
+          <span>Low Watermark (ms)</span>
+          <input id="low-watermark-ms" type="number" min="20" step="10">
+        </label>
+        <label>
+          <span>High Watermark (ms)</span>
+          <input id="high-watermark-ms" type="number" min="100" step="10">
+        </label>
+        <label>
+          <span>Max Page Characters</span>
+          <input id="max-chars" type="number" min="200" step="100">
+        </label>
+        <button id="save-config" class="primary">Save Settings</button>
+      </section>
+
+      <section class="panel">
+        <p class="meta-label">Extension Origin</p>
+        <p id="extension-origin" class="mono"></p>
+        <p class="subtle">Add this origin to the local service allow-list.</p>
+      </section>
+
+      <section class="panel actions">
+        <button id="speak-selection" class="primary">Speak Selection</button>
+        <button id="speak-page">Speak Page</button>
+        <button id="stop-playback">Stop</button>
+      </section>
+
+      <section class="panel">
+        <p class="meta-label">Playback State</p>
+        <pre id="status-text" class="status">Loading…</pre>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

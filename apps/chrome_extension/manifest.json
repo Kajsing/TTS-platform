@@ -1,6 +1,40 @@
 {
   "manifest_version": 3,
-  "name": "TTS Platform Extension Placeholder",
-  "version": "0.0.0",
-  "description": "Placeholder manifest for the future browser client."
+  "name": "TTS Platform Prototype",
+  "version": "0.1.0",
+  "description": "MV3 prototype client for the local TTS platform.",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "offscreen",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "TTS Platform",
+    "default_popup": "src/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["offscreen/offscreen.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

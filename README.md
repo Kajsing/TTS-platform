@@ -1,10 +1,10 @@
 # TTS Platform
 
-Offline-first local text-to-speech platform designed around a stable core domain, a localhost API, and future browser playback integration.
+Offline-first local text-to-speech platform designed around a stable core domain, a localhost API, and browser playback integration.
 
 ## Current Status
 
-Phase 5 is implemented:
+Phase 6 is implemented:
 
 - repository skeleton
 - engineering guidance documents
@@ -29,6 +29,10 @@ Phase 5 is implemented:
 - `tts` CLI
 - benchmark script
 - audio regression tests
+- Chrome MV3 prototype
+- offscreen streamed playback
+- extension popup, background worker, and content-script text capture
+- browser-friendly WebSocket start-event auth for the localhost extension flow
 
 ## Repository Layout
 
@@ -85,6 +89,16 @@ python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 
-## Next Step
+## Chrome Extension Prototype
 
-Phase 6 will add the first browser client prototype.
+See [apps/chrome_extension/README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) for setup and loading instructions.
+
+The extension currently supports:
+
+- speaking the current text selection
+- speaking a trimmed snapshot of the current page
+- offscreen playback of streamed PCM audio
+- local storage of base URL, token, voice, and buffering settings
+- displaying the extension origin so it can be allow-listed in the local service config
+
+The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.

@@ -42,7 +42,7 @@
 
 ## Phase 6
 
-- [ ] Add MV3 prototype
-- [ ] Add offscreen playback
-- [ ] Add jitter buffer
-- [ ] Add extension auth flow
+- [x] Add MV3 prototype
+- [x] Add offscreen playback
+- [x] Add jitter buffer
+- [x] Add extension auth flow

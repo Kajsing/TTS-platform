@@ -63,6 +63,15 @@ def test_websocket_stream_requires_auth(tmp_path: Path) -> None:
     client, _, _ = build_test_bundle(tmp_path)
 
     with client.websocket_connect("/v1/tts/stream") as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "text": "Missing auth should fail.",
+                    "voice": "manifest-voice",
+                },
+            }
+        )
         message_type, payload = _read_next_message(websocket)
 
     assert message_type == "json"
@@ -116,6 +125,27 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
     assert streaming_metrics["total_streams"] >= 1
     assert streaming_metrics["completed_streams"] >= 1
     assert streaming_metrics["active_streams"] == 0
+
+
+def test_websocket_stream_accepts_auth_token_in_start_event(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+    token = auth_headers["Authorization"].split(" ", maxsplit=1)[1]
+
+    with client.websocket_connect("/v1/tts/stream") as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "auth_token": token,
+                "payload": {
+                    "text": "Hello extension streaming world.",
+                    "voice": "manifest-voice",
+                },
+            }
+        )
+
+        started = websocket.receive_json()
+        assert started["type"] == "started"
+        assert started["job_id"]
 
 
 def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:

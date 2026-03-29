@@ -1,6 +1,6 @@
 # Testing
 
-Current automated coverage focuses on the phase 5 foundation:
+Current automated coverage focuses on the service and core foundation through phase 6:
 
 - configuration loading and environment overrides
 - voice manifest parsing
@@ -18,11 +18,14 @@ Current automated coverage focuses on the phase 5 foundation:
 - job creation, status polling, and queued-job cancellation
 - job result retrieval and retention cleanup
 - WebSocket auth handling
+- WebSocket auth via either bearer headers or the browser-friendly `start` event token field
 - PCM streaming and `done` events
 - stream cancellation and streaming metrics updates
 - observability snapshots and request ids
 - structural audio regression checks
 - rate-sensitive audio regression behavior
+
+The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
 Run tests with:
 
