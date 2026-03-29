@@ -1,10 +1,12 @@
-from .audio import WavStats, encode_wav_pcm16, inspect_wav
+from .audio import WavStats, decode_wav_pcm16, encode_wav_pcm16, inspect_wav
 from .manifest import VoiceManifestError, load_voice_manifest
 from .models import (
     AudioChunk,
     AudioFormat,
+    ChunkPlan,
     JobState,
     JobStatus,
+    PlannedChunk,
     ProsodySettings,
     SynthesisOptions,
     SynthesisRequest,
@@ -13,15 +15,19 @@ from .models import (
     VoiceDescriptor,
 )
 from .registry import DuplicateVoiceError, VoiceNotFoundError, VoiceRegistry
-from .text import PreparedText, SentenceSegmenter, TextNormalizer, TextPipeline
+from .text import ChunkPlanner, PreparedText, SentenceSegmenter, TextNormalizer, TextPipeline
 
 __all__ = [
     "AudioChunk",
     "AudioFormat",
+    "ChunkPlan",
+    "ChunkPlanner",
     "DuplicateVoiceError",
     "JobState",
     "JobStatus",
+    "PlannedChunk",
     "WavStats",
+    "decode_wav_pcm16",
     "ProsodySettings",
     "SynthesisOptions",
     "SynthesisRequest",

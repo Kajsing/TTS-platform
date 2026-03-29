@@ -12,7 +12,7 @@ from tts_core.backends.sherpa_onnx import (
 )
 from tts_core.manifest import VoiceManifestBundle, load_voice_manifest_bundle
 from tts_core.registry import VoiceRegistry
-from tts_core.text import SentenceSegmenter, TextNormalizer, TextPipeline
+from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer, TextPipeline
 
 from .auth import AuthState, initialize_auth
 from .config import AppConfig
@@ -28,6 +28,7 @@ class ApplicationState:
     voice_registry: VoiceRegistry
     backend: SherpaOnnxBackend
     text_pipeline: TextPipeline
+    chunk_planner: ChunkPlanner
     auth: AuthState
     origin_policy: OriginPolicy
     rate_limiter: RateLimiter
@@ -77,6 +78,7 @@ def build_application_state(
         normalizer=TextNormalizer(),
         segmenter=SentenceSegmenter(),
     )
+    chunk_planner = ChunkPlanner()
     origin_policy = OriginPolicy(allowed_origins=config.security.allowed_origins)
     rate_limiter = RateLimiter(requests_per_minute=config.limits.requests_per_minute)
     observability = ObservabilityState(
@@ -104,6 +106,7 @@ def build_application_state(
         voice_registry=registry,
         backend=backend,
         text_pipeline=text_pipeline,
+        chunk_planner=chunk_planner,
         auth=auth_state,
         origin_policy=origin_policy,
         rate_limiter=rate_limiter,

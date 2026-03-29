@@ -45,6 +45,7 @@ def test_create_app_bootstraps_registry_from_manifest(
     assert app.state.container.voice_registry.default_voice.id == "manifest-voice"
     assert app.state.container.backend.name == "sherpa_onnx"
     assert app.state.container.text_pipeline is not None
+    assert app.state.container.chunk_planner is not None
 
 
 def test_create_app_marks_backend_not_ready_when_real_assets_are_missing(

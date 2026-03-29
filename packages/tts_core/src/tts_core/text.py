@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .models import ChunkPlan, PlannedChunk
+
 DEFAULT_EN_ABBREVIATIONS = {
     "dr.",
     "mr.",
@@ -170,6 +172,84 @@ class SentenceSegmenter:
         if text[index].isupper() or text[index].isdigit():
             return True
         return text[index] in {'"', "'", "(", "["}
+
+
+class ChunkPlanner:
+    def __init__(self, *, max_chars_per_chunk: int = 280) -> None:
+        self.max_chars_per_chunk = max_chars_per_chunk
+
+    def plan(
+        self,
+        segments: tuple[str, ...] | list[str],
+        *,
+        sentence_pause_ms: int = 120,
+        comma_pause_ms: int = 60,
+    ) -> ChunkPlan:
+        normalized_segments = tuple(segment.strip() for segment in segments if segment.strip())
+        if not normalized_segments:
+            return ChunkPlan(chunks=(), source_segments=())
+
+        chunks: list[PlannedChunk] = []
+        current_parts: list[str] = []
+        chunk_index = 0
+
+        for segment in normalized_segments:
+            candidate_parts = current_parts + [segment]
+            candidate_text = " ".join(candidate_parts).strip()
+            if (
+                current_parts
+                and len(candidate_text) > self.max_chars_per_chunk
+            ):
+                chunk_text = " ".join(current_parts).strip()
+                chunks.append(
+                    PlannedChunk(
+                        index=chunk_index,
+                        text=chunk_text,
+                        char_count=len(chunk_text),
+                        pause_ms_hint=self._pause_hint_for(
+                            chunk_text,
+                            sentence_pause_ms=sentence_pause_ms,
+                            comma_pause_ms=comma_pause_ms,
+                        ),
+                    )
+                )
+                chunk_index += 1
+                current_parts = [segment]
+            else:
+                current_parts = candidate_parts
+
+        if current_parts:
+            chunk_text = " ".join(current_parts).strip()
+            chunks.append(
+                PlannedChunk(
+                    index=chunk_index,
+                    text=chunk_text,
+                    char_count=len(chunk_text),
+                    pause_ms_hint=self._pause_hint_for(
+                        chunk_text,
+                        sentence_pause_ms=sentence_pause_ms,
+                        comma_pause_ms=comma_pause_ms,
+                    ),
+                )
+            )
+
+        return ChunkPlan(
+            chunks=tuple(chunks),
+            source_segments=normalized_segments,
+        )
+
+    def _pause_hint_for(
+        self,
+        text: str,
+        *,
+        sentence_pause_ms: int,
+        comma_pause_ms: int,
+    ) -> int:
+        if text.endswith((".", "!", "?", ";", ":")):
+            return sentence_pause_ms
+        if text.endswith(","):
+            return comma_pause_ms
+        return 0
 
 
 @dataclass(slots=True)

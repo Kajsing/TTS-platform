@@ -32,13 +32,22 @@ def encode_wav_pcm16(
     return buffer.getvalue()
 
 
-def inspect_wav(audio_bytes: bytes) -> WavStats:
+def decode_wav_pcm16(audio_bytes: bytes) -> tuple[bytes, int, int]:
     with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
         channels = wav_file.getnchannels()
         sample_width_bytes = wav_file.getsampwidth()
+        if sample_width_bytes != 2:
+            raise ValueError("Only PCM16 WAV audio is supported.")
         sample_rate_hz = wav_file.getframerate()
         frame_count = wav_file.getnframes()
         pcm_bytes = wav_file.readframes(frame_count)
+    return pcm_bytes, sample_rate_hz, channels
+
+
+def inspect_wav(audio_bytes: bytes) -> WavStats:
+    pcm_bytes, sample_rate_hz, channels = decode_wav_pcm16(audio_bytes)
+    sample_width_bytes = 2
+    frame_count = len(pcm_bytes) // (channels * sample_width_bytes) if channels else 0
 
     samples = array("h")
     samples.frombytes(pcm_bytes)

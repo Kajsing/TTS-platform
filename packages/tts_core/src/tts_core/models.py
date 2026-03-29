@@ -66,6 +66,20 @@ class SynthesisResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PlannedChunk:
+    index: int
+    text: str
+    char_count: int
+    pause_ms_hint: int
+
+
+@dataclass(frozen=True, slots=True)
+class ChunkPlan:
+    chunks: tuple[PlannedChunk, ...]
+    source_segments: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class AudioChunk:
     job_id: str
     chunk_index: int

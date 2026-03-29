@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tts_core.text import SentenceSegmenter, TextNormalizer, TextPipeline
+from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer, TextPipeline
 
 
 def test_text_normalizer_collapses_whitespace_and_expands_abbreviations() -> None:
@@ -29,3 +29,22 @@ def test_text_pipeline_returns_segments_from_normalized_text() -> None:
 
     assert prepared.normalized_text == "Mister Doe said hi! Then he left."
     assert prepared.segments == ("Mister Doe said hi!", "Then he left.")
+
+
+def test_chunk_planner_groups_segments_into_reviewable_chunks() -> None:
+    planner = ChunkPlanner(max_chars_per_chunk=50)
+
+    plan = planner.plan(
+        (
+            "This is sentence one.",
+            "This is sentence two.",
+            "This is sentence three.",
+        ),
+        sentence_pause_ms=150,
+        comma_pause_ms=50,
+    )
+
+    assert len(plan.chunks) == 2
+    assert plan.chunks[0].text == "This is sentence one. This is sentence two."
+    assert plan.chunks[0].pause_ms_hint == 150
+    assert plan.chunks[1].text == "This is sentence three."

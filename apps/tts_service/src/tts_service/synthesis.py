@@ -4,16 +4,19 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from time import monotonic
 
+from tts_core.audio import decode_wav_pcm16, encode_wav_pcm16
 from tts_core.backends.base import BackendError
 from tts_core.models import (
     AudioChunk,
     AudioFormat,
+    ChunkPlan,
     ProsodySettings,
     SynthesisOptions,
     SynthesisRequest,
+    SynthesisResult,
 )
 from tts_core.registry import VoiceRegistry
-from tts_core.text import TextPipeline
+from tts_core.text import ChunkPlanner, TextPipeline
 
 from .errors import APIError, engine_error, invalid_request
 from .observability import ObservabilityState
@@ -25,12 +28,14 @@ class SynthesisExecution:
     request: SynthesisRequest
     normalized_text: str
     segments: tuple[str, ...]
+    chunk_plan: ChunkPlan
 
 
 @dataclass(slots=True)
 class SynthesisService:
     voice_registry: VoiceRegistry
     text_pipeline: TextPipeline
+    chunk_planner: ChunkPlanner
     backend: object
     default_voice_id: str
     max_chars_per_request: int
@@ -81,8 +86,16 @@ class SynthesisService:
         if not processed_text.normalized_text:
             raise invalid_request("Text must not be empty.", param="text")
 
+        chunk_plan = self.chunk_planner.plan(
+            processed_text.segments,
+            sentence_pause_ms=payload.prosody.sentence_pause_ms,
+            comma_pause_ms=payload.prosody.comma_pause_ms,
+        )
+        if not chunk_plan.chunks:
+            raise invalid_request("Text must not be empty.", param="text")
+
         request = SynthesisRequest(
-            text=" ".join(processed_text.segments),
+            text=processed_text.normalized_text,
             voice=voice_id,
             format=audio_format,
             prosody=ProsodySettings(
@@ -107,6 +120,7 @@ class SynthesisService:
             request=request,
             normalized_text=processed_text.normalized_text,
             segments=processed_text.segments,
+            chunk_plan=chunk_plan,
         )
 
     def synthesize(self, payload: SynthesizeRequestPayload):
@@ -116,7 +130,7 @@ class SynthesisService:
     def synthesize_execution(self, execution: SynthesisExecution):
         start_time = monotonic()
         try:
-            result = self.backend.synthesize(execution.request)
+            result = self._synthesize_chunk_plan(execution)
             self._record_synthesis("sync", "success", start_time)
             return result
         except BackendError as exc:
@@ -135,7 +149,7 @@ class SynthesisService:
     ) -> Iterator[AudioChunk]:
         start_time = monotonic()
         try:
-            for chunk in self.backend.synthesize_stream(execution.request):
+            for chunk in self._stream_chunk_plan(execution):
                 yield chunk
             self._record_synthesis("stream", "success", start_time)
         except BackendError as exc:
@@ -155,4 +169,94 @@ class SynthesisService:
             mode=mode,
             outcome=outcome,
             latency_ms=(monotonic() - start_time) * 1000,
+        )
+
+    def _synthesize_chunk_plan(self, execution: SynthesisExecution) -> SynthesisResult:
+        combined_pcm = bytearray()
+        sample_rate_hz: int | None = None
+        channels: int | None = None
+
+        for planned_chunk in execution.chunk_plan.chunks:
+            chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
+            result = self.backend.synthesize(chunk_request)
+            pcm_bytes, chunk_sample_rate_hz, chunk_channels = decode_wav_pcm16(result.audio_bytes)
+            if sample_rate_hz is None:
+                sample_rate_hz = chunk_sample_rate_hz
+                channels = chunk_channels
+            elif sample_rate_hz != chunk_sample_rate_hz or channels != chunk_channels:
+                raise engine_error(
+                    "Backend returned inconsistent audio settings across chunks.",
+                    details={
+                        "expected_sample_rate_hz": sample_rate_hz,
+                        "actual_sample_rate_hz": chunk_sample_rate_hz,
+                        "expected_channels": channels,
+                        "actual_channels": chunk_channels,
+                    },
+                )
+            combined_pcm.extend(pcm_bytes)
+
+        resolved_sample_rate_hz = sample_rate_hz or self.voice_registry.get(
+            execution.request.voice
+        ).sample_rate_hz
+        resolved_channels = channels or 1
+        return SynthesisResult(
+            audio_bytes=encode_wav_pcm16(
+                bytes(combined_pcm),
+                sample_rate_hz=resolved_sample_rate_hz,
+                channels=resolved_channels,
+            ),
+            sample_rate_hz=resolved_sample_rate_hz,
+            channels=resolved_channels,
+        )
+
+    def _stream_chunk_plan(self, execution: SynthesisExecution) -> Iterator[AudioChunk]:
+        global_chunk_index = 0
+        total_chunks = len(execution.chunk_plan.chunks)
+        for plan_index, planned_chunk in enumerate(execution.chunk_plan.chunks):
+            chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
+            result = self.backend.synthesize(chunk_request)
+            pcm_bytes, sample_rate_hz, channels = decode_wav_pcm16(result.audio_bytes)
+            bytes_per_frame = 2 * channels
+            chunk_size = max(
+                bytes_per_frame,
+                int(
+                    sample_rate_hz
+                    * bytes_per_frame
+                    * max(execution.request.options.stream_frame_ms, 10)
+                    / 1000
+                ),
+            )
+            total_size = len(pcm_bytes)
+
+            for start in range(0, total_size, chunk_size):
+                pcm_frame = pcm_bytes[start : start + chunk_size]
+                duration_ms = int(len(pcm_frame) / bytes_per_frame / sample_rate_hz * 1000)
+                is_last = (
+                    plan_index == total_chunks - 1
+                    and start + chunk_size >= total_size
+                )
+                yield AudioChunk(
+                    job_id=execution.request.job_id or "stream-job",
+                    chunk_index=global_chunk_index,
+                    sample_rate_hz=sample_rate_hz,
+                    channels=channels,
+                    pcm_bytes=pcm_frame,
+                    duration_ms=max(duration_ms, 1),
+                    is_last=is_last,
+                )
+                global_chunk_index += 1
+
+    def _build_chunk_request(
+        self,
+        request: SynthesisRequest,
+        chunk_text: str,
+    ) -> SynthesisRequest:
+        return SynthesisRequest(
+            text=chunk_text,
+            voice=request.voice,
+            format=request.format,
+            prosody=request.prosody,
+            options=request.options,
+            language_hint=request.language_hint,
+            job_id=request.job_id,
         )

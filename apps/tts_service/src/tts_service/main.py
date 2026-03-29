@@ -367,6 +367,7 @@ def _build_synthesis_service(container: object) -> SynthesisService:
     return SynthesisService(
         voice_registry=container.voice_registry,
         text_pipeline=container.text_pipeline,
+        chunk_planner=container.chunk_planner,
         backend=container.backend,
         default_voice_id=container.config.tts.default_voice,
         max_chars_per_request=container.config.tts.max_chars_per_request,
