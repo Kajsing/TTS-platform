@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from tts_service.config import AppConfig
-from tts_service.main import create_app
+from tts_service.main import _build_synthesis_service, create_app
+from tts_service.schemas import SynthesizeRequestPayload
 
 
 def build_fake_sherpa_onnx_module(sample_rate: int = 16000) -> object:
@@ -192,6 +193,36 @@ def test_tts_endpoint_returns_wav_audio(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
     assert response.content[:4] == b"RIFF"
+
+
+def test_prepare_request_uses_clause_aware_chunk_planning(tmp_path: Path) -> None:
+    _, _, app = build_test_bundle(tmp_path)
+    synthesis_service = _build_synthesis_service(app.state.container)
+    long_sentence = (
+        "Alpha clause introduces the topic with concrete examples, "
+        "beta clause adds more context about timing and workflow, "
+        "gamma clause expands on reliability, observability, and safety, "
+        "delta clause closes the idea with a practical takeaway."
+    )
+
+    execution = synthesis_service.prepare_request(
+        SynthesizeRequestPayload(
+            text=long_sentence,
+            voice="manifest-voice",
+            prosody={"sentence_pause_ms": 150, "comma_pause_ms": 50},
+        )
+    )
+
+    assert execution.segments == (long_sentence,)
+    assert [chunk.text for chunk in execution.chunk_plan.chunks] == [
+        (
+            "Alpha clause introduces the topic with concrete examples, "
+            "beta clause adds more context about timing and workflow, "
+            "gamma clause expands on reliability, observability, and safety,"
+        ),
+        "delta clause closes the idea with a practical takeaway.",
+    ]
+    assert [chunk.pause_ms_hint for chunk in execution.chunk_plan.chunks] == [50, 150]
 
 
 def test_tts_endpoint_can_use_real_backend_runtime_when_configured(

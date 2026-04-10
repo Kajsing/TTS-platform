@@ -2,9 +2,11 @@
 
 Offline-first local text-to-speech platform designed around a stable core domain, a localhost API, and browser playback integration.
 
+For ongoing Codex implementation work, use `docs/codex/Prompt.md`, `docs/codex/Plan.md`, `docs/codex/Implement.md`, and `docs/codex/Documentation.md` as the workflow source of truth. This README remains the product and setup overview.
+
 ## Current Status
 
-Phase 6 is implemented:
+Repository feature summary through the Phase 6 checkpoint:
 
 - repository skeleton
 - engineering guidance documents

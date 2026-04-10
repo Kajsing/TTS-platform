@@ -1,5 +1,7 @@
 # Tasks
 
+For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of truth. This file remains the historical phase checklist and should stay aligned with the plan.
+
 ## Phase 1
 
 - [x] Create repository skeleton
@@ -59,7 +61,7 @@
 - [x] Add async job benchmarking mode to `scripts/benchmark.py`
 - [x] Add a first-class chunk planning component in `tts_core`
 - [x] Route sync, jobs, and streaming through the shared chunk-planning flow
-- [ ] Improve chunk-plan heuristics beyond sentence grouping and simple pause hints
+- [x] Improve chunk-plan heuristics beyond sentence grouping and simple pause hints
 - [ ] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
 - [ ] Tighten cancellation semantics for running real-backend work
 - [ ] Add stronger docs for model asset layout, manifest conventions, and backend setup
