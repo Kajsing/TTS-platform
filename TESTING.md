@@ -59,6 +59,13 @@ tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 ```
 
+Public-contract smoke test after the service is running:
+
+```bash
+python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
+python3 scripts/smoke_service.py --token-file config/token.txt
+```
+
 For a lightweight extension syntax check when `node` is available:
 
 ```bash

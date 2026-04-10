@@ -14,6 +14,8 @@ This file is the live status log and shared memory for future Codex loops.
   - `python3 -m pytest -q` passed with 65 tests.
   - `python3 -m ruff check .` passed.
   - `python3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
+- Tooling status:
+  - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
 ## What Is Done
 
@@ -24,6 +26,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Observability, CLI tooling, benchmark modes, and audio regression tests exist.
 - Chrome MV3 prototype work exists in `apps/chrome_extension/`.
 - Phase 7 work already completed includes backend runtime config (`stub` / `auto` / `real`), manifest-side backend asset binding, more truthful backend readiness, health backend snapshots, fake-runtime coverage for sync/jobs/streaming, async job benchmarking, and a first chunk-planning component shared across sync/jobs/streaming.
+- A new public-contract smoke script now exists:
+  - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
+  - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.
 - Milestone 1 is now complete:
   - `ChunkPlanner` can split long sentence-level segments at clause boundaries before the hard max when that produces a better early chunk.
   - oversized segments without clause punctuation now fall back to whitespace-aware hard-limit splitting.
@@ -54,9 +59,11 @@ This file is the live status log and shared memory for future Codex loops.
 - Later phase trackers were treated as stronger than older summary docs when they conflicted.
 - Existing legacy docs were mostly left in place as reference material to avoid disruptive rewrites.
 - Windows is now recorded explicitly as the final target platform so future loops do not overfit to the current WSL development environment.
+- A repo-native smoke script was added because long-running Codex loops benefit more from one deterministic public-contract check than from repeated manual `tts` and benchmark commands.
 - The chunk-plan improvement was implemented inside `ChunkPlanner` only, without changing public API schemas or service orchestration, so sync/jobs/streaming continue to share the same `prepare_request` entry point.
 - This loop stayed focused on the Milestone 2 streaming architecture slice and did not start Milestone 3, even though the user allowed "more if you think you can handle it", because the repo runbook prefers validated milestone-sized slices over bundling unrelated behavioral changes.
 - The service now uses the backend streaming contract as its primary streaming path. The remaining limitation is explicitly preserved: the current `SherpaOnnxBackend.synthesize_stream()` implementation still generates full PCM before chunk emission for the stub path and current fake-runtime path.
+- Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 
 ## Commands To Run And Smoke Test
 
@@ -80,6 +87,8 @@ tts health
 tts list-voices
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
+python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
+python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/benchmark.py --mode http --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode job --token "$TTS_PLATFORM_TOKEN"
