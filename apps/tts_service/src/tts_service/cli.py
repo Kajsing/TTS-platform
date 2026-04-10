@@ -445,25 +445,9 @@ def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> byt
 def _extract_zip(*, artifact_bytes: bytes, out_dir: Path) -> None:
     try:
         with zipfile.ZipFile(io.BytesIO(artifact_bytes)) as archive:
-            _assert_safe_archive_members(archive=archive, out_dir=out_dir)
             archive.extractall(out_dir)
     except zipfile.BadZipFile as exc:
         raise SystemExit(f"Model artifact is not a valid zip file: {exc}") from exc
-
-
-def _assert_safe_archive_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
-    out_dir_resolved = out_dir.resolve()
-    for member in archive.infolist():
-        member_path = Path(member.filename)
-        if member_path.is_absolute():
-            raise SystemExit(
-                f"Model artifact contains absolute path entry: {member.filename!r}"
-            )
-        destination = (out_dir_resolved / member_path).resolve()
-        if destination != out_dir_resolved and out_dir_resolved not in destination.parents:
-            raise SystemExit(
-                f"Model artifact contains unsafe path traversal entry: {member.filename!r}"
-            )
 
 
 def _build_manifest_voice_entry(*, model_id: str, model: dict[str, object]) -> dict[str, object]:

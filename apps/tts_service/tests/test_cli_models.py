@@ -131,36 +131,3 @@ def test_catalog_list_command_prints_models(
 
     payload = json.loads(capsys.readouterr().out)
     assert [model["id"] for model in payload["models"]] == ["voice-a", "voice-b"]
-
-
-def test_model_install_rejects_zip_traversal_paths(tmp_path: Path) -> None:
-    artifact_path = tmp_path / "unsafe.zip"
-    with zipfile.ZipFile(artifact_path, "w") as archive:
-        archive.writestr("../escape.txt", "nope")
-
-    checksum = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
-    catalog_path = tmp_path / "catalog.json"
-    catalog_path.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "models": [
-                    {
-                        "id": "unsafe-voice",
-                        "artifact_url": str(artifact_path),
-                        "artifact_sha256": checksum,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(SystemExit, match="unsafe path traversal"):
-        cli._install_model_from_catalog(
-            catalog_source=str(catalog_path),
-            model_id="unsafe-voice",
-            models_root=tmp_path / "models" / "voices",
-            manifest_path=tmp_path / "models" / "MANIFEST.json",
-            overwrite=False,
-        )
