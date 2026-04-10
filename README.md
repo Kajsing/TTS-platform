@@ -77,9 +77,14 @@ tts list-voices
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+tts catalog-list --catalog ./models/catalog.json
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-remove sherpa-en-v1
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
+
+The `catalog-list`, `model-install`, and `model-remove` commands are local model-management helpers and do not require auth tokens.
 
 ## Benchmarking
 
