@@ -8,11 +8,10 @@ This file is the live status log and shared memory for future Codex loops.
 - Workflow status: `docs/codex/` has been created as the Codex source of truth for project spec, execution order, operating rules, and resume context.
 - Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
 - Runtime context: the intended end platform is Windows, while the current Codex environment is WSL.
-- Current loop result: Milestone 1 is complete.
+- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open.
 - Validation status for the current loop:
-  - `python3 -m pip install -e ".[dev]"` completed successfully.
-  - `python3 -m pytest -q packages/tts_core/tests/test_text.py apps/tts_service/tests/test_api.py apps/tts_service/tests/test_streaming.py` passed.
-  - `python3 -m pytest -q` passed with 64 tests.
+  - `python3 -m pytest -q packages/tts_core/tests/test_sherpa_onnx_backend.py apps/tts_service/tests/test_streaming.py apps/tts_service/tests/test_api.py` passed.
+  - `python3 -m pytest -q` passed with 65 tests.
   - `python3 -m ruff check .` passed.
   - `python3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 
@@ -30,6 +29,11 @@ This file is the live status log and shared memory for future Codex loops.
   - oversized segments without clause punctuation now fall back to whitespace-aware hard-limit splitting.
   - split subchunks are kept explicit instead of being immediately merged back into a larger chunk.
   - tests now cover core chunk-boundary behavior plus service-level use of the shared chunk-planning entry point.
+- Milestone 2 is now complete at the service layer:
+  - `SynthesisService` streams through `backend.synthesize_stream()` instead of synthesizing WAV per planned chunk and slicing decoded PCM locally.
+  - service streaming now remaps backend-local chunk indices into one global stream index sequence across the whole chunk plan.
+  - service streaming validates sample-rate/channel consistency across streamed backend chunks.
+  - regression coverage now fails if stream execution falls back to `backend.synthesize()` instead of the backend streaming contract.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -38,10 +42,10 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Milestone 2 from `Plan.md`: tighten the streaming path so it moves closer to true incremental backend generation instead of only chunk synthesis plus PCM frame slicing.
-- After that, tighten cancellation semantics for running work.
-- Then finish backend/model/setup documentation closeout.
-- Milestone 5 closeout remains blocked on Milestones 2 through 4.
+- Milestone 3 from `Plan.md`: tighten cancellation semantics for running work.
+- After that, finish backend/model/setup documentation closeout.
+- The open Phase 7 streaming item in `TASKS.md` still needs backend-level work if the project wants true runtime-incremental generation instead of backend-side full-PCM generation followed by chunk emission.
+- Milestone 5 closeout remains blocked on Milestones 3 and 4, plus the remaining open Phase 7 streaming task in `TASKS.md`.
 
 ## Decisions Made And Why
 
@@ -50,8 +54,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Later phase trackers were treated as stronger than older summary docs when they conflicted.
 - Existing legacy docs were mostly left in place as reference material to avoid disruptive rewrites.
 - Windows is now recorded explicitly as the final target platform so future loops do not overfit to the current WSL development environment.
-- This loop was kept intentionally scoped to Milestone 1 even though the user message referenced Milestones 1-5, because the explicit requested change was chunk-plan heuristics and the repo runbook prefers one validated milestone at a time.
 - The chunk-plan improvement was implemented inside `ChunkPlanner` only, without changing public API schemas or service orchestration, so sync/jobs/streaming continue to share the same `prepare_request` entry point.
+- This loop stayed focused on the Milestone 2 streaming architecture slice and did not start Milestone 3, even though the user allowed "more if you think you can handle it", because the repo runbook prefers validated milestone-sized slices over bundling unrelated behavioral changes.
+- The service now uses the backend streaming contract as its primary streaming path. The remaining limitation is explicitly preserved: the current `SherpaOnnxBackend.synthesize_stream()` implementation still generates full PCM before chunk emission for the stub path and current fake-runtime path.
 
 ## Commands To Run And Smoke Test
 
@@ -92,7 +97,7 @@ python3 scripts/check_extension.py
 - `ARCHITECTURE.md` still describes a much earlier architecture snapshot centered on Phase 2. Use it as background only.
 - The original design doc uses `kokoro-en-heart` in examples, but the current manifest and config example use `sherpa-en-debug`.
 - WSL is the current working environment, but it must not silently become the assumed target platform in code or documentation.
-- The current streaming path still needs follow-up toward true incremental backend generation.
+- The service-layer streaming path no longer decodes WAV and slices PCM locally, but the backend still needs follow-up for true runtime-incremental generation.
 - Running-work cancellation on the real backend path still needs clearer semantics and stronger coverage.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
@@ -102,7 +107,7 @@ python3 scripts/check_extension.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Start with Milestone 2 unless this file records a deliberate reorder.
+3. Start with Milestone 3 unless this file records a deliberate reorder.
 4. Keep the next diff narrowly scoped to that milestone.
 5. Run the milestone validation commands before claiming completion.
 6. Update this file again before handing off.

@@ -212,36 +212,36 @@ class SynthesisService:
     def _stream_chunk_plan(self, execution: SynthesisExecution) -> Iterator[AudioChunk]:
         global_chunk_index = 0
         total_chunks = len(execution.chunk_plan.chunks)
+        expected_sample_rate_hz: int | None = None
+        expected_channels: int | None = None
         for plan_index, planned_chunk in enumerate(execution.chunk_plan.chunks):
             chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
-            result = self.backend.synthesize(chunk_request)
-            pcm_bytes, sample_rate_hz, channels = decode_wav_pcm16(result.audio_bytes)
-            bytes_per_frame = 2 * channels
-            chunk_size = max(
-                bytes_per_frame,
-                int(
-                    sample_rate_hz
-                    * bytes_per_frame
-                    * max(execution.request.options.stream_frame_ms, 10)
-                    / 1000
-                ),
-            )
-            total_size = len(pcm_bytes)
+            for backend_chunk in self.backend.synthesize_stream(chunk_request):
+                if expected_sample_rate_hz is None:
+                    expected_sample_rate_hz = backend_chunk.sample_rate_hz
+                    expected_channels = backend_chunk.channels
+                elif (
+                    expected_sample_rate_hz != backend_chunk.sample_rate_hz
+                    or expected_channels != backend_chunk.channels
+                ):
+                    raise engine_error(
+                        "Backend returned inconsistent audio settings across stream chunks.",
+                        details={
+                            "expected_sample_rate_hz": expected_sample_rate_hz,
+                            "actual_sample_rate_hz": backend_chunk.sample_rate_hz,
+                            "expected_channels": expected_channels,
+                            "actual_channels": backend_chunk.channels,
+                        },
+                    )
 
-            for start in range(0, total_size, chunk_size):
-                pcm_frame = pcm_bytes[start : start + chunk_size]
-                duration_ms = int(len(pcm_frame) / bytes_per_frame / sample_rate_hz * 1000)
-                is_last = (
-                    plan_index == total_chunks - 1
-                    and start + chunk_size >= total_size
-                )
+                is_last = plan_index == total_chunks - 1 and backend_chunk.is_last
                 yield AudioChunk(
-                    job_id=execution.request.job_id or "stream-job",
+                    job_id=backend_chunk.job_id,
                     chunk_index=global_chunk_index,
-                    sample_rate_hz=sample_rate_hz,
-                    channels=channels,
-                    pcm_bytes=pcm_frame,
-                    duration_ms=max(duration_ms, 1),
+                    sample_rate_hz=backend_chunk.sample_rate_hz,
+                    channels=backend_chunk.channels,
+                    pcm_bytes=backend_chunk.pcm_bytes,
+                    duration_ms=max(backend_chunk.duration_ms, 1),
                     is_last=is_last,
                 )
                 global_chunk_index += 1

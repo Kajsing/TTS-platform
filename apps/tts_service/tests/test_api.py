@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from tts_core.models import AudioChunk
 from tts_service.config import AppConfig
 from tts_service.main import _build_synthesis_service, create_app
 from tts_service.schemas import SynthesizeRequestPayload
@@ -223,6 +224,65 @@ def test_prepare_request_uses_clause_aware_chunk_planning(tmp_path: Path) -> Non
         "delta clause closes the idea with a practical takeaway.",
     ]
     assert [chunk.pause_ms_hint for chunk in execution.chunk_plan.chunks] == [50, 150]
+
+
+def test_stream_execution_uses_backend_streaming_path(tmp_path: Path, monkeypatch) -> None:
+    _, _, app = build_test_bundle(tmp_path)
+    synthesis_service = _build_synthesis_service(app.state.container)
+    long_sentence = (
+        "Alpha clause introduces the topic with concrete examples, "
+        "beta clause adds more context about timing and workflow, "
+        "gamma clause expands on reliability, observability, and safety, "
+        "delta clause closes the idea with a practical takeaway."
+    )
+    execution = synthesis_service.prepare_request(
+        SynthesizeRequestPayload(
+            text=long_sentence,
+            voice="manifest-voice",
+        ),
+        job_id="stream-job",
+    )
+    stream_calls: list[str] = []
+
+    def fail_synthesize(self, request):
+        raise AssertionError("stream execution should not fall back to backend.synthesize()")
+
+    def fake_stream(self, request):
+        stream_calls.append(request.text)
+        yield AudioChunk(
+            job_id=request.job_id or "stream-job",
+            chunk_index=0,
+            sample_rate_hz=22050,
+            channels=1,
+            pcm_bytes=b"\x01\x00",
+            duration_ms=10,
+            is_last=False,
+        )
+        yield AudioChunk(
+            job_id=request.job_id or "stream-job",
+            chunk_index=1,
+            sample_rate_hz=22050,
+            channels=1,
+            pcm_bytes=b"\x02\x00",
+            duration_ms=10,
+            is_last=True,
+        )
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", fail_synthesize)
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize_stream", fake_stream)
+
+    chunks = list(synthesis_service.synthesize_stream_execution(execution))
+
+    assert stream_calls == [
+        (
+            "Alpha clause introduces the topic with concrete examples, "
+            "beta clause adds more context about timing and workflow, "
+            "gamma clause expands on reliability, observability, and safety,"
+        ),
+        "delta clause closes the idea with a practical takeaway.",
+    ]
+    assert [chunk.chunk_index for chunk in chunks] == [0, 1, 2, 3]
+    assert [chunk.is_last for chunk in chunks] == [False, False, False, True]
 
 
 def test_tts_endpoint_can_use_real_backend_runtime_when_configured(
