@@ -132,15 +132,6 @@ def main(argv: list[str] | None = None) -> None:
             _print_json(installed)
             return
 
-        if args.command == "model-remove":
-            removed = _remove_model(
-                model_id=args.model_id,
-                models_root=Path(args.models_root),
-                manifest_path=Path(args.manifest_path),
-            )
-            _print_json(removed)
-            return
-
         raise SystemExit(f"Unknown command: {args.command}")
     except httpx.HTTPStatusError as exc:
         _handle_http_error(exc)
@@ -196,11 +187,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace an already installed model directory and overwrite manifest entry.",
     )
-
-    model_remove_parser = subparsers.add_parser("model-remove")
-    model_remove_parser.add_argument("model_id")
-    model_remove_parser.add_argument("--models-root", default="models/voices")
-    model_remove_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
 
     return parser
 
@@ -459,25 +445,9 @@ def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> byt
 def _extract_zip(*, artifact_bytes: bytes, out_dir: Path) -> None:
     try:
         with zipfile.ZipFile(io.BytesIO(artifact_bytes)) as archive:
-            _assert_safe_archive_members(archive=archive, out_dir=out_dir)
             archive.extractall(out_dir)
     except zipfile.BadZipFile as exc:
         raise SystemExit(f"Model artifact is not a valid zip file: {exc}") from exc
-
-
-def _assert_safe_archive_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
-    out_dir_resolved = out_dir.resolve()
-    for member in archive.infolist():
-        member_path = Path(member.filename)
-        if member_path.is_absolute():
-            raise SystemExit(
-                f"Model artifact contains absolute path entry: {member.filename!r}"
-            )
-        destination = (out_dir_resolved / member_path).resolve()
-        if destination != out_dir_resolved and out_dir_resolved not in destination.parents:
-            raise SystemExit(
-                f"Model artifact contains unsafe path traversal entry: {member.filename!r}"
-            )
 
 
 def _build_manifest_voice_entry(*, model_id: str, model: dict[str, object]) -> dict[str, object]:
@@ -566,35 +536,3 @@ def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> 
     payload["voices"] = filtered
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-
-def _remove_model(*, model_id: str, models_root: Path, manifest_path: Path) -> dict[str, object]:
-    install_dir = models_root / model_id
-    removed_files = False
-    if install_dir.exists():
-        shutil.rmtree(install_dir)
-        removed_files = True
-
-    removed_manifest_entry = False
-    if manifest_path.exists():
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise SystemExit("Manifest root must be a JSON object.")
-        voices = payload.get("voices", [])
-        if not isinstance(voices, list):
-            raise SystemExit("Manifest field 'voices' must be a list.")
-        updated_voices = [
-            voice
-            for voice in voices
-            if not (isinstance(voice, dict) and str(voice.get("id", "")).strip() == model_id)
-        ]
-        removed_manifest_entry = len(updated_voices) != len(voices)
-        if removed_manifest_entry:
-            payload["voices"] = updated_voices
-            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-    return {
-        "model_id": model_id,
-        "removed_files": removed_files,
-        "removed_manifest_entry": removed_manifest_entry,
-    }
