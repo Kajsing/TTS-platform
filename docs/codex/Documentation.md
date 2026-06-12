@@ -4,16 +4,17 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-04-10
-- Workflow status: `docs/codex/` has been created as the Codex source of truth for project spec, execution order, operating rules, and resume context.
+- Date: 2026-06-13
+- Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
-- Runtime context: the intended end platform is Windows, while the current Codex environment is WSL.
-- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open.
+- Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
+- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open. This loop updated the Codex workflow to commit and push successful runs by default.
 - Validation status for the current loop:
-  - `python3 -m pytest -q packages/tts_core/tests/test_sherpa_onnx_backend.py apps/tts_service/tests/test_streaming.py apps/tts_service/tests/test_api.py` passed.
-  - `python3 -m pytest -q` passed with 65 tests.
-  - `python3 -m ruff check .` passed.
-  - `python3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
+  - `python3 -m ruff check .` failed in Windows PowerShell because `python3` resolves to the Microsoft Store alias.
+  - `python3 -m pytest -q` failed for the same reason.
+  - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest -q` passed with 66 tests.
+  - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -59,11 +60,17 @@ This file is the live status log and shared memory for future Codex loops.
 - Later phase trackers were treated as stronger than older summary docs when they conflicted.
 - Existing legacy docs were mostly left in place as reference material to avoid disruptive rewrites.
 - Windows is now recorded explicitly as the final target platform so future loops do not overfit to the current WSL development environment.
+- Windows runner fallback is now documented in `AGENTS.md` because some Windows
+  sessions resolve `python3` to the Microsoft Store alias.
 - A repo-native smoke script was added because long-running Codex loops benefit more from one deterministic public-contract check than from repeated manual `tts` and benchmark commands.
 - The chunk-plan improvement was implemented inside `ChunkPlanner` only, without changing public API schemas or service orchestration, so sync/jobs/streaming continue to share the same `prepare_request` entry point.
 - This loop stayed focused on the Milestone 2 streaming architecture slice and did not start Milestone 3, even though the user allowed "more if you think you can handle it", because the repo runbook prefers validated milestone-sized slices over bundling unrelated behavioral changes.
 - The service now uses the backend streaming contract as its primary streaming path. The remaining limitation is explicitly preserved: the current `SherpaOnnxBackend.synthesize_stream()` implementation still generates full PCM before chunk emission for the stub path and current fake-runtime path.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
+- Because this repository is jointly owned by the user and Codex, successful
+  Codex runs now default to committing and pushing the completed slice. Codex
+  should still stop before pushing when validation fails, credentials are
+  missing, branch/remote state is unsafe, or the user explicitly says not to.
 
 ## Commands To Run And Smoke Test
 
@@ -105,7 +112,10 @@ python3 scripts/check_extension.py
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
 - `ARCHITECTURE.md` still describes a much earlier architecture snapshot centered on Phase 2. Use it as background only.
 - The original design doc uses `kokoro-en-heart` in examples, but the current manifest and config example use `sherpa-en-debug`.
-- WSL is the current working environment, but it must not silently become the assumed target platform in code or documentation.
+- Older loops ran in WSL, but future code and docs should not assume WSL or
+  Windows PowerShell exclusively.
+- Some sessions run in Windows PowerShell instead of WSL; use `py -3` when
+  `python3` resolves to the Windows Store alias.
 - The service-layer streaming path no longer decodes WAV and slices PCM locally, but the backend still needs follow-up for true runtime-incremental generation.
 - Running-work cancellation on the real backend path still needs clearer semantics and stronger coverage.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.

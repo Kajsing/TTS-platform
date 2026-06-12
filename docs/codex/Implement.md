@@ -13,6 +13,7 @@ This file is the Codex runbook for day-to-day work in this repository.
 - Continuously update `Documentation.md` while working.
 - When uncertain, prefer preserving existing behavior over broad rewrites.
 - Do not treat intermediate progress as completion.
+- After validation passes, commit and push the completed slice by default.
 - Before finishing, verify every "done when" criterion in `Prompt.md` or mark what remains in `Documentation.md`.
 
 ## Repo Rules To Preserve
@@ -36,6 +37,8 @@ This file is the Codex runbook for day-to-day work in this repository.
 6. Run the milestone validation commands.
 7. If anything fails, fix it before doing new work.
 8. Update `Documentation.md` with what changed, what passed, and what remains.
+9. Commit the completed slice with a focused message.
+10. Push the branch to `origin`.
 
 ## Scope Control
 
@@ -51,3 +54,6 @@ This file is the Codex runbook for day-to-day work in this repository.
 - Confirm the relevant validation commands passed, or record exactly what did not pass.
 - Update `Documentation.md` so the next Codex loop can resume without re-discovery.
 - Check `Prompt.md` done-when criteria and mark anything still missing.
+- Commit and push the run unless validation failed, credentials are missing, the
+  branch/remote state is unsafe, or the user explicitly asked not to.
+- Report the pushed branch and commit hash.
