@@ -268,14 +268,20 @@ service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
 
 ## Long-Text Implications
 
-The service currently enforces `tts.max_chars_per_request`, which defaults to
-`4000`. This is enough for shorter passages, but a full article with thousands
-of words may exceed a single request.
+The service keeps separate text limits for short requests and streamed reading:
+
+- `tts.max_chars_per_request` defaults to `4000` and applies to `/v1/tts` and
+  `/v1/tts/jobs`.
+- `tts.max_chars_per_stream` defaults to `48000` and applies to
+  `WS /v1/tts/stream`.
+
+The split keeps synchronous WAV and async job requests bounded while allowing
+the browser reader to send page-scale text to the streaming path.
 
 The current long-text path is therefore:
 
-- capture web text in the extension,
-- send text in bounded chunks or jobs,
+- capture bounded readable page text in the extension,
+- send page text through the WebSocket stream path,
 - let the service normalize, segment, plan chunks, synthesize, stream, and allow
   cancellation between planned chunks.
 
@@ -284,9 +290,10 @@ backend streaming path emits audio from those callbacks instead of waiting for
 the full generated audio buffer. Older runtimes or runtimes without a usable
 callback fall back to the full-buffer path.
 
-The server-side chunk planner now improves chunk boundaries and the real runtime
-path can stream callback audio, but the product still needs a higher-level
-long-document reading flow before the Chrome reader is fully v1-ready.
+The server-side chunk planner now improves chunk boundaries, the stream path has
+a separate page-scale text limit, and the real runtime path can stream callback
+audio. The product still needs a richer long-document reader workflow before
+the Chrome reader is fully v1-ready.
 
 ## Cancellation Limits
 

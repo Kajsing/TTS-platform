@@ -26,6 +26,7 @@ def test_load_config_reads_toml_file(tmp_path: Path) -> None:
 
     assert config.server.port == 9001
     assert config.tts.default_voice == "voice-x"
+    assert config.tts.max_chars_per_stream == 48000
     assert config.streaming.prebuffer_ms == 200
 
 
@@ -63,6 +64,42 @@ def test_load_config_rejects_invalid_values(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         load_config(config_path, env={})
+
+
+def test_load_config_rejects_stream_limit_below_request_limit(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "max_chars_per_request = 4000",
+                "max_chars_per_stream = 2000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="max_chars_per_stream"):
+        load_config(config_path, env={})
+
+
+def test_load_config_reads_stream_text_limit(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "max_chars_per_request = 2000",
+                "max_chars_per_stream = 16000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path, env={})
+
+    assert config.tts.max_chars_per_request == 2000
+    assert config.tts.max_chars_per_stream == 16000
 
 
 def test_load_config_reads_backend_section(tmp_path: Path) -> None:

@@ -48,7 +48,7 @@ function getSelectedText() {
   return extractReadableText(anchorElement, 1000);
 }
 
-function getPageText(maxChars = 4000) {
+function getPageText(maxChars = 24000) {
   const root = pickReadableRoot();
   const extracted = extractReadableText(root, maxChars);
   if (extracted) {

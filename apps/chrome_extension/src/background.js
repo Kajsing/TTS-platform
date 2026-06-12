@@ -5,7 +5,7 @@ const DEFAULT_CONFIG = {
   prebufferMs: 180,
   lowWatermarkMs: 100,
   highWatermarkMs: 600,
-  maxChars: 4000,
+  maxChars: 24000,
 };
 
 let playbackState = {
@@ -237,7 +237,7 @@ function sanitizeConfig(config) {
     sanitizeNumber(config.highWatermarkMs, DEFAULT_CONFIG.highWatermarkMs, 100),
     prebufferMs
   );
-  const maxChars = sanitizeNumber(config.maxChars, DEFAULT_CONFIG.maxChars, 200, 12000);
+  const maxChars = sanitizeNumber(config.maxChars, DEFAULT_CONFIG.maxChars, 200, 48000);
 
   return {
     baseUrl: String(config.baseUrl || DEFAULT_CONFIG.baseUrl).trim() || DEFAULT_CONFIG.baseUrl,

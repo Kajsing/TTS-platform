@@ -43,6 +43,7 @@ class SynthesisService:
     backend: object
     default_voice_id: str
     max_chars_per_request: int
+    max_chars_per_stream: int
     stream_frame_ms: int = 40
     observability: ObservabilityState | None = None
 
@@ -52,11 +53,39 @@ class SynthesisService:
         *,
         job_id: str | None = None,
     ) -> SynthesisExecution:
-        if len(payload.text) > self.max_chars_per_request:
+        return self._prepare_request(
+            payload,
+            job_id=job_id,
+            max_chars=self.max_chars_per_request,
+            max_chars_name="max_chars_per_request",
+        )
+
+    def prepare_stream_request(
+        self,
+        payload: SynthesizeRequestPayload,
+        *,
+        job_id: str | None = None,
+    ) -> SynthesisExecution:
+        return self._prepare_request(
+            payload,
+            job_id=job_id,
+            max_chars=self.max_chars_per_stream,
+            max_chars_name="max_chars_per_stream",
+        )
+
+    def _prepare_request(
+        self,
+        payload: SynthesizeRequestPayload,
+        *,
+        job_id: str | None,
+        max_chars: int,
+        max_chars_name: str,
+    ) -> SynthesisExecution:
+        if len(payload.text) > max_chars:
             raise invalid_request(
-                "Text exceeds max_chars_per_request.",
+                f"Text exceeds {max_chars_name}.",
                 param="text",
-                details={"max_chars_per_request": self.max_chars_per_request},
+                details={max_chars_name: max_chars},
             )
 
         if payload.options.input_format != "plain_text":

@@ -5,7 +5,7 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 ## What it can do
 
 - speak the current selection from the active tab
-- speak a trimmed version of the current page text
+- speak a bounded readable snapshot of the current page text
 - stream audio through an offscreen document
 - buffer PCM audio before playback starts
 - store local service settings such as base URL, token, preferred voice, and page-text limits
@@ -56,6 +56,7 @@ The popup can also refresh service health and voice discovery directly from the 
 - This token flow is intentionally limited to the localhost MVP shape and should be revisited if the browser client becomes more broadly distributed.
 - The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
 - Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
+- Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
 
 ## Validation
 
@@ -67,4 +68,4 @@ python3 scripts/check_extension.py
 
 This checks manifest references, linked popup/offscreen assets, and JavaScript syntax when `node` is available.
 
-For common issues, see [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).
+For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

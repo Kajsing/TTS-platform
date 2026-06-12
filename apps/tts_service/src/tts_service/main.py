@@ -234,7 +234,7 @@ def _register_routes(app: FastAPI) -> None:
             payload = SynthesizeRequestPayload.model_validate(initial_message.get("payload", {}))
             stream_id = str(uuid4())
             synthesis_service = _build_synthesis_service(container)
-            execution = synthesis_service.prepare_request(payload, job_id=stream_id)
+            execution = synthesis_service.prepare_stream_request(payload, job_id=stream_id)
         except ValidationError as exc:
             api_error = invalid_request(
                 "Request body validation failed.",
@@ -383,6 +383,7 @@ def _build_synthesis_service(container: object) -> SynthesisService:
         backend=container.backend,
         default_voice_id=container.config.tts.default_voice,
         max_chars_per_request=container.config.tts.max_chars_per_request,
+        max_chars_per_stream=container.config.tts.max_chars_per_stream,
         stream_frame_ms=container.config.streaming.audio_frame_ms,
         observability=container.observability,
     )

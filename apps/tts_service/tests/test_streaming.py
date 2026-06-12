@@ -211,6 +211,84 @@ def test_websocket_stream_accepts_auth_token_in_start_event(tmp_path: Path) -> N
         assert started["job_id"]
 
 
+def test_websocket_stream_accepts_text_above_http_request_limit(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "tts": {
+                "default_voice": "manifest-voice",
+                "max_chars_per_request": 80,
+                "max_chars_per_stream": 2000,
+            },
+            "streaming": {"audio_frame_ms": 1000},
+        },
+    )
+    long_text = " ".join(
+        f"Sentence {index} has enough readable words for streaming."
+        for index in range(20)
+    )
+    assert len(long_text) > 80
+    assert len(long_text) < 2000
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "text": long_text,
+                    "voice": "manifest-voice",
+                },
+            }
+        )
+
+        started = websocket.receive_json()
+        assert started["type"] == "started"
+
+        binary_frames = 0
+        done_payload = None
+        for _ in range(256):
+            message_type, payload = _read_next_message(websocket)
+            if message_type == "bytes":
+                binary_frames += 1
+                continue
+            if message_type == "json" and payload["type"] == "done":
+                done_payload = payload
+                break
+
+    assert binary_frames > 0
+    assert done_payload is not None
+
+
+def test_websocket_stream_rejects_text_above_stream_limit(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "tts": {
+                "default_voice": "manifest-voice",
+                "max_chars_per_request": 80,
+                "max_chars_per_stream": 120,
+            }
+        },
+    )
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "text": "Long streaming input. " * 8,
+                    "voice": "manifest-voice",
+                },
+            }
+        )
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["param"] == "text"
+    assert error_payload["error"]["details"]["max_chars_per_stream"] == 120
+
+
 def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:
     client, auth_headers, app = build_test_bundle(tmp_path)
     original_stream = app.state.container.backend.synthesize_stream

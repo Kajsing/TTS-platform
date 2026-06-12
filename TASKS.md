@@ -65,3 +65,12 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
 - [x] Tighten cancellation semantics for running real-backend work
 - [x] Add stronger docs for model asset layout, manifest conventions, and backend setup
+
+## V1 Reader Track
+
+- [x] Add a separate long-text WebSocket stream limit for page-scale playback
+- [ ] Add reader progress/resume semantics for long page playback
+- [ ] Improve model-management UX and first-run guidance
+- [ ] Add Windows-friendly service setup flow
+- [ ] Improve Chrome extension onboarding and installability
+- [ ] Close release-hardening gaps for docs, security defaults, and tests

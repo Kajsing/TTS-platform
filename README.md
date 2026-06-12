@@ -47,6 +47,8 @@ and v1-readiness work:
 - callback-driven real-runtime streaming and cancellation when the installed
   `sherpa_onnx` package exposes generation callbacks, with fallback for older
   runtimes
+- separate long-text character limit for WebSocket streaming so page-scale
+  extension playback can exceed the shorter HTTP/job request limit
 
 ## Repository Layout
 
@@ -135,13 +137,13 @@ See [apps/chrome_extension/README.md](apps/chrome_extension/README.md) for setup
 The extension currently supports:
 
 - speaking the current text selection
-- speaking a trimmed snapshot of the current page
+- speaking a bounded readable snapshot of the current page
 - offscreen playback of streamed PCM audio
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config
 
-The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.
+The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path.
 
 For extension-specific setup and troubleshooting, see
 [README.md](apps/chrome_extension/README.md) and

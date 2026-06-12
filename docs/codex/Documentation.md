@@ -11,15 +11,14 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Phase 7 closeout tightened real-runtime streaming and
-  cancellation. `SherpaOnnxBackend` now uses `sherpa_onnx` generation callbacks
-  when available so real streaming can emit callback audio instead of waiting
-  for one full generated buffer. Sync/job generation also passes a cancellation
-  callback when a job id exists. Older runtimes fall back to the previous
-  full-buffer path.
+- Current loop result: The first Post-Phase 7 v1 reader slice added a separate
+  long-text WebSocket streaming limit. `/v1/tts` and `/v1/tts/jobs` still use
+  `tts.max_chars_per_request`, while `WS /v1/tts/stream` uses
+  `tts.max_chars_per_stream` so the Chrome reader can send page-scale text to
+  the streaming path without widening the short request contracts.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 87 tests.
+  - `py -3 -m pytest -q` passed with 91 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -72,6 +71,15 @@ This file is the live status log and shared memory for future Codex loops.
   - `TASKS.md`, `TESTING.md`, `README.md`, `docs/backend_model_setup.md`, and
     `docs/codex/Plan.md` now point future work toward v1 reader slices instead
     of stale Phase 7 execution.
+- V1 reader track has started:
+  - `tts.max_chars_per_stream` defaults to `48000` and is validated to stay at
+    least as large as `tts.max_chars_per_request`.
+  - WebSocket streaming now uses `prepare_stream_request()` with the stream
+    limit, while HTTP and async jobs still use `prepare_request()`.
+  - the Chrome extension page capture default is now `24000` characters, with a
+    maximum of `48000`, matching the service's default stream ceiling.
+  - tests cover stream acceptance above the HTTP/job limit and rejection above
+    the stream limit.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -80,10 +88,10 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Move to the Post-Phase 7 v1 reader track from `Plan.md`.
-- Start with long-document reading orchestration for thousands-of-words inputs:
-  define a service/client flow that can accept page-scale text without relying
-  on one oversized `/v1/tts` request.
+- Continue the Post-Phase 7 v1 reader track from `Plan.md`.
+- Next reader slice: add reader progress/resume semantics for long page
+  playback, likely by surfacing total planned text chunks and current progress
+  through WebSocket events and extension playback state.
 - Continue v1 model-management after that with clearer install progress output,
   catalog guidance, and first-run defaults.
 - Then move to Windows-friendly service setup and Chrome extension
@@ -112,6 +120,10 @@ This file is the live status log and shared memory for future Codex loops.
   assumed. Supported runtimes stream callback audio and can stop at callback
   boundaries; unsupported runtimes fall back to full-buffer generation while
   preserving public contracts.
+- Long page playback should use WebSocket streaming with
+  `tts.max_chars_per_stream` instead of raising `tts.max_chars_per_request` for
+  every endpoint. This keeps sync HTTP and async job memory/latency expectations
+  bounded while allowing the browser reader to handle page-scale text.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -179,6 +191,8 @@ python3 scripts/check_extension.py
 - The default example config still points at the development stub voice. A real
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
+- Long page playback now has a larger WebSocket text limit, but the reader still
+  lacks first-class progress, resume, and section navigation semantics.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.

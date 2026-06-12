@@ -18,6 +18,7 @@ DEFAULT_LOG_LEVEL = "info"
 DEFAULT_TOKEN_FILE = "./config/token.txt"
 DEFAULT_VOICE_ID = "sherpa-en-debug"
 DEFAULT_MAX_CHARS_PER_REQUEST = 4000
+DEFAULT_MAX_CHARS_PER_STREAM = 48000
 DEFAULT_WARMUP_ON_START = True
 DEFAULT_STREAMING_ENABLED = True
 DEFAULT_AUDIO_FRAME_MS = 40
@@ -76,6 +77,7 @@ class AuthConfig:
 class TTSConfig:
     default_voice: str = DEFAULT_VOICE_ID
     max_chars_per_request: int = DEFAULT_MAX_CHARS_PER_REQUEST
+    max_chars_per_stream: int = DEFAULT_MAX_CHARS_PER_STREAM
     warmup_on_start: bool = DEFAULT_WARMUP_ON_START
 
     @classmethod
@@ -85,12 +87,17 @@ class TTSConfig:
             max_chars_per_request=int(
                 data.get("max_chars_per_request", DEFAULT_MAX_CHARS_PER_REQUEST)
             ),
+            max_chars_per_stream=int(
+                data.get("max_chars_per_stream", DEFAULT_MAX_CHARS_PER_STREAM)
+            ),
             warmup_on_start=bool(data.get("warmup_on_start", DEFAULT_WARMUP_ON_START)),
         )
         if not config.default_voice:
             raise ValueError("tts.default_voice must not be empty")
         if config.max_chars_per_request <= 0:
             raise ValueError("tts.max_chars_per_request must be positive")
+        if config.max_chars_per_stream < config.max_chars_per_request:
+            raise ValueError("tts.max_chars_per_stream must be at least max_chars_per_request")
         return config
 
 

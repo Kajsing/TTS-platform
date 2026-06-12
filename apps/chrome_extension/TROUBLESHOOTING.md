@@ -12,6 +12,8 @@
 - Confirm a token has been saved in the popup.
 - Confirm the extension origin shown in the popup is allow-listed in the service config.
 - Confirm the selected or page text is not empty.
+- For page playback, confirm `Max Page Characters` does not exceed the service
+  `tts.max_chars_per_stream` setting.
 - If the service was restarted recently, refresh the popup and try again.
 
 ## Voice list is empty
@@ -30,4 +32,5 @@
 
 - The content script prefers selected text first, then readable page content.
 - Inputs and textareas use the current text selection inside the control.
-- Page playback intentionally trims and normalizes text, so exact visual parity with the page is not guaranteed.
+- Page playback intentionally bounds and normalizes text, so exact visual parity
+  with the page is not guaranteed.

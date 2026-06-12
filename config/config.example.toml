@@ -10,6 +10,7 @@ token_file = "./config/token.txt"
 [tts]
 default_voice = "sherpa-en-debug"
 max_chars_per_request = 4000
+max_chars_per_stream = 48000
 warmup_on_start = true
 
 [streaming]
