@@ -62,6 +62,6 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add a first-class chunk planning component in `tts_core`
 - [x] Route sync, jobs, and streaming through the shared chunk-planning flow
 - [x] Improve chunk-plan heuristics beyond sentence grouping and simple pause hints
-- [ ] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
-- [ ] Tighten cancellation semantics for running real-backend work
+- [x] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
+- [x] Tighten cancellation semantics for running real-backend work
 - [x] Add stronger docs for model asset layout, manifest conventions, and backend setup

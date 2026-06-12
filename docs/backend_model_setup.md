@@ -279,9 +279,14 @@ The current long-text path is therefore:
 - let the service normalize, segment, plan chunks, synthesize, stream, and allow
   cancellation between planned chunks.
 
-The server-side chunk planner now improves chunk boundaries, but the product
-still needs a higher-level long-document reading flow before the Chrome reader
-is fully v1-ready.
+When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
+backend streaming path emits audio from those callbacks instead of waiting for
+the full generated audio buffer. Older runtimes or runtimes without a usable
+callback fall back to the full-buffer path.
+
+The server-side chunk planner now improves chunk boundaries and the real runtime
+path can stream callback audio, but the product still needs a higher-level
+long-document reading flow before the Chrome reader is fully v1-ready.
 
 ## Cancellation Limits
 
@@ -290,12 +295,15 @@ Cancellation is terminal and observable at the service-contract level:
 - queued jobs become `cancelled`;
 - running jobs stay `cancelled` even if backend generation finishes later;
 - chunk-planned synthesis checks cancellation between planned chunks;
+- real-runtime generation receives a cancellation callback when the installed
+  `sherpa_onnx` package supports generation callbacks;
 - WebSocket cancellation returns a `cancelled` event when observed by the stream
   path.
 
-Current limitation: hard interruption inside one real `sherpa_onnx` generation
-call is still best-effort. The job state will be correct, but the backend may
-finish the in-flight call before the worker thread returns.
+Current limitation: hard interruption inside one real `sherpa_onnx` callback
+interval is still best-effort. The job state will be correct, but older runtimes
+or in-flight work between callback boundaries may finish before the worker
+thread returns.
 
 ## Security Notes
 

@@ -131,3 +131,19 @@ python3 scripts/benchmark.py --mode http --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode job --token "$TTS_PLATFORM_TOKEN"
 ```
+
+## Post-Phase 7: V1 Reader Track
+
+After Phase 7 closeout, continue toward the active v1 product goal in this
+order unless `Documentation.md` records a deliberate reorder:
+
+1. Long-document reading orchestration for thousands-of-words inputs.
+2. Model-management UX and hardening: catalog clarity, progress output,
+   checksum defaults, install/activate/remove safety, and first-run guidance.
+3. Service packaging/install and Windows-friendly first-run flow.
+4. Chrome extension onboarding and installability.
+5. Release hardening: docs, security defaults, smoke tests, and remaining test
+   coverage gaps.
+
+Keep browser-specific behavior inside `apps/chrome_extension/`, and keep the
+service contract stable while adding any long-document orchestration.

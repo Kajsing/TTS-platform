@@ -30,6 +30,8 @@ backend-realism work, and early v1 model-management helpers:
 - backend runtime config for `stub`, `auto`, and `real` modes
 - backend readiness and health-status reporting
 - fake `sherpa_onnx` runtime coverage for sync, async job, and streaming paths
+- callback-driven fake `sherpa_onnx` runtime coverage for incremental streaming
+  and real-runtime cancellation callback behavior
 - chunk-plan generation and synthesis routing
 - model catalog listing, local artifact install, manifest update, safe zip
   extraction, overwrite refusal, default-voice activation, and model removal

@@ -44,6 +44,9 @@ and v1-readiness work:
 - backend status reporting in `/v1/health`
 - shared chunk planning for sync, job, and streaming synthesis
 - local model catalog/install/activate/remove CLI helpers
+- callback-driven real-runtime streaming and cancellation when the installed
+  `sherpa_onnx` package exposes generation callbacks, with fallback for older
+  runtimes
 
 ## Repository Layout
 

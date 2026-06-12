@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import queue
 import threading
 from array import array
 from collections.abc import Iterator, Mapping, Sequence
@@ -20,6 +21,10 @@ from tts_core.models import (
 from tts_core.registry import VoiceNotFoundError
 
 from .base import BackendError, BackendNotReadyError
+
+
+class _RuntimeStreamingCallbackUnavailable(RuntimeError):
+    """Internal marker for sherpa-onnx runtimes without callback streaming."""
 
 
 def build_stub_voice() -> VoiceDescriptor:
@@ -153,8 +158,17 @@ class SherpaOnnxBackend:
     def synthesize_stream(self, request: SynthesisRequest) -> Iterator[AudioChunk]:
         voice = self._resolve_voice(request.voice)
         runtime_config = self._get_runtime_config(request.voice)
+        job_id = request.job_id or "stream-job"
+        if self._is_cancelled(job_id):
+            self._clear_cancel(job_id)
+            return
+
         if runtime_config is not None and self.settings.runtime_mode != "stub":
-            pcm_bytes, sample_rate_hz = self._generate_runtime_pcm(request, runtime_config)
+            try:
+                yield from self._stream_with_runtime_callback(request, runtime_config, job_id)
+                return
+            except _RuntimeStreamingCallbackUnavailable:
+                pcm_bytes, sample_rate_hz = self._generate_runtime_pcm(request, runtime_config)
         elif self.settings.runtime_mode == "real":
             raise BackendNotReadyError(
                 f"Voice '{request.voice}' is missing sherpa-onnx backend configuration."
@@ -169,39 +183,12 @@ class SherpaOnnxBackend:
             )
             sample_rate_hz = voice.sample_rate_hz
 
-        job_id = request.job_id or "stream-job"
-        bytes_per_frame = 2
-        chunk_size = max(
-            bytes_per_frame,
-            int(
-                sample_rate_hz
-                * bytes_per_frame
-                * max(request.options.stream_frame_ms, 10)
-                / 1000
-            ),
+        yield from self._stream_pcm_buffer(
+            pcm_bytes,
+            sample_rate_hz=sample_rate_hz,
+            job_id=job_id,
+            stream_frame_ms=request.options.stream_frame_ms,
         )
-        total_size = len(pcm_bytes)
-        chunk_index = 0
-
-        for start in range(0, total_size, chunk_size):
-            if self._is_cancelled(job_id):
-                self._clear_cancel(job_id)
-                return
-
-            pcm_chunk = pcm_bytes[start : start + chunk_size]
-            duration_ms = int(len(pcm_chunk) / bytes_per_frame / sample_rate_hz * 1000)
-            yield AudioChunk(
-                job_id=job_id,
-                chunk_index=chunk_index,
-                sample_rate_hz=sample_rate_hz,
-                channels=1,
-                pcm_bytes=pcm_chunk,
-                duration_ms=max(duration_ms, 1),
-                is_last=start + chunk_size >= total_size,
-            )
-            chunk_index += 1
-
-        self._clear_cancel(job_id)
 
     def cancel(self, job_id: str) -> bool:
         with self._cancel_lock:
@@ -262,17 +249,265 @@ class SherpaOnnxBackend:
     ) -> tuple[bytes, int]:
         runtime = self._get_or_create_runtime(request.voice, runtime_config)
         module = self._load_runtime_module()
+        generation_config = self._build_generation_config(module, request, runtime_config)
+        try:
+            audio = self._generate_runtime_audio(
+                runtime,
+                request.text,
+                generation_config,
+                job_id=request.job_id,
+            )
+        except Exception as exc:  # pragma: no cover - depends on external runtime
+            raise BackendError(f"sherpa-onnx synthesis failed: {exc}") from exc
+        sample_rate_hz = int(
+            getattr(audio, "sample_rate", 0) or self._runtime_sample_rate_hz(runtime) or 24000
+        )
+        if len(audio.samples) == 0:
+            if request.job_id is not None and self._is_cancelled(request.job_id):
+                return b"", sample_rate_hz
+            raise BackendError("sherpa-onnx returned empty audio.")
+        return self._float_samples_to_pcm16(audio.samples), sample_rate_hz
+
+    def _generate_runtime_audio(
+        self,
+        runtime: object,
+        text: str,
+        generation_config: object,
+        *,
+        job_id: str | None,
+    ) -> object:
+        if job_id is None:
+            return runtime.generate(text, generation_config)
+
+        def cancellation_callback(_samples: Sequence[float], _progress: float) -> int:
+            if self._is_cancelled(job_id):
+                return 0
+            return 1
+
+        try:
+            return runtime.generate(text, generation_config, cancellation_callback)
+        except TypeError:
+            return runtime.generate(text, generation_config)
+
+    def _stream_with_runtime_callback(
+        self,
+        request: SynthesisRequest,
+        runtime_config: SherpaOnnxVoiceRuntimeConfig,
+        job_id: str,
+    ) -> Iterator[AudioChunk]:
+        runtime = self._get_or_create_runtime(request.voice, runtime_config)
+        module = self._load_runtime_module()
+        sample_rate_hz = self._runtime_sample_rate_hz(runtime)
+        if sample_rate_hz is None:
+            raise _RuntimeStreamingCallbackUnavailable
+
+        generation_config = self._build_generation_config(module, request, runtime_config)
+        item_queue: queue.Queue[tuple[str, object | None]] = queue.Queue(maxsize=8)
+        stop_requested = threading.Event()
+
+        def put_item(kind: str, value: object | None = None) -> bool:
+            while not stop_requested.is_set():
+                try:
+                    item_queue.put((kind, value), timeout=0.1)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def generation_callback(samples: Sequence[float], _progress: float) -> int:
+            if stop_requested.is_set() or self._is_cancelled(job_id):
+                return 0
+            pcm_bytes = self._float_samples_to_pcm16(samples)
+            if pcm_bytes and not put_item("pcm", pcm_bytes):
+                return 0
+            if stop_requested.is_set() or self._is_cancelled(job_id):
+                return 0
+            return 1
+
+        def generate_worker() -> None:
+            callback_was_used = False
+
+            def recording_callback(samples: Sequence[float], progress: float) -> int:
+                nonlocal callback_was_used
+                callback_was_used = True
+                return generation_callback(samples, progress)
+
+            try:
+                audio = runtime.generate(request.text, generation_config, recording_callback)
+                if not callback_was_used:
+                    if len(audio.samples) == 0:
+                        put_item("error", BackendError("sherpa-onnx returned empty audio."))
+                    else:
+                        put_item("pcm", self._float_samples_to_pcm16(audio.samples))
+            except TypeError as exc:
+                put_item("unsupported", exc)
+            except Exception as exc:  # pragma: no cover - depends on external runtime
+                put_item("error", BackendError(f"sherpa-onnx streaming synthesis failed: {exc}"))
+            finally:
+                put_item("done")
+
+        worker = threading.Thread(
+            target=generate_worker,
+            name=f"sherpa-onnx-stream-{job_id}",
+            daemon=True,
+        )
+        worker.start()
+
+        pending_pcm: bytes | None = None
+        emitted_any = False
+        chunk_index = 0
+
+        while True:
+            if self._is_cancelled(job_id):
+                stop_requested.set()
+                self._clear_cancel(job_id)
+                return
+            try:
+                kind, value = item_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            if kind == "done":
+                if pending_pcm is not None:
+                    yield self._build_audio_chunk(
+                        job_id=job_id,
+                        chunk_index=chunk_index,
+                        sample_rate_hz=sample_rate_hz,
+                        pcm_bytes=pending_pcm,
+                        is_last=True,
+                    )
+                self._clear_cancel(job_id)
+                return
+
+            if kind == "unsupported":
+                stop_requested.set()
+                if emitted_any:
+                    raise BackendError(
+                        "sherpa-onnx streaming callback failed after audio was emitted."
+                    )
+                if isinstance(value, BaseException):
+                    raise _RuntimeStreamingCallbackUnavailable from value
+                raise _RuntimeStreamingCallbackUnavailable
+
+            if kind == "error":
+                stop_requested.set()
+                if isinstance(value, BackendError):
+                    raise value
+                raise BackendError(str(value))
+
+            if kind != "pcm" or not isinstance(value, bytes):
+                continue
+
+            for pcm_frame in self._iter_pcm_frames(
+                value,
+                sample_rate_hz=sample_rate_hz,
+                stream_frame_ms=request.options.stream_frame_ms,
+            ):
+                if pending_pcm is not None:
+                    yield self._build_audio_chunk(
+                        job_id=job_id,
+                        chunk_index=chunk_index,
+                        sample_rate_hz=sample_rate_hz,
+                        pcm_bytes=pending_pcm,
+                        is_last=False,
+                    )
+                    emitted_any = True
+                    chunk_index += 1
+                pending_pcm = pcm_frame
+
+    def _build_generation_config(
+        self,
+        module: object,
+        request: SynthesisRequest,
+        runtime_config: SherpaOnnxVoiceRuntimeConfig,
+    ) -> object:
         generation_config = module.GenerationConfig()
         generation_config.sid = runtime_config.speaker_id
         generation_config.speed = max(request.prosody.rate, 0.1)
         generation_config.silence_scale = 0.2
-        try:
-            audio = runtime.generate(request.text, generation_config)
-        except Exception as exc:  # pragma: no cover - depends on external runtime
-            raise BackendError(f"sherpa-onnx synthesis failed: {exc}") from exc
-        if len(audio.samples) == 0:
-            raise BackendError("sherpa-onnx returned empty audio.")
-        return self._float_samples_to_pcm16(audio.samples), int(audio.sample_rate)
+        return generation_config
+
+    def _runtime_sample_rate_hz(self, runtime: object) -> int | None:
+        sample_rate = getattr(runtime, "sample_rate", None)
+        if callable(sample_rate):
+            sample_rate = sample_rate()
+        if sample_rate is None:
+            return None
+        return int(sample_rate)
+
+    def _stream_pcm_buffer(
+        self,
+        pcm_bytes: bytes,
+        *,
+        sample_rate_hz: int,
+        job_id: str,
+        stream_frame_ms: int,
+    ) -> Iterator[AudioChunk]:
+        pending_pcm: bytes | None = None
+        chunk_index = 0
+        for pcm_frame in self._iter_pcm_frames(
+            pcm_bytes,
+            sample_rate_hz=sample_rate_hz,
+            stream_frame_ms=stream_frame_ms,
+        ):
+            if self._is_cancelled(job_id):
+                self._clear_cancel(job_id)
+                return
+            if pending_pcm is not None:
+                yield self._build_audio_chunk(
+                    job_id=job_id,
+                    chunk_index=chunk_index,
+                    sample_rate_hz=sample_rate_hz,
+                    pcm_bytes=pending_pcm,
+                    is_last=False,
+                )
+                chunk_index += 1
+            pending_pcm = pcm_frame
+        if pending_pcm is not None:
+            yield self._build_audio_chunk(
+                job_id=job_id,
+                chunk_index=chunk_index,
+                sample_rate_hz=sample_rate_hz,
+                pcm_bytes=pending_pcm,
+                is_last=True,
+            )
+        self._clear_cancel(job_id)
+
+    def _iter_pcm_frames(
+        self,
+        pcm_bytes: bytes,
+        *,
+        sample_rate_hz: int,
+        stream_frame_ms: int,
+    ) -> Iterator[bytes]:
+        bytes_per_frame = 2
+        chunk_size = max(
+            bytes_per_frame,
+            int(sample_rate_hz * bytes_per_frame * max(stream_frame_ms, 10) / 1000),
+        )
+        for start in range(0, len(pcm_bytes), chunk_size):
+            yield pcm_bytes[start : start + chunk_size]
+
+    def _build_audio_chunk(
+        self,
+        *,
+        job_id: str,
+        chunk_index: int,
+        sample_rate_hz: int,
+        pcm_bytes: bytes,
+        is_last: bool,
+    ) -> AudioChunk:
+        bytes_per_frame = 2
+        duration_ms = int(len(pcm_bytes) / bytes_per_frame / sample_rate_hz * 1000)
+        return AudioChunk(
+            job_id=job_id,
+            chunk_index=chunk_index,
+            sample_rate_hz=sample_rate_hz,
+            channels=1,
+            pcm_bytes=pcm_bytes,
+            duration_ms=max(duration_ms, 1),
+            is_last=is_last,
+        )
 
     def _get_or_create_runtime(
         self,

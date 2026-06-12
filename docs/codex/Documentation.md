@@ -6,12 +6,20 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Date: 2026-06-13
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
-- Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
+- Project status: Phases 1 through 7 are complete at the repository behavior and
+  test-contract level. The active long-horizon implementation target is now the
+  v1 local reader flow: robust long-document orchestration, model-management
+  UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Milestone 4 backend/model setup documentation has been added and linked. The new docs cover model asset layout, manifest conventions, backend modes, readiness behavior, catalog format, model-management CLI usage, long-text limits, and the remaining real-backend cancellation limitation.
+- Current loop result: Phase 7 closeout tightened real-runtime streaming and
+  cancellation. `SherpaOnnxBackend` now uses `sherpa_onnx` generation callbacks
+  when available so real streaming can emit callback audio instead of waiting
+  for one full generated buffer. Sync/job generation also passes a cancellation
+  callback when a job id exists. Older runtimes fall back to the previous
+  full-buffer path.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 83 tests.
+  - `py -3 -m pytest -q` passed with 87 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -54,6 +62,16 @@ This file is the live status log and shared memory for future Codex loops.
     catalog format, model-management CLI usage, long-text implications,
     cancellation limits, security notes, and troubleshooting.
   - `README.md` links to the backend/model setup guide from the CLI section.
+- Milestone 5 is now complete:
+  - the remaining Phase 7 streaming item is implemented through
+    callback-driven real-runtime streaming when supported by `sherpa_onnx`;
+  - the remaining Phase 7 real-backend cancellation item is implemented through
+    generation callbacks that return `0` once cancellation is observed;
+  - older runtimes and work between callback boundaries remain documented
+    best-effort limits rather than hidden guarantees;
+  - `TASKS.md`, `TESTING.md`, `README.md`, `docs/backend_model_setup.md`, and
+    `docs/codex/Plan.md` now point future work toward v1 reader slices instead
+    of stale Phase 7 execution.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -62,17 +80,14 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Move to Milestone 5 from `Plan.md`: Phase 7 closeout.
-- Continue v1 model-management with clearer install progress output after Phase
-  7 closeout.
-- The open Phase 7 streaming item in `TASKS.md` still needs backend-level work
-  if the project wants true runtime-incremental generation instead of
-  backend-side full-PCM generation followed by chunk emission.
-- The open Phase 7 real-backend cancellation item still needs backend-level work
-  if the project wants hard interruption inside one active runtime generation
-  call instead of service-contract cancellation around it.
-- Milestone 5 closeout should either finish those remaining Phase 7 items or
-  explicitly carry them forward as unfinished follow-ups.
+- Move to the Post-Phase 7 v1 reader track from `Plan.md`.
+- Start with long-document reading orchestration for thousands-of-words inputs:
+  define a service/client flow that can accept page-scale text without relying
+  on one oversized `/v1/tts` request.
+- Continue v1 model-management after that with clearer install progress output,
+  catalog guidance, and first-run defaults.
+- Then move to Windows-friendly service setup and Chrome extension
+  onboarding/installability.
 
 ## Decisions Made And Why
 
@@ -86,10 +101,17 @@ This file is the live status log and shared memory for future Codex loops.
 - A repo-native smoke script was added because long-running Codex loops benefit more from one deterministic public-contract check than from repeated manual `tts` and benchmark commands.
 - The chunk-plan improvement was implemented inside `ChunkPlanner` only, without changing public API schemas or service orchestration, so sync/jobs/streaming continue to share the same `prepare_request` entry point.
 - This loop stayed focused on the Milestone 2 streaming architecture slice and did not start Milestone 3, even though the user allowed "more if you think you can handle it", because the repo runbook prefers validated milestone-sized slices over bundling unrelated behavioral changes.
-- The service now uses the backend streaming contract as its primary streaming path. The remaining limitation is explicitly preserved: the current `SherpaOnnxBackend.synthesize_stream()` implementation still generates full PCM before chunk emission for the stub path and current fake-runtime path.
-- Cancellation is now terminal and observable at the service-contract level, but
-  hard interruption inside a single real backend generation call remains
-  best-effort until the backend exposes truly interruptible runtime generation.
+- The service now uses the backend streaming contract as its primary streaming
+  path. Real runtimes with generation callbacks can emit callback audio;
+  stub mode and older runtimes still generate a full PCM buffer before chunk
+  emission.
+- Cancellation is terminal and observable at the service-contract level. Real
+  runtimes with generation callbacks can stop at callback boundaries; hard
+  interruption inside a callback interval remains best-effort.
+- The real `sherpa_onnx` runtime callback API is feature-detected rather than
+  assumed. Supported runtimes stream callback audio and can stop at callback
+  boundaries; unsupported runtimes fall back to full-buffer generation while
+  preserving public contracts.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -148,10 +170,15 @@ python3 scripts/check_extension.py
   Windows PowerShell exclusively.
 - Some sessions run in Windows PowerShell instead of WSL; use `py -3` when
   `python3` resolves to the Windows Store alias.
-- The service-layer streaming path no longer decodes WAV and slices PCM locally, but the backend still needs follow-up for true runtime-incremental generation.
-- Running-work cancellation is now clearer at the service-contract level; true
-  hard interruption inside a single real backend generation call remains a
-  backend limitation.
+- Real-runtime streaming now uses `sherpa_onnx` generation callbacks when the
+  installed package supports them. Stub mode and older real runtimes still use
+  full-buffer generation followed by local chunk emission.
+- Running-work cancellation can now stop supported real runtimes at generation
+  callback boundaries. Hard interruption inside one callback interval remains a
+  backend/runtime limitation.
+- The default example config still points at the development stub voice. A real
+  local voice must be installed and activated before real acoustic output is the
+  normal local run path.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.
@@ -160,7 +187,8 @@ python3 scripts/check_extension.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Start with Milestone 5 unless this file records a deliberate reorder.
+3. Start with the Post-Phase 7 v1 reader track unless this file records a
+   deliberate reorder.
 4. Keep the next diff narrowly scoped to that milestone.
 5. Run the milestone validation commands before claiming completion.
 6. Update this file again before handing off.
