@@ -110,6 +110,10 @@ tokens. `model-install` downloads or reads a catalog artifact, verifies
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 
+For backend modes, model asset layout, manifest conventions, catalog format,
+and current long-text limits, see
+[`docs/backend_model_setup.md`](docs/backend_model_setup.md).
+
 ## Benchmarking
 
 Examples:

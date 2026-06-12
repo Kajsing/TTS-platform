@@ -8,10 +8,8 @@ This file is the live status log and shared memory for future Codex loops.
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Milestone 3 cancellation semantics are tightened at the service-contract level. Queued and running jobs now move to terminal `cancelled` status when cancellation is accepted, chunk-planned synthesis checks cancellation between planned chunks, and WebSocket cancellation exceptions are reported as cancelled instead of internal errors.
+- Current loop result: Milestone 4 backend/model setup documentation has been added and linked. The new docs cover model asset layout, manifest conventions, backend modes, readiness behavior, catalog format, model-management CLI usage, long-text limits, and the remaining real-backend cancellation limitation.
 - Validation status for the current loop:
-  - `py -3 -m pytest -q apps/tts_service/tests/test_api.py apps/tts_service/tests/test_streaming.py apps/tts_service/tests/test_observability.py` passed with 36 tests.
-  - `py -3 -m ruff check apps/tts_service/src/tts_service/jobs.py apps/tts_service/src/tts_service/synthesis.py apps/tts_service/src/tts_service/main.py apps/tts_service/src/tts_service/observability.py apps/tts_service/tests/test_api.py packages/tts_core/src/tts_core/backends/base.py packages/tts_core/src/tts_core/backends/sherpa_onnx.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 83 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
@@ -50,6 +48,12 @@ This file is the live status log and shared memory for future Codex loops.
   - chunk-planned sync/job synthesis checks backend cancellation flags between planned chunks.
   - WebSocket cancellation raised from the stream generator is reported as a `cancelled` event.
   - synthesis observability now separates cancelled attempts from failures.
+- Milestone 4 is now complete:
+  - `docs/backend_model_setup.md` documents runtime files, backend modes,
+    readiness behavior, manifest conventions, real `sherpa-onnx` backend config,
+    catalog format, model-management CLI usage, long-text implications,
+    cancellation limits, security notes, and troubleshooting.
+  - `README.md` links to the backend/model setup guide from the CLI section.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -58,13 +62,17 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Move to Milestone 4 from `Plan.md`: document backend setup and manifest
-  conventions.
-- Continue v1 model-management with clearer catalog schema docs and progress
-  output after backend/model documentation.
-- After that, finish backend/model/setup documentation closeout.
-- The open Phase 7 streaming item in `TASKS.md` still needs backend-level work if the project wants true runtime-incremental generation instead of backend-side full-PCM generation followed by chunk emission.
-- Milestone 5 closeout remains blocked on Milestones 3 and 4, plus the remaining open Phase 7 streaming task in `TASKS.md`.
+- Move to Milestone 5 from `Plan.md`: Phase 7 closeout.
+- Continue v1 model-management with clearer install progress output after Phase
+  7 closeout.
+- The open Phase 7 streaming item in `TASKS.md` still needs backend-level work
+  if the project wants true runtime-incremental generation instead of
+  backend-side full-PCM generation followed by chunk emission.
+- The open Phase 7 real-backend cancellation item still needs backend-level work
+  if the project wants hard interruption inside one active runtime generation
+  call instead of service-contract cancellation around it.
+- Milestone 5 closeout should either finish those remaining Phase 7 items or
+  explicitly carry them forward as unfinished follow-ups.
 
 ## Decisions Made And Why
 
@@ -152,7 +160,7 @@ python3 scripts/check_extension.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Start with Milestone 4 unless this file records a deliberate reorder.
+3. Start with Milestone 5 unless this file records a deliberate reorder.
 4. Keep the next diff narrowly scoped to that milestone.
 5. Run the milestone validation commands before claiming completion.
 6. Update this file again before handing off.

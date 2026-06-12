@@ -64,4 +64,4 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Improve chunk-plan heuristics beyond sentence grouping and simple pause hints
 - [ ] Revisit streaming to support true incremental backend generation instead of chunk synthesize plus frame slicing
 - [ ] Tighten cancellation semantics for running real-backend work
-- [ ] Add stronger docs for model asset layout, manifest conventions, and backend setup
+- [x] Add stronger docs for model asset layout, manifest conventions, and backend setup
