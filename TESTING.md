@@ -1,6 +1,7 @@
 # Testing
 
-Current automated coverage focuses on the service and core foundation through phase 6:
+Current automated coverage focuses on the service, core foundation, Phase 7
+backend-realism work, and early v1 model-management helpers:
 
 - configuration loading and environment overrides
 - voice manifest parsing
@@ -24,6 +25,12 @@ Current automated coverage focuses on the service and core foundation through ph
 - observability snapshots and request ids
 - structural audio regression checks
 - rate-sensitive audio regression behavior
+- backend runtime config for `stub`, `auto`, and `real` modes
+- backend readiness and health-status reporting
+- fake `sherpa_onnx` runtime coverage for sync, async job, and streaming paths
+- chunk-plan generation and synthesis routing
+- model catalog listing, local artifact install, manifest update, safe zip
+  extraction, overwrite refusal, and model removal
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
@@ -43,11 +50,15 @@ Run tests with:
 python3 -m pytest -q
 ```
 
+On Windows, use `py -3 -m pytest -q` when `python3` is unavailable.
+
 Lint with:
 
 ```bash
 python3 -m ruff check .
 ```
+
+On Windows, use `py -3 -m ruff check .` when `python3` is unavailable.
 
 CLI example:
 
@@ -74,3 +85,6 @@ node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js
 ```
+
+On Windows, run the Python check as `py -3 scripts/check_extension.py` when
+`python3` is unavailable.

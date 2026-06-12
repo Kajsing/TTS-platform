@@ -6,7 +6,8 @@ For ongoing Codex implementation work, use `docs/codex/Prompt.md`, `docs/codex/P
 
 ## Current Status
 
-Repository feature summary through the Phase 6 checkpoint:
+Repository feature summary through the Phase 6 checkpoint plus current Phase 7
+and v1-readiness work:
 
 - repository skeleton
 - engineering guidance documents
@@ -38,6 +39,11 @@ Repository feature summary through the Phase 6 checkpoint:
 - popup-side service status and voice discovery
 - more deliberate extension-side rebuffering and playback state recovery
 - heuristic page-text extraction and a lightweight extension validation script
+- backend runtime modes for `stub`, `auto`, and `real`
+- manifest-side backend asset binding for real `sherpa-onnx` voices
+- backend status reporting in `/v1/health`
+- shared chunk planning for sync, job, and streaming synthesis
+- local model catalog/install/remove CLI helpers
 
 ## Repository Layout
 
@@ -56,8 +62,8 @@ scripts/
 ## Quick Start
 
 1. Create a virtual environment.
-2. Install dependencies from [`pyproject.toml`](/home/kajsing/projects/TTS-platform/pyproject.toml).
-3. Copy [`config/config.example.toml`](/home/kajsing/projects/TTS-platform/config/config.example.toml) to `config/config.toml`.
+2. Install dependencies from [`pyproject.toml`](pyproject.toml).
+3. Copy [`config/config.example.toml`](config/config.example.toml) to `config/config.toml`.
 4. Run the tests.
 
 Example:
@@ -67,6 +73,15 @@ python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -e ".[dev]"
 python3 -m pytest -q
+```
+
+On Windows, use `py -3` if `python3` resolves to the Microsoft Store alias:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python -m pytest -q
 ```
 
 ## CLI Usage
@@ -79,9 +94,18 @@ tts list-voices
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+tts catalog-list --catalog ./models/catalog.json
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-remove sherpa-en-v1
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
+
+The `catalog-list`, `model-install`, and `model-remove` commands are local
+model-management helpers and do not require service auth tokens. `model-install`
+downloads or reads a catalog artifact, verifies `artifact_sha256` when present,
+extracts the zip safely under `models/voices/<model-id>`, and updates
+`models/MANIFEST.json`.
 
 ## Benchmarking
 
@@ -96,7 +120,7 @@ The benchmark script reports average latency, output duration, output size, and 
 
 ## Chrome Extension Prototype
 
-See [apps/chrome_extension/README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) for setup and loading instructions.
+See [apps/chrome_extension/README.md](apps/chrome_extension/README.md) for setup and loading instructions.
 
 The extension currently supports:
 
@@ -109,4 +133,6 @@ The extension currently supports:
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.
 
-For extension-specific setup and troubleshooting, see [README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) and [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).
+For extension-specific setup and troubleshooting, see
+[README.md](apps/chrome_extension/README.md) and
+[TROUBLESHOOTING.md](apps/chrome_extension/TROUBLESHOOTING.md).
