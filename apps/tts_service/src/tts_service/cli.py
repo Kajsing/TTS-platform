@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -132,6 +133,15 @@ def main(argv: list[str] | None = None) -> None:
             _print_json(installed)
             return
 
+        if args.command == "model-activate":
+            activated = _activate_model(
+                model_id=args.model_id,
+                manifest_path=Path(args.manifest_path),
+                config_path=Path(args.config_path),
+            )
+            _print_json(activated)
+            return
+
         if args.command == "model-remove":
             removed = _remove_model(
                 model_id=args.model_id,
@@ -196,6 +206,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace an already installed model directory and overwrite manifest entry.",
     )
+
+    model_activate_parser = subparsers.add_parser("model-activate")
+    model_activate_parser.add_argument("model_id")
+    model_activate_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+    model_activate_parser.add_argument("--config-path", default="config/config.toml")
 
     model_remove_parser = subparsers.add_parser("model-remove")
     model_remove_parser.add_argument("model_id")
@@ -586,6 +601,97 @@ def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> 
     payload["voices"] = filtered
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _activate_model(*, model_id: str, manifest_path: Path, config_path: Path) -> dict[str, object]:
+    if not _manifest_contains_voice(manifest_path=manifest_path, model_id=model_id):
+        raise SystemExit(f"Model '{model_id}' was not found in manifest: {manifest_path}")
+
+    _set_default_voice_in_config(config_path=config_path, model_id=model_id)
+    return {
+        "activated_model": model_id,
+        "config_path": str(config_path),
+        "manifest_path": str(manifest_path),
+    }
+
+
+def _manifest_contains_voice(*, manifest_path: Path, model_id: str) -> bool:
+    if not manifest_path.exists():
+        raise SystemExit(f"Manifest does not exist: {manifest_path}")
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("Manifest root must be a JSON object.")
+    if int(payload.get("version", 1)) != 1:
+        raise SystemExit(f"Unsupported manifest version: {payload.get('version')!r}")
+    voices = payload.get("voices", [])
+    if not isinstance(voices, list):
+        raise SystemExit("Manifest field 'voices' must be a list.")
+    return any(
+        isinstance(voice, dict) and str(voice.get("id", "")).strip() == model_id
+        for voice in voices
+    )
+
+
+def _set_default_voice_in_config(*, config_path: Path, model_id: str) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    default_voice_line = f"default_voice = {_toml_string(model_id)}"
+
+    if not config_path.exists():
+        config_path.write_text(f"[tts]\n{default_voice_line}\n", encoding="utf-8")
+        return
+
+    text = config_path.read_text(encoding="utf-8")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    tts_section_index = _find_toml_table(lines, "tts")
+
+    if tts_section_index is None:
+        prefix = text
+        if prefix and not prefix.endswith(("\n", "\r")):
+            prefix += newline
+        if prefix:
+            prefix += newline
+        config_path.write_text(
+            f"{prefix}[tts]{newline}{default_voice_line}{newline}",
+            encoding="utf-8",
+        )
+        return
+
+    section_end = _find_next_toml_table(lines, start=tts_section_index + 1)
+    default_voice_pattern = re.compile(r"^(\s*)default_voice\s*=")
+    for index in range(tts_section_index + 1, section_end):
+        match = default_voice_pattern.match(lines[index])
+        if match:
+            lines[index] = f"{match.group(1)}{default_voice_line}"
+            _write_toml_lines(config_path=config_path, lines=lines, newline=newline)
+            return
+
+    lines.insert(tts_section_index + 1, default_voice_line)
+    _write_toml_lines(config_path=config_path, lines=lines, newline=newline)
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value)
+
+
+def _find_toml_table(lines: list[str], table_name: str) -> int | None:
+    expected = f"[{table_name}]"
+    for index, line in enumerate(lines):
+        if line.strip() == expected:
+            return index
+    return None
+
+
+def _find_next_toml_table(lines: list[str], *, start: int) -> int:
+    for index in range(start, len(lines)):
+        stripped = lines[index].strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            return index
+    return len(lines)
+
+
+def _write_toml_lines(*, config_path: Path, lines: list[str], newline: str) -> None:
+    config_path.write_text(newline.join(lines) + newline, encoding="utf-8")
 
 
 def _remove_model(*, model_id: str, models_root: Path, manifest_path: Path) -> dict[str, object]:

@@ -8,11 +8,11 @@ This file is the live status log and shared memory for future Codex loops.
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open. This loop pulled the rescued model-management WIP onto `main` before Milestone 3 because the active product goal is a usable local long-text reader, and users need a local model install/remove path before the Chrome reading flow can be v1-usable.
+- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open. This loop extended the v1 model-management path with default voice activation so an installed model can become the service default without manual config editing.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q apps/tts_service/tests/test_cli_models.py` passed with 10 tests.
-  - `py -3 -m pytest -q` passed with 76 tests.
+  - `py -3 -m pytest -q apps/tts_service/tests/test_cli_models.py` passed with 15 tests.
+  - `py -3 -m pytest -q` passed with 81 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -29,7 +29,7 @@ This file is the live status log and shared memory for future Codex loops.
 - Early v1 model-management work now includes local catalog listing, model
   artifact install with optional checksum verification, safe zip extraction
   against absolute paths, drive-qualified paths, and traversal entries, manifest
-  update, and model removal.
+  update, default voice activation in `config/config.toml`, and model removal.
 - A new public-contract smoke script now exists:
   - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
   - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.
@@ -53,8 +53,8 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Return to Milestone 3 from `Plan.md`: tighten cancellation semantics for
   running work.
-- Continue v1 model-management with default voice activation after the current
-  install/remove slice is merged.
+- Continue v1 model-management with clearer catalog schema docs and progress
+  output after cancellation semantics.
 - After that, finish backend/model/setup documentation closeout.
 - The open Phase 7 streaming item in `TASKS.md` still needs backend-level work if the project wants true runtime-incremental generation instead of backend-side full-PCM generation followed by chunk emission.
 - Milestone 5 closeout remains blocked on Milestones 3 and 4, plus the remaining open Phase 7 streaming task in `TASKS.md`.
@@ -106,6 +106,7 @@ tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts catalog-list --catalog ./models/catalog.json
 tts model-install <model-id> --catalog ./models/catalog.json
+tts model-activate <model-id>
 tts model-remove <model-id>
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt

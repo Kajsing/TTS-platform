@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from tts_service import cli
+from tts_service.config import load_config
 
 
 def _build_zip(path: Path, *, files: dict[str, str]) -> bytes:
@@ -14,6 +15,19 @@ def _build_zip(path: Path, *, files: dict[str, str]) -> bytes:
         for relative_path, content in files.items():
             archive.writestr(relative_path, content)
     return path.read_bytes()
+
+
+def _write_manifest(path: Path, *, voice_ids: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [{"id": voice_id, "name": voice_id} for voice_id in voice_ids],
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> None:
@@ -352,3 +366,112 @@ def test_model_remove_is_noop_when_model_is_missing(tmp_path: Path) -> None:
 
     assert payload["removed_files"] is False
     assert payload["removed_manifest_entry"] is False
+
+
+def test_model_activate_updates_existing_default_voice(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        "\n".join(
+            [
+                "[server]",
+                'host = "127.0.0.1"',
+                "",
+                "[tts]",
+                'default_voice = "old-voice"',
+                "max_chars_per_request = 8000",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    payload = cli._activate_model(
+        model_id="voice-a",
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["activated_model"] == "voice-a"
+    config = load_config(config_path, env={})
+    assert config.tts.default_voice == "voice-a"
+    assert config.tts.max_chars_per_request == 8000
+    assert config.server.host == "127.0.0.1"
+
+
+def test_model_activate_inserts_tts_section_when_missing(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("[server]\nport = 9001\n", encoding="utf-8")
+
+    cli._activate_model(
+        model_id="voice-a",
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    config = load_config(config_path, env={})
+    assert config.server.port == 9001
+    assert config.tts.default_voice == "voice-a"
+
+
+def test_model_activate_creates_missing_config(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+
+    cli._activate_model(
+        model_id="voice-a",
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert config_path.read_text(encoding="utf-8") == '[tts]\ndefault_voice = "voice-a"\n'
+    assert load_config(config_path, env={}).tts.default_voice == "voice-a"
+
+
+def test_model_activate_rejects_missing_manifest_voice_without_changing_config(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text('[tts]\ndefault_voice = "voice-a"\n', encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="was not found in manifest"):
+        cli._activate_model(
+            model_id="missing-voice",
+            manifest_path=manifest_path,
+            config_path=config_path,
+        )
+
+    assert load_config(config_path, env={}).tts.default_voice == "voice-a"
+
+
+def test_model_activate_command_prints_activation_payload(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+
+    cli.main(
+        [
+            "model-activate",
+            "voice-a",
+            "--manifest-path",
+            str(manifest_path),
+            "--config-path",
+            str(config_path),
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["activated_model"] == "voice-a"
+    assert load_config(config_path, env={}).tts.default_voice == "voice-a"

@@ -43,7 +43,7 @@ and v1-readiness work:
 - manifest-side backend asset binding for real `sherpa-onnx` voices
 - backend status reporting in `/v1/health`
 - shared chunk planning for sync, job, and streaming synthesis
-- local model catalog/install/remove CLI helpers
+- local model catalog/install/activate/remove CLI helpers
 
 ## Repository Layout
 
@@ -96,16 +96,19 @@ tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-activate sherpa-en-v1
 tts model-remove sherpa-en-v1
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 
-The `catalog-list`, `model-install`, and `model-remove` commands are local
-model-management helpers and do not require service auth tokens. `model-install`
-downloads or reads a catalog artifact, verifies `artifact_sha256` when present,
-extracts the zip safely under `models/voices/<model-id>`, and updates
-`models/MANIFEST.json`.
+The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
+commands are local model-management helpers and do not require service auth
+tokens. `model-install` downloads or reads a catalog artifact, verifies
+`artifact_sha256` when present, extracts the zip safely under
+`models/voices/<model-id>`, and updates `models/MANIFEST.json`.
+`model-activate` validates that the model exists in the manifest and updates
+`config/config.toml` so new synthesis requests use that voice by default.
 
 ## Benchmarking
 
