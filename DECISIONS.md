@@ -81,3 +81,20 @@ Reasoning:
 - Standard browser WebSocket clients cannot attach arbitrary `Authorization` headers in the same way as non-browser clients.
 - The Chrome extension prototype should reuse the existing streaming endpoint instead of introducing a separate browser-only transport.
 - Keeping this compromise scoped to localhost preserves the public contract while acknowledging a browser platform constraint.
+
+## 2026-06-13: Keep Codex workflow guidance in AGENTS.md for now
+
+The repository now treats `AGENTS.md` as the durable source for coding-agent
+workflow rules, with `README.md`, `TESTING.md`, and design docs carrying the
+human-facing setup and milestone details. The project is not adding a local
+`.codex/` config, hooks, rules, or MCP setup yet.
+
+Reasoning:
+
+- The current workflow needs shared guidance more than mechanical enforcement.
+- Project-local hooks and rules require trust review and should be introduced
+  only when a specific check needs enforcement.
+- Different Codex surfaces can work on this repository, so the repo should not
+  assume a single CLI/app/GitHub execution path.
+- Windows developer machines may need `py -3` or a bundled runtime even though
+  the canonical commands remain `python3`-based.

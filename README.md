@@ -4,7 +4,12 @@ Offline-first local text-to-speech platform designed around a stable core domain
 
 ## Current Status
 
-Phase 6 is implemented:
+The repository has implemented the Phase 1-6 platform foundation and a partial
+Phase 7 backend-realism track. The current v1 work is focused on service
+packaging, model management, Chrome extension installability, and release
+hardening.
+
+Implemented foundations:
 
 - repository skeleton
 - engineering guidance documents
@@ -36,6 +41,12 @@ Phase 6 is implemented:
 - popup-side service status and voice discovery
 - more deliberate extension-side rebuffering and playback state recovery
 - heuristic page-text extraction and a lightweight extension validation script
+- backend runtime modes for `stub`, `auto`, and `real`
+- manifest-side backend asset binding for real `sherpa-onnx` voices
+- backend status reporting in `/v1/health`
+- fake-runtime coverage for the real sync, async job, and streaming paths
+- shared chunk planning for sync, job, and streaming synthesis
+- local model catalog/install/remove CLI helpers
 
 ## Repository Layout
 
@@ -54,11 +65,11 @@ scripts/
 ## Quick Start
 
 1. Create a virtual environment.
-2. Install dependencies from [`pyproject.toml`](/home/kajsing/projects/TTS-platform/pyproject.toml).
-3. Copy [`config/config.example.toml`](/home/kajsing/projects/TTS-platform/config/config.example.toml) to `config/config.toml`.
+2. Install dependencies from [`pyproject.toml`](pyproject.toml).
+3. Copy [`config/config.example.toml`](config/config.example.toml) to `config/config.toml`.
 4. Run the tests.
 
-Example:
+POSIX example:
 
 ```bash
 python3 -m venv .venv
@@ -66,6 +77,18 @@ python3 -m venv .venv
 python3 -m pip install -e ".[dev]"
 python3 -m pytest -q
 ```
+
+Windows PowerShell example:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python -m pytest -q
+```
+
+If `python3` opens the Microsoft Store on Windows, use `py -3` or the virtual
+environment's `python` executable instead.
 
 ## CLI Usage
 
@@ -77,9 +100,14 @@ tts list-voices
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+tts catalog-list --catalog ./models/catalog.json
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-remove sherpa-en-v1
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
+
+The `catalog-list`, `model-install`, and `model-remove` commands are local model-management helpers and do not require auth tokens.
 
 ## Benchmarking
 
@@ -94,7 +122,7 @@ The benchmark script reports average latency, output duration, output size, and 
 
 ## Chrome Extension Prototype
 
-See [apps/chrome_extension/README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) for setup and loading instructions.
+See [apps/chrome_extension/README.md](apps/chrome_extension/README.md) for setup and loading instructions.
 
 The extension currently supports:
 
@@ -107,4 +135,6 @@ The extension currently supports:
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts.
 
-For extension-specific setup and troubleshooting, see [README.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/README.md) and [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).
+For extension-specific setup and troubleshooting, see
+[README.md](apps/chrome_extension/README.md) and
+[TROUBLESHOOTING.md](apps/chrome_extension/TROUBLESHOOTING.md).

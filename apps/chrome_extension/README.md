@@ -65,6 +65,9 @@ Run the lightweight extension validation script with:
 python3 scripts/check_extension.py
 ```
 
+On Windows, use `py -3 scripts/check_extension.py` when `python3` is not
+available.
+
 This checks manifest references, linked popup/offscreen assets, and JavaScript syntax when `node` is available.
 
-For common issues, see [TROUBLESHOOTING.md](/home/kajsing/projects/TTS-platform/apps/chrome_extension/TROUBLESHOOTING.md).
+For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
