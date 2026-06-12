@@ -17,11 +17,13 @@ backend-realism work, and early v1 model-management helpers:
 - origin filtering
 - rate limiting
 - job creation, status polling, and queued-job cancellation
+- running-job cancellation that remains terminal even when backend interruption is best-effort
 - job result retrieval and retention cleanup
 - WebSocket auth handling
 - WebSocket auth via either bearer headers or the browser-friendly `start` event token field
 - PCM streaming and `done` events
 - stream cancellation and streaming metrics updates
+- cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids
 - structural audio regression checks
 - rate-sensitive audio regression behavior

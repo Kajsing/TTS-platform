@@ -25,7 +25,7 @@ from .security import (
     extract_bearer_token_from_headers,
     validate_auth_token,
 )
-from .synthesis import SynthesisService
+from .synthesis import SynthesisCancelledError, SynthesisService
 
 
 def create_app(
@@ -333,6 +333,15 @@ def _register_routes(app: FastAPI) -> None:
         except WebSocketDisconnect:
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_cancelled()
+        except SynthesisCancelledError:
+            container.streaming_metrics.mark_cancelled()
+            await websocket.send_json(
+                {
+                    "type": "cancelled",
+                    "job_id": stream_id,
+                    "chunks_sent": chunk_count,
+                }
+            )
         except Exception as exc:
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_failed()
@@ -349,6 +358,9 @@ def _register_routes(app: FastAPI) -> None:
                 }
             )
         finally:
+            clear_cancel = getattr(container.backend, "clear_cancel", None)
+            if clear_cancel is not None:
+                clear_cancel(stream_id)
             receiver_task.cancel()
             with suppress(asyncio.CancelledError):
                 await receiver_task

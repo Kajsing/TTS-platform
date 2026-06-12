@@ -23,6 +23,10 @@ from .observability import ObservabilityState
 from .schemas import SynthesizeRequestPayload
 
 
+class SynthesisCancelledError(RuntimeError):
+    """Raised when synthesis sees a cancellation request for its job id."""
+
+
 @dataclass(frozen=True, slots=True)
 class SynthesisExecution:
     request: SynthesisRequest
@@ -133,6 +137,9 @@ class SynthesisService:
             result = self._synthesize_chunk_plan(execution)
             self._record_synthesis("sync", "success", start_time)
             return result
+        except SynthesisCancelledError:
+            self._record_synthesis("sync", "cancelled", start_time)
+            raise
         except BackendError as exc:
             self._record_synthesis("sync", "failure", start_time)
             raise engine_error(
@@ -152,6 +159,9 @@ class SynthesisService:
             for chunk in self._stream_chunk_plan(execution):
                 yield chunk
             self._record_synthesis("stream", "success", start_time)
+        except SynthesisCancelledError:
+            self._record_synthesis("stream", "cancelled", start_time)
+            raise
         except BackendError as exc:
             self._record_synthesis("stream", "failure", start_time)
             raise engine_error(
@@ -177,8 +187,10 @@ class SynthesisService:
         channels: int | None = None
 
         for planned_chunk in execution.chunk_plan.chunks:
+            self._raise_if_cancelled(execution)
             chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
             result = self.backend.synthesize(chunk_request)
+            self._raise_if_cancelled(execution)
             pcm_bytes, chunk_sample_rate_hz, chunk_channels = decode_wav_pcm16(result.audio_bytes)
             if sample_rate_hz is None:
                 sample_rate_hz = chunk_sample_rate_hz
@@ -215,8 +227,10 @@ class SynthesisService:
         expected_sample_rate_hz: int | None = None
         expected_channels: int | None = None
         for plan_index, planned_chunk in enumerate(execution.chunk_plan.chunks):
+            self._raise_if_cancelled(execution)
             chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
             for backend_chunk in self.backend.synthesize_stream(chunk_request):
+                self._raise_if_cancelled(execution)
                 if expected_sample_rate_hz is None:
                     expected_sample_rate_hz = backend_chunk.sample_rate_hz
                     expected_channels = backend_chunk.channels
@@ -260,3 +274,11 @@ class SynthesisService:
             language_hint=request.language_hint,
             job_id=request.job_id,
         )
+
+    def _raise_if_cancelled(self, execution: SynthesisExecution) -> None:
+        job_id = execution.request.job_id
+        if job_id is None:
+            return
+        is_cancelled = getattr(self.backend, "is_cancelled", None)
+        if is_cancelled is not None and is_cancelled(job_id):
+            raise SynthesisCancelledError(f"Synthesis job '{job_id}' was cancelled.")

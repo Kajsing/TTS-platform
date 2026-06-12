@@ -35,3 +35,9 @@ class TTSBackend(Protocol):
 
     def cancel(self, job_id: str) -> bool:
         ...
+
+    def is_cancelled(self, job_id: str) -> bool:
+        ...
+
+    def clear_cancel(self, job_id: str) -> None:
+        ...

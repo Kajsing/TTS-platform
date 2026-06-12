@@ -8,11 +8,12 @@ This file is the live status log and shared memory for future Codex loops.
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 6 are complete. Phase 7 is partially complete and is the active long-horizon implementation target.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Milestone 2 is complete at the service orchestration layer, while the stricter Phase 7 streaming follow-up in `TASKS.md` remains open. This loop extended the v1 model-management path with default voice activation so an installed model can become the service default without manual config editing.
+- Current loop result: Milestone 3 cancellation semantics are tightened at the service-contract level. Queued and running jobs now move to terminal `cancelled` status when cancellation is accepted, chunk-planned synthesis checks cancellation between planned chunks, and WebSocket cancellation exceptions are reported as cancelled instead of internal errors.
 - Validation status for the current loop:
+  - `py -3 -m pytest -q apps/tts_service/tests/test_api.py apps/tts_service/tests/test_streaming.py apps/tts_service/tests/test_observability.py` passed with 36 tests.
+  - `py -3 -m ruff check apps/tts_service/src/tts_service/jobs.py apps/tts_service/src/tts_service/synthesis.py apps/tts_service/src/tts_service/main.py apps/tts_service/src/tts_service/observability.py apps/tts_service/tests/test_api.py packages/tts_core/src/tts_core/backends/base.py packages/tts_core/src/tts_core/backends/sherpa_onnx.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q apps/tts_service/tests/test_cli_models.py` passed with 15 tests.
-  - `py -3 -m pytest -q` passed with 81 tests.
+  - `py -3 -m pytest -q` passed with 83 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -43,6 +44,12 @@ This file is the live status log and shared memory for future Codex loops.
   - service streaming now remaps backend-local chunk indices into one global stream index sequence across the whole chunk plan.
   - service streaming validates sample-rate/channel consistency across streamed backend chunks.
   - regression coverage now fails if stream execution falls back to `backend.synthesize()` instead of the backend streaming contract.
+- Milestone 3 is now complete at the service-contract level:
+  - cancelling a queued or running job records terminal `cancelled` state immediately.
+  - background job completion cannot overwrite a previously cancelled job with `completed`.
+  - chunk-planned sync/job synthesis checks backend cancellation flags between planned chunks.
+  - WebSocket cancellation raised from the stream generator is reported as a `cancelled` event.
+  - synthesis observability now separates cancelled attempts from failures.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -51,10 +58,10 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Return to Milestone 3 from `Plan.md`: tighten cancellation semantics for
-  running work.
+- Move to Milestone 4 from `Plan.md`: document backend setup and manifest
+  conventions.
 - Continue v1 model-management with clearer catalog schema docs and progress
-  output after cancellation semantics.
+  output after backend/model documentation.
 - After that, finish backend/model/setup documentation closeout.
 - The open Phase 7 streaming item in `TASKS.md` still needs backend-level work if the project wants true runtime-incremental generation instead of backend-side full-PCM generation followed by chunk emission.
 - Milestone 5 closeout remains blocked on Milestones 3 and 4, plus the remaining open Phase 7 streaming task in `TASKS.md`.
@@ -72,6 +79,9 @@ This file is the live status log and shared memory for future Codex loops.
 - The chunk-plan improvement was implemented inside `ChunkPlanner` only, without changing public API schemas or service orchestration, so sync/jobs/streaming continue to share the same `prepare_request` entry point.
 - This loop stayed focused on the Milestone 2 streaming architecture slice and did not start Milestone 3, even though the user allowed "more if you think you can handle it", because the repo runbook prefers validated milestone-sized slices over bundling unrelated behavioral changes.
 - The service now uses the backend streaming contract as its primary streaming path. The remaining limitation is explicitly preserved: the current `SherpaOnnxBackend.synthesize_stream()` implementation still generates full PCM before chunk emission for the stub path and current fake-runtime path.
+- Cancellation is now terminal and observable at the service-contract level, but
+  hard interruption inside a single real backend generation call remains
+  best-effort until the backend exposes truly interruptible runtime generation.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -131,7 +141,9 @@ python3 scripts/check_extension.py
 - Some sessions run in Windows PowerShell instead of WSL; use `py -3` when
   `python3` resolves to the Windows Store alias.
 - The service-layer streaming path no longer decodes WAV and slices PCM locally, but the backend still needs follow-up for true runtime-incremental generation.
-- Running-work cancellation on the real backend path still needs clearer semantics and stronger coverage.
+- Running-work cancellation is now clearer at the service-contract level; true
+  hard interruption inside a single real backend generation call remains a
+  backend limitation.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.
@@ -140,7 +152,7 @@ python3 scripts/check_extension.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Start with Milestone 3 unless this file records a deliberate reorder.
+3. Start with Milestone 4 unless this file records a deliberate reorder.
 4. Keep the next diff narrowly scoped to that milestone.
 5. Run the milestone validation commands before claiming completion.
 6. Update this file again before handing off.

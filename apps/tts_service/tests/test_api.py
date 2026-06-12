@@ -5,11 +5,13 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from tts_core.models import AudioChunk
 from tts_service.config import AppConfig
 from tts_service.main import _build_synthesis_service, create_app
 from tts_service.schemas import SynthesizeRequestPayload
+from tts_service.synthesis import SynthesisCancelledError
 
 
 def build_fake_sherpa_onnx_module(sample_rate: int = 16000) -> object:
@@ -283,6 +285,42 @@ def test_stream_execution_uses_backend_streaming_path(tmp_path: Path, monkeypatc
     ]
     assert [chunk.chunk_index for chunk in chunks] == [0, 1, 2, 3]
     assert [chunk.is_last for chunk in chunks] == [False, False, False, True]
+
+
+def test_synthesis_execution_stops_between_chunks_after_cancel(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _, _, app = build_test_bundle(tmp_path)
+    synthesis_service = _build_synthesis_service(app.state.container)
+    long_sentence = (
+        "Alpha clause introduces the topic with concrete examples, "
+        "beta clause adds more context about timing and workflow, "
+        "gamma clause expands on reliability, observability, and safety, "
+        "delta clause closes the idea with a practical takeaway."
+    )
+    execution = synthesis_service.prepare_request(
+        SynthesizeRequestPayload(
+            text=long_sentence,
+            voice="manifest-voice",
+        ),
+        job_id="job-to-cancel",
+    )
+    original_synthesize = app.state.container.backend.synthesize
+    synthesize_calls: list[str] = []
+
+    def cancelling_synthesize(self, request):
+        synthesize_calls.append(request.text)
+        self.cancel(request.job_id)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", cancelling_synthesize)
+
+    with pytest.raises(SynthesisCancelledError):
+        synthesis_service.synthesize_execution(execution)
+
+    assert len(synthesize_calls) == 1
+    assert app.state.container.observability.snapshot()["synthesis"]["cancelled_count"] == 1
 
 
 def test_tts_endpoint_can_use_real_backend_runtime_when_configured(
@@ -726,6 +764,65 @@ def test_tts_jobs_can_cancel_a_queued_job(tmp_path: Path, monkeypatch) -> None:
 
     assert cancel_response.status_code == 200
     assert cancel_response.json()["status"] == "cancelled"
+
+
+def test_tts_jobs_cancel_running_job_is_terminal_when_backend_cancel_is_best_effort(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client, auth_headers, app = build_test_bundle(
+        tmp_path,
+        config_data={
+            "limits": {
+                "max_concurrent_jobs": 1,
+                "requests_per_minute": 20,
+            }
+        },
+    )
+    original_synthesize = app.state.container.backend.synthesize
+
+    def delayed_synthesize(self, request):
+        time.sleep(0.15)
+        return original_synthesize(request)
+
+    def best_effort_cancel(self, job_id):
+        return False
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", delayed_synthesize)
+    monkeypatch.setattr(type(app.state.container.backend), "cancel", best_effort_cancel)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Running job", "voice": "manifest-voice"},
+    )
+    job_id = create_response.json()["job_id"]
+
+    saw_running = False
+    for _ in range(25):
+        status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+        assert status_response.status_code == 200
+        if status_response.json()["status"] == "running":
+            saw_running = True
+            break
+        time.sleep(0.01)
+    assert saw_running
+
+    cancel_response = client.delete(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+
+    time.sleep(0.2)
+    status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+    result_response = client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+    health_response = client.get("/v1/health")
+
+    assert status_response.json()["status"] == "cancelled"
+    assert status_response.json()["result_available"] is False
+    assert result_response.status_code == 409
+    assert result_response.json()["error"]["details"]["status"] == "cancelled"
+    assert health_response.json()["observability"]["jobs"]["cancelled_count"] >= 1
 
 
 def test_completed_jobs_are_cleaned_up_after_ttl(tmp_path: Path) -> None:

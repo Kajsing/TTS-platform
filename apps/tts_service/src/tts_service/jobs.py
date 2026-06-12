@@ -12,7 +12,7 @@ from tts_core.models import JobStatus, SynthesisResult, utc_now
 from .errors import conflict, not_found
 from .observability import ObservabilityState
 from .schemas import SynthesizeRequestPayload
-from .synthesis import SynthesisExecution, SynthesisService
+from .synthesis import SynthesisCancelledError, SynthesisExecution, SynthesisService
 
 
 @dataclass(slots=True)
@@ -107,21 +107,11 @@ class InMemoryJobManager:
                 JobStatus.CANCELLED,
             }:
                 return record
-            if future is not None and future.cancel():
-                record.status = JobStatus.CANCELLED
-                record.updated_at = utc_now()
-                self._record_job_event("cancelled")
-                return record
-
-        if self.backend.cancel(job_id):
-            with self._lock:
-                record = self._jobs[job_id]
-                record.status = JobStatus.CANCELLED
-                record.updated_at = utc_now()
-                self._record_job_event("cancelled")
-                return record
-
-        return self.get_job(job_id)
+            if future is not None:
+                future.cancel()
+            self.backend.cancel(job_id)
+            self._mark_cancelled_locked(record)
+            return record
 
     def _run_job(
         self,
@@ -138,6 +128,13 @@ class InMemoryJobManager:
 
         try:
             result = synthesis_service.synthesize_execution(execution)
+        except SynthesisCancelledError:
+            with self._lock:
+                record = self._jobs[job_id]
+                if record.status != JobStatus.CANCELLED:
+                    self._mark_cancelled_locked(record)
+            self._clear_backend_cancel(job_id)
+            return
         except Exception as exc:  # pragma: no cover - exercised via API tests
             with self._lock:
                 record = self._jobs[job_id]
@@ -146,6 +143,7 @@ class InMemoryJobManager:
                     record.error_message = str(exc)
                     record.updated_at = utc_now()
                     self._record_job_event("failed")
+            self._clear_backend_cancel(job_id)
             return
 
         with self._lock:
@@ -156,6 +154,7 @@ class InMemoryJobManager:
                 record.updated_at = utc_now()
                 self._record_job_event("completed")
             self._cleanup_locked()
+        self._clear_backend_cancel(job_id)
 
     def _cleanup_locked(self) -> None:
         now = utc_now()
@@ -187,6 +186,18 @@ class InMemoryJobManager:
         self._executions.pop(job_id, None)
         self._futures.pop(job_id, None)
         self._record_job_event("cleaned")
+
+    def _mark_cancelled_locked(self, record: JobRecord) -> None:
+        record.status = JobStatus.CANCELLED
+        record.result = None
+        record.error_message = None
+        record.updated_at = utc_now()
+        self._record_job_event("cancelled")
+
+    def _clear_backend_cancel(self, job_id: str) -> None:
+        clear_cancel = getattr(self.backend, "clear_cancel", None)
+        if clear_cancel is not None:
+            clear_cancel(job_id)
 
     def _record_job_event(self, event: str) -> None:
         if self.observability is not None:

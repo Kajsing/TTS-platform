@@ -208,6 +208,12 @@ class SherpaOnnxBackend:
             self._cancelled_job_ids.add(job_id)
         return True
 
+    def is_cancelled(self, job_id: str) -> bool:
+        return self._is_cancelled(job_id)
+
+    def clear_cancel(self, job_id: str) -> None:
+        self._clear_cancel(job_id)
+
     def _synthesize_with_stub(
         self,
         request: SynthesisRequest,

@@ -56,6 +56,7 @@ class SynthesisMetrics:
     request_count: int = 0
     success_count: int = 0
     failure_count: int = 0
+    cancelled_count: int = 0
     total_latency_ms: float = 0.0
     modes: dict[str, int] = field(default_factory=dict)
 
@@ -66,6 +67,8 @@ class SynthesisMetrics:
             self.modes[mode] = self.modes.get(mode, 0) + 1
             if outcome == "success":
                 self.success_count += 1
+            elif outcome == "cancelled":
+                self.cancelled_count += 1
             else:
                 self.failure_count += 1
 
@@ -78,6 +81,7 @@ class SynthesisMetrics:
                 "request_count": self.request_count,
                 "success_count": self.success_count,
                 "failure_count": self.failure_count,
+                "cancelled_count": self.cancelled_count,
                 "average_latency_ms": average_latency_ms,
                 "modes": dict(sorted(self.modes.items())),
             }
