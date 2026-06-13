@@ -40,6 +40,20 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
     assert summary["install"]["activated_model"] == "local-flow-voice"
     assert summary["install"]["files_installed"] == 3
     assert summary["install"]["checksum_verified"] is True
+    assert summary["model_list"]["default_voice"] == "local-flow-voice"
+    assert summary["model_list"]["manifest_voice_count"] == 2
+    assert summary["model_list"]["default_voice_in_manifest"] is True
+    assert summary["model_list"]["model_ids"] == [
+        "sherpa-en-debug",
+        "local-flow-voice",
+    ]
+    assert summary["model_list"]["default_model_id"] == "local-flow-voice"
+    assert summary["model_list"]["default_model_has_backend_config"] is False
+    assert summary["model_list"]["default_catalog_exists"] is True
+    assert summary["model_list"]["next_steps"] == [
+        "tts model-install local-flow-voice --activate --overwrite",
+        "tts model-check",
+    ]
     assert summary["model_check"]["model_id"] == "local-flow-voice"
     assert summary["model_check"]["voice_found"] is True
     assert summary["model_check"]["backend_configured"] is False

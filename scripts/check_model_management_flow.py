@@ -146,6 +146,22 @@ def check_model_management_flow(
                 timeout_s=command_timeout_s,
             )
         _assert_installed_repo_state(repo_root=repo_root)
+        model_list_payload = _run_json_command(
+            [
+                python_executable,
+                "-m",
+                "tts_service.cli",
+                "model-list",
+                "--repo-root",
+                str(repo_root),
+                "--manifest-path",
+                str(repo_root / "models" / "MANIFEST.json"),
+                "--config-path",
+                str(repo_root / "config" / "config.toml"),
+            ],
+            env=env,
+            timeout_s=command_timeout_s,
+        )
         model_check_payload = _run_json_command(
             [
                 python_executable,
@@ -221,6 +237,7 @@ def check_model_management_flow(
         "default_catalog": _summarize_default_catalog(default_catalog_payload),
         "catalog": _summarize_catalog(catalog_payload),
         "install": _summarize_install(install_payload),
+        "model_list": _summarize_model_list(model_list_payload),
         "model_check": _summarize_model_check(model_check_payload),
         "service": _summarize_smoke(smoke_payload),
         "remove": _summarize_remove(remove_payload),
@@ -506,6 +523,36 @@ def _summarize_install(payload: dict[str, object]) -> dict[str, object]:
             for step in payload.get("install_steps", [])
             if isinstance(step, dict)
         ],
+    }
+
+
+def _summarize_model_list(payload: dict[str, object]) -> dict[str, object]:
+    models = [
+        model
+        for model in payload.get("models", [])
+        if isinstance(model, dict)
+    ]
+    default_model = next(
+        (model for model in models if model.get("is_default") is True),
+        None,
+    )
+    manifest = payload.get("manifest", {})
+    catalog = payload.get("catalog", {})
+    return {
+        "default_voice": payload.get("default_voice"),
+        "manifest_voice_count": _dict_get(manifest, "voice_count"),
+        "default_voice_in_manifest": _dict_get(
+            manifest,
+            "default_voice_in_manifest",
+        ),
+        "model_ids": [model.get("id") for model in models],
+        "default_model_id": _dict_get(default_model, "id"),
+        "default_model_has_backend_config": _dict_get(
+            default_model,
+            "has_backend_config",
+        ),
+        "default_catalog_exists": _dict_get(catalog, "exists"),
+        "next_steps": payload.get("next_steps"),
     }
 
 

@@ -320,5 +320,8 @@ the default catalog and put the concrete default model install command first.
 The forty-first release-hardening slice exposes the same
 `catalog_single_installable_model` signal from Windows launcher setup-only
 summaries, keeping all Windows first-run checks aligned.
+The forty-second model-management UX slice adds `tts model-list`, a read-only
+offline manifest/default-voice listing command, and wires it into the
+model-management flow smoke.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

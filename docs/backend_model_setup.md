@@ -421,19 +421,26 @@ tts model-activate vits-piper-en_US-lessac-medium
 Check whether an installed or default voice is ready for real local output:
 
 ```bash
+tts model-list
 tts model-check vits-piper-en_US-lessac-medium
 tts model-check
 ```
 
-`model-check` is read-only. It reports config validity, the selected/default
-voice, manifest presence, whether the voice has a sherpa-onnx backend config,
-which backend asset paths exist, whether `[backend].mode` is non-stub, whether
-`sherpa_onnx` can be imported, whether the default `models/catalog.json`
-exists, which installable model ids it contains, and concrete next steps. When
-the default catalog exists, install guidance omits `--catalog`; otherwise it
-tells the operator to pass `--catalog <path-or-url>`. If the configured default
-voice is still the development stub and the default catalog has one installable
-real voice, `model-check` suggests that catalog model, such as
+`model-list` is read-only and does not require the service to be running. It
+reports installed manifest voices, which one matches `[tts].default_voice`,
+whether each voice has backend configuration, default catalog status, and
+next-step guidance.
+
+`model-check` is also read-only. It reports config validity, the
+selected/default voice, manifest presence, whether the voice has a sherpa-onnx
+backend config, which backend asset paths exist, whether `[backend].mode` is
+non-stub, whether `sherpa_onnx` can be imported, whether the default
+`models/catalog.json` exists, which installable model ids it contains, and
+concrete next steps. When the default catalog exists, install guidance omits
+`--catalog`; otherwise it tells the operator to pass `--catalog <path-or-url>`.
+If the configured default voice is still the development stub and the default
+catalog has one installable real voice, `model-check` suggests that catalog
+model, such as
 `tts model-install vits-piper-en_US-lessac-medium --activate`, instead of
 suggesting a stub reinstall. A development stub voice is expected to report
 `ready: false` because it has no real backend asset configuration.

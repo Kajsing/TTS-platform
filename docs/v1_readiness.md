@@ -43,10 +43,11 @@ for long web-page text.
   install command before first playback.
 - `python3 scripts/check_model_management_flow.py` creates a local loopback
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
-  verifies the default `models/catalog.json` path behavior, runs
-  download/install, activate, service smoke with the installed voice, read-only
-  model readiness diagnostics with catalog-aware next steps, and remove without
-  external downloads. Model installs require `artifact_sha256` by default, with
+  verifies the default `models/catalog.json` path behavior, lists installed
+  manifest models offline, runs download/install, activate, service smoke with
+  the installed voice, read-only model readiness diagnostics with catalog-aware
+  next steps, and remove without external downloads. Model installs require
+  `artifact_sha256` by default, with
   `--allow-missing-checksum` reserved for trusted local artifacts. The default
   catalog now includes the English
   `vits-piper-en_US-lessac-medium` sherpa-onnx model, and the installer supports
@@ -97,7 +98,8 @@ for long web-page text.
   The local artifact workflow is automated; real acoustic-output readiness
   still needs a real model artifact and runtime outside the default gate. Use
   `tts setup-local` for catalog-aware first-run guidance, then
-  `tts model-check <model-id>` to verify local manifest/backend assets and
+  `tts model-list` to inspect installed manifest voices and
+  `tts model-check <model-id>` to verify local manifest/backend assets plus
   `sherpa_onnx` runtime availability before expecting real acoustic output.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt

@@ -72,6 +72,7 @@ READINESS_MARKERS = (
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
     "tts model-install vits-piper-en_US-lessac-medium --activate",
     "catalog-aware first-run guidance",
+    "tts model-list",
     "tts model-check <model-id>",
     "--allow-missing-checksum",
     "python3 scripts/check_chrome_extension_smoke.py",
@@ -175,6 +176,9 @@ REQUIRED_TEXT_MARKERS = {
         "missing artifact_sha256",
         "installable_model_ids",
         "_model_check_catalog_model_ref",
+        "model-list",
+        "_list_models",
+        "_model_list_default_model",
         "_setup_local_model_install_step",
         "default_voice_has_backend_config",
         "extension-allow-origin",
@@ -185,6 +189,11 @@ REQUIRED_TEXT_MARKERS = {
         '"service_smoke"',
         '"foreground_service"',
         "catalog_single_installable_model",
+    ),
+    "scripts/check_model_management_flow.py": (
+        '"model-list"',
+        '"model_list"',
+        "_summarize_model_list",
     ),
     "TESTING.md": (
         "v1-readiness",
@@ -210,6 +219,7 @@ REQUIRED_TEXT_MARKERS = {
     "docs/backend_model_setup.md": (
         "vits-piper-en_US-lessac-medium",
         "tar.bz2",
+        "model-list",
         "Continue Page",
         "non-textual character offset",
         "check_chrome_extension_smoke.py",

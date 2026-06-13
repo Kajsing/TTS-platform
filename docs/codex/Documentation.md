@@ -11,22 +11,23 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Windows launcher setup-only summaries now expose
-  `catalog_single_installable_model`, aligning launcher, bundle bootstrap, and
-  installed bundle first-run evidence.
+- Current loop result: `tts model-list` now gives an offline manifest/default
+  voice overview with catalog-aware next steps, and the model-management smoke
+  exercises it between install/activate and `model-check`.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_windows_launchers.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_launchers_check.py`.
-  - Targeted Windows launcher tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`
-    and reported 5 passed.
-  - `py -3 scripts\check_windows_launchers.py --bundle dist\windows\tts-platform-local-reader.zip`
-    passed and reported `catalog_single_installable_model` as
-    `vits-piper-en_US-lessac-medium` for both PowerShell and CMD setup-only
-    launchers.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py scripts\check_model_management_flow.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py`.
+  - Targeted model-management tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
+    and reported 39 passed.
+  - `py -3 -m tts_service.cli model-list` passed and reported
+    `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
+    next step for the current debug default voice.
+  - `py -3 scripts\check_model_management_flow.py` passed and now reports a
+    `model_list` summary.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 174 tests.
+  - `py -3 -m pytest -q` passed with 178 tests.
   - `py -3 scripts\release_check.py` passed, including security defaults,
     v1 readiness, local service bootstrap, model-management flow, extension
     checks, extension packaging, Windows bundle packaging/bootstrap, Windows
@@ -179,11 +180,14 @@ This file is the live status log and shared memory for future Codex loops.
     and, when the configured/default voice is still the non-real development
     stub, suggests the concrete catalog model such as
     `tts model-install vits-piper-en_US-lessac-medium --activate`.
+  - `tts model-list` now reports installed manifest voices, the configured
+    default voice, backend-config presence, default catalog status, and
+    catalog-aware next steps without starting the service.
   - `scripts/check_model_management_flow.py` now verifies catalog-list,
-    default `models/catalog.json` discovery, relative-artifact download/install
-    from a generated loopback HTTP catalog, activate, model readiness output,
-    service smoke with the installed voice, and remove using a generated local
-    artifact and temp repo root.
+    default `models/catalog.json` discovery, offline `model-list`,
+    relative-artifact download/install from a generated loopback HTTP catalog,
+    activate, model readiness output, service smoke with the installed voice,
+    and remove using a generated local artifact and temp repo root.
 - Windows-friendly first-run setup has started:
   - `tts setup-local` bootstraps local config and token files without requiring
     the service to be running.

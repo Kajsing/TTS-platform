@@ -195,6 +195,7 @@ manager, scheduled task, or auto-start entry.
 
    ```powershell
    .\\.venv\\Scripts\\tts.exe catalog-list
+   .\\.venv\\Scripts\\tts.exe model-list
    .\\.venv\\Scripts\\tts.exe model-install vits-piper-en_US-lessac-medium --activate
    .\\.venv\\Scripts\\tts.exe model-check vits-piper-en_US-lessac-medium
    ```

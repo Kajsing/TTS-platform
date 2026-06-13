@@ -1090,6 +1090,122 @@ def test_model_activate_rejects_missing_manifest_voice_without_changing_config(
     assert load_config(config_path, env={}).tts.default_voice == "voice-a"
 
 
+def test_model_list_reports_manifest_models_and_default(tmp_path: Path) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = _write_model_check_manifest(tmp_path)
+
+    payload = cli._list_models(
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["default_voice"] == "voice-a"
+    assert payload["manifest"]["valid"] is True
+    assert payload["manifest"]["voice_count"] == 1
+    assert payload["manifest"]["default_voice_in_manifest"] is True
+    assert payload["models"] == [
+        {
+            "id": "voice-a",
+            "name": "Voice A",
+            "engine": "sherpa_onnx",
+            "language": "en",
+            "sample_rate_hz": 24000,
+            "quality_tier": "unknown",
+            "source": "models/voices/voice-a",
+            "is_default": True,
+            "has_backend_config": True,
+            "backend_model_type": "vits",
+        }
+    ]
+    assert payload["next_steps"] == ["tts model-check voice-a", "tts serve"]
+
+
+def test_model_list_suggests_default_catalog_install_when_manifest_missing(
+    tmp_path: Path,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+
+    payload = cli._list_models(
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["manifest"]["exists"] is False
+    assert payload["manifest"]["valid"] is False
+    assert payload["models"] == []
+    assert payload["catalog"]["single_installable_model_id"] == "voice-a"
+    assert payload["next_steps"] == [
+        "tts catalog-list",
+        "tts model-install voice-a --activate",
+    ]
+
+
+def test_model_list_suggests_catalog_install_for_default_stub_voice(
+    tmp_path: Path,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "sherpa-en-debug",
+                        "name": "Sherpa English Debug",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+
+    payload = cli._list_models(
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["models"][0]["has_backend_config"] is False
+    assert payload["next_steps"] == [
+        "tts model-install voice-a --activate",
+        "tts model-check",
+    ]
+
+
+def test_model_list_command_prints_payload(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = _write_model_check_manifest(tmp_path)
+
+    cli.main(
+        [
+            "model-list",
+            "--repo-root",
+            str(tmp_path),
+            "--manifest-path",
+            str(manifest_path),
+            "--config-path",
+            str(config_path),
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["default_voice"] == "voice-a"
+    assert payload["models"][0]["id"] == "voice-a"
+    assert payload["models"][0]["is_default"] is True
+
+
 def test_model_check_reports_default_stub_voice_is_not_real_ready(tmp_path: Path) -> None:
     config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
     manifest_path = tmp_path / "models" / "MANIFEST.json"

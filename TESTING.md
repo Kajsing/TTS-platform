@@ -70,9 +70,9 @@ backend-realism work, and early v1 model-management helpers:
   metadata, overwrite refusal, checksum-required-by-default install behavior
   with an explicit trusted-local override, default `models/catalog.json`
   discovery with friendly missing-file guidance,
-  install-and-activate first-run shortcut, default-voice activation, read-only
-  real-backend readiness diagnostics with catalog-aware concrete install next
-  steps, and model removal
+  install-and-activate first-run shortcut, offline manifest model listing,
+  default-voice activation, read-only real-backend readiness diagnostics with
+  catalog-aware concrete install next steps, and model removal
 - local first-run setup helper behavior for config creation, token
   initialization, manifest/default-voice readiness reporting, default catalog
   detection, and concrete model-install guidance

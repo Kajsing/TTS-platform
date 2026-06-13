@@ -192,6 +192,16 @@ def main(argv: list[str] | None = None) -> None:
             _print_json(activated)
             return
 
+        if args.command == "model-list":
+            _print_json(
+                _list_models(
+                    repo_root=Path(args.repo_root),
+                    manifest_path=Path(args.manifest_path),
+                    config_path=Path(args.config_path),
+                )
+            )
+            return
+
         if args.command == "model-check":
             _print_json(
                 _check_model_readiness(
@@ -312,6 +322,11 @@ def _build_parser() -> argparse.ArgumentParser:
     model_activate_parser.add_argument("model_id")
     model_activate_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
     model_activate_parser.add_argument("--config-path", default="config/config.toml")
+
+    model_list_parser = subparsers.add_parser("model-list")
+    model_list_parser.add_argument("--repo-root", default=".")
+    model_list_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+    model_list_parser.add_argument("--config-path", default="config/config.toml")
 
     model_check_parser = subparsers.add_parser("model-check")
     model_check_parser.add_argument("model_id", nargs="?")
@@ -1558,6 +1573,204 @@ def _inspect_config_default_for_remove(
         "config_path": str(config_path),
         "active_default_voice": config.tts.default_voice == model_id,
     }
+
+
+def _list_models(
+    *,
+    repo_root: Path,
+    manifest_path: Path,
+    config_path: Path,
+) -> dict[str, object]:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_manifest_path = _resolve_under_root(resolved_repo_root, manifest_path)
+    resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
+    config_status = _inspect_config_for_model_check(resolved_config_path)
+    default_voice = str(config_status.get("default_voice") or "").strip()
+    manifest_status = _inspect_manifest_for_model_list(
+        manifest_path=resolved_manifest_path,
+        default_voice=default_voice,
+    )
+    catalog_status = _inspect_catalog_for_model_check(repo_root=resolved_repo_root)
+    return {
+        "repo_root": str(resolved_repo_root),
+        "config": config_status,
+        "manifest": {
+            key: value
+            for key, value in manifest_status.items()
+            if key != "models"
+        },
+        "catalog": catalog_status,
+        "default_voice": default_voice or None,
+        "models": manifest_status.get("models", []),
+        "next_steps": _model_list_next_steps(
+            config_status=config_status,
+            manifest_status=manifest_status,
+            catalog_status=catalog_status,
+        ),
+    }
+
+
+def _inspect_manifest_for_model_list(
+    *,
+    manifest_path: Path,
+    default_voice: str,
+) -> dict[str, object]:
+    if not manifest_path.exists():
+        return {
+            "path": str(manifest_path),
+            "exists": False,
+            "valid": False,
+            "voice_count": 0,
+            "default_voice_in_manifest": False,
+            "models": [],
+            "error": "Manifest does not exist.",
+        }
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {
+            "path": str(manifest_path),
+            "exists": True,
+            "valid": False,
+            "voice_count": 0,
+            "default_voice_in_manifest": False,
+            "models": [],
+            "error": f"Manifest is not valid JSON: {exc}",
+        }
+    if not isinstance(payload, dict):
+        return _invalid_manifest_for_model_list(manifest_path, "Manifest root must be an object.")
+    if payload.get("version") != 1:
+        return _invalid_manifest_for_model_list(
+            manifest_path,
+            f"Unsupported manifest version: {payload.get('version')!r}",
+        )
+    voices = payload.get("voices", [])
+    if not isinstance(voices, list):
+        return _invalid_manifest_for_model_list(
+            manifest_path,
+            "Manifest field 'voices' must be a list.",
+        )
+
+    models = [
+        _model_list_voice_summary(voice=voice, default_voice=default_voice)
+        for voice in voices
+        if isinstance(voice, dict) and str(voice.get("id", "")).strip()
+    ]
+    return {
+        "path": str(manifest_path),
+        "exists": True,
+        "valid": True,
+        "voice_count": len(models),
+        "default_voice_in_manifest": any(
+            model.get("id") == default_voice for model in models
+        ),
+        "models": models,
+    }
+
+
+def _invalid_manifest_for_model_list(manifest_path: Path, error: str) -> dict[str, object]:
+    return {
+        "path": str(manifest_path),
+        "exists": True,
+        "valid": False,
+        "voice_count": 0,
+        "default_voice_in_manifest": False,
+        "models": [],
+        "error": error,
+    }
+
+
+def _model_list_voice_summary(
+    *,
+    voice: dict[str, object],
+    default_voice: str,
+) -> dict[str, object]:
+    model_id = str(voice.get("id", "")).strip()
+    backend = voice.get("backend")
+    return {
+        "id": model_id,
+        "name": str(voice.get("name", model_id)),
+        "engine": str(voice.get("engine", "unknown")),
+        "language": str(voice.get("language", "unknown")),
+        "sample_rate_hz": voice.get("sample_rate_hz"),
+        "quality_tier": str(voice.get("quality_tier", "unknown")),
+        "source": str(voice.get("source", "")),
+        "is_default": bool(model_id and model_id == default_voice),
+        "has_backend_config": isinstance(backend, dict),
+        "backend_model_type": (
+            str(backend.get("model_type", "")).strip()
+            if isinstance(backend, dict)
+            else None
+        ),
+    }
+
+
+def _model_list_next_steps(
+    *,
+    config_status: dict[str, object],
+    manifest_status: dict[str, object],
+    catalog_status: dict[str, object],
+) -> list[str]:
+    steps: list[str] = []
+    if config_status.get("valid") is not True:
+        steps.append("tts setup-local")
+    if manifest_status.get("valid") is not True or not manifest_status.get("models"):
+        steps.append("tts catalog-list")
+        steps.append(
+            _model_check_install_step(
+                model_id="",
+                catalog_status=catalog_status,
+                overwrite=False,
+            )
+        )
+        return steps
+    if manifest_status.get("default_voice_in_manifest") is not True:
+        steps.extend(
+            [
+                "tts model-activate <model-id>",
+                "tts model-check <model-id>",
+            ]
+        )
+        return steps
+
+    default_voice = str(config_status.get("default_voice") or "").strip()
+    default_model = _model_list_default_model(manifest_status)
+    if (
+        default_model is not None
+        and default_model.get("has_backend_config") is not True
+    ):
+        install_step = _setup_local_model_install_step(
+            default_voice=default_voice,
+            default_voice_in_manifest=True,
+            default_voice_has_backend_config=False,
+            catalog_status=catalog_status,
+        )
+        if install_step:
+            steps.append(install_step)
+            steps.append("tts model-check")
+            return steps
+    if default_voice:
+        steps.append(f"tts model-check {default_voice}")
+    else:
+        steps.append("tts model-check")
+    steps.append("tts serve")
+    return steps
+
+
+def _model_list_default_model(
+    manifest_status: dict[str, object],
+) -> dict[str, object] | None:
+    models = manifest_status.get("models", [])
+    if not isinstance(models, list):
+        return None
+    return next(
+        (
+            model
+            for model in models
+            if isinstance(model, dict) and model.get("is_default") is True
+        ),
+        None,
+    )
 
 
 def _check_model_readiness(
