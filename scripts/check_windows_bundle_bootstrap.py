@@ -116,6 +116,9 @@ def check_windows_bundle_bootstrap(
             "manifest_default_voice": setup_payload["manifest"][
                 "default_voice_in_manifest"
             ],
+            "catalog_single_installable_model": setup_payload["catalog"][
+                "single_installable_model_id"
+            ],
             "next_steps": _string_list(setup_payload.get("next_steps")),
         },
     }
@@ -209,7 +212,8 @@ def _assert_setup_payload(*, setup_payload: dict[str, object], bundle_root: Path
     token_path = Path(str(setup_payload.get("token_file", "")))
     service = setup_payload.get("service")
     manifest = setup_payload.get("manifest")
-    next_steps = setup_payload.get("next_steps")
+    catalog = setup_payload.get("catalog")
+    next_steps = _string_list(setup_payload.get("next_steps"))
 
     if setup_payload.get("config_created") is not True:
         raise WindowsBundleBootstrapError("setup-local did not create config/config.toml")
@@ -226,10 +230,26 @@ def _assert_setup_payload(*, setup_payload: dict[str, object], bundle_root: Path
         raise WindowsBundleBootstrapError("setup-local service base URL is not loopback default")
     if not isinstance(manifest, dict) or manifest.get("exists") is not True:
         raise WindowsBundleBootstrapError("setup-local did not find models/MANIFEST.json")
-    if not isinstance(next_steps, list) or "tts serve" not in next_steps:
+    if "tts serve" not in next_steps:
         raise WindowsBundleBootstrapError("setup-local next steps do not include tts serve")
     if "tts model-check" not in next_steps:
         raise WindowsBundleBootstrapError("setup-local next steps do not include tts model-check")
+    if not isinstance(catalog, dict) or catalog.get("exists") is not True:
+        raise WindowsBundleBootstrapError("setup-local did not report the default catalog")
+    single_installable_model_id = str(
+        catalog.get("single_installable_model_id") or ""
+    ).strip()
+    if not single_installable_model_id:
+        raise WindowsBundleBootstrapError(
+            "setup-local default catalog did not expose one installable model"
+        )
+    expected_install_step = (
+        f"tts model-install {single_installable_model_id} --activate"
+    )
+    if not next_steps or next_steps[0] != expected_install_step:
+        raise WindowsBundleBootstrapError(
+            "setup-local did not put the default catalog install step first"
+        )
 
 
 def _string_list(value: object) -> list[str]:

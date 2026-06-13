@@ -161,6 +161,12 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_windows_bundle_install.py": (
         "_run_windows_install_script",
         '"installer_script"',
+        "catalog_single_installable_model",
+        "Installed setup-local did not put the default catalog install step first",
+    ),
+    "scripts/check_windows_bundle_bootstrap.py": (
+        "catalog_single_installable_model",
+        "setup-local did not put the default catalog install step first",
     ),
     "apps/tts_service/src/tts_service/cli.py": (
         "tarfile",

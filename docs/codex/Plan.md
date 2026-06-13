@@ -314,5 +314,8 @@ The thirty-ninth packaging UX slice updates the generated
 `WINDOWS_BUNDLE_README.md` so the first-run model section installs
 `vits-piper-en_US-lessac-medium` before re-checking readiness, matching the
 catalog-aware `setup-local` next steps.
+The fortieth release-hardening slice makes the Windows bundle bootstrap and
+install checks fail if extracted/installed `setup-local` output does not expose
+the default catalog and put the concrete default model install command first.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

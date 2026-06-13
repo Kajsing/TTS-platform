@@ -66,6 +66,13 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
     assert summary["setup"]["token_created"] is True
     assert summary["setup"]["base_url"] == "http://127.0.0.1:7777"
     assert summary["setup"]["manifest_default_voice"] is True
+    assert (
+        summary["setup"]["catalog_single_installable_model"]
+        == "vits-piper-en_US-lessac-medium"
+    )
+    assert summary["setup"]["next_steps"][0] == (
+        "tts model-install vits-piper-en_US-lessac-medium --activate"
+    )
     assert "tts model-check" in summary["setup"]["next_steps"]
     assert "tts serve" in summary["setup"]["next_steps"]
 

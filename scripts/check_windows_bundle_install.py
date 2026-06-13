@@ -196,6 +196,10 @@ def check_windows_bundle_install(
                 setup_payload.get("manifest"),
                 "default_voice_in_manifest",
             ),
+            "catalog_single_installable_model": _dict_get(
+                setup_payload.get("catalog"),
+                "single_installable_model_id",
+            ),
             "next_steps": _string_list(setup_payload.get("next_steps")),
         },
         "service": _summarize_smoke(smoke_payload),
@@ -469,14 +473,33 @@ def _dict_payload(raw_payload: object, *, label: str) -> dict[str, object]:
 
 
 def _assert_setup_next_steps(setup_payload: dict[str, object]) -> None:
-    next_steps = setup_payload.get("next_steps")
-    if not isinstance(next_steps, list) or "tts serve" not in next_steps:
+    next_steps = _string_list(setup_payload.get("next_steps"))
+    if "tts serve" not in next_steps:
         raise WindowsBundleInstallError(
             "Installed setup-local next steps do not include tts serve."
         )
     if "tts model-check" not in next_steps:
         raise WindowsBundleInstallError(
             "Installed setup-local next steps do not include tts model-check."
+        )
+    catalog = setup_payload.get("catalog")
+    if not isinstance(catalog, dict) or catalog.get("exists") is not True:
+        raise WindowsBundleInstallError(
+            "Installed setup-local did not report the default catalog."
+        )
+    single_installable_model_id = str(
+        catalog.get("single_installable_model_id") or ""
+    ).strip()
+    if not single_installable_model_id:
+        raise WindowsBundleInstallError(
+            "Installed setup-local default catalog did not expose one installable model."
+        )
+    expected_install_step = (
+        f"tts model-install {single_installable_model_id} --activate"
+    )
+    if not next_steps or next_steps[0] != expected_install_step:
+        raise WindowsBundleInstallError(
+            "Installed setup-local did not put the default catalog install step first."
         )
 
 
