@@ -257,5 +257,8 @@ The twenty-fourth model-management slice resolves relative `artifact_url`
 entries from remote HTTP catalogs against the catalog URL before download, so
 the download/install path works consistently for local catalog files and remote
 catalogs.
+The twenty-fifth model-management slice stages downloaded or copied artifacts
+in a temporary file and verifies/extracts from that file, avoiding a full
+artifact-sized byte string in memory during install.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

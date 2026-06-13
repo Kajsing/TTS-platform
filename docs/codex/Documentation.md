@@ -11,10 +11,9 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model-management download slice now resolves
-  relative `artifact_url` entries from remote HTTP catalogs against the catalog
-  URL before download. Local catalog-relative artifacts still resolve against
-  the catalog file directory.
+- Current loop result: The model-management install flow now stages downloaded
+  or copied artifacts in a temporary file before checksum and zip extraction,
+  avoiding a full artifact-sized byte string in memory during install.
 - Validation status for the current loop:
   - Targeted model-management ruff passed with
     `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
@@ -137,6 +136,9 @@ This file is the live status log and shared memory for future Codex loops.
   - remote HTTP catalogs can now use relative `artifact_url` entries; the
     installer resolves them against the catalog URL before download, matching
     local catalog-relative artifact behavior.
+  - `tts model-install` now stages artifacts in a temporary file before
+    checksum verification and zip extraction, improving large model install
+    behavior without changing the CLI JSON contract.
   - `tts model-remove` now reports whether the removed model id is still
     configured as `[tts].default_voice`, with next-step guidance to activate
     another voice before service restart.
@@ -323,6 +325,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Relative model artifact paths should be resolved from the catalog source that
   declared them. Local catalogs use their parent directory; remote HTTP catalogs
   use the catalog URL as the download base.
+- Model artifacts should be treated as large files during install. Stage them
+  to temporary storage, hash them from disk, and extract from disk instead of
+  keeping a full artifact-sized byte string in memory.
 - First-run setup may create local config and token files, but should not choose
   a Windows service manager or persistence mechanism until that product
   direction is explicit.

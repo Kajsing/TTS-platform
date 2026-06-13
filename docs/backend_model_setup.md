@@ -303,6 +303,9 @@ Install behavior:
 
 - resolves relative artifacts against either the local catalog file path or the
   remote catalog URL
+- downloads or copies the artifact into a temporary file before checksum and
+  extraction so large artifacts do not need to stay resident as one in-memory
+  byte string
 - verifies `artifact_sha256` before extraction
 - rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
   for a trusted local artifact

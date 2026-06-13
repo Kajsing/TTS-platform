@@ -152,9 +152,19 @@ def test_model_install_downloads_relative_artifact_from_remote_catalog(
                 raise AssertionError("No JSON payload was configured.")
             return self._json_payload
 
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def iter_bytes(self) -> list[bytes]:
+            return [self.content]
+
     class FakeClient:
-        def __init__(self, *, timeout: float) -> None:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
             self.timeout = timeout
+            self.follow_redirects = follow_redirects
 
         def __enter__(self) -> "FakeClient":
             return self
@@ -166,7 +176,12 @@ def test_model_install_downloads_relative_artifact_from_remote_catalog(
             requested_urls.append(url)
             if url == catalog_url:
                 return FakeResponse(json_payload=catalog_payload)
-            if url == resolved_artifact_url:
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        def stream(self, method: str, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if method == "GET" and url == resolved_artifact_url:
+                assert self.follow_redirects is True
                 return FakeResponse(content=artifact_bytes)
             raise AssertionError(f"Unexpected URL: {url}")
 

@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import hashlib
 import importlib.util
-import io
 import json
 import os
 import re
@@ -14,6 +13,7 @@ import sys
 import tempfile
 import zipfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urljoin, urlparse
 
@@ -638,6 +638,12 @@ def _run_uvicorn(*args: object, **kwargs: object) -> None:
 CatalogLocation = Path | str
 
 
+@dataclass(frozen=True)
+class ArtifactFile:
+    path: Path
+    bytes: int
+
+
 def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], CatalogLocation]:
     parsed = urlparse(catalog_source)
     if parsed.scheme in {"http", "https"}:
@@ -784,76 +790,80 @@ def _install_model_from_catalog(
     artifact_url = str(model.get("artifact_url", "")).strip()
     if not artifact_url:
         raise SystemExit(f"Catalog model '{model_id}' is missing artifact_url.")
-    artifact_bytes = _read_artifact_bytes(
-        artifact_url=artifact_url,
-        catalog_location=catalog_location,
-    )
-    _record_install_step(
-        install_steps,
-        step="load_artifact",
-        status="completed",
-        progress=progress,
-        bytes=len(artifact_bytes),
-    )
-
-    expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
-    checksum_verified = False
-    if expected_sha:
-        actual_sha = hashlib.sha256(artifact_bytes).hexdigest().lower()
-        if actual_sha != expected_sha:
-            raise SystemExit(
-                f"Checksum mismatch for '{model_id}'. expected={expected_sha} actual={actual_sha}"
-            )
-        checksum_verified = True
+    with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
+        artifact = _load_artifact_file(
+            artifact_url=artifact_url,
+            catalog_location=catalog_location,
+            destination=Path(temp_dir) / "artifact.zip",
+        )
         _record_install_step(
             install_steps,
-            step="verify_checksum",
+            step="load_artifact",
             status="completed",
             progress=progress,
-            algorithm="sha256",
+            bytes=artifact.bytes,
         )
-    else:
-        if not allow_missing_checksum:
+
+        expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
+        checksum_verified = False
+        if expected_sha:
+            actual_sha = _sha256_file(artifact.path)
+            if actual_sha != expected_sha:
+                raise SystemExit(
+                    f"Checksum mismatch for '{model_id}'. "
+                    f"expected={expected_sha} actual={actual_sha}"
+                )
+            checksum_verified = True
             _record_install_step(
                 install_steps,
                 step="verify_checksum",
-                status="failed",
+                status="completed",
                 progress=progress,
-                reason="catalog entry has no artifact_sha256",
+                algorithm="sha256",
             )
-            raise SystemExit(
-                f"Catalog model '{model_id}' is missing artifact_sha256. "
-                "Add artifact_sha256 to the catalog entry or pass "
-                "--allow-missing-checksum for a trusted local artifact."
+        else:
+            if not allow_missing_checksum:
+                _record_install_step(
+                    install_steps,
+                    step="verify_checksum",
+                    status="failed",
+                    progress=progress,
+                    reason="catalog entry has no artifact_sha256",
+                )
+                raise SystemExit(
+                    f"Catalog model '{model_id}' is missing artifact_sha256. "
+                    "Add artifact_sha256 to the catalog entry or pass "
+                    "--allow-missing-checksum for a trusted local artifact."
+                )
+            _record_install_step(
+                install_steps,
+                step="verify_checksum",
+                status="skipped",
+                progress=progress,
+                reason="allowed missing artifact_sha256 for trusted local artifact",
             )
-        _record_install_step(
-            install_steps,
-            step="verify_checksum",
-            status="skipped",
-            progress=progress,
-            reason="allowed missing artifact_sha256 for trusted local artifact",
-        )
 
-    install_dir = models_root / model_id
-    if install_dir.exists():
-        if not overwrite:
-            raise SystemExit(
-                f"Model directory already exists: {install_dir}. Use --overwrite to replace it."
-            )
-
-    models_root.mkdir(parents=True, exist_ok=True)
-    temp_install_dir: Path | None = Path(
-        tempfile.mkdtemp(prefix=f".{model_id}.", dir=models_root)
-    )
-    try:
-        _extract_zip(artifact_bytes=artifact_bytes, out_dir=temp_install_dir)
+        install_dir = models_root / model_id
         if install_dir.exists():
-            shutil.rmtree(install_dir)
-        temp_install_dir.rename(install_dir)
-        temp_install_dir = None
-    finally:
-        if temp_install_dir is not None and temp_install_dir.exists():
-            shutil.rmtree(temp_install_dir)
+            if not overwrite:
+                raise SystemExit(
+                    f"Model directory already exists: {install_dir}. "
+                    "Use --overwrite to replace it."
+                )
+
+        models_root.mkdir(parents=True, exist_ok=True)
+        temp_install_dir: Path | None = Path(
+            tempfile.mkdtemp(prefix=f".{model_id}.", dir=models_root)
+        )
+        try:
+            _extract_zip(artifact_path=artifact.path, out_dir=temp_install_dir)
+            if install_dir.exists():
+                shutil.rmtree(install_dir)
+            temp_install_dir.rename(install_dir)
+            temp_install_dir = None
+        finally:
+            if temp_install_dir is not None and temp_install_dir.exists():
+                shutil.rmtree(temp_install_dir)
 
     installed_files = sorted(
         str(path.relative_to(install_dir)).replace("\\", "/")
@@ -947,30 +957,51 @@ def _format_install_progress(step: dict[str, object]) -> str:
     return f"{label}: {status}"
 
 
-def _read_artifact_bytes(*, artifact_url: str, catalog_location: CatalogLocation) -> bytes:
+def _load_artifact_file(
+    *,
+    artifact_url: str,
+    catalog_location: CatalogLocation,
+    destination: Path,
+) -> ArtifactFile:
+    destination.parent.mkdir(parents=True, exist_ok=True)
     parsed = urlparse(artifact_url)
     if parsed.scheme in {"http", "https"}:
-        with httpx.Client(timeout=120.0) as client:
-            response = client.get(artifact_url)
-            response.raise_for_status()
-            return response.content
+        _download_artifact_to_file(url=artifact_url, destination=destination)
+        return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
     if isinstance(catalog_location, str):
         resolved_url = urljoin(catalog_location, artifact_url)
-        with httpx.Client(timeout=120.0) as client:
-            response = client.get(resolved_url)
-            response.raise_for_status()
-            return response.content
+        _download_artifact_to_file(url=resolved_url, destination=destination)
+        return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
     artifact_path = Path(artifact_url).expanduser()
     if not artifact_path.is_absolute():
         artifact_path = (catalog_location.parent / artifact_path).resolve()
-    return artifact_path.read_bytes()
+    with artifact_path.open("rb") as source, destination.open("wb") as target:
+        shutil.copyfileobj(source, target)
+    return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
 
-def _extract_zip(*, artifact_bytes: bytes, out_dir: Path) -> None:
+def _download_artifact_to_file(*, url: str, destination: Path) -> None:
+    with httpx.Client(timeout=120.0, follow_redirects=True) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            with destination.open("wb") as artifact_file:
+                for chunk in response.iter_bytes():
+                    artifact_file.write(chunk)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().lower()
+
+
+def _extract_zip(*, artifact_path: Path, out_dir: Path) -> None:
     try:
-        with zipfile.ZipFile(io.BytesIO(artifact_bytes)) as archive:
+        with zipfile.ZipFile(artifact_path) as archive:
             _assert_safe_archive_members(archive=archive, out_dir=out_dir)
             archive.extractall(out_dir)
     except zipfile.BadZipFile as exc:
