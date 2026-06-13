@@ -45,6 +45,26 @@ def _write_manifest(path: Path, *, voice_ids: list[str]) -> None:
     )
 
 
+def _write_setup_catalog(path: Path, *, model_ids: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": model_id,
+                        "name": model_id,
+                        "artifact_url": f"https://models.example.test/{model_id}.tar.bz2",
+                    }
+                    for model_id in model_ids
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_setup_local_creates_config_and_token(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -79,6 +99,8 @@ def test_setup_local_creates_config_and_token(
     assert Path(payload["token_file"]).read_text(encoding="utf-8").strip()
     assert payload["service"]["base_url"] == "http://127.0.0.1:7777"
     assert payload["manifest"]["default_voice_in_manifest"] is True
+    assert payload["manifest"]["default_voice_has_backend_config"] is False
+    assert payload["catalog"]["exists"] is False
     assert payload["next_steps"] == [
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
@@ -125,6 +147,79 @@ def test_setup_local_preserves_existing_config_and_token(
     }
     assert payload["next_steps"][:3] == [
         "tts model-install <model-id> --catalog <catalog> --activate",
+        "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
+    ]
+
+
+def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    example_config_path = tmp_path / "config" / "config.example.toml"
+    config_path = tmp_path / "config" / "config.toml"
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    catalog_path = tmp_path / "models" / "catalog.json"
+    _write_setup_config(example_config_path, default_voice="debug-voice")
+    _write_manifest(manifest_path, voice_ids=["debug-voice"])
+    _write_setup_catalog(catalog_path, model_ids=["real-english-voice"])
+
+    cli.main(
+        [
+            "setup-local",
+            "--repo-root",
+            str(tmp_path),
+            "--config-path",
+            str(config_path),
+            "--example-config-path",
+            str(example_config_path),
+            "--manifest-path",
+            str(manifest_path),
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["manifest"]["default_voice_in_manifest"] is True
+    assert payload["manifest"]["default_voice_has_backend_config"] is False
+    assert payload["catalog"]["valid"] is True
+    assert payload["catalog"]["single_installable_model_id"] == "real-english-voice"
+    assert payload["next_steps"][:3] == [
+        "tts model-install real-english-voice --activate",
+        "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
+    ]
+
+
+def test_setup_local_suggests_single_catalog_model_when_manifest_is_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = tmp_path / "config" / "config.toml"
+    token_path = tmp_path / "config" / "token.txt"
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    catalog_path = tmp_path / "models" / "catalog.json"
+    _write_setup_config(config_path, default_voice="voice-a")
+    _write_setup_catalog(catalog_path, model_ids=["real-english-voice"])
+    token_path.write_text("existing-token\n", encoding="utf-8")
+
+    cli.main(
+        [
+            "setup-local",
+            "--repo-root",
+            str(tmp_path),
+            "--config-path",
+            str(config_path),
+            "--example-config-path",
+            str(tmp_path / "config" / "missing-example.toml"),
+            "--manifest-path",
+            str(manifest_path),
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["catalog"]["single_installable_model_id"] == "real-english-voice"
+    assert payload["next_steps"][:3] == [
+        "tts model-install real-english-voice --activate",
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
     ]

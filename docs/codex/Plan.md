@@ -301,5 +301,10 @@ The thirty-sixth model-management UX slice makes `tts model-check` inspect the
 default catalog contents and suggest a concrete installable catalog model when
 the configured development stub is not real-backend ready, avoiding misleading
 stub reinstall guidance.
+The thirty-seventh first-run UX slice makes `tts setup-local` inspect the
+default catalog too, returning catalog status in JSON and putting the concrete
+default English `tts model-install vits-piper-en_US-lessac-medium --activate`
+step first when the configured default voice is still a non-real development
+stub.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

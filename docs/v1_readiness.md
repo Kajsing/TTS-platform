@@ -38,7 +38,9 @@ for long web-page text.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   verifies setup next-step guidance, runs the public-contract smoke, and shuts
-  the service down.
+  the service down. `setup-local` now also reports default catalog readiness and
+  can point a development-stub default voice at the concrete default English
+  install command before first playback.
 - `python3 scripts/check_model_management_flow.py` creates a local loopback
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
   verifies the default `models/catalog.json` path behavior, runs
@@ -94,6 +96,7 @@ for long web-page text.
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
   still needs a real model artifact and runtime outside the default gate. Use
+  `tts setup-local` for catalog-aware first-run guidance, then
   `tts model-check <model-id>` to verify local manifest/backend assets and
   `sherpa_onnx` runtime availability before expecting real acoustic output.
 - Run live smoke against the started service with

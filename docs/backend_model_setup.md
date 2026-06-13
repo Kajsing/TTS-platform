@@ -37,10 +37,14 @@ tts setup-local
 The helper copies `config/config.example.toml` to `config/config.toml` when the
 local config is missing, initializes `config/token.txt` through the same auth
 path the service uses, checks whether the configured default voice appears in
-`models/MANIFEST.json`, and returns next steps as JSON. The next steps include
-`tts model-check` so operators can verify configured/default voice readiness
-before expecting real acoustic output. It does not print the bearer token; read
-`config/token.txt` locally when a protected client needs it.
+`models/MANIFEST.json`, inspects the default `models/catalog.json`, and returns
+next steps as JSON. The next steps include `tts model-check` so operators can
+verify configured/default voice readiness before expecting real acoustic output.
+When the configured default voice is only a development stub and the default
+catalog has one installable real voice, setup guidance starts with the concrete
+`tts model-install vits-piper-en_US-lessac-medium --activate` command. It does
+not print the bearer token; read `config/token.txt` locally when a protected
+client needs it.
 
 Add a copied Chrome extension origin to the service allow-list with:
 

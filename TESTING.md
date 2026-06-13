@@ -93,8 +93,8 @@ backend-realism work, and early v1 model-management helpers:
   persistent service manager
 - Windows local reader bundle bootstrap checks that safely extract the bundle,
   verify local token/model artifacts are absent, inspect model-readiness guide
-  markers, inspect the embedded extension zip, and run `setup-local` from the
-  extracted source paths
+  markers, inspect the embedded extension zip, and run catalog-aware
+  `setup-local` from the extracted source paths
 - Windows launcher setup-only checks that run the bundled PowerShell/CMD
   launchers far enough to create local config/token files without starting a
   long-lived service process
@@ -182,8 +182,8 @@ permanent service manager. On Windows, the same check also starts the bundled
 PowerShell/CMD launchers as foreground services on reserved loopback ports,
 runs public-contract smoke, and stops the launcher process trees.
 It verifies the bundled Windows install script path when present by using it to
-create `.venv`, install the local package, and run `setup-local` before the
-installed foreground service smoke.
+create `.venv`, install the local package, and run catalog-aware `setup-local`
+before the installed foreground service smoke.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet plus CLI helper behavior.

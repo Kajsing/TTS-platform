@@ -523,6 +523,7 @@ def _setup_local(
         manifest_path=resolved_manifest_path,
         default_voice=config.tts.default_voice,
     )
+    catalog_status = _inspect_catalog_for_model_check(resolved_repo_root)
     base_url = f"http://{config.server.host}:{config.server.port}"
     return {
         "repo_root": str(resolved_repo_root),
@@ -538,10 +539,16 @@ def _setup_local(
         },
         "default_voice": config.tts.default_voice,
         "manifest": manifest_status,
+        "catalog": catalog_status,
         "next_steps": _setup_local_next_steps(
             config_created=config_created,
             token_created=auth_state.generated,
             default_voice_in_manifest=bool(manifest_status["default_voice_in_manifest"]),
+            default_voice_has_backend_config=bool(
+                manifest_status.get("default_voice_has_backend_config")
+            ),
+            default_voice=config.tts.default_voice,
+            catalog_status=catalog_status,
         ),
     }
 
@@ -573,11 +580,24 @@ def _inspect_manifest(*, manifest_path: Path, default_voice: str) -> dict[str, o
         for voice in voices
         if isinstance(voice, dict) and str(voice.get("id", "")).strip()
     ]
+    matching_default_voice = next(
+        (
+            voice
+            for voice in voices
+            if isinstance(voice, dict)
+            and str(voice.get("id", "")).strip() == default_voice
+        ),
+        None,
+    )
     return {
         "path": str(manifest_path),
         "exists": True,
         "voice_count": len(voice_ids),
         "default_voice_in_manifest": default_voice in voice_ids,
+        "default_voice_has_backend_config": (
+            isinstance(matching_default_voice, dict)
+            and isinstance(matching_default_voice.get("backend"), dict)
+        ),
     }
 
 
@@ -586,14 +606,82 @@ def _setup_local_next_steps(
     config_created: bool,
     token_created: bool,
     default_voice_in_manifest: bool,
+    default_voice_has_backend_config: bool,
+    default_voice: str,
+    catalog_status: dict[str, object],
 ) -> list[str]:
-    steps = ["tts model-check", "tts serve", "tts health", "tts list-voices"]
-    steps.insert(0, "tts extension-allow-origin <chrome-extension-origin>")
-    if not default_voice_in_manifest:
-        steps.insert(0, "tts model-install <model-id> --catalog <catalog> --activate")
+    steps: list[str] = []
+    install_step = _setup_local_model_install_step(
+        default_voice=default_voice,
+        default_voice_in_manifest=default_voice_in_manifest,
+        default_voice_has_backend_config=default_voice_has_backend_config,
+        catalog_status=catalog_status,
+    )
+    if install_step:
+        steps.append(install_step)
+    steps.extend(
+        [
+            "tts extension-allow-origin <chrome-extension-origin>",
+            "tts model-check",
+            "tts serve",
+            "tts health",
+            "tts list-voices",
+        ]
+    )
     if config_created or token_created:
         steps.append("read config/token.txt when a protected client needs the bearer token")
     return steps
+
+
+def _setup_local_model_install_step(
+    *,
+    default_voice: str,
+    default_voice_in_manifest: bool,
+    default_voice_has_backend_config: bool,
+    catalog_status: dict[str, object],
+) -> str | None:
+    if default_voice_in_manifest and default_voice_has_backend_config:
+        return None
+    if default_voice_in_manifest:
+        if not _catalog_can_suggest_default_voice(
+            default_voice=default_voice,
+            catalog_status=catalog_status,
+        ):
+            return None
+        return _model_check_install_step(
+            model_id=default_voice,
+            catalog_status=catalog_status,
+            overwrite=True,
+        )
+    if not _catalog_has_installable_model(catalog_status):
+        return "tts model-install <model-id> --catalog <catalog> --activate"
+    return _model_check_install_step(
+        model_id="",
+        catalog_status=catalog_status,
+        overwrite=False,
+    )
+
+
+def _catalog_has_installable_model(catalog_status: dict[str, object]) -> bool:
+    return any(
+        str(candidate).strip()
+        for candidate in catalog_status.get("installable_model_ids", [])
+    )
+
+
+def _catalog_can_suggest_default_voice(
+    *,
+    default_voice: str,
+    catalog_status: dict[str, object],
+) -> bool:
+    installable_model_ids = [
+        str(candidate).strip()
+        for candidate in catalog_status.get("installable_model_ids", [])
+        if str(candidate).strip()
+    ]
+    if default_voice in installable_model_ids:
+        return True
+    return bool(str(catalog_status.get("single_installable_model_id") or "").strip())
 
 
 def _allow_extension_origin(

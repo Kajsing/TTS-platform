@@ -151,8 +151,11 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 `setup-local` is the Windows-friendly first-run helper: it creates
 `config/config.toml` from `config/config.example.toml` when missing, initializes
 `config/token.txt` through the same auth path the service uses, reports default
-voice/manifest readiness, and prints next steps, including `tts model-check`,
-without exposing the token.
+voice/manifest readiness, inspects the default model catalog, and prints next
+steps, including `tts model-check`, without exposing the token. When the
+configured default voice is still the development stub and the default catalog
+has a single installable model, those next steps start with the concrete
+`tts model-install vits-piper-en_US-lessac-medium --activate` command.
 `extension-allow-origin` adds a copied Chrome extension origin to
 `security.allowed_origins` in `config/config.toml`, preserving existing origins
 and rejecting non-`chrome-extension` origins for this onboarding path.
