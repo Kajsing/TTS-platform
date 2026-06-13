@@ -97,7 +97,7 @@ button.primary {
   gap: 8px;
 }
 
-.actions button:last-child {
+#stop-playback {
   grid-column: 1 / -1;
 }
 

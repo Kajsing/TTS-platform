@@ -152,6 +152,8 @@ The first long-document slices are now:
 
 - separate `tts.max_chars_per_stream` limit for WebSocket playback;
 - stream progress metadata plus `start_text_chunk_index` as a resume anchor.
+- popup-side `Resume Page` action that re-extracts active-tab text and resumes
+  from the latest reader progress.
 
-Continue by adding richer extension UX for resuming from saved reader progress
-rather than raising the short `/v1/tts` and job limits.
+Continue with model-management UX and first-run guidance unless a reader-flow
+bug appears.

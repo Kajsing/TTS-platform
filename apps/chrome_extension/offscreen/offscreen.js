@@ -329,7 +329,7 @@ async function stopStream({ notifyServer }) {
     message: "Ready",
     activeStreamId: null,
     bufferedMs: 0,
-    readerProgress: null,
+    readerProgress: playbackState.readerProgress,
     lastEvent: "stop",
   });
 }

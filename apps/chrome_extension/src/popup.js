@@ -119,6 +119,10 @@ document.querySelector("#speak-page").addEventListener("click", async () => {
   await runAction("tts-extension:speak-page");
 });
 
+document.querySelector("#resume-page").addEventListener("click", async () => {
+  await runAction("tts-extension:resume-page");
+});
+
 document.querySelector("#stop-playback").addEventListener("click", async () => {
   await runAction("tts-extension:stop");
 });

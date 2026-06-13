@@ -9,6 +9,7 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - stream audio through an offscreen document
 - buffer PCM audio before playback starts
 - show reader progress for streamed page playback
+- resume page playback from the latest reader progress
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
@@ -38,7 +39,7 @@ The popup can also refresh service health and voice discovery directly from the 
 - `background.js` orchestrates text capture and offscreen playback.
 - `content-script.js` reads selection or page text.
 - `offscreen.js` connects to the local service and plays streamed PCM audio with a small prebuffer.
-- `popup.html` and `popup.js` provide a basic control surface for configuration, playback actions, and reader progress.
+- `popup.html` and `popup.js` provide a basic control surface for configuration, playback actions, reader progress, and page resume.
 
 ## Suggested manual check
 
@@ -51,6 +52,7 @@ The popup can also refresh service health and voice discovery directly from the 
 7. Stop playback once and start it again to confirm the offscreen flow recovers cleanly.
 8. Reopen the popup during or after playback and confirm the state still looks sensible.
 9. During long page playback, confirm the playback state includes reader progress.
+10. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -60,6 +62,7 @@ The popup can also refresh service health and voice discovery directly from the 
 - Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
 - Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
+- `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 
 ## Validation
 

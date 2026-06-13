@@ -62,6 +62,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "tts-extension:speak-page":
         sendResponse(await speakPage());
         return;
+      case "tts-extension:resume-page":
+        sendResponse(await resumePage());
+        return;
       case "tts-extension:stop":
         await stopPlayback();
         sendResponse({ ok: true });
@@ -81,6 +84,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       status: "error",
       message: error.message,
       activeStreamId: null,
+      readerProgress: playbackState.readerProgress ?? null,
     });
     sendResponse({ ok: false, message: error.message });
   });
@@ -104,11 +108,7 @@ async function speakSelection() {
 async function speakPage() {
   const tab = await getActiveTab();
   const config = await getConfig();
-  const response = await chrome.tabs.sendMessage(tab.id, {
-    type: "tts-extension:get-page-text",
-    maxChars: config.maxChars,
-  });
-  const text = (response?.text || "").trim();
+  const text = await getPageText(tab.id, config.maxChars);
   if (!text) {
     return { ok: false, message: "No page text found." };
   }
@@ -116,7 +116,41 @@ async function speakPage() {
   return { ok: true, message: "Started speaking page text." };
 }
 
-async function startPlayback({ text, source, tabId }) {
+async function resumePage() {
+  const currentState = await getPlaybackState();
+  const startTextChunkIndex = resolveResumeTextChunkIndex(currentState.readerProgress);
+  if (startTextChunkIndex == null) {
+    return { ok: false, message: "No resumable page progress is available." };
+  }
+
+  const tab = await getActiveTab();
+  const config = await getConfig();
+  const text = await getPageText(tab.id, config.maxChars);
+  if (!text) {
+    return { ok: false, message: "No page text found." };
+  }
+
+  await startPlayback({
+    text,
+    source: "page-resume",
+    tabId: tab.id,
+    startTextChunkIndex,
+  });
+  return {
+    ok: true,
+    message: `Resumed page playback from chunk ${startTextChunkIndex + 1}.`,
+  };
+}
+
+async function getPageText(tabId, maxChars) {
+  const response = await chrome.tabs.sendMessage(tabId, {
+    type: "tts-extension:get-page-text",
+    maxChars,
+  });
+  return (response?.text || "").trim();
+}
+
+async function startPlayback({ text, source, tabId, startTextChunkIndex = 0 }) {
   const config = await getConfig();
   if (!config.token) {
     throw new Error("Missing token. Open the popup and save a service token first.");
@@ -127,12 +161,15 @@ async function startPlayback({ text, source, tabId }) {
     activeStreamId: null,
     source,
     tabId,
+    readerProgress: null,
+    startTextChunkIndex,
   });
   const response = await sendOffscreenMessage({
     type: "tts-extension:start-stream",
     payload: {
       ...config,
       text,
+      startTextChunkIndex,
       extensionOrigin: config.extensionOrigin,
     },
   });
@@ -142,6 +179,7 @@ async function startPlayback({ text, source, tabId }) {
 }
 
 async function stopPlayback() {
+  const currentState = await getPlaybackState();
   if (await hasOffscreenDocument()) {
     await sendOffscreenMessage({
       type: "tts-extension:stop-stream",
@@ -150,6 +188,7 @@ async function stopPlayback() {
   }
 
   await setPlaybackState({
+    ...currentState,
     status: "idle",
     message: "Ready",
     activeStreamId: null,
@@ -258,6 +297,25 @@ function sanitizeNumber(value, fallback, minimum, maximum = Number.POSITIVE_INFI
   return Math.max(minimum, Math.min(maximum, Math.round(parsed)));
 }
 
+function resolveResumeTextChunkIndex(progress) {
+  if (!progress) {
+    return null;
+  }
+  const chunkCount = Number(progress.text_chunk_count ?? 0);
+  const chunkIndex = Number(progress.text_chunk_index ?? 0);
+  const percent = Number(progress.percent ?? 0);
+  if (!Number.isFinite(chunkCount) || chunkCount <= 0) {
+    return null;
+  }
+  if (!Number.isFinite(chunkIndex) || chunkIndex < 0) {
+    return null;
+  }
+  if (Number.isFinite(percent) && percent >= 1) {
+    return null;
+  }
+  return Math.min(Math.floor(chunkIndex), Math.floor(chunkCount) - 1);
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({
     active: true,
@@ -364,6 +422,7 @@ async function initializeExtensionState() {
       activeStreamId: null,
       source: restoredState.source,
       tabId: restoredState.tabId,
+      readerProgress: restoredState.readerProgress ?? null,
       lastEvent: "recovered",
     });
     return;

@@ -24,6 +24,7 @@ backend-realism work, and early v1 model-management helpers:
 - PCM streaming and `done` events
 - WebSocket long-text streaming above the shorter HTTP/job request limit
 - WebSocket reader progress metadata and `start_text_chunk_index` resume anchor
+- extension resume wiring for page playback
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids

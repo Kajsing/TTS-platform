@@ -294,6 +294,11 @@ The current long-text path is therefore:
 - a browser client can send `start_text_chunk_index` in the initial `start`
   event to begin from a later planned text chunk.
 
+The Chrome extension uses this to implement `Resume Page`: it keeps the latest
+reader progress in session playback state, re-extracts readable text from the
+active tab, and asks the service to start from the saved planned text chunk. It
+does not persist raw page text for resume.
+
 When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
 backend streaming path emits audio from those callbacks instead of waiting for
 the full generated audio buffer. Older runtimes or runtimes without a usable
@@ -301,8 +306,9 @@ callback fall back to the full-buffer path.
 
 The server-side chunk planner now improves chunk boundaries, the stream path has
 a separate page-scale text limit, the real runtime path can stream callback
-audio, and stream events expose reader progress. The product still needs a
-richer long-document reader UX before the Chrome reader is fully v1-ready.
+audio, stream events expose reader progress, and the extension has a basic
+resume action. The product still needs richer navigation and packaging polish
+before the Chrome reader is fully v1-ready.
 
 ## Cancellation Limits
 

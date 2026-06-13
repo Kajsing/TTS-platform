@@ -25,8 +25,19 @@
 ## Playback stops mid-stream
 
 - Reopen the popup and inspect the `Playback State` panel.
+- If reader progress is available, use `Resume Page` on the same page to restart
+  from the latest planned text chunk.
 - If the offscreen document became unavailable, stop playback once and start a new request.
 - If underruns are frequent, increase `Prebuffer (ms)` and `High Watermark (ms)`.
+
+## Resume Page does not continue where expected
+
+- Confirm the active tab is the same page you were listening to.
+- Resume re-extracts readable page text and uses the last planned text chunk
+  index; if the page content changed, the resumed position may shift.
+- Resume intentionally repeats the latest known text chunk instead of skipping
+  ahead, because stream progress can be reported before that chunk has fully
+  played.
 
 ## Selection playback does not read the expected text
 

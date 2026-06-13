@@ -32,6 +32,8 @@ def main() -> None:
             raise SystemExit(f"Missing HTML-linked asset: {asset.relative_to(REPO_ROOT)}")
 
     print("HTML asset references resolved.")
+    verify_resume_wiring()
+    print("Extension resume wiring resolved.")
 
     node_binary = shutil.which("node")
     if node_binary is None:
@@ -98,6 +100,27 @@ def collect_html_assets(path: Path) -> set[Path]:
                 assets.add(path.parent / relative_path)
             start = value_end + 1
     return assets
+
+
+def verify_resume_wiring() -> None:
+    required_fragments = {
+        EXTENSION_ROOT / "src" / "popup.html": ['id="resume-page"'],
+        EXTENSION_ROOT / "src" / "popup.js": ['"tts-extension:resume-page"'],
+        EXTENSION_ROOT / "src" / "background.js": [
+            '"tts-extension:resume-page"',
+            "resolveResumeTextChunkIndex",
+            "startTextChunkIndex",
+        ],
+        EXTENSION_ROOT / "offscreen" / "offscreen.js": ["start_text_chunk_index"],
+    }
+    missing: list[str] = []
+    for path, fragments in required_fragments.items():
+        contents = path.read_text(encoding="utf-8")
+        for fragment in fragments:
+            if fragment not in contents:
+                missing.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+    if missing:
+        raise SystemExit("Missing extension resume wiring:\n" + "\n".join(missing))
 
 
 if __name__ == "__main__":
