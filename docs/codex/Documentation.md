@@ -239,6 +239,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `pyproject.toml` now exposes a `real` optional dependency extra containing
     `sherpa-onnx` and `numpy`, so local real-voice demos can install runtime
     dependencies with `python -m pip install -e ".[real]"`.
+  - the extension content script now skips `aria-hidden`, `hidden`, and
+    `inert` subtrees during page capture, reducing hidden UI noise during
+    long-page playback while keeping extraction heuristic and metadata-only.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

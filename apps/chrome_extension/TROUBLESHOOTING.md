@@ -64,6 +64,9 @@
 ## Page playback stops before the whole article
 
 - Check `Page Capture` in the popup playback state.
+- If the captured text includes hidden UI or modal text, inspect whether the
+  page marks those regions with `aria-hidden`, `hidden`, or `inert`; the
+  extension deliberately skips those subtrees.
 - If it says `truncated`, the extension reached `Max Page Characters` before
   the readable page text ended.
 - Use `Continue Page` to re-extract the active tab from the next known text

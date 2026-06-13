@@ -256,6 +256,9 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "readableBlocks",
             "truncated",
             "minimumBlockLength(blockKind)",
+            "HIDDEN_SUBTREE_SELECTOR",
+            "[aria-hidden='true']",
+            "[inert]",
         ],
         "offscreen.js": [
             "readerProgress",

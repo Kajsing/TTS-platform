@@ -114,6 +114,8 @@ action.
 - This token flow is intentionally limited to the localhost MVP shape and should be revisited if the browser client becomes more broadly distributed.
 - The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
 - Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
+- Page text capture skips hidden and non-reader DOM subtrees such as
+  `aria-hidden`, `hidden`, `inert`, navigation, forms, and script/style assets.
 - Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
 - The extension stores only page-capture metadata in session playback state, not

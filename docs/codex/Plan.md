@@ -342,5 +342,8 @@ real async/stream callback path needs it even when short sync synthesis works.
 The forty-eighth install-flow slice adds a `real` optional dependency extra for
 `sherpa-onnx` and `numpy`, so real voice demos can use
 `python -m pip install -e ".[real]"` instead of loose runtime package commands.
+The forty-ninth reader-flow reliability slice makes page capture skip
+`aria-hidden`, `hidden`, and `inert` DOM subtrees so long-page playback avoids
+hidden UI noise without adding a full reader-mode extractor.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

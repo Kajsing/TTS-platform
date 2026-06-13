@@ -23,7 +23,9 @@ const BLOCK_SELECTORS = [
 const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4"]);
 
 const SKIP_SELECTOR =
-  "script, style, noscript, nav, header, footer, aside, form, button, input, select, textarea, svg, canvas";
+  "script, style, noscript, template, nav, header, footer, aside, form, button, input, select, textarea, svg, canvas";
+
+const HIDDEN_SUBTREE_SELECTOR = "[hidden], [inert], [aria-hidden='true']";
 
 function getSelectedText() {
   const controlSelection = getControlSelection(document.activeElement);
@@ -238,7 +240,11 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
 }
 
 function shouldSkipElement(element) {
-  return Boolean(element.closest(SKIP_SELECTOR)) || isElementHidden(element);
+  return (
+    Boolean(element.closest(SKIP_SELECTOR)) ||
+    Boolean(element.closest(HIDDEN_SUBTREE_SELECTOR)) ||
+    isElementHidden(element)
+  );
 }
 
 function isElementHidden(element) {
