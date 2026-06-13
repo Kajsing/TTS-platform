@@ -107,6 +107,36 @@ def test_chrome_extension_smoke_extracts_extension_id() -> None:
     assert extension_id == "abcdefghijklmnopabcdefghijklmnop"
 
 
+def test_chrome_extension_smoke_reports_observed_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_chrome_smoke_module()
+    times = iter([0.0, 0.1, 1.0])
+    monkeypatch.setattr(check_module.time, "perf_counter", lambda: next(times))
+    monkeypatch.setattr(check_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        check_module,
+        "_json_get",
+        lambda _url: [
+            {"type": "page", "url": "about:blank"},
+            {
+                "type": "background_page",
+                "url": "chrome-extension://component/background.html",
+            },
+        ],
+    )
+
+    with pytest.raises(
+        check_module.ChromeExtensionSmokeError,
+        match="Observed browser targets",
+    ) as exc_info:
+        check_module._wait_for_extension_target(cdp_port=7777, timeout_s=0.5)
+
+    message = str(exc_info.value)
+    assert "about:blank" in message
+    assert "background_page" in message
+
+
 def _load_chrome_smoke_module():
     spec = importlib.util.spec_from_file_location(
         "tts_platform_check_chrome_extension_smoke",

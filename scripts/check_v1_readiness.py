@@ -129,6 +129,7 @@ REQUIRED_TEXT_MARKERS = {
         "extension-allow-origin",
         "tts-extension:speak-page",
         "playbackState",
+        "Observed browser targets",
     ),
     "scripts/check_extension_onboarding.py": (
         "extension-allow-origin",

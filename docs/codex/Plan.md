@@ -354,5 +354,8 @@ pages with multiple article/main/content containers.
 The fifty-second first-run UX slice makes runtime next-step guidance prefer the
 committed `.[real]` optional dependency extra when both `sherpa-onnx` and
 `numpy` are missing, while preserving targeted single-package guidance.
+The fifty-third extension-flow hardening slice adds observed-browser-target
+diagnostics when the optional Chrome/MV3 smoke cannot find the extension
+service worker, making skipped browser evidence easier to triage.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -252,6 +252,9 @@ This file is the live status log and shared memory for future Codex loops.
     `python -m pip install -e ".[real]"` when both `sherpa-onnx` and `numpy`
     are missing, while keeping targeted single-package guidance for partial
     installs.
+  - optional Chrome/MV3 smoke skips now include a compact observed browser
+    target summary when the extension service worker is missing, making local
+    browser-environment failures easier to triage.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

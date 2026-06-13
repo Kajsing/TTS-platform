@@ -37,7 +37,9 @@ for long web-page text.
   generated long article, verifies content-script page capture and background
   health fetch, starts `Speak Page`, and observes playback state. Without
   Chrome or Edge, or when the local browser/MV3 environment cannot run the
-  smoke, it reports a skipped smoke unless `--require-browser` is set.
+  smoke, it reports a skipped smoke unless `--require-browser` is set; missing
+  extension service worker skips include a short observed-browser-targets
+  diagnostic.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   verifies setup next-step guidance, runs the public-contract smoke, and shuts
@@ -157,7 +159,9 @@ for long web-page text.
   load the unpacked MV3 extension. The default release gate can skip the
   browser smoke when the local browser environment cannot run it;
   run `python3 scripts/check_chrome_extension_smoke.py --require-browser` when
-  a real browser must be present.
+  a real browser must be present. Missing service worker skips include observed
+  target diagnostics to separate unloaded unpacked extensions from generic CDP
+  startup failures.
 - JavaScript syntax validation in `scripts/check_extension.py` requires `node`
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live

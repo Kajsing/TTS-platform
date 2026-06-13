@@ -187,7 +187,8 @@ The smoke uses Chrome or Edge through DevTools Protocol when a browser is
 available, loads this unpacked extension, starts an isolated local service,
 opens a generated long article, verifies page capture, starts page playback,
 and observes playback state. It skips truthfully when the local browser/MV3
-environment cannot run the smoke; add `--require-browser --headed` when strict
-local browser evidence is needed.
+environment cannot run the smoke, including a short observed-target summary
+when the extension service worker is missing; add `--require-browser --headed`
+when strict local browser evidence is needed.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

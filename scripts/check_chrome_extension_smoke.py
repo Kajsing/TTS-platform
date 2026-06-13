@@ -340,14 +340,34 @@ def _wait_for_cdp(*, cdp_port: int, timeout_s: float) -> None:
 
 def _wait_for_extension_target(*, cdp_port: int, timeout_s: float) -> dict[str, object]:
     deadline = time.perf_counter() + timeout_s
+    observed_targets: list[dict[str, str]] = []
     while time.perf_counter() < deadline:
         targets = _json_get(f"http://127.0.0.1:{cdp_port}/json")
         if isinstance(targets, list):
+            observed_targets = _summarize_browser_targets(targets)
             for target in targets:
                 if _is_extension_service_worker(target):
                     return target
         time.sleep(0.2)
-    raise ChromeExtensionSmokeError("Timed out waiting for extension service worker target.")
+    observed_text = json.dumps(observed_targets, sort_keys=True)
+    raise ChromeExtensionSmokeError(
+        "Timed out waiting for extension service worker target. "
+        f"Observed browser targets: {observed_text}"
+    )
+
+
+def _summarize_browser_targets(targets: list[object]) -> list[dict[str, str]]:
+    summaries: list[dict[str, str]] = []
+    for target in targets[:10]:
+        if not isinstance(target, dict):
+            continue
+        summaries.append(
+            {
+                "type": str(target.get("type", "")),
+                "url": str(target.get("url", ""))[:160],
+            }
+        )
+    return summaries
 
 
 def _wait_for_page_target(*, cdp_port: int, target_id: str) -> dict[str, object]:
