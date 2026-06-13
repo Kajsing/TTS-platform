@@ -36,6 +36,9 @@ for long web-page text.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
   model manifest, extension source, and validated extension zip.
+- `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
+  creating `.venv`, installing the local package, and running `setup-local`
+  without choosing a persistent service manager.
 - `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks the embedded extension zip, and runs `setup-local` from the
@@ -49,7 +52,8 @@ for long web-page text.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   starts the installed `tts serve` entrypoint, runs public-contract smoke, and
-  shuts the service down.
+  shuts the service down. When the bundled install script is present, the check
+  uses it for the venv/package/setup stage.
 
 ## Manual Gates
 
@@ -96,7 +100,7 @@ for long web-page text.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
 - Extended foreground PowerShell/CMD launcher observation remains manual; the
-  automated gates cover safe extraction, launcher setup-only execution,
-  launcher foreground service smoke, `setup-local`, temporary venv
-  installation, installed `tts serve`, loopback service startup, and
-  stub-backed smoke.
+  automated gates cover safe extraction, local install bootstrap, launcher
+  setup-only execution, launcher foreground service smoke, `setup-local`,
+  temporary venv installation, installed `tts serve`, loopback service startup,
+  and stub-backed smoke.

@@ -75,6 +75,9 @@ backend-realism work, and early v1 model-management helpers:
 - Windows local reader bundle packaging that includes the service source,
   Windows launchers, docs, config example, model manifest, extension source,
   and a validated extension zip while excluding local token/model artifacts
+- Windows local install bootstrap script packaging that creates `.venv`,
+  installs the local package, and runs `setup-local` without choosing a
+  persistent service manager
 - Windows local reader bundle bootstrap checks that safely extract the bundle,
   verify local token/model artifacts are absent, inspect the embedded extension
   zip, and run `setup-local` from the extracted source paths
@@ -84,6 +87,8 @@ backend-realism work, and early v1 model-management helpers:
 - Windows launcher foreground service smoke checks that start the bundled
   PowerShell/CMD launchers on reserved loopback ports, run public-contract
   smoke, and stop the process tree
+- Windows bundle install checks that use the bundled install script when
+  available before starting the installed `tts serve` entrypoint
 - repo-native release check orchestration for ruff, pytest, security-default
   verification, v1-readiness verification, extension validation, extension
   package build, Windows bundle build, launcher setup/service-smoke checks, and
@@ -151,6 +156,9 @@ executables are available, verifying direct first-run setup without choosing a
 permanent service manager. On Windows, the same check also starts the bundled
 PowerShell/CMD launchers as foreground services on reserved loopback ports,
 runs public-contract smoke, and stops the launcher process trees.
+It verifies the bundled Windows install script path when present by using it to
+create `.venv`, install the local package, and run `setup-local` before the
+installed foreground service smoke.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
@@ -180,6 +188,12 @@ python3 scripts/package_windows_bundle.py
 
 On Windows, use `py -3 scripts/package_windows_bundle.py` when `python3` is
 unavailable.
+After extracting a bundle, bootstrap the local virtual environment with:
+
+```powershell
+.\scripts\windows\install_local.ps1
+```
+
 Check the built bundle's first-run bootstrap path with:
 
 ```bash

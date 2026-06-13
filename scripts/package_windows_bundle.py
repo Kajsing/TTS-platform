@@ -45,6 +45,8 @@ INCLUDED_FILES = (
     "scripts/package_windows_bundle.py",
     "scripts/release_check.py",
     "scripts/smoke_service.py",
+    "scripts/windows/install_local.cmd",
+    "scripts/windows/install_local.ps1",
     "scripts/windows/run_service.cmd",
     "scripts/windows/run_service.ps1",
 )
@@ -162,7 +164,16 @@ manager, scheduled task, or auto-start entry.
 
 1. Extract the zip.
 2. Open PowerShell in the extracted `tts-platform` directory.
-3. Create and activate a virtual environment:
+3. Install the local package:
+
+   ```powershell
+   .\\scripts\\windows\\install_local.ps1
+   ```
+
+   The installer creates `.venv`, installs the local package, and runs
+   `tts setup-local`. Use `install_local.cmd` when launching from `cmd.exe`.
+
+   The equivalent manual commands are:
 
    ```powershell
    py -3 -m venv .venv

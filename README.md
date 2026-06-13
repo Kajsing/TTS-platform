@@ -110,6 +110,7 @@ On Windows, the repository also includes launchers that set the local source
 paths, run `tts setup-local` when needed, and then start `tts serve`:
 
 ```powershell
+.\scripts\windows\install_local.ps1
 .\scripts\windows\run_service.ps1
 ```
 
@@ -148,7 +149,9 @@ voice/manifest readiness, and prints next steps without exposing the token.
 `serve` starts the local service from `config/config.toml`, binds only to
 loopback hosts by default, and uses the configured host, port, and log level.
 The Windows launchers in `scripts/windows/` are a convenience packaging step for
-local runs; they do not install a persistent Windows service.
+local runs. `install_local.ps1` creates `.venv`, installs the local package, and
+runs `setup-local`; `run_service.ps1` starts the foreground localhost service.
+They do not install a persistent Windows service.
 
 To build a Windows-friendly local reader bundle with the service source,
 launchers, config example, docs, and a validated Chrome extension zip:

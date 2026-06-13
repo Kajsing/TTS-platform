@@ -11,25 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows launcher hardening slice extends
-  `scripts/check_windows_launchers.py` beyond setup-only validation. On
-  Windows it now starts bundled PowerShell/CMD launchers as foreground services
-  on reserved loopback ports, waits for health, runs public-contract smoke, and
-  stops the launcher process trees without choosing a permanent service
-  manager.
+- Current loop result: The Windows local install bootstrap slice adds
+  `scripts/windows/install_local.ps1` plus a CMD wrapper. The script creates
+  `.venv`, installs the local package, runs `setup-local`, and emits JSON for
+  automation without choosing a permanent service manager or auto-start path.
+  The Windows bundle install check now uses the script when it is present.
 - Validation status for the current loop:
-  - Targeted launcher ruff passed with
-    `py -3 -m ruff check scripts\check_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py`.
-  - Targeted launcher tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`.
-  - `py -3 scripts\check_windows_launchers.py` passed, including setup-only
-    and foreground service smoke for bundled PowerShell/CMD launchers.
+  - Targeted install bootstrap ruff passed with
+    `py -3 -m ruff check scripts\check_windows_bundle_install.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_launchers.py`.
+  - Targeted install/bootstrap tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_v1_readiness_check.py -q`.
+  - `py -3 scripts\check_windows_bundle_install.py` passed and reported
+    `installer_script: true`.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 146 tests.
-  - `py -3 scripts\release_check.py` passed, including the updated
-    `windows_launchers` gate with PowerShell/CMD setup-only checks and
-    foreground service smoke.
+  - `py -3 -m pytest -q` passed with 149 tests.
+  - `py -3 scripts\release_check.py` passed, including a Windows bundle with
+    `install_local.ps1` / `install_local.cmd` and a bundle-install smoke that
+    reported `installer_script: true`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -159,6 +158,9 @@ This file is the live status log and shared memory for future Codex loops.
     Chrome extension source, and a validated extension zip.
   - The Windows bundle intentionally excludes `config/token.txt` and installed
     model files under `models/voices/`.
+  - `scripts/windows/install_local.ps1` and `install_local.cmd` now bootstrap
+    an extracted bundle by creating `.venv`, installing the local package, and
+    running `setup-local` without choosing a persistent service manager.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, origin snippet readiness, voice discovery, and health status.
@@ -313,6 +315,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Windows launcher scripts are acceptable packaging progress without choosing a
   persistent service mechanism. Do not silently choose NSSM, Task Scheduler,
   pywin32, or startup-folder auto-run without an explicit product decision.
+- A local `.venv` bootstrap script is acceptable packaging/install progress as
+  long as it remains foreground/local and does not choose persistence or
+  auto-start.
 - The Windows local reader bundle is a source handoff package, not a persistent
   service-manager installer. It moves installability forward while preserving
   the explicit later choice around NSSM, Task Scheduler, pywin32, or auto-start.
@@ -368,6 +373,7 @@ tts setup-local
 Service start:
 
 ```bash
+scripts/windows/install_local.cmd
 tts serve
 python3 scripts/dev_run.py
 scripts/windows/run_service.cmd

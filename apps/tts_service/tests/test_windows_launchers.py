@@ -16,6 +16,18 @@ def test_windows_service_launcher_uses_module_cli_setup_and_serve() -> None:
     assert '"--allow-non-local-host"' in script
 
 
+def test_windows_install_launcher_bootstraps_venv_package_and_setup() -> None:
+    launcher = REPO_ROOT / "scripts" / "windows" / "install_local.ps1"
+    script = launcher.read_text(encoding="utf-8")
+
+    assert "TTS_PLATFORM_PYTHON" in script
+    assert '"venv", "--system-site-packages"' in script
+    assert '"pip", "install"' in script
+    assert '"--no-build-isolation", "--no-deps", "-e", $RepoRoot' in script
+    assert "tts_service.cli setup-local" in script
+    assert "ConvertTo-Json" in script
+
+
 def test_windows_cmd_launcher_delegates_to_powershell_launcher() -> None:
     launcher = REPO_ROOT / "scripts" / "windows" / "run_service.cmd"
     script = launcher.read_text(encoding="utf-8")
@@ -23,4 +35,14 @@ def test_windows_cmd_launcher_delegates_to_powershell_launcher() -> None:
     assert "powershell.exe" in script
     assert "-ExecutionPolicy Bypass" in script
     assert "run_service.ps1" in script
+    assert "%*" in script
+
+
+def test_windows_install_cmd_launcher_delegates_to_powershell_installer() -> None:
+    launcher = REPO_ROOT / "scripts" / "windows" / "install_local.cmd"
+    script = launcher.read_text(encoding="utf-8")
+
+    assert "powershell.exe" in script
+    assert "-ExecutionPolicy Bypass" in script
+    assert "install_local.ps1" in script
     assert "%*" in script

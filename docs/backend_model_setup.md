@@ -54,6 +54,7 @@ default; `--allow-non-local-host` must be explicit for any trusted-network bind.
 Windows launcher scripts are also available:
 
 ```powershell
+.\scripts\windows\install_local.ps1
 .\scripts\windows\run_service.ps1
 ```
 
@@ -67,6 +68,9 @@ fall back to `py -3`, run `setup-local` when needed, and then run `tts serve`.
 Use `.\scripts\windows\run_service.ps1 -SetupOnly` to create
 `config\config.toml` and `config\token.txt` without starting the service. They
 are convenience launchers, not persistent Windows service installers.
+Use `.\scripts\windows\install_local.ps1` first when the extracted bundle needs
+a local `.venv`; it creates the virtual environment, installs the local package,
+runs `setup-local`, and emits a JSON summary for automation.
 
 Build a Windows-friendly local reader bundle with:
 
@@ -88,7 +92,8 @@ stopping the process trees.
 `scripts/check_windows_bundle_install.py` verifies the extracted bundle in a
 temporary virtual environment by installing the package, running the installed
 `tts setup-local` and `tts serve` entrypoint, and executing public-contract
-smoke against the started service.
+smoke against the started service. When the bundled install script is present,
+the check uses it for the venv/package/setup stage.
 
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice

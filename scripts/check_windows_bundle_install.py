@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -81,38 +82,48 @@ def check_windows_bundle_install(
         _extract_bundle(bundle_path=resolved_bundle_path, extract_root=extract_root)
         bundle_root = extract_root / BUNDLE_ROOT
         venv_dir = bundle_root / ".venv"
-        _create_venv(
+        installer_payload = _run_windows_install_script(
             python_executable=python_executable,
-            venv_dir=venv_dir,
+            bundle_root=bundle_root,
             timeout_s=command_timeout_s,
         )
+        if installer_payload is None:
+            _create_venv(
+                python_executable=python_executable,
+                venv_dir=venv_dir,
+                timeout_s=command_timeout_s,
+            )
         venv_python = _venv_python(venv_dir)
         tts_entrypoint = _venv_tts_entrypoint(venv_dir)
-        _install_build_tooling(
-            venv_python=venv_python,
-            bundle_root=bundle_root,
-            timeout_s=command_timeout_s,
-        )
-        _install_bundle_package(
-            venv_python=venv_python,
-            bundle_root=bundle_root,
-            timeout_s=command_timeout_s,
-        )
+        if installer_payload is None:
+            _install_build_tooling(
+                venv_python=venv_python,
+                bundle_root=bundle_root,
+                timeout_s=command_timeout_s,
+            )
+            _install_bundle_package(
+                venv_python=venv_python,
+                bundle_root=bundle_root,
+                timeout_s=command_timeout_s,
+            )
         if not tts_entrypoint.is_file():
             raise WindowsBundleInstallError(
                 f"Installed tts entrypoint is missing: {tts_entrypoint}"
             )
 
-        setup_payload = _run_json_command(
-            [
-                str(tts_entrypoint),
-                "setup-local",
-                "--repo-root",
-                str(bundle_root),
-            ],
-            cwd=bundle_root,
-            timeout_s=command_timeout_s,
-        )
+        if installer_payload is None:
+            setup_payload = _run_json_command(
+                [
+                    str(tts_entrypoint),
+                    "setup-local",
+                    "--repo-root",
+                    str(bundle_root),
+                ],
+                cwd=bundle_root,
+                timeout_s=command_timeout_s,
+            )
+        else:
+            setup_payload = _dict_payload(installer_payload.get("setup"), label="installer setup")
         token_file = Path(str(setup_payload.get("token_file", "")))
         if not token_file.is_file():
             raise WindowsBundleInstallError("Installed setup-local did not create a token file.")
@@ -165,10 +176,15 @@ def check_windows_bundle_install(
     return {
         "bundle_path": str(resolved_bundle_path),
         "venv": {
-            "created": True,
+            "created": _installer_bool(installer_payload, "venv_created", fallback=True),
             "system_site_packages": True,
-            "build_tooling_installed": True,
+            "build_tooling_installed": _installer_bool(
+                installer_payload,
+                "build_tooling_installed",
+                fallback=True,
+            ),
             "editable_install": True,
+            "installer_script": installer_payload is not None,
             "entrypoint": _display_venv_path(tts_entrypoint),
         },
         "setup": {
@@ -193,6 +209,37 @@ def _extract_bundle(*, bundle_path: Path, extract_root: Path) -> None:
         )
         check_windows_bundle_bootstrap._assert_bundle_contents(names=names)
         archive.extractall(extract_root)
+
+
+def _run_windows_install_script(
+    *,
+    python_executable: str,
+    bundle_root: Path,
+    timeout_s: float,
+) -> dict[str, object] | None:
+    installer_path = bundle_root / "scripts" / "windows" / "install_local.ps1"
+    if not installer_path.is_file():
+        return None
+    powershell_executable = _find_powershell_executable()
+    if not powershell_executable:
+        return None
+
+    env = dict(os.environ)
+    env["TTS_PLATFORM_PYTHON"] = python_executable
+    env["PYTHONUNBUFFERED"] = "1"
+    return _run_json_command(
+        [
+            powershell_executable,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(installer_path),
+        ],
+        cwd=bundle_root,
+        timeout_s=timeout_s,
+        env=env,
+    )
 
 
 def _create_venv(*, python_executable: str, venv_dir: Path, timeout_s: float) -> None:
@@ -270,6 +317,15 @@ def _run_command(
             _format_command_failure(command, stdout=exc.stdout, stderr=exc.stderr)
             + f"\nCommand timed out after {timeout_s:.1f}s."
         ) from exc
+
+
+def _find_powershell_executable() -> str | None:
+    return (
+        shutil.which("powershell.exe")
+        or shutil.which("powershell")
+        or shutil.which("pwsh.exe")
+        or shutil.which("pwsh")
+    )
 
 
 def _run_json_command(
@@ -402,6 +458,23 @@ def _dict_get(raw_payload: object, key: str) -> object:
     if not isinstance(raw_payload, dict):
         return None
     return raw_payload.get(key)
+
+
+def _dict_payload(raw_payload: object, *, label: str) -> dict[str, object]:
+    if not isinstance(raw_payload, dict):
+        raise WindowsBundleInstallError(f"{label} payload must be a JSON object.")
+    return raw_payload
+
+
+def _installer_bool(
+    installer_payload: dict[str, object] | None,
+    key: str,
+    *,
+    fallback: bool,
+) -> bool:
+    if installer_payload is None:
+        return fallback
+    return bool(installer_payload.get(key))
 
 
 def _display_venv_path(path: Path) -> str:

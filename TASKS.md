@@ -81,6 +81,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add Windows-friendly local first-run setup helper
 - [x] Add Windows-friendly service run command
 - [x] Add Windows-friendly service launcher scripts
+- [x] Add Windows-friendly local install bootstrap script
 - [x] Add automated Windows launcher foreground service smoke
 - [x] Add Windows-friendly service install/packaging flow
 - [x] Add Chrome extension popup setup checklist

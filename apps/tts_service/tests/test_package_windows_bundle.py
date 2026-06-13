@@ -55,6 +55,8 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/apps/tts_service/src/tts_service/main.py" in names
     assert "tts-platform/packages/tts_core/src/tts_core/text.py" in names
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
+    assert "tts-platform/scripts/windows/install_local.ps1" in names
+    assert "tts-platform/scripts/windows/install_local.cmd" in names
     assert "tts-platform/scripts/windows/run_service.ps1" in names
     assert "tts-platform/scripts/windows/run_service.cmd" in names
     assert "tts-platform/scripts/check_extension_onboarding.py" in names
@@ -69,6 +71,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/package_windows_bundle.py" in names
     assert "tts-platform/scripts/release_check.py" in names
     assert "tts-platform/dist/chrome_extension/tts-platform-prototype.zip" in names
+    assert ".\\scripts\\windows\\install_local.ps1" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme

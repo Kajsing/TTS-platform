@@ -237,5 +237,9 @@ page text. The twentieth release-hardening slice extends
 `scripts/check_windows_launchers.py` to start bundled PowerShell/CMD launchers
 as foreground services on reserved loopback ports, run public-contract smoke,
 and stop the process trees without choosing a permanent service manager.
+The twenty-first packaging slice adds `scripts/windows/install_local.ps1` and
+`.cmd` wrapper support for extracted bundles, bootstrapping `.venv`, local
+package install, and `setup-local` without choosing a permanent service
+manager or auto-start mechanism.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
