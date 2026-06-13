@@ -11,13 +11,14 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The third Post-Phase 7 v1 reader slice added a popup-side
-  `Resume Page` action. The extension now preserves latest reader progress when
-  playback stops, re-extracts readable text from the active tab, and resumes
-  streaming with `start_text_chunk_index` without persisting raw page text.
+- Current loop result: The first v1 model-management UX slice added
+  `tts model-install --activate`, so first-run setup can install a catalog model
+  and set it as `[tts].default_voice` in one local command. Install output now
+  includes checksum verification status, installed file count, and next-step
+  guidance.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 93 tests.
+  - `py -3 -m pytest -q` passed with 95 tests.
   - `py -3 scripts/check_extension.py` passed, including resume-wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -90,6 +91,11 @@ This file is the live status log and shared memory for future Codex loops.
     planned text chunk index and re-extracts current active-tab page text.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
+- V1 model-management UX has started:
+  - `tts model-install --activate` updates the manifest and `config/config.toml`
+    default voice in one command.
+  - model install JSON output now reports installed file count, checksum
+    verification status, warnings for missing checksums, and next steps.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -99,8 +105,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue v1 model-management with clearer install progress output, catalog
-  guidance, and first-run defaults.
+- Continue v1 model-management with clearer catalog-list output and install
+  progress/status messages.
 - Then move to Windows-friendly service setup and Chrome extension
   onboarding/installability.
 
@@ -137,6 +143,8 @@ This file is the live status log and shared memory for future Codex loops.
 - Extension resume should re-extract active-tab text and reuse the latest
   planned text chunk index instead of persisting raw page text in extension
   storage.
+- First-run model setup should prefer one clear local command where possible:
+  `tts model-install <id> --catalog <catalog> --activate`.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex

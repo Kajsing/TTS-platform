@@ -104,6 +104,7 @@ tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
 tts model-activate sherpa-en-v1
 tts model-remove sherpa-en-v1
 ```
@@ -117,6 +118,8 @@ tokens. `model-install` downloads or reads a catalog artifact, verifies
 `models/voices/<model-id>`, and updates `models/MANIFEST.json`.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
+Use `model-install --activate` for the first-run path when the installed model
+should immediately become the default voice.
 
 For backend modes, model asset layout, manifest conventions, catalog format,
 and current long-text limits, see

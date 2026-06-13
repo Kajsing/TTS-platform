@@ -227,6 +227,8 @@ Install behavior:
 - extracts to a temporary directory first
 - replaces an existing model directory only after extraction succeeds
 - writes or updates the manifest entry
+- reports installed file count, checksum verification status, and suggested
+  next steps
 
 Unsafe zip entries include absolute paths, Windows drive-qualified paths, and
 path traversal using either `/` or `\`.
@@ -243,6 +245,12 @@ Install a model:
 
 ```bash
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json
+```
+
+Install and activate a model in one first-run command:
+
+```bash
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
 ```
 
 Replace an existing installed model:
@@ -265,6 +273,8 @@ tts model-remove sherpa-en-v1
 
 These model-management commands edit local files and do not call protected
 service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
+`model-install --activate` also updates `config/config.toml` `[tts].default_voice`
+and reports the config path in its JSON output.
 
 ## Long-Text Implications
 

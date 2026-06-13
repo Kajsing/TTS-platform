@@ -129,6 +129,8 @@ def main(argv: list[str] | None = None) -> None:
                 models_root=Path(args.models_root),
                 manifest_path=Path(args.manifest_path),
                 overwrite=args.overwrite,
+                activate=args.activate,
+                config_path=Path(args.config_path),
             )
             _print_json(installed)
             return
@@ -201,6 +203,12 @@ def _build_parser() -> argparse.ArgumentParser:
     model_install_parser.add_argument("--catalog", required=True)
     model_install_parser.add_argument("--models-root", default="models/voices")
     model_install_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+    model_install_parser.add_argument("--config-path", default="config/config.toml")
+    model_install_parser.add_argument(
+        "--activate",
+        action="store_true",
+        help="Set the installed model as config/config.toml [tts].default_voice.",
+    )
     model_install_parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -416,6 +424,8 @@ def _install_model_from_catalog(
     models_root: Path,
     manifest_path: Path,
     overwrite: bool,
+    activate: bool = False,
+    config_path: Path | None = None,
 ) -> dict[str, object]:
     catalog_payload, catalog_path = _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
@@ -429,12 +439,14 @@ def _install_model_from_catalog(
     artifact_bytes = _read_artifact_bytes(artifact_url=artifact_url, catalog_path=catalog_path)
 
     expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
+    checksum_verified = False
     if expected_sha:
         actual_sha = hashlib.sha256(artifact_bytes).hexdigest().lower()
         if actual_sha != expected_sha:
             raise SystemExit(
                 f"Checksum mismatch for '{model_id}'. expected={expected_sha} actual={actual_sha}"
             )
+        checksum_verified = True
 
     install_dir = models_root / model_id
     if install_dir.exists():
@@ -457,14 +469,44 @@ def _install_model_from_catalog(
         if temp_install_dir is not None and temp_install_dir.exists():
             shutil.rmtree(temp_install_dir)
 
+    installed_files = sorted(
+        str(path.relative_to(install_dir)).replace("\\", "/")
+        for path in install_dir.rglob("*")
+        if path.is_file()
+    )
     manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
     _upsert_manifest_entry(manifest_path=manifest_path, entry=manifest_entry)
 
-    return {
+    result: dict[str, object] = {
         "installed_model": model_id,
         "install_dir": str(install_dir),
         "manifest_path": str(manifest_path),
+        "files_installed": len(installed_files),
+        "checksum_verified": checksum_verified,
+        "next_steps": [
+            f"tts model-activate {model_id}",
+            "restart the local service if it is already running",
+            "tts list-voices",
+        ],
     }
+    if not checksum_verified:
+        result["warning"] = "Catalog entry has no artifact_sha256; use only trusted artifacts."
+
+    if activate:
+        resolved_config_path = config_path or Path("config/config.toml")
+        activation = _activate_model(
+            model_id=model_id,
+            manifest_path=manifest_path,
+            config_path=resolved_config_path,
+        )
+        result["activated_model"] = activation["activated_model"]
+        result["config_path"] = activation["config_path"]
+        result["next_steps"] = [
+            "restart the local service if it is already running",
+            "tts list-voices",
+        ]
+
+    return result
 
 
 def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> bytes:

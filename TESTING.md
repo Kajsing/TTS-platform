@@ -37,7 +37,8 @@ backend-realism work, and early v1 model-management helpers:
   and real-runtime cancellation callback behavior
 - chunk-plan generation and synthesis routing
 - model catalog listing, local artifact install, manifest update, safe zip
-  extraction, overwrite refusal, default-voice activation, and model removal
+  extraction, overwrite refusal, install-and-activate first-run shortcut,
+  default-voice activation, and model removal
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

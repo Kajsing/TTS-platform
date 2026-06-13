@@ -86,6 +86,106 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
     assert voices[0]["id"] == "voice-a"
     assert voices[0]["backend"]["model"] == "models/voices/voice-a/model.onnx"
     assert voices[0]["backend"]["tokens"] == "models/voices/voice-a/tokens.txt"
+    assert result["checksum_verified"] is True
+    assert result["files_installed"] == 2
+    assert result["next_steps"][0] == "tts model-activate voice-a"
+
+
+def test_model_install_command_can_activate_model(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    artifact_bytes = _build_zip(
+        artifact_path,
+        files={
+            "model.onnx": "fake-model",
+            "tokens.txt": "fake-tokens",
+        },
+    )
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "model.onnx",
+                            "tokens": "tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "config" / "config.toml"
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+
+    cli.main(
+        [
+            "model-install",
+            "voice-a",
+            "--catalog",
+            str(catalog_path),
+            "--models-root",
+            str(tmp_path / "models" / "voices"),
+            "--manifest-path",
+            str(manifest_path),
+            "--config-path",
+            str(config_path),
+            "--activate",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["installed_model"] == "voice-a"
+    assert payload["activated_model"] == "voice-a"
+    assert payload["checksum_verified"] is True
+    assert payload["files_installed"] == 2
+    assert payload["next_steps"] == [
+        "restart the local service if it is already running",
+        "tts list-voices",
+    ]
+    assert load_config(config_path, env={}).tts.default_voice == "voice-a"
+
+
+def test_model_install_warns_when_catalog_has_no_checksum(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    _build_zip(artifact_path, files={"model.onnx": "fake-model"})
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": str(artifact_path),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli._install_model_from_catalog(
+        catalog_source=str(catalog_path),
+        model_id="voice-a",
+        models_root=tmp_path / "models" / "voices",
+        manifest_path=tmp_path / "models" / "MANIFEST.json",
+        overwrite=False,
+    )
+
+    assert result["checksum_verified"] is False
+    assert result["warning"] == "Catalog entry has no artifact_sha256; use only trusted artifacts."
 
 
 def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path) -> None:
