@@ -11,26 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The extension reader-flow slice now records a
-  non-textual `nextSectionIndex` marker when a page capture is truncated before
-  a later heading-backed section. `Next Section` can use that marker to
-  re-extract the active tab from the first known uncaptured section without
-  storing raw page text or heading text.
+- Current loop result: The model-management download slice now resolves
+  relative `artifact_url` entries from remote HTTP catalogs against the catalog
+  URL before download. Local catalog-relative artifacts still resolve against
+  the catalog file directory.
 - Validation status for the current loop:
-  - Targeted extension validation passed with `py -3 scripts\check_extension.py`;
-    JavaScript syntax checks were skipped because `node` is not installed.
-  - Targeted reader-flow smoke passed with
-    `py -3 scripts\check_extension_reader_flow.py`; the generated long article
-    streamed as 145 text chunks.
-  - Targeted extension tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`.
+  - Targeted model-management ruff passed with
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
+  - Targeted model-management tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` with 25
+    tests.
+  - `py -3 scripts\check_model_management_flow.py` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 151 tests.
+  - `py -3 -m pytest -q` passed with 152 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including extension reader-flow
-    smoke, extension packaging, Windows bundle packaging, launcher foreground
-    service smoke, and bundle install smoke.
+  - `py -3 scripts\release_check.py` passed, including model-management flow
+    smoke, extension reader-flow smoke, Windows launcher foreground service
+    smoke, and bundle install smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -136,6 +134,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts model-install` now requires `artifact_sha256` by default and only
     permits missing checksums through `--allow-missing-checksum` for trusted
     local artifacts.
+  - remote HTTP catalogs can now use relative `artifact_url` entries; the
+    installer resolves them against the catalog URL before download, matching
+    local catalog-relative artifact behavior.
   - `tts model-remove` now reports whether the removed model id is still
     configured as `[tts].default_voice`, with next-step guidance to activate
     another voice before service restart.
@@ -319,6 +320,9 @@ This file is the live status log and shared memory for future Codex loops.
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any
   human progress chatter belongs on stderr.
+- Relative model artifact paths should be resolved from the catalog source that
+  declared them. Local catalogs use their parent directory; remote HTTP catalogs
+  use the catalog URL as the download base.
 - First-run setup may create local config and token files, but should not choose
   a Windows service manager or persistence mechanism until that product
   direction is explicit.

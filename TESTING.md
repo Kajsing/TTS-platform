@@ -60,10 +60,11 @@ backend-realism work, and early v1 model-management helpers:
   and real-runtime cancellation callback behavior
 - chunk-plan generation and synthesis routing
 - model catalog listing summaries and warnings, local artifact install, manifest
-  update, safe zip extraction, install progress metadata, overwrite refusal,
-  checksum-required-by-default install behavior with an explicit trusted-local
-  override, install-and-activate first-run shortcut, default-voice activation,
-  read-only real-backend readiness diagnostics, and model removal
+  update, remote catalog relative-artifact download, safe zip extraction,
+  install progress metadata, overwrite refusal, checksum-required-by-default
+  install behavior with an explicit trusted-local override,
+  install-and-activate first-run shortcut, default-voice activation, read-only
+  real-backend readiness diagnostics, and model removal
 - local first-run setup helper behavior for config creation, token
   initialization, and manifest/default-voice readiness reporting
 - local service run command wiring for configured host/port/log level, explicit

@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import websockets
@@ -635,7 +635,10 @@ def _run_uvicorn(*args: object, **kwargs: object) -> None:
     uvicorn.run(*args, **kwargs)
 
 
-def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], Path | None]:
+CatalogLocation = Path | str
+
+
+def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], CatalogLocation]:
     parsed = urlparse(catalog_source)
     if parsed.scheme in {"http", "https"}:
         with httpx.Client(timeout=60.0) as client:
@@ -644,7 +647,7 @@ def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], Path | 
             payload = response.json()
         if not isinstance(payload, dict):
             raise SystemExit("Catalog root must be a JSON object.")
-        return payload, None
+        return payload, catalog_source
 
     catalog_path = Path(catalog_source).expanduser().resolve()
     payload = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -764,7 +767,7 @@ def _install_model_from_catalog(
     progress: Callable[[str], None] | None = None,
     allow_missing_checksum: bool = False,
 ) -> dict[str, object]:
-    catalog_payload, catalog_path = _load_model_catalog(catalog_source)
+    catalog_payload, catalog_location = _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
     model = next((candidate for candidate in models if candidate.get("id") == model_id), None)
     if model is None:
@@ -781,7 +784,10 @@ def _install_model_from_catalog(
     artifact_url = str(model.get("artifact_url", "")).strip()
     if not artifact_url:
         raise SystemExit(f"Catalog model '{model_id}' is missing artifact_url.")
-    artifact_bytes = _read_artifact_bytes(artifact_url=artifact_url, catalog_path=catalog_path)
+    artifact_bytes = _read_artifact_bytes(
+        artifact_url=artifact_url,
+        catalog_location=catalog_location,
+    )
     _record_install_step(
         install_steps,
         step="load_artifact",
@@ -941,7 +947,7 @@ def _format_install_progress(step: dict[str, object]) -> str:
     return f"{label}: {status}"
 
 
-def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> bytes:
+def _read_artifact_bytes(*, artifact_url: str, catalog_location: CatalogLocation) -> bytes:
     parsed = urlparse(artifact_url)
     if parsed.scheme in {"http", "https"}:
         with httpx.Client(timeout=120.0) as client:
@@ -949,9 +955,16 @@ def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> byt
             response.raise_for_status()
             return response.content
 
+    if isinstance(catalog_location, str):
+        resolved_url = urljoin(catalog_location, artifact_url)
+        with httpx.Client(timeout=120.0) as client:
+            response = client.get(resolved_url)
+            response.raise_for_status()
+            return response.content
+
     artifact_path = Path(artifact_url).expanduser()
-    if not artifact_path.is_absolute() and catalog_path is not None:
-        artifact_path = (catalog_path.parent / artifact_path).resolve()
+    if not artifact_path.is_absolute():
+        artifact_path = (catalog_location.parent / artifact_path).resolve()
     return artifact_path.read_bytes()
 
 

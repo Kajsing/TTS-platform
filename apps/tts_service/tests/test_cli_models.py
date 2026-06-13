@@ -98,6 +98,94 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
     assert result["next_steps"][0] == "tts model-activate voice-a"
 
 
+def test_model_install_downloads_relative_artifact_from_remote_catalog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    artifact_bytes = _build_zip(
+        artifact_path,
+        files={
+            "model.onnx": "fake-model",
+            "tokens.txt": "fake-tokens",
+        },
+    )
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_url = "https://models.example.test/catalogs/catalog.json"
+    artifact_url = "voices/voice-a.zip"
+    resolved_artifact_url = "https://models.example.test/catalogs/voices/voice-a.zip"
+    requested_urls: list[str] = []
+
+    catalog_payload = {
+        "version": 1,
+        "models": [
+            {
+                "id": "voice-a",
+                "name": "Voice A",
+                "language": "en",
+                "artifact_url": artifact_url,
+                "artifact_sha256": checksum,
+                "backend": {
+                    "model_type": "vits",
+                    "model": "model.onnx",
+                    "tokens": "tokens.txt",
+                },
+            }
+        ],
+    }
+
+    class FakeResponse:
+        def __init__(
+            self,
+            *,
+            json_payload: dict[str, object] | None = None,
+            content: bytes = b"",
+        ) -> None:
+            self._json_payload = json_payload
+            self.content = content
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            if self._json_payload is None:
+                raise AssertionError("No JSON payload was configured.")
+            return self._json_payload
+
+    class FakeClient:
+        def __init__(self, *, timeout: float) -> None:
+            self.timeout = timeout
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if url == catalog_url:
+                return FakeResponse(json_payload=catalog_payload)
+            if url == resolved_artifact_url:
+                return FakeResponse(content=artifact_bytes)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    result = cli._install_model_from_catalog(
+        catalog_source=catalog_url,
+        model_id="voice-a",
+        models_root=tmp_path / "models" / "voices",
+        manifest_path=tmp_path / "models" / "MANIFEST.json",
+        overwrite=False,
+    )
+
+    assert requested_urls == [catalog_url, resolved_artifact_url]
+    assert result["installed_model"] == "voice-a"
+    assert result["checksum_verified"] is True
+    assert (tmp_path / "models" / "voices" / "voice-a" / "model.onnx").exists()
+
+
 def test_model_install_command_can_activate_model(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

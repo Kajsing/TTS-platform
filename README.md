@@ -170,7 +170,8 @@ The `catalog-list`, `model-install`, `model-activate`, `model-check`, and
 service auth tokens. `catalog-list` reports catalog counts, install readiness, checksum
 coverage, warnings, and next-step guidance while preserving the raw model
 entries in JSON. `model-install` downloads or reads a catalog artifact, verifies
-`artifact_sha256` by default, extracts the zip safely under
+`artifact_sha256` by default, resolves relative artifacts against the local
+catalog path or remote catalog URL, extracts the zip safely under
 `models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
 status to stderr, and keeps its structured result on stdout. Use
 `--allow-missing-checksum` only for trusted local artifacts.

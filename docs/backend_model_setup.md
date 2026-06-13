@@ -285,9 +285,12 @@ Recommended model fields:
 - `artifact_sha256`
 - `backend`
 
-`artifact_url` may be `http`, `https`, an absolute local path, or a path relative
-to the catalog file. `artifact_sha256` is required by default for
-`model-install` so artifacts are integrity-checked before extraction.
+`artifact_url` may be `http`, `https`, an absolute local path, or a path
+relative to the catalog source. Relative artifacts under a local catalog are
+resolved against the catalog file directory; relative artifacts under an HTTP
+catalog are resolved against the catalog URL before download.
+`artifact_sha256` is required by default for `model-install` so artifacts are
+integrity-checked before extraction.
 
 `tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
 
@@ -298,6 +301,8 @@ to the catalog file. `artifact_sha256` is required by default for
 
 Install behavior:
 
+- resolves relative artifacts against either the local catalog file path or the
+  remote catalog URL
 - verifies `artifact_sha256` before extraction
 - rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
   for a trusted local artifact

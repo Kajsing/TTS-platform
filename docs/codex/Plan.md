@@ -253,5 +253,9 @@ The twenty-third reader-flow slice extends page-capture structure metadata with
 a `nextSectionIndex` continuation marker for truncated captures, allowing
 `Next Section` to re-extract from the first known uncaptured heading-backed
 section without storing raw page text or heading text.
+The twenty-fourth model-management slice resolves relative `artifact_url`
+entries from remote HTTP catalogs against the catalog URL before download, so
+the download/install path works consistently for local catalog files and remote
+catalogs.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
