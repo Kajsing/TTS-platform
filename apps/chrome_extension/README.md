@@ -14,8 +14,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   readable block count, extraction source, and truncation at the configured limit
 - preserve short article headings in page playback and show heading/body/list
   structure counts in playback state
-- jump to the next captured page section by re-extracting the active tab from
-  the next heading index
+- jump to the previous or next captured page section by re-extracting the active
+  tab from a heading index
 - stop playback and keep popup state truthful if playback is interrupted while
   the offscreen document is unavailable
 - store local service settings such as base URL, token, preferred voice, and page-text limits
@@ -81,8 +81,8 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
     truncation when the readable page text reaches `Max Page Characters`.
 12. Confirm short article headings are included in page playback and that
     `Page Capture` reports heading/body/list structure counts.
-13. Use `Next Section` during page playback and confirm it restarts from a later
-    heading-backed section when one is available.
+13. Use `Previous Section` and `Next Section` during page playback and confirm
+    they restart from heading-backed sections when available.
 14. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
@@ -97,8 +97,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
   raw page text.
 - Page-capture structure metadata stores counts only; it does not store heading
   text or other raw page text.
-- `Next Section` uses heading offsets and section indexes from the latest page
-  capture metadata, then re-extracts page text from the active tab.
+- `Previous Section` and `Next Section` use heading offsets and section indexes
+  from the latest page capture metadata, then re-extract page text from the
+  active tab.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 - Manifest host permissions are limited to the localhost service origins. The
   declared content script handles page access, and the validation script checks
@@ -134,8 +135,8 @@ python3 scripts/check_extension_reader_flow.py
 ```
 
 This verifies the `Speak Page`, reader progress, page-capture metadata,
-`Resume Page`, `Next Section`, stop/restart recovery, and popup reopen-state
-wiring, then streams a generated thousand-word article through the local
-WebSocket service path.
+`Resume Page`, previous/next section navigation, stop/restart recovery, and
+popup reopen-state wiring, then streams a generated thousand-word article
+through the local WebSocket service path.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

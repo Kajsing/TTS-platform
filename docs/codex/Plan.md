@@ -163,6 +163,9 @@ The first long-document slices are now:
 - popup-side `Next Section` action that uses heading offsets and section
   indexes to re-extract active-tab text from a later captured section without
   storing heading text.
+- popup-side `Previous Section` action that uses the same heading offsets and
+  re-extracts active-tab text from an earlier captured section without storing
+  heading text.
 
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, and install progress metadata/status lines.
@@ -227,6 +230,8 @@ first-run setup without choosing a permanent service manager. The eighteenth
 model-management slice adds `tts model-check`, a read-only readiness diagnostic
 for default or selected voices that reports manifest/backend asset readiness,
 backend mode, `sherpa_onnx` availability, and concrete next steps before
-operators expect real acoustic output. Continue from the readiness audit:
-either automate another listed manual gate or take the next reader-flow/product
-slice.
+operators expect real acoustic output. The nineteenth reader-flow slice adds
+popup-side `Previous Section` navigation, reusing heading offsets and active-tab
+re-extraction so long article navigation can move backward without storing raw
+page text. Continue from the readiness audit: either automate another listed
+manual gate or take the next reader-flow/product slice.

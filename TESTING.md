@@ -36,6 +36,8 @@ backend-realism work, and early v1 model-management helpers:
   short heading preservation in captured page text
 - extension next-section wiring that re-extracts the active tab from the next
   heading-backed section without storing heading text
+- extension previous-section wiring that re-extracts the active tab from the
+  previous heading-backed section without storing heading text
 - extension stop/restart recovery wiring, including persisted interrupted
   state when popup/background state is restored without an offscreen document
 - extension manifest policy checks that keep service host permissions limited
@@ -108,6 +110,8 @@ Recommended extension checks:
   reports heading/body/list structure counts
 - verify `Next Section` restarts page playback from a later heading-backed
   section when one is available
+- verify `Previous Section` restarts page playback from an earlier
+  heading-backed section when one is available
 
 Run tests with:
 
@@ -147,8 +151,8 @@ controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
 It also verifies the long-page reader-flow contract and streams a generated
 thousand-word article through the WebSocket service path. That reader-flow
-contract includes stop/restart recovery wiring and the popup state fields used
-after reopening the popup.
+contract includes previous/next section navigation, stop/restart recovery
+wiring, and the popup state fields used after reopening the popup.
 If the service is already running, include the public-contract smoke path:
 
 ```bash

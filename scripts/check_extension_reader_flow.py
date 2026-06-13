@@ -163,6 +163,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "popup.html": [
             'id="speak-page"',
             'id="resume-page"',
+            'id="previous-section"',
             'id="next-section"',
             'id="stop-playback"',
             'id="status-text"',
@@ -170,6 +171,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "popup.js": [
             '"tts-extension:speak-page"',
             '"tts-extension:resume-page"',
+            '"tts-extension:previous-section"',
             '"tts-extension:next-section"',
             '"tts-extension:stop"',
             "await refreshState();",
@@ -184,12 +186,15 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "background.js": [
             "async function speakPage()",
             "async function resumePage()",
+            "async function previousSection()",
             "async function nextSection()",
             "async function stopPlayback()",
             '"tts-extension:stop"',
+            '"tts-extension:previous-section"',
             '"tts-extension:stop-stream"',
             "getPageCapture(tab.id, config.maxChars",
             "resolveResumeTextChunkIndex",
+            "resolvePreviousSectionIndex",
             "resolveNextSectionIndex",
             "startTextChunkIndex",
             "pageCapture: capture.meta",
@@ -244,9 +249,9 @@ def _verify_extension_reader_contract() -> dict[str, object]:
 
     return {
         "checked_files": len(files),
-        "popup_actions": 3,
+        "popup_actions": 4,
         "page_capture_metadata": True,
-        "resume_and_next_section": True,
+        "resume_and_section_navigation": True,
         "stop_restart_recovery": True,
         "popup_reopen_state": True,
         "raw_page_text_persistence": False,

@@ -191,11 +191,13 @@ def verify_extension_wiring() -> None:
     required_fragments = {
         EXTENSION_ROOT / "src" / "popup.html": [
             'id="resume-page"',
+            'id="previous-section"',
             'id="next-section"',
             'id="onboarding-status"',
         ],
         EXTENSION_ROOT / "src" / "popup.js": [
             '"tts-extension:resume-page"',
+            '"tts-extension:previous-section"',
             '"tts-extension:next-section"',
             "formatOnboardingStatus",
             "formatPageCapture",
@@ -204,8 +206,10 @@ def verify_extension_wiring() -> None:
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
+            '"tts-extension:previous-section"',
             '"tts-extension:next-section"',
             "pageCapture",
+            "resolvePreviousSectionIndex",
             "resolveNextSectionIndex",
             "sanitizePageCaptureMeta",
             "sanitizePageStructureMeta",

@@ -417,6 +417,9 @@ The Chrome extension uses this to implement `Resume Page`: it keeps the latest
 reader progress in session playback state, re-extracts readable text from the
 active tab, and asks the service to start from the saved planned text chunk. It
 does not persist raw page text for resume.
+The extension also uses page-capture heading offsets for `Previous Section` and
+`Next Section`, re-extracting the active tab from a section index instead of
+storing raw page text.
 
 When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
 backend streaming path emits audio from those callbacks instead of waiting for
@@ -426,8 +429,8 @@ callback fall back to the full-buffer path.
 The server-side chunk planner now improves chunk boundaries, the stream path has
 a separate page-scale text limit, the real runtime path can stream callback
 audio, stream events expose reader progress, and the extension has a basic
-resume action. The product still needs richer navigation and packaging polish
-before the Chrome reader is fully v1-ready.
+resume action plus previous/next section navigation. The product still needs
+manual Chrome playback evidence before the Chrome reader is fully v1-ready.
 
 ## Cancellation Limits
 

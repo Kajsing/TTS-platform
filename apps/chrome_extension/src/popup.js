@@ -125,6 +125,10 @@ document.querySelector("#resume-page").addEventListener("click", async () => {
   await runAction("tts-extension:resume-page");
 });
 
+document.querySelector("#previous-section").addEventListener("click", async () => {
+  await runAction("tts-extension:previous-section");
+});
+
 document.querySelector("#next-section").addEventListener("click", async () => {
   await runAction("tts-extension:next-section");
 });

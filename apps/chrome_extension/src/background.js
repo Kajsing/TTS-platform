@@ -65,6 +65,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "tts-extension:resume-page":
         sendResponse(await resumePage());
         return;
+      case "tts-extension:previous-section":
+        sendResponse(await previousSection());
+        return;
       case "tts-extension:next-section":
         sendResponse(await nextSection());
         return;
@@ -153,6 +156,37 @@ async function resumePage() {
     ok: true,
     message: `Resumed page playback from chunk ${
       startTextChunkIndex + 1
+    }.${formatCaptureSuffix(capture.meta)}`,
+  };
+}
+
+async function previousSection() {
+  const currentState = await getPlaybackState();
+  const previousSectionIndex = resolvePreviousSectionIndex({
+    progress: currentState.readerProgress,
+    pageCapture: currentState.pageCapture,
+  });
+  if (previousSectionIndex == null) {
+    return { ok: false, message: "No previous page section is available." };
+  }
+
+  const tab = await getActiveTab();
+  const config = await getConfig();
+  const capture = await getPageCapture(tab.id, config.maxChars, previousSectionIndex);
+  if (!capture.text) {
+    return { ok: false, message: "No page text found for the previous section." };
+  }
+
+  await startPlayback({
+    text: capture.text,
+    source: "page-previous-section",
+    tabId: tab.id,
+    pageCapture: capture.meta,
+  });
+  return {
+    ok: true,
+    message: `Started page playback from section ${
+      previousSectionIndex + 1
     }.${formatCaptureSuffix(capture.meta)}`,
   };
 }
@@ -402,6 +436,38 @@ function resolveNextSectionIndex({ progress, pageCapture }) {
     return null;
   }
   return Math.floor(sectionIndex);
+}
+
+function resolvePreviousSectionIndex({ progress, pageCapture }) {
+  const structure = pageCapture?.structure ?? {};
+  const sections = Array.isArray(structure.sections) ? structure.sections : [];
+  const completedTextChars = Math.max(
+    0,
+    Number(progress?.completed_text_chars ?? progress?.text_char_end ?? 0)
+  );
+  const sortedSections = sections
+    .slice()
+    .sort((left, right) => Number(left?.textCharStart ?? 0) - Number(right?.textCharStart ?? 0));
+  let currentSectionIndex = null;
+  for (const section of sortedSections) {
+    const textCharStart = Number(section?.textCharStart ?? 0);
+    const sectionIndex = Number(section?.index);
+    if (
+      Number.isFinite(textCharStart) &&
+      Number.isFinite(sectionIndex) &&
+      textCharStart <= completedTextChars
+    ) {
+      currentSectionIndex = Math.floor(sectionIndex);
+    }
+  }
+  if (currentSectionIndex == null) {
+    const startSectionIndex = Number(structure.startSectionIndex ?? 0);
+    currentSectionIndex = Number.isFinite(startSectionIndex) ? Math.floor(startSectionIndex) : 0;
+  }
+  if (currentSectionIndex <= 0) {
+    return null;
+  }
+  return currentSectionIndex - 1;
 }
 
 function sanitizePageCaptureMeta(meta, fallback) {

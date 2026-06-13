@@ -11,28 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model readiness slice adds `tts model-check`, a
-  read-only diagnostic for the configured default voice or a selected model id.
-  It reports config/default voice state, manifest presence, backend asset
-  paths, missing files, non-stub backend mode, `sherpa_onnx` availability, and
-  concrete next steps before operators expect real acoustic output.
+- Current loop result: The extension reader navigation slice adds popup-side
+  `Previous Section` support. It reuses heading offsets and active-tab
+  re-extraction like `Next Section`, so long article navigation can move
+  backward without storing raw page text in extension state.
 - Validation status for the current loop:
-  - Targeted `py -3 -m ruff check ...` passed for `cli.py`,
-    `test_cli_models.py`, `check_model_management_flow.py`, and
-    `test_model_management_flow_check.py`.
-  - `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`
-    passed with 23 tests.
-  - `py -3 -m tts_service.cli model-check --repo-root . --manifest-path models\MANIFEST.json --config-path config\config.example.toml`
-    passed and correctly reported the development stub voice as `ready: false`.
-  - `py -3 scripts/check_model_management_flow.py` passed and now includes a
-    `model_check` summary.
-  - `py -3 scripts/check_v1_readiness.py` passed.
-  - `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    passed with 25 tests.
+  - Targeted extension validation passed with `py -3 scripts\check_extension.py`.
+  - Targeted extension reader-flow validation passed with
+    `py -3 scripts\check_extension_reader_flow.py`.
+  - Targeted extension tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`.
+  - Targeted ruff checks passed with
+    `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py scripts\check_extension.py apps\tts_service\tests\test_check_extension.py`.
+  - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 145 tests.
-  - `py -3 scripts/release_check.py` passed, including the updated
-    `model_management_flow` with `model_check`.
+  - `py -3 scripts\release_check.py` passed, including local service
+    bootstrap, model-management flow, extension onboarding, extension
+    reader-flow, extension package, Windows bundle, launcher, and bundle-install
+    checks.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -111,6 +108,10 @@ This file is the live status log and shared memory for future Codex loops.
   - the popup now exposes `Next Section`; background resolves the next heading
     offset from current reader progress, re-extracts the active tab from that
     section index, and starts page playback from there.
+  - the popup now exposes `Previous Section`; background resolves the previous
+    heading-backed section from current reader progress and page-capture
+    metadata, re-extracts the active tab from that section index, and starts
+    page playback from there.
   - `scripts/check_extension_reader_flow.py` now verifies long-page reader
     wiring and streams a generated thousand-word article through the local
     service WebSocket contract.
