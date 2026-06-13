@@ -114,7 +114,7 @@ def _run_release_checks_with_package_path(
     for name, command in checks:
         print(f"[release-check] {name}", file=sys.stderr)
         subprocess.run(command, cwd=REPO_ROOT, check=True)
-        completed.append({"name": name, "command": command})
+        completed.append({"name": name, "command": _redact_command(command)})
 
     return {
         "checks": completed,
@@ -143,6 +143,14 @@ def _build_live_smoke_command(
     if voice:
         command.extend(["--voice", voice])
     return command
+
+
+def _redact_command(command: list[str]) -> list[str]:
+    redacted = list(command)
+    for index, value in enumerate(redacted[:-1]):
+        if value == "--token":
+            redacted[index + 1] = "<redacted>"
+    return redacted
 
 
 if __name__ == "__main__":

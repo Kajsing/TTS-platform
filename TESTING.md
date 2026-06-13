@@ -54,6 +54,7 @@ backend-realism work, and early v1 model-management helpers:
   POSIX-style relative asset paths
 - repo-native release check orchestration for ruff, pytest, extension
   validation, and extension package build
+- release-check redaction for inline live-smoke bearer tokens in JSON summaries
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

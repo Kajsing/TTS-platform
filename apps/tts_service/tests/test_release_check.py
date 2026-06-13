@@ -80,6 +80,37 @@ def test_release_check_can_include_optional_live_smoke(
     ]
 
 
+def test_release_check_redacts_inline_live_smoke_token(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        live_smoke=True,
+        token="secret-token",
+    )
+
+    assert "--token" in calls[-1]
+    assert "secret-token" in calls[-1]
+    assert summary["checks"][-1]["command"] == [
+        "python-test",
+        "scripts/smoke_service.py",
+        "--base-url",
+        "http://127.0.0.1:7777",
+        "--token",
+        "<redacted>",
+    ]
+
+
 def _load_release_check_module():
     spec = importlib.util.spec_from_file_location(
         "tts_platform_release_check",

@@ -11,13 +11,12 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The third release-hardening slice added optional live
-  public-contract smoke coverage to `scripts/release_check.py`. The default
-  release gate still runs without service credentials; `--live-smoke` adds
-  `scripts/smoke_service.py` when a local service and token are available.
+- Current loop result: The fourth release-hardening slice redacts inline
+  `--token` values from `scripts/release_check.py` JSON summaries while still
+  passing the token to the live smoke subprocess.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 114 tests.
+  - `py -3 -m pytest -q` passed with 115 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
   - `py -3 scripts/release_check.py` passed.
@@ -131,6 +130,8 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/release_check.py --live-smoke` can also run the public-contract
     smoke script against an already running service using `--token`,
     `--token-file`, and optional `--voice`.
+  - `scripts/release_check.py` redacts inline `--token` values in its JSON
+    summary so release logs do not echo bearer tokens.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -202,6 +203,7 @@ This file is the live status log and shared memory for future Codex loops.
   service and token.
 - Optional live smoke belongs behind an explicit release-check flag so local
   validation can stay deterministic when no service is running.
+- Release-check summaries must not echo bearer-token values.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
