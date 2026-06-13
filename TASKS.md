@@ -78,5 +78,5 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add Windows-friendly service launcher scripts
 - [ ] Add Windows-friendly service install/packaging flow
 - [x] Add Chrome extension popup setup checklist
-- [ ] Improve Chrome extension packaging/installability
+- [x] Add Chrome extension zip packaging script
 - [ ] Close release-hardening gaps for docs, security defaults, and tests

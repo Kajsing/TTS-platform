@@ -37,6 +37,18 @@ refresh or settings save.
 3. Choose `Load unpacked`.
 4. Select this `apps/chrome_extension` directory.
 
+## Package Locally
+
+Build a zip with the extension manifest at the archive root:
+
+```bash
+python3 scripts/package_extension.py
+```
+
+The package script runs `scripts/check_extension.py` first and writes the zip to
+`dist/chrome_extension/tts-platform-prototype.zip` by default. The zip is for
+local testing and handoff; it is not Chrome Web Store signing or publishing.
+
 ## Prototype flow
 
 - `background.js` orchestrates text capture and offscreen playback.

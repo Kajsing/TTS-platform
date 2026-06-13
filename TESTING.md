@@ -48,6 +48,8 @@ backend-realism work, and early v1 model-management helpers:
   invocation, setup fallback, and PowerShell delegation from the CMD launcher
 - Chrome extension popup setup-checklist wiring through the lightweight
   extension validator
+- Chrome extension zip packaging with manifest at the archive root and
+  POSIX-style relative asset paths
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
@@ -100,6 +102,7 @@ For a lightweight extension syntax check when `node` is available:
 
 ```bash
 python3 scripts/check_extension.py
+python3 scripts/package_extension.py
 node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js

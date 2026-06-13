@@ -193,3 +193,9 @@ The browser client is still a prototype. It deliberately keeps all browser-speci
 For extension-specific setup and troubleshooting, see
 [README.md](apps/chrome_extension/README.md) and
 [TROUBLESHOOTING.md](apps/chrome_extension/TROUBLESHOOTING.md).
+
+To build a local Chrome extension zip after validation:
+
+```bash
+python3 scripts/package_extension.py
+```

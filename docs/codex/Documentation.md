@@ -11,13 +11,12 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first Chrome extension onboarding slice added a
-  popup setup checklist. The checklist reports service reachability, saved token
-  state, origin snippet readiness, voice discovery, and health status after
-  refresh or settings save.
+- Current loop result: The first Chrome extension packaging slice added
+  `scripts/package_extension.py`. The script runs extension validation first and
+  writes a local Chrome-loadable zip with `manifest.json` at the archive root.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 106 tests.
+  - `py -3 -m pytest -q` passed with 107 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -118,6 +117,8 @@ This file is the live status log and shared memory for future Codex loops.
     token state, origin snippet readiness, voice discovery, and health status.
   - `scripts/check_extension.py` now validates setup-checklist wiring along
     with manifest, asset, and resume wiring.
+  - `scripts/package_extension.py` now builds a validated local extension zip
+    at `dist/chrome_extension/tts-platform-prototype.zip` by default.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -127,7 +128,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue Chrome extension packaging/installability.
+- Continue release hardening: docs, security defaults, smoke coverage, and
+  remaining test gaps.
 - Leave permanent Windows service manager or auto-start install as an explicit
   later product choice.
 
@@ -178,6 +180,8 @@ This file is the live status log and shared memory for future Codex loops.
   pywin32, or startup-folder auto-run without an explicit product decision.
 - Extension onboarding should expose readiness state in the popup, while
   browser-specific behavior remains inside `apps/chrome_extension/`.
+- Extension zip packaging is local handoff/installability only; Chrome Web Store
+  signing or publishing is out of scope until explicitly chosen.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -233,6 +237,7 @@ Extension structural smoke:
 
 ```bash
 python3 scripts/check_extension.py
+python3 scripts/package_extension.py
 ```
 
 ## Known Issues And Follow-Ups
