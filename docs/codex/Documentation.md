@@ -11,20 +11,20 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model-management readiness slice adds a local
-  artifact/catalog smoke that exercises catalog-list, install, activate,
-  service smoke with the installed voice, and remove without external downloads.
-  `model-remove` now warns when the removed model id is still configured as the
-  active default voice.
+- Current loop result: The extension-onboarding readiness slice adds a
+  deterministic popup/service contract check. It verifies popup setup controls,
+  Chrome-extension origin allow-list snippet compatibility, and health/voice
+  discovery against a temporary local service without requiring a full Chrome
+  MV3 browser harness.
 - Validation status for the current loop:
-  - `py -3 scripts/check_model_management_flow.py` passed.
-  - `py -3 -m pytest apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py -q` passed with 24 tests.
-  - `py -3 scripts/check_v1_readiness.py` passed.
+  - `py -3 scripts/check_extension_onboarding.py` passed.
+  - `py -3 -m pytest apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_check_extension.py -q` passed with 9 tests.
   - Targeted `py -3 -m ruff check ...` passed.
+  - `py -3 scripts/check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 132 tests.
-  - `py -3 scripts/release_check.py` passed, including the local service
-    bootstrap and model-management flow gates.
+  - `py -3 -m pytest -q` passed with 134 tests.
+  - `py -3 scripts/release_check.py` passed, including
+    `extension_onboarding`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -144,6 +144,9 @@ This file is the live status log and shared memory for future Codex loops.
     token state, origin snippet readiness, voice discovery, and health status.
   - `scripts/check_extension.py` now validates setup-checklist wiring along
     with manifest, asset, and resume wiring.
+  - `scripts/check_extension_onboarding.py` now validates the popup onboarding
+    surface, config-loadable Chrome extension origin snippet, and service
+    health/voice snapshot used by the popup.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
   - the extension manifest no longer requests `<all_urls>` in
@@ -200,6 +203,8 @@ This file is the live status log and shared memory for future Codex loops.
     or token side effects.
   - `scripts/release_check.py` now runs local service bootstrap and
     model-management flow smoke checks as deterministic offline readiness gates.
+  - `scripts/release_check.py` now runs extension onboarding contract smoke as
+    a deterministic local gate before extension packaging.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -343,6 +348,7 @@ tts model-install <model-id> --catalog ./models/catalog.json
 tts model-activate <model-id>
 tts model-remove <model-id>
 python3 scripts/check_model_management_flow.py
+python3 scripts/check_extension_onboarding.py
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2

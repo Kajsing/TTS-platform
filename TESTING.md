@@ -133,6 +133,9 @@ public-contract smoke against that isolated config/token root.
 It also creates a temporary local model artifact/catalog, verifies
 catalog-list, install, activate, service smoke with the installed voice, and
 remove.
+It verifies the Chrome extension onboarding contract by checking popup setup
+controls, service health/voice discovery against a temporary service, and the
+extension-origin allow-list snippet shape.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -171,6 +174,12 @@ Check the local model-management flow directly with:
 
 ```bash
 python3 scripts/check_model_management_flow.py
+```
+
+Check the Chrome extension onboarding contract directly with:
+
+```bash
+python3 scripts/check_extension_onboarding.py
 ```
 
 CLI example:

@@ -30,6 +30,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "local_service_bootstrap",
         "model_management_flow",
         "extension",
+        "extension_onboarding",
         "extension_package",
         "windows_bundle",
         "windows_bundle_bootstrap",
@@ -44,6 +45,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         (["python-test", "scripts/check_local_service_bootstrap.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_model_management_flow.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension.py"], REPO_ROOT, True),
+        (["python-test", "scripts/check_extension_onboarding.py"], REPO_ROOT, True),
         (
             [
                 "python-test",

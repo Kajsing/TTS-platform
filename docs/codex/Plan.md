@@ -202,6 +202,15 @@ release-hardening slice now adds `docs/v1_readiness.md` and
 gate and Windows bundle so automated gates, manual gates, product choices, and
 known not-yet-automated items stay explicit. The tenth release-hardening slice
 now adds `scripts/check_windows_bundle_bootstrap.py`, wiring safe bundle
-extraction and extracted-source `setup-local` into the release gate. Continue
-from the readiness audit: either automate another listed manual gate or take the
-next reader-flow/product slice.
+extraction and extracted-source `setup-local` into the release gate. The
+eleventh release-hardening slice now adds
+`scripts/check_local_service_bootstrap.py`, wiring isolated first-run service
+startup plus public-contract smoke into the release gate. The twelfth
+release-hardening slice now adds `scripts/check_model_management_flow.py`,
+covering a generated local catalog/artifact install, activate, service smoke,
+and remove flow. The thirteenth release-hardening slice now adds
+`scripts/check_extension_onboarding.py`, covering popup setup controls,
+extension-origin allow-list snippet compatibility, and service health/voice
+discovery without requiring a full Chrome MV3 harness. Continue from the
+readiness audit: either automate another listed manual gate or take the next
+reader-flow/product slice.

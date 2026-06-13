@@ -89,3 +89,4 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Close release-hardening gaps for docs, security defaults, and tests
 - [x] Add automated local first-run service bootstrap smoke
 - [x] Add automated local model-management flow smoke
+- [x] Add automated Chrome extension onboarding contract smoke

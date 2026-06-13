@@ -14,6 +14,9 @@ for long web-page text.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
   boundaries, and JavaScript syntax when `node` is installed.
+- `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
+  controls, Chrome-extension origin allow-list snippet compatibility, and the
+  health/voice-discovery service snapshot used by the popup.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   runs the public-contract smoke, and shuts the service down.
@@ -46,7 +49,8 @@ for long web-page text.
   --stream-text-repeat 200 --min-stream-text-chunks 2`.
 - Load `apps/chrome_extension` in Chrome, copy the extension origin into
   `security.allowed_origins`, restart the service, save the token in the popup,
-  and confirm service health plus voice discovery.
+  and confirm actual Chrome popup health plus voice discovery. The static
+  popup/origin/service-snapshot contract is automated.
 - On a long article page, verify `Speak Page`, progress display, truncation
   metadata, `Resume Page`, `Next Section`, stop/restart behavior, and popup
   state after reopening.
@@ -63,7 +67,8 @@ for long web-page text.
 
 ## Known Not Yet Automated
 
-- There is no full automated Chrome MV3 browser harness in the repository.
+- There is no full automated Chrome MV3 browser harness in the repository; the
+  automated onboarding gate does not replace manual Chrome loading/playback.
 - JavaScript syntax validation in `scripts/check_extension.py` requires `node`
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live

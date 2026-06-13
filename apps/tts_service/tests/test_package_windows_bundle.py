@@ -57,6 +57,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
     assert "tts-platform/scripts/windows/run_service.ps1" in names
     assert "tts-platform/scripts/windows/run_service.cmd" in names
+    assert "tts-platform/scripts/check_extension_onboarding.py" in names
     assert "tts-platform/scripts/check_security_defaults.py" in names
     assert "tts-platform/scripts/check_local_service_bootstrap.py" in names
     assert "tts-platform/scripts/check_model_management_flow.py" in names

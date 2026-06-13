@@ -114,4 +114,15 @@ This checks manifest references, linked popup/offscreen assets, manifest policy,
 extension privacy/layering boundaries, and JavaScript syntax when `node` is
 available.
 
+Run the onboarding contract check with:
+
+```bash
+python3 scripts/check_extension_onboarding.py
+```
+
+This starts a temporary local service, verifies the popup setup controls,
+checks that the extension-origin allow-list snippet is accepted by service
+config, and confirms the health/voice-discovery snapshot shape used by the
+popup.
+
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
