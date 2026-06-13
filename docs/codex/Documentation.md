@@ -11,26 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension popup reader controls are now
-  state-aware: resume, continue, previous/next section, and stop buttons are
-  disabled until the latest playback metadata supports them.
+- Current loop result: The Chrome extension local install guide now points
+  packaged handoff users at the Windows bundle `install_local` bootstrap before
+  service launch, Chrome loading, allow-list setup, and token save. Extension
+  and bundle packaging tests now assert that guidance remains present.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py`.
+    `py -3 -m ruff check scripts\check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
-    and reported 3 passed.
-  - `py -3 scripts\check_extension_reader_flow.py` passed and reported
-    `popup_state_aware_actions = true`, `popup_long_page_status = true`, a
-    2,963-word generated article, and 145 stream text chunks.
+    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py -q`
+    and reported 7 passed.
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
     skipped because `node` is not installed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 162 tests.
-  - `py -3 scripts\release_check.py` passed, including the updated extension
-    reader-flow contract with `popup_long_page_status = true`.
+  - `py -3 scripts\release_check.py` passed, including the tightened packaged
+    extension install guide contract.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -209,6 +207,9 @@ This file is the live status log and shared memory for future Codex loops.
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
   - the Chrome extension package now includes `INSTALL.md` plus manifest/action
     PNG icons for local Chrome handoff builds.
+  - the packaged extension install guide now points extracted Windows bundle
+    users at `scripts\windows\install_local.ps1` before service launch,
+    extension loading, origin allow-listing, and token save.
   - `scripts/check_chrome_extension_smoke.py` now provides an optional real
     Chrome/Edge MV3 smoke for page capture and playback startup evidence, and
     it uses `extension-allow-origin` for service allow-list setup.

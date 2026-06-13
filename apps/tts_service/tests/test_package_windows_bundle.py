@@ -56,6 +56,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     with zipfile.ZipFile(out_path) as archive:
         names = set(archive.namelist())
         readme = archive.read("tts-platform/WINDOWS_BUNDLE_README.md").decode()
+        install_guide = archive.read("tts-platform/apps/chrome_extension/INSTALL.md").decode()
 
     assert "tts-platform/pyproject.toml" in names
     assert "tts-platform/config/config.example.toml" in names
@@ -87,6 +88,9 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "apps\\chrome_extension\\INSTALL.md" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme
+    assert "scripts\\windows\\install_local.ps1" in install_guide
+    assert "scripts\\windows\\run_service.ps1" in install_guide
+    assert "tts extension-allow-origin <copied-origin>" in install_guide
 
     assert all(name.startswith("tts-platform/") for name in names)
     assert all("\\" not in name for name in names)

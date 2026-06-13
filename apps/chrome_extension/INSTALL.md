@@ -5,13 +5,34 @@ It is not Chrome Web Store signed.
 
 ## Load Unpacked
 
-1. Start first-run setup with `scripts\windows\run_service.ps1 -SetupOnly`.
-2. Open `chrome://extensions`.
-3. Enable Developer Mode.
-4. Choose `Load unpacked`.
-5. Select the extracted `apps\chrome_extension` directory.
-6. Open the extension popup and copy the `Allow-List Command`.
-7. Run the command to update `security.allowed_origins`:
+1. Prepare the local service:
+
+   - From the extracted Windows bundle, run:
+
+     ```powershell
+     .\scripts\windows\install_local.ps1
+     ```
+
+     This creates `.venv`, installs the local package, and runs first-run
+     `tts setup-local`.
+
+   - From an already installed development checkout, run:
+
+     ```powershell
+     tts setup-local
+     ```
+
+     You can also use `scripts\windows\run_service.ps1 -SetupOnly` when you
+     want the source launcher to create `config\config.toml` and
+     `config\token.txt` without starting the foreground service.
+
+2. Start the local service with `scripts\windows\run_service.ps1`.
+3. Open `chrome://extensions`.
+4. Enable Developer Mode.
+5. Choose `Load unpacked`.
+6. Select the extracted `apps\chrome_extension` directory.
+7. Open the extension popup and copy the `Allow-List Command`.
+8. Run the command to update `security.allowed_origins`:
 
    ```powershell
    tts extension-allow-origin <copied-origin>
@@ -24,9 +45,9 @@ It is not Chrome Web Store signed.
    .\.venv\Scripts\tts.exe extension-allow-origin <copied-origin>
    ```
 
-8. Restart the local service.
-9. Save the token from `config\token.txt` in the popup.
-10. Refresh service status and confirm the setup checklist is all `[ok]`.
+9. Restart the local service.
+10. Save the token from `config\token.txt` in the popup.
+11. Refresh service status and confirm the setup checklist is all `[ok]`.
 
 ## Packaged Zip
 

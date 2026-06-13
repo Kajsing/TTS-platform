@@ -25,6 +25,7 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
 
     with zipfile.ZipFile(out_path) as archive:
         names = set(archive.namelist())
+        install_guide = archive.read("INSTALL.md").decode()
 
     assert "manifest.json" in names
     assert "INSTALL.md" in names
@@ -36,6 +37,12 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert "src/popup.js" in names
     assert "offscreen/offscreen.html" in names
     assert "offscreen/offscreen.js" in names
+    assert "scripts\\windows\\install_local.ps1" in install_guide
+    assert "scripts\\windows\\run_service.ps1" in install_guide
+    assert "tts setup-local" in install_guide
+    assert "tts extension-allow-origin <copied-origin>" in install_guide
+    assert "security.allowed_origins" in install_guide
+    assert "config\\token.txt" in install_guide
     assert all(not name.startswith("/") for name in names)
     assert all("\\" not in name for name in names)
 
