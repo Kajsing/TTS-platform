@@ -74,6 +74,7 @@ READINESS_MARKERS = (
     "catalog-aware first-run guidance",
     "tts model-list",
     "tts model-check <model-id>",
+    "python -m pip install sherpa-onnx",
     "--allow-missing-checksum",
     "python3 scripts/check_chrome_extension_smoke.py",
     "tts extension-allow-origin <copied-origin>",
@@ -157,6 +158,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/windows/install_local.ps1",
         "scripts/windows/install_local.cmd",
         "should put the `model-install` command above first",
+        ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install sherpa-onnx",
         "extension-allow-origin",
     ),
     "scripts/check_windows_bundle_install.py": (
@@ -179,6 +181,8 @@ REQUIRED_TEXT_MARKERS = {
         "model-list",
         "_list_models",
         "_model_list_default_model",
+        "_append_sherpa_onnx_install_step",
+        "SHERPA_ONNX_INSTALL_STEP",
         "_setup_local_model_install_step",
         "default_voice_has_backend_config",
         "extension-allow-origin",
@@ -194,6 +198,7 @@ REQUIRED_TEXT_MARKERS = {
         '"model-list"',
         '"model_list"',
         "_summarize_model_list",
+        "sherpa_onnx_installed",
     ),
     "TESTING.md": (
         "v1-readiness",
@@ -206,6 +211,7 @@ REQUIRED_TEXT_MARKERS = {
         "extension-allow-origin",
         "copy-command",
         "catalog-aware `setup-local`",
+        "`sherpa_onnx` runtime install",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",

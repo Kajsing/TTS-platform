@@ -54,6 +54,9 @@ for long web-page text.
   the official `tar.bz2` release archive format. `model-check` now reads the
   default catalog and suggests the concrete default English model when the
   configured development stub is not real-backend ready.
+- `tts setup-local` and `tts model-list` expose `sherpa_onnx` runtime status
+  and include `python -m pip install sherpa-onnx` in next-step guidance when
+  real local playback is relevant but the runtime package is missing.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
@@ -101,6 +104,8 @@ for long web-page text.
   `tts model-list` to inspect installed manifest voices and
   `tts model-check <model-id>` to verify local manifest/backend assets plus
   `sherpa_onnx` runtime availability before expecting real acoustic output.
+  When prompted, install the runtime in the active environment with
+  `python -m pip install sherpa-onnx`.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

@@ -153,10 +153,12 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 `config/config.toml` from `config/config.example.toml` when missing, initializes
 `config/token.txt` through the same auth path the service uses, reports default
 voice/manifest readiness, inspects the default model catalog, and prints next
-steps, including `tts model-check`, without exposing the token. When the
+steps, including `tts model-check`, without exposing the token. It also reports
+whether `sherpa_onnx` is importable in the active environment. When the
 configured default voice is still the development stub and the default catalog
 has a single installable model, those next steps start with the concrete
-`tts model-install vits-piper-en_US-lessac-medium --activate` command.
+`tts model-install vits-piper-en_US-lessac-medium --activate` command and add
+`python -m pip install sherpa-onnx` when the runtime package is missing.
 `extension-allow-origin` adds a copied Chrome extension origin to
 `security.allowed_origins` in `config/config.toml`, preserving existing origins
 and rejecting non-`chrome-extension` origins for this onboarding path.
@@ -186,8 +188,8 @@ and do not require service auth tokens. `catalog-list` reports catalog counts,
 install readiness, checksum coverage, warnings, and next-step guidance while
 preserving the raw model entries in JSON. `model-list` reports installed
 manifest voices, the configured default voice, backend-config presence, default
-catalog status, and next-step guidance without starting the service. By
-default, `catalog-list` and `model-install` read
+catalog status, `sherpa_onnx` runtime status, and next-step guidance without
+starting the service. By default, `catalog-list` and `model-install` read
 `models/catalog.json`; pass `--catalog <path-or-url>` for a different local
 catalog file or remote catalog URL. `model-install` downloads or reads a
 catalog artifact, verifies `artifact_sha256` by default, resolves relative
@@ -199,7 +201,9 @@ status to stderr, and keeps its structured result on stdout. Use
 The committed default catalog currently includes the English
 `vits-piper-en_US-lessac-medium` sherpa-onnx voice. Install it with
 `tts model-install vits-piper-en_US-lessac-medium --activate` before expecting
-real acoustic output from the local reader.
+real acoustic output from the local reader, and install `sherpa-onnx` into the
+same Python environment when `setup-local`, `model-list`, or `model-check`
+reports `python -m pip install sherpa-onnx`.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 `model-check` reports whether the selected or default voice has manifest

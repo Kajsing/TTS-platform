@@ -78,6 +78,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add `model-install --activate` first-run shortcut and install guidance output
 - [x] Improve catalog listing and install progress output
 - [x] Add offline model manifest listing
+- [x] Add first-run `sherpa-onnx` runtime install guidance
 - [x] Add read-only model readiness diagnostics for real local backend setup
 - [x] Add Windows-friendly local first-run setup helper
 - [x] Add Windows-friendly service run command

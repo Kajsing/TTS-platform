@@ -323,5 +323,8 @@ summaries, keeping all Windows first-run checks aligned.
 The forty-second model-management UX slice adds `tts model-list`, a read-only
 offline manifest/default-voice listing command, and wires it into the
 model-management flow smoke.
+The forty-third first-run UX slice exposes `sherpa_onnx` runtime status from
+`tts setup-local` and `tts model-list`, adding `python -m pip install
+sherpa-onnx` next-step guidance before real local playback.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

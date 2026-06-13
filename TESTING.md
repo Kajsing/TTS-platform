@@ -75,7 +75,8 @@ backend-realism work, and early v1 model-management helpers:
   catalog-aware concrete install next steps, and model removal
 - local first-run setup helper behavior for config creation, token
   initialization, manifest/default-voice readiness reporting, default catalog
-  detection, and concrete model-install guidance
+  detection, concrete model-install guidance, and `sherpa_onnx` runtime install
+  guidance
 - local service run command wiring for configured host/port/log level, explicit
   overrides, missing-config guidance, and loopback-only default binding
 - Windows launcher structure, including repo-local `PYTHONPATH`, module CLI

@@ -11,20 +11,22 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `tts model-list` now gives an offline manifest/default
-  voice overview with catalog-aware next steps, and the model-management smoke
-  exercises it between install/activate and `model-check`.
+- Current loop result: `tts setup-local` and `tts model-list` now expose
+  `sherpa_onnx` runtime status and add
+  `python -m pip install sherpa-onnx` to next-step guidance when real local
+  playback is relevant but the runtime package is missing.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py scripts\check_model_management_flow.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py`.
-  - Targeted model-management tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
-    and reported 39 passed.
-  - `py -3 -m tts_service.cli model-list` passed and reported
-    `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
-    next step for the current debug default voice.
-  - `py -3 scripts\check_model_management_flow.py` passed and now reports a
-    `model_list` summary.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py scripts\check_model_management_flow.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py`.
+  - Targeted setup/model/package tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
+    and reported 50 passed.
+  - `py -3 -m tts_service.cli setup-local` and
+    `py -3 -m tts_service.cli model-list` passed and reported
+    `python -m pip install sherpa-onnx` immediately after the default Lessac
+    install step in this environment.
+  - `py -3 scripts\check_model_management_flow.py` passed and now reports
+    runtime status in the `model_list` summary.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 178 tests.
@@ -183,6 +185,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts model-list` now reports installed manifest voices, the configured
     default voice, backend-config presence, default catalog status, and
     catalog-aware next steps without starting the service.
+  - `tts setup-local` and `tts model-list` now also report runtime status and
+    suggest `python -m pip install sherpa-onnx` before real playback when the
+    runtime package is missing.
   - `scripts/check_model_management_flow.py` now verifies catalog-list,
     default `models/catalog.json` discovery, offline `model-list`,
     relative-artifact download/install from a generated loopback HTTP catalog,
@@ -345,6 +350,9 @@ This file is the live status log and shared memory for future Codex loops.
   - The generated `WINDOWS_BUNDLE_README.md` now puts the default English
     `model-install` command before model readiness re-checking, matching
     `setup-local` next-step guidance.
+  - The generated `WINDOWS_BUNDLE_README.md` now also includes the venv-local
+    `sherpa-onnx` runtime install command before real playback readiness
+    checks.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.
@@ -582,9 +590,10 @@ python3 scripts/package_windows_bundle.py
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
 - The default catalog can now install `vits-piper-en_US-lessac-medium`, but
-  `sherpa_onnx` is still an optional local runtime dependency. `model-check`
-  will continue to report `python -m pip install sherpa-onnx` until that package
-  is installed in the active environment.
+  `sherpa_onnx` is still an optional local runtime dependency. `setup-local`,
+  `model-list`, and `model-check` will continue to report
+  `python -m pip install sherpa-onnx` until that package is installed in the
+  active environment.
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
   visibility. It now preserves short headings, reports structure counts, and

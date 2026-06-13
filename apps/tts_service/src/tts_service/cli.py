@@ -28,6 +28,7 @@ from .auth import initialize_auth
 from .config import SecurityConfig, load_config
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
+SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -539,6 +540,9 @@ def _setup_local(
         default_voice=config.tts.default_voice,
     )
     catalog_status = _inspect_catalog_for_model_check(resolved_repo_root)
+    runtime_status = _inspect_runtime_for_model_check(
+        {"backend_mode": config.backend.mode}
+    )
     base_url = f"http://{config.server.host}:{config.server.port}"
     return {
         "repo_root": str(resolved_repo_root),
@@ -555,6 +559,7 @@ def _setup_local(
         "default_voice": config.tts.default_voice,
         "manifest": manifest_status,
         "catalog": catalog_status,
+        "runtime": runtime_status,
         "next_steps": _setup_local_next_steps(
             config_created=config_created,
             token_created=auth_state.generated,
@@ -564,6 +569,7 @@ def _setup_local(
             ),
             default_voice=config.tts.default_voice,
             catalog_status=catalog_status,
+            runtime_status=runtime_status,
         ),
     }
 
@@ -624,6 +630,7 @@ def _setup_local_next_steps(
     default_voice_has_backend_config: bool,
     default_voice: str,
     catalog_status: dict[str, object],
+    runtime_status: dict[str, object],
 ) -> list[str]:
     steps: list[str] = []
     install_step = _setup_local_model_install_step(
@@ -634,6 +641,11 @@ def _setup_local_next_steps(
     )
     if install_step:
         steps.append(install_step)
+    _append_sherpa_onnx_install_step(
+        steps,
+        runtime_status=runtime_status,
+        real_output_expected=bool(install_step) or default_voice_has_backend_config,
+    )
     steps.extend(
         [
             "tts extension-allow-origin <chrome-extension-origin>",
@@ -1591,6 +1603,7 @@ def _list_models(
         default_voice=default_voice,
     )
     catalog_status = _inspect_catalog_for_model_check(repo_root=resolved_repo_root)
+    runtime_status = _inspect_runtime_for_model_check(config_status=config_status)
     return {
         "repo_root": str(resolved_repo_root),
         "config": config_status,
@@ -1600,12 +1613,14 @@ def _list_models(
             if key != "models"
         },
         "catalog": catalog_status,
+        "runtime": runtime_status,
         "default_voice": default_voice or None,
         "models": manifest_status.get("models", []),
         "next_steps": _model_list_next_steps(
             config_status=config_status,
             manifest_status=manifest_status,
             catalog_status=catalog_status,
+            runtime_status=runtime_status,
         ),
     }
 
@@ -1710,6 +1725,7 @@ def _model_list_next_steps(
     config_status: dict[str, object],
     manifest_status: dict[str, object],
     catalog_status: dict[str, object],
+    runtime_status: dict[str, object],
 ) -> list[str]:
     steps: list[str] = []
     if config_status.get("valid") is not True:
@@ -1722,6 +1738,11 @@ def _model_list_next_steps(
                 catalog_status=catalog_status,
                 overwrite=False,
             )
+        )
+        _append_sherpa_onnx_install_step(
+            steps,
+            runtime_status=runtime_status,
+            real_output_expected=True,
         )
         return steps
     if manifest_status.get("default_voice_in_manifest") is not True:
@@ -1747,8 +1768,19 @@ def _model_list_next_steps(
         )
         if install_step:
             steps.append(install_step)
+            _append_sherpa_onnx_install_step(
+                steps,
+                runtime_status=runtime_status,
+                real_output_expected=True,
+            )
             steps.append("tts model-check")
             return steps
+    if default_model is not None and default_model.get("has_backend_config") is True:
+        _append_sherpa_onnx_install_step(
+            steps,
+            runtime_status=runtime_status,
+            real_output_expected=True,
+        )
     if default_voice:
         steps.append(f"tts model-check {default_voice}")
     else:
@@ -1771,6 +1803,21 @@ def _model_list_default_model(
         ),
         None,
     )
+
+
+def _append_sherpa_onnx_install_step(
+    steps: list[str],
+    *,
+    runtime_status: dict[str, object],
+    real_output_expected: bool,
+) -> None:
+    if (
+        real_output_expected
+        and runtime_status.get("real_mode_enabled") is True
+        and runtime_status.get("sherpa_onnx_installed") is not True
+        and SHERPA_ONNX_INSTALL_STEP not in steps
+    ):
+        steps.append(SHERPA_ONNX_INSTALL_STEP)
 
 
 def _check_model_readiness(
@@ -2152,7 +2199,7 @@ def _model_check_next_steps(
             )
         )
     if runtime_status.get("sherpa_onnx_installed") is not True:
-        steps.append("python -m pip install sherpa-onnx")
+        steps.append(SHERPA_ONNX_INSTALL_STEP)
     if runtime_status.get("real_mode_enabled") is not True:
         steps.append("set [backend].mode to auto or real in config/config.toml")
     if not steps:

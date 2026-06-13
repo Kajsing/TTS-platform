@@ -38,11 +38,13 @@ The helper copies `config/config.example.toml` to `config/config.toml` when the
 local config is missing, initializes `config/token.txt` through the same auth
 path the service uses, checks whether the configured default voice appears in
 `models/MANIFEST.json`, inspects the default `models/catalog.json`, and returns
-next steps as JSON. The next steps include `tts model-check` so operators can
+next steps as JSON. It also reports whether `sherpa_onnx` is importable in the
+active environment. The next steps include `tts model-check` so operators can
 verify configured/default voice readiness before expecting real acoustic output.
 When the configured default voice is only a development stub and the default
 catalog has one installable real voice, setup guidance starts with the concrete
-`tts model-install vits-piper-en_US-lessac-medium --activate` command. It does
+`tts model-install vits-piper-en_US-lessac-medium --activate` command and adds
+`python -m pip install sherpa-onnx` when the runtime package is missing. It does
 not print the bearer token; read `config/token.txt` locally when a protected
 client needs it.
 
@@ -428,8 +430,8 @@ tts model-check
 
 `model-list` is read-only and does not require the service to be running. It
 reports installed manifest voices, which one matches `[tts].default_voice`,
-whether each voice has backend configuration, default catalog status, and
-next-step guidance.
+whether each voice has backend configuration, default catalog status,
+`sherpa_onnx` runtime status, and next-step guidance.
 
 `model-check` is also read-only. It reports config validity, the
 selected/default voice, manifest presence, whether the voice has a sherpa-onnx

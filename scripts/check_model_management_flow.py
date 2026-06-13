@@ -538,6 +538,7 @@ def _summarize_model_list(payload: dict[str, object]) -> dict[str, object]:
     )
     manifest = payload.get("manifest", {})
     catalog = payload.get("catalog", {})
+    runtime = payload.get("runtime", {})
     return {
         "default_voice": payload.get("default_voice"),
         "manifest_voice_count": _dict_get(manifest, "voice_count"),
@@ -552,6 +553,8 @@ def _summarize_model_list(payload: dict[str, object]) -> dict[str, object]:
             "has_backend_config",
         ),
         "default_catalog_exists": _dict_get(catalog, "exists"),
+        "real_mode_enabled": _dict_get(runtime, "real_mode_enabled"),
+        "sherpa_onnx_installed": _dict_get(runtime, "sherpa_onnx_installed"),
         "next_steps": payload.get("next_steps"),
     }
 

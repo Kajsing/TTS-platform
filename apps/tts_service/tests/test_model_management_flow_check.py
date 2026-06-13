@@ -50,8 +50,11 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
     assert summary["model_list"]["default_model_id"] == "local-flow-voice"
     assert summary["model_list"]["default_model_has_backend_config"] is False
     assert summary["model_list"]["default_catalog_exists"] is True
+    assert summary["model_list"]["real_mode_enabled"] is True
+    assert summary["model_list"]["sherpa_onnx_installed"] is False
     assert summary["model_list"]["next_steps"] == [
         "tts model-install local-flow-voice --activate --overwrite",
+        "python -m pip install sherpa-onnx",
         "tts model-check",
     ]
     assert summary["model_check"]["model_id"] == "local-flow-voice"

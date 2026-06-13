@@ -1090,9 +1090,17 @@ def test_model_activate_rejects_missing_manifest_voice_without_changing_config(
     assert load_config(config_path, env={}).tts.default_voice == "voice-a"
 
 
-def test_model_list_reports_manifest_models_and_default(tmp_path: Path) -> None:
+def test_model_list_reports_manifest_models_and_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
     manifest_path = _write_model_check_manifest(tmp_path)
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "sherpa_onnx" else None,
+    )
 
     payload = cli._list_models(
         repo_root=tmp_path,
@@ -1104,6 +1112,7 @@ def test_model_list_reports_manifest_models_and_default(tmp_path: Path) -> None:
     assert payload["manifest"]["valid"] is True
     assert payload["manifest"]["voice_count"] == 1
     assert payload["manifest"]["default_voice_in_manifest"] is True
+    assert payload["runtime"]["sherpa_onnx_installed"] is True
     assert payload["models"] == [
         {
             "id": "voice-a",
@@ -1123,10 +1132,12 @@ def test_model_list_reports_manifest_models_and_default(tmp_path: Path) -> None:
 
 def test_model_list_suggests_default_catalog_install_when_manifest_missing(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
     manifest_path = tmp_path / "models" / "MANIFEST.json"
     _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
 
     payload = cli._list_models(
         repo_root=tmp_path,
@@ -1141,11 +1152,13 @@ def test_model_list_suggests_default_catalog_install_when_manifest_missing(
     assert payload["next_steps"] == [
         "tts catalog-list",
         "tts model-install voice-a --activate",
+        "python -m pip install sherpa-onnx",
     ]
 
 
 def test_model_list_suggests_catalog_install_for_default_stub_voice(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
     manifest_path = tmp_path / "models" / "MANIFEST.json"
@@ -1167,6 +1180,7 @@ def test_model_list_suggests_catalog_install_for_default_stub_voice(
         encoding="utf-8",
     )
     _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
 
     payload = cli._list_models(
         repo_root=tmp_path,
@@ -1177,6 +1191,7 @@ def test_model_list_suggests_catalog_install_for_default_stub_voice(
     assert payload["models"][0]["has_backend_config"] is False
     assert payload["next_steps"] == [
         "tts model-install voice-a --activate",
+        "python -m pip install sherpa-onnx",
         "tts model-check",
     ]
 

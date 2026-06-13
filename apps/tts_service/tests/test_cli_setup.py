@@ -101,6 +101,7 @@ def test_setup_local_creates_config_and_token(
     assert payload["manifest"]["default_voice_in_manifest"] is True
     assert payload["manifest"]["default_voice_has_backend_config"] is False
     assert payload["catalog"]["exists"] is False
+    assert payload["runtime"]["backend_mode"] is not None
     assert payload["next_steps"] == [
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
@@ -145,8 +146,9 @@ def test_setup_local_preserves_existing_config_and_token(
         "voice_count": 0,
         "default_voice_in_manifest": False,
     }
-    assert payload["next_steps"][:3] == [
+    assert payload["next_steps"][:4] == [
         "tts model-install <model-id> --catalog <catalog> --activate",
+        "python -m pip install sherpa-onnx",
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
     ]
@@ -155,6 +157,7 @@ def test_setup_local_preserves_existing_config_and_token(
 def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     example_config_path = tmp_path / "config" / "config.example.toml"
     config_path = tmp_path / "config" / "config.toml"
@@ -163,6 +166,7 @@ def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
     _write_setup_config(example_config_path, default_voice="debug-voice")
     _write_manifest(manifest_path, voice_ids=["debug-voice"])
     _write_setup_catalog(catalog_path, model_ids=["real-english-voice"])
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
 
     cli.main(
         [
@@ -183,8 +187,10 @@ def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
     assert payload["manifest"]["default_voice_has_backend_config"] is False
     assert payload["catalog"]["valid"] is True
     assert payload["catalog"]["single_installable_model_id"] == "real-english-voice"
-    assert payload["next_steps"][:3] == [
+    assert payload["runtime"]["sherpa_onnx_installed"] is False
+    assert payload["next_steps"][:4] == [
         "tts model-install real-english-voice --activate",
+        "python -m pip install sherpa-onnx",
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
     ]
@@ -193,6 +199,7 @@ def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
 def test_setup_local_suggests_single_catalog_model_when_manifest_is_missing(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = tmp_path / "config" / "config.toml"
     token_path = tmp_path / "config" / "token.txt"
@@ -201,6 +208,7 @@ def test_setup_local_suggests_single_catalog_model_when_manifest_is_missing(
     _write_setup_config(config_path, default_voice="voice-a")
     _write_setup_catalog(catalog_path, model_ids=["real-english-voice"])
     token_path.write_text("existing-token\n", encoding="utf-8")
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
 
     cli.main(
         [
@@ -218,8 +226,10 @@ def test_setup_local_suggests_single_catalog_model_when_manifest_is_missing(
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["catalog"]["single_installable_model_id"] == "real-english-voice"
-    assert payload["next_steps"][:3] == [
+    assert payload["runtime"]["sherpa_onnx_installed"] is False
+    assert payload["next_steps"][:4] == [
         "tts model-install real-english-voice --activate",
+        "python -m pip install sherpa-onnx",
         "tts extension-allow-origin <chrome-extension-origin>",
         "tts model-check",
     ]
