@@ -210,7 +210,26 @@ function formatPageCapture(capture) {
   const source = capture.source || "unknown";
   const status = capture.truncated ? "truncated" : "complete";
   const blocks = readableBlocks > 0 ? `, ${readableBlocks} blocks` : "";
-  return `${textChars}/${maxChars} chars, ${status}, ${source}${blocks}`;
+  const structure = formatPageStructure(capture.structure);
+  return `${textChars}/${maxChars} chars, ${status}, ${source}${blocks}${structure}`;
+}
+
+function formatPageStructure(structure) {
+  if (!structure) {
+    return "";
+  }
+  const headingCount = Number(structure.headingCount ?? 0);
+  const capturedHeadingCount = Number(structure.capturedHeadingCount ?? 0);
+  const bodyBlockCount = Number(structure.bodyBlockCount ?? 0);
+  const listItemCount = Number(structure.listItemCount ?? 0);
+  const quoteBlockCount = Number(structure.quoteBlockCount ?? 0);
+  const details = [
+    headingCount > 0 ? `${capturedHeadingCount}/${headingCount} headings` : null,
+    bodyBlockCount > 0 ? `${bodyBlockCount} body` : null,
+    listItemCount > 0 ? `${listItemCount} list` : null,
+    quoteBlockCount > 0 ? `${quoteBlockCount} quote` : null,
+  ].filter(Boolean);
+  return details.length ? `, ${details.join(", ")}` : "";
 }
 
 function formatServiceSnapshot(snapshot) {

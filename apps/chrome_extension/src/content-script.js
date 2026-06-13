@@ -20,6 +20,8 @@ const BLOCK_SELECTORS = [
   "figcaption",
 ];
 
+const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4"]);
+
 const SKIP_SELECTOR =
   "script, style, noscript, nav, header, footer, aside, form, button, input, select, textarea, svg, canvas";
 
@@ -58,6 +60,7 @@ function getPageCapture(maxChars = 24000) {
       source: extracted.source,
       truncated: extracted.truncated,
       readableBlocks: extracted.readableBlocks,
+      structure: extracted.structure,
     });
   }
 
@@ -68,6 +71,7 @@ function getPageCapture(maxChars = 24000) {
     source: "fallback-body",
     truncated: fallbackText.length > requestedMaxChars,
     readableBlocks: 0,
+    structure: emptyStructureSummary(),
   });
 }
 
@@ -107,6 +111,7 @@ function extractReadableText(root, maxChars) {
 
   const blocks = [];
   const seen = new Set();
+  const structure = createStructureSummary(root);
   let truncated = false;
   const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
   for (const element of candidates) {
@@ -114,13 +119,15 @@ function extractReadableText(root, maxChars) {
       continue;
     }
 
+    const blockKind = getBlockKind(element);
     const text = normalizeInlineText(element.innerText || element.textContent || "");
-    if (text.length < 30 || seen.has(text)) {
+    if (text.length < minimumBlockLength(blockKind) || seen.has(text)) {
       continue;
     }
 
     blocks.push(text);
     seen.add(text);
+    recordCapturedBlock(structure, blockKind);
 
     if (blocks.join("\n\n").length >= maxChars) {
       truncated = true;
@@ -135,6 +142,7 @@ function extractReadableText(root, maxChars) {
       source: "readable-blocks",
       truncated: truncated || joined.length > maxChars,
       readableBlocks: blocks.length,
+      structure,
     };
   }
   const fallbackText = normalizeInlineText(root.innerText || root.textContent || "");
@@ -143,6 +151,7 @@ function extractReadableText(root, maxChars) {
     source: "root-text",
     truncated: fallbackText.length > maxChars,
     readableBlocks: 0,
+    structure,
   };
 }
 
@@ -157,6 +166,62 @@ function isElementHidden(element) {
 
 function normalizeInlineText(text) {
   return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getBlockKind(element) {
+  if (isHeadingElement(element)) {
+    return "heading";
+  }
+  if (element.tagName === "LI") {
+    return "listItem";
+  }
+  if (element.tagName === "BLOCKQUOTE") {
+    return "quote";
+  }
+  return "body";
+}
+
+function isHeadingElement(element) {
+  return HEADING_TAGS.has(element.tagName);
+}
+
+function minimumBlockLength(blockKind) {
+  return blockKind === "heading" ? 3 : 30;
+}
+
+function createStructureSummary(root) {
+  const summary = emptyStructureSummary();
+  if (!root) {
+    return summary;
+  }
+  summary.headingCount = Array.from(root.querySelectorAll("h1, h2, h3, h4")).filter(
+    (element) =>
+      !shouldSkipElement(element) &&
+      normalizeInlineText(element.innerText || element.textContent || "").length >= 3
+  ).length;
+  return summary;
+}
+
+function emptyStructureSummary() {
+  return {
+    headingCount: 0,
+    capturedHeadingCount: 0,
+    bodyBlockCount: 0,
+    listItemCount: 0,
+    quoteBlockCount: 0,
+  };
+}
+
+function recordCapturedBlock(summary, blockKind) {
+  if (blockKind === "heading") {
+    summary.capturedHeadingCount += 1;
+  } else if (blockKind === "listItem") {
+    summary.listItemCount += 1;
+  } else if (blockKind === "quote") {
+    summary.quoteBlockCount += 1;
+  } else {
+    summary.bodyBlockCount += 1;
+  }
 }
 
 function sanitizeMaxChars(value) {
@@ -174,6 +239,7 @@ function emptyCapture(source, maxChars) {
     truncated: false,
     readableBlocks: 0,
     maxChars,
+    structure: emptyStructureSummary(),
   };
 }
 
@@ -186,6 +252,7 @@ function buildCaptureResult(text, meta) {
       maxChars: meta.maxChars,
       truncated: Boolean(meta.truncated),
       readableBlocks: meta.readableBlocks,
+      structure: meta.structure || emptyStructureSummary(),
     },
   };
 }

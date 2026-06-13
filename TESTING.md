@@ -29,6 +29,8 @@ backend-realism work, and early v1 model-management helpers:
 - extension resume wiring for page playback
 - extension page-capture metadata wiring for long-page character counts,
   readable block counts, extraction source, and truncation status
+- extension page-structure metadata wiring for heading/body/list counts and
+  short heading preservation in captured page text
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids
@@ -78,6 +80,8 @@ Recommended extension checks:
 - verify page playback prefers readable content over navigation-heavy boilerplate on a normal article page
 - verify long page playback reports page-capture metadata and shows truncation
   when readable text reaches the configured character limit
+- verify short headings are included in page playback and that `Page Capture`
+  reports heading/body/list structure counts
 
 Run tests with:
 

@@ -157,6 +157,9 @@ The first long-document slices are now:
 - extension-side page-capture metadata so long page reads report captured
   characters, extraction source, readable block count, and truncation at the
   configured page limit.
+- extension-side page-structure metadata so captured long pages preserve short
+  headings and report heading/body/list/quote counts without storing heading
+  text.
 
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, and install progress metadata/status lines.

@@ -64,6 +64,15 @@
 - The popup stores capture counts and extraction metadata only; it does not
   store raw page text.
 
+## Page playback misses section breaks
+
+- Check whether `Page Capture` reports heading counts.
+- Short `h1` to `h4` headings are preserved even when they are shorter than the
+  normal body-text block threshold.
+- Pages without semantic headings can still sound flatter because the extension
+  has only body/list/quote block structure to work with.
+- Structure metadata stores counts only, not heading text.
+
 ## Selection playback does not read the expected text
 
 - The content script prefers selected text first, then readable page content.

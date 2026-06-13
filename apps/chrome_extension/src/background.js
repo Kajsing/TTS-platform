@@ -351,6 +351,17 @@ function sanitizePageCaptureMeta(meta, fallback) {
     maxChars,
     truncated: Boolean(meta?.truncated),
     readableBlocks: sanitizeNumber(meta?.readableBlocks, 0, 0),
+    structure: sanitizePageStructureMeta(meta?.structure),
+  };
+}
+
+function sanitizePageStructureMeta(structure) {
+  return {
+    headingCount: sanitizeNumber(structure?.headingCount, 0, 0),
+    capturedHeadingCount: sanitizeNumber(structure?.capturedHeadingCount, 0, 0),
+    bodyBlockCount: sanitizeNumber(structure?.bodyBlockCount, 0, 0),
+    listItemCount: sanitizeNumber(structure?.listItemCount, 0, 0),
+    quoteBlockCount: sanitizeNumber(structure?.quoteBlockCount, 0, 0),
   };
 }
 

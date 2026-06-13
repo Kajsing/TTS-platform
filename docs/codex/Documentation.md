@@ -11,13 +11,12 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The long-page reader UX slice adds page-capture metadata
-  to the Chrome extension. Page playback now records captured character count,
-  configured page limit, extraction source, readable block count, and truncation
-  status in playback state without storing raw page text.
+- Current loop result: The long-page structure slice preserves short `h1`-`h4`
+  headings during page capture and adds non-text structure metadata for
+  heading/body/list/quote counts in Chrome extension playback state.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 117 tests.
+  - `py -3 -m pytest -q` passed with 118 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
   - `py -3 scripts/package_extension.py --out "$env:TEMP\tts-platform-prototype-test.zip"` passed.
@@ -94,6 +93,10 @@ This file is the live status log and shared memory for future Codex loops.
   - page playback now stores non-text capture metadata in session playback
     state, and the popup reports whether a long page was truncated at the
     configured character limit.
+  - short article headings are now preserved in page capture even when they are
+    below the normal body-block text threshold.
+  - page playback now stores structure counts for headings, body blocks, list
+    items, and quotes without storing heading text or raw page text.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
@@ -200,6 +203,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Extension page-capture diagnostics should also avoid raw page text. Counts,
   extraction source, readable block count, and truncation status are enough to
   explain bounded long-page playback without creating a text-storage surface.
+- Extension page-structure diagnostics should preserve useful section signals
+  by keeping short headings in captured text and storing counts only in session
+  metadata. Full section navigation still needs a later explicit UX slice.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any
@@ -314,7 +320,8 @@ python3 scripts/package_windows_bundle.py
   normal local run path.
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
-  visibility. It still lacks section navigation semantics.
+  visibility. It now preserves short headings and reports structure counts, but
+  still lacks explicit section-jump navigation.
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction.
 - Persistent Windows auto-start/service-manager installation remains an explicit

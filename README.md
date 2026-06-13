@@ -54,6 +54,8 @@ and v1-readiness work:
 - popup-side resume action for page playback based on the latest reader progress
 - extension-side page capture metadata that reports captured character count,
   extraction source, readable block count, and truncation at the page limit
+- extension-side structure metadata for long pages, including heading/body/list
+  block counts, with short headings preserved in captured text
 
 ## Repository Layout
 
@@ -215,6 +217,8 @@ The extension currently supports:
 - resuming page playback from the latest reader progress on the active tab
 - displaying page-capture metadata so long pages show whether captured text was
   complete or truncated at the configured limit
+- preserving short article headings and showing page-structure counts for long
+  page playback
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config

@@ -12,6 +12,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - resume page playback from the latest reader progress
 - show page-capture metadata for long pages, including captured characters,
   readable block count, extraction source, and truncation at the configured limit
+- preserve short article headings in page playback and show heading/body/list
+  structure counts in playback state
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
@@ -73,7 +75,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 10. During long page playback, confirm the playback state includes reader progress.
 11. Confirm the playback state includes page-capture metadata and reports
     truncation when the readable page text reaches `Max Page Characters`.
-12. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+12. Confirm short article headings are included in page playback and that
+    `Page Capture` reports heading/body/list structure counts.
+13. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -85,6 +89,8 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
 - The extension stores only page-capture metadata in session playback state, not
   raw page text.
+- Page-capture structure metadata stores counts only; it does not store heading
+  text or other raw page text.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 
 ## Validation
