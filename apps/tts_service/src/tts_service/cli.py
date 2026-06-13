@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -19,6 +20,8 @@ from urllib.parse import urlparse
 import httpx
 import websockets
 from tts_core.audio import encode_wav_pcm16
+from tts_core.backends.base import BackendNotReadyError
+from tts_core.backends.sherpa_onnx import SherpaOnnxVoiceRuntimeConfig
 
 from .auth import initialize_auth
 from .config import load_config
@@ -175,6 +178,17 @@ def main(argv: list[str] | None = None) -> None:
             _print_json(activated)
             return
 
+        if args.command == "model-check":
+            _print_json(
+                _check_model_readiness(
+                    model_id=args.model_id,
+                    repo_root=Path(args.repo_root),
+                    manifest_path=Path(args.manifest_path),
+                    config_path=Path(args.config_path),
+                )
+            )
+            return
+
         if args.command == "model-remove":
             removed = _remove_model(
                 model_id=args.model_id,
@@ -271,6 +285,12 @@ def _build_parser() -> argparse.ArgumentParser:
     model_activate_parser.add_argument("model_id")
     model_activate_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
     model_activate_parser.add_argument("--config-path", default="config/config.toml")
+
+    model_check_parser = subparsers.add_parser("model-check")
+    model_check_parser.add_argument("model_id", nargs="?")
+    model_check_parser.add_argument("--repo-root", default=".")
+    model_check_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+    model_check_parser.add_argument("--config-path", default="config/config.toml")
 
     model_remove_parser = subparsers.add_parser("model-remove")
     model_remove_parser.add_argument("model_id")
@@ -1202,6 +1222,353 @@ def _inspect_config_default_for_remove(
         "config_path": str(config_path),
         "active_default_voice": config.tts.default_voice == model_id,
     }
+
+
+def _check_model_readiness(
+    *,
+    model_id: str | None,
+    repo_root: Path,
+    manifest_path: Path,
+    config_path: Path,
+) -> dict[str, object]:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_manifest_path = _resolve_under_root(resolved_repo_root, manifest_path)
+    resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
+    config_status = _inspect_config_for_model_check(resolved_config_path)
+    selected_model_id = model_id or str(config_status.get("default_voice") or "").strip()
+    selected_source = "argument" if model_id else "config_default"
+    manifest_status = _inspect_manifest_for_model_check(
+        manifest_path=resolved_manifest_path,
+        model_id=selected_model_id,
+    )
+    backend_status = _inspect_backend_for_model_check(
+        repo_root=resolved_repo_root,
+        model_id=selected_model_id,
+        voice=manifest_status.get("voice"),
+    )
+    runtime_status = _inspect_runtime_for_model_check(config_status=config_status)
+    next_steps = _model_check_next_steps(
+        model_id=selected_model_id,
+        config_status=config_status,
+        manifest_status=manifest_status,
+        backend_status=backend_status,
+        runtime_status=runtime_status,
+    )
+    ready = (
+        bool(selected_model_id)
+        and config_status.get("valid") is True
+        and manifest_status.get("voice_found") is True
+        and backend_status.get("configured") is True
+        and backend_status.get("valid") is True
+        and backend_status.get("assets_ready") is True
+        and runtime_status.get("real_mode_enabled") is True
+        and runtime_status.get("sherpa_onnx_installed") is True
+    )
+
+    return {
+        "ready": ready,
+        "model_id": selected_model_id or None,
+        "selected_source": selected_source,
+        "config": config_status,
+        "manifest": _without_private_voice(manifest_status),
+        "backend": backend_status,
+        "runtime": runtime_status,
+        "next_steps": next_steps,
+    }
+
+
+def _inspect_config_for_model_check(config_path: Path) -> dict[str, object]:
+    if not config_path.exists():
+        return {
+            "path": str(config_path),
+            "exists": False,
+            "valid": False,
+            "default_voice": None,
+            "backend_mode": None,
+            "error": "Config does not exist.",
+        }
+    try:
+        config = load_config(config_path, env={})
+    except ValueError as exc:
+        return {
+            "path": str(config_path),
+            "exists": True,
+            "valid": False,
+            "default_voice": None,
+            "backend_mode": None,
+            "error": str(exc),
+        }
+    return {
+        "path": str(config_path),
+        "exists": True,
+        "valid": True,
+        "default_voice": config.tts.default_voice,
+        "backend_mode": config.backend.mode,
+        "backend_provider": config.backend.provider,
+        "warmup_on_start": config.tts.warmup_on_start,
+    }
+
+
+def _inspect_manifest_for_model_check(
+    *,
+    manifest_path: Path,
+    model_id: str,
+) -> dict[str, object]:
+    if not manifest_path.exists():
+        return {
+            "path": str(manifest_path),
+            "exists": False,
+            "valid": False,
+            "voice_count": 0,
+            "voice_found": False,
+            "voice": None,
+            "error": "Manifest does not exist.",
+        }
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {
+            "path": str(manifest_path),
+            "exists": True,
+            "valid": False,
+            "voice_count": 0,
+            "voice_found": False,
+            "voice": None,
+            "error": f"Manifest is not valid JSON: {exc}",
+        }
+    if not isinstance(payload, dict):
+        return _invalid_manifest_for_model_check(manifest_path, "Manifest root must be an object.")
+    if payload.get("version") != 1:
+        return _invalid_manifest_for_model_check(
+            manifest_path,
+            f"Unsupported manifest version: {payload.get('version')!r}",
+        )
+    voices = payload.get("voices", [])
+    if not isinstance(voices, list):
+        return _invalid_manifest_for_model_check(
+            manifest_path,
+            "Manifest field 'voices' must be a list.",
+        )
+
+    matching_voice = next(
+        (
+            voice
+            for voice in voices
+            if isinstance(voice, dict) and str(voice.get("id", "")).strip() == model_id
+        ),
+        None,
+    )
+    return {
+        "path": str(manifest_path),
+        "exists": True,
+        "valid": True,
+        "voice_count": len([voice for voice in voices if isinstance(voice, dict)]),
+        "voice_found": matching_voice is not None,
+        "voice": matching_voice,
+    }
+
+
+def _invalid_manifest_for_model_check(manifest_path: Path, error: str) -> dict[str, object]:
+    return {
+        "path": str(manifest_path),
+        "exists": True,
+        "valid": False,
+        "voice_count": 0,
+        "voice_found": False,
+        "voice": None,
+        "error": error,
+    }
+
+
+def _inspect_backend_for_model_check(
+    *,
+    repo_root: Path,
+    model_id: str,
+    voice: object,
+) -> dict[str, object]:
+    if not model_id or not isinstance(voice, dict):
+        return {
+            "configured": False,
+            "valid": False,
+            "assets_ready": False,
+            "asset_checks": [],
+            "missing_assets": [],
+        }
+    backend_raw = voice.get("backend")
+    if not isinstance(backend_raw, dict):
+        return {
+            "configured": False,
+            "valid": False,
+            "assets_ready": False,
+            "asset_checks": [],
+            "missing_assets": [],
+            "warning": "Voice has no sherpa-onnx backend config; it can only use stub fallback.",
+        }
+
+    try:
+        runtime_config = SherpaOnnxVoiceRuntimeConfig.from_mapping(backend_raw)
+    except (BackendNotReadyError, ValueError, TypeError) as exc:
+        return {
+            "configured": True,
+            "valid": False,
+            "assets_ready": False,
+            "asset_checks": [],
+            "missing_assets": [],
+            "error": str(exc),
+        }
+
+    asset_checks, config_errors = _model_backend_asset_checks(
+        repo_root=repo_root,
+        runtime_config=runtime_config,
+    )
+    missing_assets = [check["path"] for check in asset_checks if check.get("exists") is not True]
+    return {
+        "configured": True,
+        "valid": not config_errors,
+        "model_type": runtime_config.model_type,
+        "assets_ready": not config_errors and not missing_assets,
+        "asset_checks": asset_checks,
+        "missing_assets": missing_assets,
+        "errors": config_errors,
+    }
+
+
+def _model_backend_asset_checks(
+    *,
+    repo_root: Path,
+    runtime_config: SherpaOnnxVoiceRuntimeConfig,
+) -> tuple[list[dict[str, object]], list[str]]:
+    required_fields = {
+        "vits": ("model",),
+        "matcha": ("acoustic_model", "vocoder"),
+        "kokoro": ("model", "voices", "tokens", "data_dir"),
+        "kitten": ("model", "voices", "tokens", "data_dir"),
+    }[runtime_config.model_type]
+    config_errors: list[str] = []
+    if runtime_config.model_type in {"vits", "matcha"} and not (
+        runtime_config.data_dir or runtime_config.tokens
+    ):
+        config_errors.append(
+            f"{runtime_config.model_type} voices must define either data_dir or tokens."
+        )
+
+    checks: list[dict[str, object]] = []
+    for field in required_fields:
+        checks.append(
+            _model_asset_check(
+                repo_root=repo_root,
+                field=field,
+                raw_path=str(getattr(runtime_config, field)),
+                required=True,
+            )
+        )
+    for field in ("tokens", "data_dir", "lexicon"):
+        raw_path = str(getattr(runtime_config, field))
+        if raw_path and field not in required_fields:
+            checks.append(
+                _model_asset_check(
+                    repo_root=repo_root,
+                    field=field,
+                    raw_path=raw_path,
+                    required=False,
+                )
+            )
+    for index, raw_path in enumerate(runtime_config.rule_fsts):
+        checks.append(
+            _model_asset_check(
+                repo_root=repo_root,
+                field=f"rule_fsts[{index}]",
+                raw_path=raw_path,
+                required=False,
+            )
+        )
+    return checks, config_errors
+
+
+def _model_asset_check(
+    *,
+    repo_root: Path,
+    field: str,
+    raw_path: str,
+    required: bool,
+) -> dict[str, object]:
+    resolved_path = _resolve_model_asset_path(repo_root=repo_root, raw_path=raw_path)
+    return {
+        "field": field,
+        "path": str(resolved_path) if resolved_path is not None else "",
+        "required": required,
+        "exists": resolved_path is not None and resolved_path.exists(),
+    }
+
+
+def _resolve_model_asset_path(*, repo_root: Path, raw_path: str) -> Path | None:
+    if not raw_path:
+        return None
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path
+    return (repo_root / path).resolve()
+
+
+def _inspect_runtime_for_model_check(config_status: dict[str, object]) -> dict[str, object]:
+    backend_mode = str(config_status.get("backend_mode") or "")
+    return {
+        "backend_mode": backend_mode or None,
+        "real_mode_enabled": backend_mode in {"auto", "real"},
+        "sherpa_onnx_installed": importlib.util.find_spec("sherpa_onnx") is not None,
+    }
+
+
+def _model_check_next_steps(
+    *,
+    model_id: str,
+    config_status: dict[str, object],
+    manifest_status: dict[str, object],
+    backend_status: dict[str, object],
+    runtime_status: dict[str, object],
+) -> list[str]:
+    steps: list[str] = []
+    if config_status.get("exists") is not True:
+        steps.append("tts setup-local")
+    if not model_id or manifest_status.get("voice_found") is not True:
+        steps.append("tts model-install <model-id> --catalog <catalog> --activate")
+        return steps
+    if backend_status.get("configured") is not True:
+        steps.append(f"tts model-install {model_id} --catalog <catalog> --activate --overwrite")
+    elif backend_status.get("assets_ready") is not True:
+        steps.append(f"tts model-install {model_id} --catalog <catalog> --activate --overwrite")
+    if runtime_status.get("sherpa_onnx_installed") is not True:
+        steps.append("python -m pip install sherpa-onnx")
+    if runtime_status.get("real_mode_enabled") is not True:
+        steps.append("set [backend].mode to auto or real in config/config.toml")
+    if not steps:
+        steps.extend(
+            [
+                "restart the local service if it is already running",
+                (
+                    "python3 scripts/smoke_service.py --token-file "
+                    f"config/token.txt --voice {model_id}"
+                ),
+            ]
+        )
+    return steps
+
+
+def _without_private_voice(manifest_status: dict[str, object]) -> dict[str, object]:
+    public_status = dict(manifest_status)
+    voice = public_status.pop("voice", None)
+    if isinstance(voice, dict):
+        public_status["voice"] = {
+            "id": voice.get("id"),
+            "name": voice.get("name"),
+            "engine": voice.get("engine"),
+            "language": voice.get("language"),
+            "source": voice.get("source"),
+            "has_backend_config": isinstance(voice.get("backend"), dict),
+        }
+    else:
+        public_status["voice"] = None
+    return public_status
 
 
 if __name__ == "__main__":

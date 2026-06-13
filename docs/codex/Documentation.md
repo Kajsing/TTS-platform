@@ -11,27 +11,28 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows launcher first-run slice adds a setup-only
-  launcher path, fixes a PowerShell parser issue in `run_service.ps1`, lets the
-  release gate use `TTS_PLATFORM_PYTHON` for deterministic launcher execution,
-  and adds `scripts/check_windows_launchers.py` to run bundled PowerShell/CMD
-  launchers far enough to create local config/token files without starting a
-  long-lived service process.
+- Current loop result: The model readiness slice adds `tts model-check`, a
+  read-only diagnostic for the configured default voice or a selected model id.
+  It reports config/default voice state, manifest presence, backend asset
+  paths, missing files, non-stub backend mode, `sherpa_onnx` availability, and
+  concrete next steps before operators expect real acoustic output.
 - Validation status for the current loop:
-  - Targeted `py -3 -m ruff check ...` passed for the new launcher checker,
-    release/package/readiness wiring, and related tests.
-  - `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    passed with 9 tests.
+  - Targeted `py -3 -m ruff check ...` passed for `cli.py`,
+    `test_cli_models.py`, `check_model_management_flow.py`, and
+    `test_model_management_flow_check.py`.
+  - `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`
+    passed with 23 tests.
+  - `py -3 -m tts_service.cli model-check --repo-root . --manifest-path models\MANIFEST.json --config-path config\config.example.toml`
+    passed and correctly reported the development stub voice as `ready: false`.
+  - `py -3 scripts/check_model_management_flow.py` passed and now includes a
+    `model_check` summary.
   - `py -3 scripts/check_v1_readiness.py` passed.
-  - `py -3 scripts/check_windows_launchers.py` passed; both PowerShell and CMD
-    launchers created config/token files in setup-only mode with no skips.
-  - `py -3 scripts/package_windows_bundle.py --out $env:TEMP\tts-platform-local-reader-check.zip`
-    passed and produced a 66-file bundle.
-  - `py -3 scripts/check_windows_bundle_bootstrap.py` passed.
+  - `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    passed with 25 tests.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 142 tests.
-  - `py -3 scripts/release_check.py` passed, including `windows_launchers`
-    with PowerShell and CMD setup-only checks and no skips.
+  - `py -3 -m pytest -q` passed with 145 tests.
+  - `py -3 scripts/release_check.py` passed, including the updated
+    `model_management_flow` with `model_check`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -130,9 +131,11 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts model-remove` now reports whether the removed model id is still
     configured as `[tts].default_voice`, with next-step guidance to activate
     another voice before service restart.
+  - `tts model-check [model-id]` now reports read-only real-backend readiness
+    diagnostics for the configured default voice or selected model id.
   - `scripts/check_model_management_flow.py` now verifies local catalog-list,
-    install, activate, service smoke with the installed voice, and remove using
-    a generated local artifact and temp repo root.
+    install, activate, model readiness output, service smoke with the installed
+    voice, and remove using a generated local artifact and temp repo root.
 - Windows-friendly first-run setup has started:
   - `tts setup-local` bootstraps local config and token files without requiring
     the service to be running.
@@ -375,6 +378,7 @@ tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts catalog-list --catalog ./models/catalog.json
 tts model-install <model-id> --catalog ./models/catalog.json
 tts model-activate <model-id>
+tts model-check <model-id>
 tts model-remove <model-id>
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_extension_onboarding.py
@@ -420,7 +424,8 @@ python3 scripts/package_windows_bundle.py
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction. The
   virtualenv install/start path is now covered by an automated temp-venv smoke,
-  but direct PowerShell/CMD launcher UX still needs manual operator validation.
+  and launcher setup-only execution is covered for PowerShell/CMD; foreground
+  launcher service observation still needs manual operator validation.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.

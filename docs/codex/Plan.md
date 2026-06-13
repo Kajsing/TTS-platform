@@ -223,6 +223,10 @@ recovery by persisting interrupted playback state when the offscreen document is
 gone and extending the reader-flow gate to cover those signals. The seventeenth
 release-hardening slice adds a setup-only Windows launcher path plus
 `scripts/check_windows_launchers.py`, covering bundled PowerShell/CMD
-first-run setup without choosing a permanent service manager. Continue from the
-readiness audit: either automate another listed manual gate or take the next
-reader-flow/product slice.
+first-run setup without choosing a permanent service manager. The eighteenth
+model-management slice adds `tts model-check`, a read-only readiness diagnostic
+for default or selected voices that reports manifest/backend asset readiness,
+backend mode, `sherpa_onnx` availability, and concrete next steps before
+operators expect real acoustic output. Continue from the readiness audit:
+either automate another listed manual gate or take the next reader-flow/product
+slice.

@@ -27,7 +27,8 @@ for long web-page text.
   runs the public-contract smoke, and shuts the service down.
 - `python3 scripts/check_model_management_flow.py` creates a local
   model-artifact catalog, runs catalog-list, install, activate, service smoke
-  with the installed voice, and remove without external downloads.
+  with the installed voice, read-only model readiness diagnostics, and remove
+  without external downloads.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
@@ -57,7 +58,9 @@ for long web-page text.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
-  still needs a real model artifact and runtime outside the default gate.
+  still needs a real model artifact and runtime outside the default gate. Use
+  `tts model-check <model-id>` to verify local manifest/backend assets and
+  `sherpa_onnx` runtime availability before expecting real acoustic output.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

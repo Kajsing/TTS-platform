@@ -353,6 +353,20 @@ Activate an installed model as the default voice:
 tts model-activate sherpa-en-v1
 ```
 
+Check whether an installed or default voice is ready for real local output:
+
+```bash
+tts model-check sherpa-en-v1
+tts model-check
+```
+
+`model-check` is read-only. It reports config validity, the selected/default
+voice, manifest presence, whether the voice has a sherpa-onnx backend config,
+which backend asset paths exist, whether `[backend].mode` is non-stub, whether
+`sherpa_onnx` can be imported, and concrete next steps. A development stub
+voice is expected to report `ready: false` because it has no real backend asset
+configuration.
+
 Remove an installed model:
 
 ```bash

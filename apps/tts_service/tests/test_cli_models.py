@@ -673,6 +673,177 @@ def test_model_activate_rejects_missing_manifest_voice_without_changing_config(
     assert load_config(config_path, env={}).tts.default_voice == "voice-a"
 
 
+def test_model_check_reports_default_stub_voice_is_not_real_ready(tmp_path: Path) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "sherpa-en-debug",
+                        "name": "Sherpa English Debug",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                        "sample_rate_hz": 24000,
+                        "license": "development-only",
+                        "source": "models/voices/sherpa-en-debug",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = cli._check_model_readiness(
+        model_id=None,
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["ready"] is False
+    assert payload["model_id"] == "sherpa-en-debug"
+    assert payload["selected_source"] == "config_default"
+    assert payload["manifest"]["voice"]["has_backend_config"] is False
+    assert payload["backend"]["configured"] is False
+    assert payload["next_steps"][0] == (
+        "tts model-install sherpa-en-debug --catalog <catalog> --activate --overwrite"
+    )
+
+
+def test_model_check_reports_real_voice_ready_when_assets_and_runtime_exist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = _write_model_check_manifest(tmp_path)
+    _write_real_voice_assets(tmp_path)
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "sherpa_onnx" else None,
+    )
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["ready"] is True
+    assert payload["selected_source"] == "argument"
+    assert payload["backend"]["configured"] is True
+    assert payload["backend"]["assets_ready"] is True
+    assert payload["backend"]["missing_assets"] == []
+    assert payload["runtime"]["sherpa_onnx_installed"] is True
+    assert payload["next_steps"] == [
+        "restart the local service if it is already running",
+        "python3 scripts/smoke_service.py --token-file config/token.txt --voice voice-a",
+    ]
+
+
+def test_model_check_reports_missing_real_voice_asset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = _write_model_check_manifest(tmp_path)
+    voice_dir = tmp_path / "models" / "voices" / "voice-a"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake", encoding="utf-8")
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "sherpa_onnx" else None,
+    )
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["ready"] is False
+    assert payload["backend"]["assets_ready"] is False
+    assert payload["backend"]["missing_assets"] == [
+        str((voice_dir / "tokens.txt").resolve())
+    ]
+    assert payload["next_steps"][0] == (
+        "tts model-install voice-a --catalog <catalog> --activate --overwrite"
+    )
+
+
+def _write_model_check_config(tmp_path: Path, *, default_voice: str) -> Path:
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        "\n".join(
+            [
+                "[server]",
+                'host = "127.0.0.1"',
+                "port = 7777",
+                "",
+                "[auth]",
+                "enabled = true",
+                'token_file = "./config/token.txt"',
+                "",
+                "[tts]",
+                f'default_voice = "{default_voice}"',
+                "max_chars_per_request = 4000",
+                "max_chars_per_stream = 48000",
+                "",
+                "[backend]",
+                'mode = "auto"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _write_model_check_manifest(tmp_path: Path) -> Path:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                        "sample_rate_hz": 24000,
+                        "license": "test-only",
+                        "source": "models/voices/voice-a",
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "models/voices/voice-a/model.onnx",
+                            "tokens": "models/voices/voice-a/tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def _write_real_voice_assets(tmp_path: Path) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "voice-a"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake-model", encoding="utf-8")
+    (voice_dir / "tokens.txt").write_text("a\nb\nc\n", encoding="utf-8")
+
+
 def test_model_activate_command_prints_activation_payload(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

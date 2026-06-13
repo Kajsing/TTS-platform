@@ -58,8 +58,8 @@ backend-realism work, and early v1 model-management helpers:
 - chunk-plan generation and synthesis routing
 - model catalog listing summaries and warnings, local artifact install, manifest
   update, safe zip extraction, install progress metadata, overwrite refusal,
-  install-and-activate first-run shortcut, default-voice activation, and model
-  removal
+  install-and-activate first-run shortcut, default-voice activation, read-only
+  real-backend readiness diagnostics, and model removal
 - local first-run setup helper behavior for config creation, token
   initialization, and manifest/default-voice readiness reporting
 - local service run command wiring for configured host/port/log level, explicit
@@ -137,8 +137,8 @@ automated gates from manual live checks and unresolved product choices.
 It starts a temporary first-run service on a loopback port and runs the local
 public-contract smoke against that isolated config/token root.
 It also creates a temporary local model artifact/catalog, verifies
-catalog-list, install, activate, service smoke with the installed voice, and
-remove.
+catalog-list, install, activate, read-only model readiness output, service smoke
+with the installed voice, and remove.
 It runs the bundled Windows launchers in setup-only mode when Windows launcher
 executables are available, verifying direct first-run setup without choosing a
 permanent service manager.
@@ -199,6 +199,12 @@ Check the local model-management flow directly with:
 
 ```bash
 python3 scripts/check_model_management_flow.py
+```
+
+Check real-backend readiness for the configured default voice with:
+
+```bash
+tts model-check
 ```
 
 Check the Chrome extension onboarding contract directly with:

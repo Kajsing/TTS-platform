@@ -115,6 +115,23 @@ def check_model_management_flow(
             timeout_s=command_timeout_s,
         )
         _assert_installed_repo_state(repo_root=repo_root)
+        model_check_payload = _run_json_command(
+            [
+                python_executable,
+                "-m",
+                "tts_service.cli",
+                "model-check",
+                MODEL_ID,
+                "--repo-root",
+                str(repo_root),
+                "--manifest-path",
+                str(repo_root / "models" / "MANIFEST.json"),
+                "--config-path",
+                str(repo_root / "config" / "config.toml"),
+            ],
+            env=env,
+            timeout_s=command_timeout_s,
+        )
 
         port = _reserve_loopback_port()
         base_url = f"http://127.0.0.1:{port}"
@@ -172,6 +189,7 @@ def check_model_management_flow(
         "model_id": MODEL_ID,
         "catalog": _summarize_catalog(catalog_payload),
         "install": _summarize_install(install_payload),
+        "model_check": _summarize_model_check(model_check_payload),
         "service": _summarize_smoke(smoke_payload),
         "remove": _summarize_remove(remove_payload),
     }
@@ -429,6 +447,21 @@ def _summarize_smoke(payload: dict[str, object]) -> dict[str, object]:
         "http_bytes": _dict_get(payload.get("http", {}), "bytes"),
         "stream_frames": _dict_get(stream, "frames"),
         "job_status": _dict_get(payload.get("job", {}), "status"),
+    }
+
+
+def _summarize_model_check(payload: dict[str, object]) -> dict[str, object]:
+    manifest = payload.get("manifest", {})
+    backend = payload.get("backend", {})
+    runtime = payload.get("runtime", {})
+    return {
+        "ready": payload.get("ready"),
+        "model_id": payload.get("model_id"),
+        "voice_found": _dict_get(manifest, "voice_found"),
+        "backend_configured": _dict_get(backend, "configured"),
+        "assets_ready": _dict_get(backend, "assets_ready"),
+        "real_mode_enabled": _dict_get(runtime, "real_mode_enabled"),
+        "sherpa_onnx_installed": _dict_get(runtime, "sherpa_onnx_installed"),
     }
 
 

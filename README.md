@@ -135,6 +135,7 @@ tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
 tts model-activate sherpa-en-v1
+tts model-check sherpa-en-v1
 tts model-remove sherpa-en-v1
 ```
 
@@ -160,9 +161,9 @@ The bundle is written to `dist/windows/tts-platform-local-reader.zip` by
 default. It is a local source handoff package, not a persistent service-manager
 installer.
 
-The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
-commands are local model-management helpers and do not require service auth
-tokens. `catalog-list` reports catalog counts, install readiness, checksum
+The `catalog-list`, `model-install`, `model-activate`, `model-check`, and
+`model-remove` commands are local model-management helpers and do not require
+service auth tokens. `catalog-list` reports catalog counts, install readiness, checksum
 coverage, warnings, and next-step guidance while preserving the raw model
 entries in JSON. `model-install` downloads or reads a catalog artifact, verifies
 `artifact_sha256` when present, extracts the zip safely under
@@ -170,6 +171,9 @@ entries in JSON. `model-install` downloads or reads a catalog artifact, verifies
 status to stderr, and keeps its structured result on stdout.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
+`model-check` reports whether the selected or default voice has manifest
+metadata, real backend asset paths, existing local asset files, a non-stub
+backend mode, and an importable `sherpa_onnx` runtime.
 Use `model-install --activate` for the first-run path when the installed model
 should immediately become the default voice.
 `model-remove` reports whether the removed model id is still configured as

@@ -57,6 +57,7 @@ READINESS_MARKERS = (
     "python3 scripts/release_check.py --live-smoke --token-file config/token.txt",
     "--stream-text-repeat 200 --min-stream-text-chunks 2",
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
+    "tts model-check <model-id>",
     "no full automated Chrome MV3 browser harness",
     "Permanent Windows auto-start/service-manager installation remains undecided",
 )
