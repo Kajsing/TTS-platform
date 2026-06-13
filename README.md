@@ -204,6 +204,13 @@ With the service already running, add the live public-contract smoke:
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 ```
 
+For a page-scale reader smoke, keep the HTTP/job text short and repeat only the
+WebSocket stream text:
+
+```bash
+python3 scripts/release_check.py --live-smoke --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
+```
+
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 
 ## Chrome Extension Prototype

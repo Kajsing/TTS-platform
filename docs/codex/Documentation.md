@@ -159,6 +159,13 @@ This file is the live status log and shared memory for future Codex loops.
     ignored local token/model artifacts.
   - `scripts/release_check.py` now runs the security-default verification as
     part of the local release gate.
+  - `scripts/smoke_service.py` now accepts separate WebSocket stream text via
+    `--stream-text`, `--stream-text-file`, and `--stream-text-repeat`, plus
+    `--min-stream-text-chunks` to assert page-scale stream chunking without
+    sending the same long input through the shorter HTTP/job contracts.
+  - `scripts/release_check.py --live-smoke` forwards those long-stream smoke
+    options and redacts inline `--text` / `--stream-text` values from its JSON
+    summary.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -300,6 +307,7 @@ tts model-activate <model-id>
 tts model-remove <model-id>
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
+python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
 python3 scripts/benchmark.py --mode http --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode job --token "$TTS_PLATFORM_TOKEN"

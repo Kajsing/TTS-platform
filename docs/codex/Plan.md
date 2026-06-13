@@ -189,5 +189,9 @@ ids and adding regression coverage for query string, token, and raw text
 omission. The sixth release-hardening slice now adds
 `scripts/check_security_defaults.py` and wires it into the release gate so the
 example config and ignore policy keep localhost, auth, empty allow-list,
-long-stream, local CPU backend, and local artifact defaults explicit. Continue
-with remaining release hardening unless a reader-flow bug appears.
+long-stream, local CPU backend, and local artifact defaults explicit. The
+seventh release-hardening slice now lets live smoke checks use separate
+page-scale WebSocket stream text, repeat it for long-reader coverage, assert a
+minimum stream text-chunk count, and redact inline smoke text from release-check
+summaries. Continue with remaining release hardening unless a reader-flow bug
+appears.

@@ -12,6 +12,7 @@ def test_smoke_service_script_runs_across_public_contract_steps(monkeypatch) -> 
     smoke_module = _load_smoke_module()
     requested_urls: list[tuple[str, str]] = []
     created_job_ids: list[str] = []
+    websocket_instances: list[object] = []
 
     class FakeResponse:
         def __init__(self, *, json_payload=None, content: bytes = b"") -> None:
@@ -77,6 +78,7 @@ def test_smoke_service_script_runs_across_public_contract_steps(monkeypatch) -> 
                         "type": "started",
                         "sample_rate_hz": 22050,
                         "channels": 1,
+                        "progress": {"text_chunk_count": 2},
                     }
                 ),
                 json.dumps({"type": "mark"}),
@@ -99,13 +101,20 @@ def test_smoke_service_script_runs_across_public_contract_steps(monkeypatch) -> 
             return self._messages.pop(0)
 
     monkeypatch.setattr(smoke_module.httpx, "Client", FakeHttpClient)
-    monkeypatch.setattr(smoke_module.websockets, "connect", lambda *args, **kwargs: FakeWebSocket())
+    def fake_connect(*args, **kwargs):
+        websocket = FakeWebSocket()
+        websocket_instances.append(websocket)
+        return websocket
+
+    monkeypatch.setattr(smoke_module.websockets, "connect", fake_connect)
 
     summary = smoke_module.run_smoke(
         base_url="http://127.0.0.1:7777",
         token="test-token",
         voice=None,
         text="Hello from the automated smoke script test.",
+        stream_text="Long page stream smoke text. " * 20,
+        min_stream_text_chunks=2,
         poll_interval_ms=1,
         job_timeout_s=5.0,
     )
@@ -116,11 +125,39 @@ def test_smoke_service_script_runs_across_public_contract_steps(monkeypatch) -> 
     assert summary["http"]["bytes"] > 0
     assert summary["stream"]["frames"] == 1
     assert summary["stream"]["marks"] == 1
+    assert summary["stream"]["text_chunk_count"] == 2
+    assert summary["input"]["text_chars"] == len("Hello from the automated smoke script test.")
+    assert summary["input"]["stream_text_chars"] == len("Long page stream smoke text. " * 20)
     assert summary["job"]["job_id"] == "job-123"
     assert summary["job"]["status"] == "completed"
     assert ("GET", "http://127.0.0.1:7777/v1/health") in requested_urls
     assert ("POST", "http://127.0.0.1:7777/v1/tts") in requested_urls
     assert created_job_ids == ["job-123"]
+    assert len(websocket_instances) == 1
+    assert websocket_instances[0].sent_messages == [
+        {
+            "type": "start",
+            "payload": {
+                "text": "Long page stream smoke text. " * 20,
+                "voice": "manifest-voice",
+            },
+        }
+    ]
+
+
+def test_resolve_stream_text_supports_file_and_repeat(tmp_path: Path) -> None:
+    smoke_module = _load_smoke_module()
+    stream_text_path = tmp_path / "stream.txt"
+    stream_text_path.write_text("Long page paragraph.", encoding="utf-8")
+
+    stream_text = smoke_module._resolve_stream_text(
+        text="Short HTTP text.",
+        stream_text=None,
+        stream_text_file=str(stream_text_path),
+        stream_text_repeat=3,
+    )
+
+    assert stream_text == "\n\n".join(["Long page paragraph."] * 3)
 
 
 def _load_smoke_module():

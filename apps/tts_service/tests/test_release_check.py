@@ -82,6 +82,10 @@ def test_release_check_can_include_optional_live_smoke(
         base_url="http://localhost:8888/",
         token_file="config/token.txt",
         voice="voice-a",
+        smoke_text="Short contract smoke.",
+        stream_text="Long stream text.",
+        stream_text_repeat=5,
+        min_stream_text_chunks=2,
     )
 
     assert summary["checks"][-1]["name"] == "live_smoke"
@@ -94,6 +98,14 @@ def test_release_check_can_include_optional_live_smoke(
         "config/token.txt",
         "--voice",
         "voice-a",
+        "--text",
+        "Short contract smoke.",
+        "--stream-text",
+        "Long stream text.",
+        "--stream-text-repeat",
+        "5",
+        "--min-stream-text-chunks",
+        "2",
     ]
 
 
@@ -115,6 +127,8 @@ def test_release_check_redacts_inline_live_smoke_token(
         windows_bundle_out_path=tmp_path / "windows.zip",
         live_smoke=True,
         token="secret-token",
+        smoke_text="private smoke text",
+        stream_text="private long page text",
     )
 
     assert "--token" in calls[-1]
@@ -126,6 +140,10 @@ def test_release_check_redacts_inline_live_smoke_token(
         "http://127.0.0.1:7777",
         "--token",
         "<redacted>",
+        "--text",
+        "<text-redacted>",
+        "--stream-text",
+        "<text-redacted>",
     ]
 
 

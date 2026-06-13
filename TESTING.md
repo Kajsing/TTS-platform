@@ -70,6 +70,8 @@ backend-realism work, and early v1 model-management helpers:
   verification, extension validation, extension package build, and Windows
   bundle build
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
+- live smoke support for separate long WebSocket stream text, minimum stream
+  text-chunk assertions, and release-check redaction of inline smoke text
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
@@ -120,6 +122,14 @@ If the service is already running, include the public-contract smoke path:
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 ```
 
+For a long-page reader smoke, use a separate repeated stream input so HTTP and
+async job coverage stay within the shorter request limit while WebSocket
+streaming exercises the long-text path:
+
+```bash
+python3 scripts/release_check.py --live-smoke --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
+```
+
 Build the Windows local reader bundle directly with:
 
 ```bash
@@ -144,6 +154,7 @@ Public-contract smoke test after the service is running:
 ```bash
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
+python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
 ```
 
 For a lightweight extension syntax check when `node` is available:

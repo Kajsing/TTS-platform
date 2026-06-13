@@ -23,6 +23,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--token", default=None)
     parser.add_argument("--token-file", default=None)
     parser.add_argument("--voice", default=None)
+    parser.add_argument("--smoke-text", default=None)
+    parser.add_argument("--stream-text", default=None)
+    parser.add_argument("--stream-text-file", default=None)
+    parser.add_argument("--stream-text-repeat", type=int, default=1)
+    parser.add_argument("--min-stream-text-chunks", type=int, default=1)
     args = parser.parse_args(argv)
 
     try:
@@ -37,6 +42,11 @@ def main(argv: list[str] | None = None) -> None:
             token=args.token,
             token_file=args.token_file,
             voice=args.voice,
+            smoke_text=args.smoke_text,
+            stream_text=args.stream_text,
+            stream_text_file=args.stream_text_file,
+            stream_text_repeat=args.stream_text_repeat,
+            min_stream_text_chunks=args.min_stream_text_chunks,
         )
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
@@ -54,6 +64,11 @@ def run_release_checks(
     token: str | None = None,
     token_file: str | None = None,
     voice: str | None = None,
+    smoke_text: str | None = None,
+    stream_text: str | None = None,
+    stream_text_file: str | None = None,
+    stream_text_repeat: int = 1,
+    min_stream_text_chunks: int = 1,
 ) -> dict[str, object]:
     if package_out_path is not None and windows_bundle_out_path is not None:
         return _run_release_checks_with_package_path(
@@ -65,6 +80,11 @@ def run_release_checks(
             token=token,
             token_file=token_file,
             voice=voice,
+            smoke_text=smoke_text,
+            stream_text=stream_text,
+            stream_text_file=stream_text_file,
+            stream_text_repeat=stream_text_repeat,
+            min_stream_text_chunks=min_stream_text_chunks,
         )
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-release-") as temp_dir:
@@ -87,6 +107,11 @@ def run_release_checks(
             token=token,
             token_file=token_file,
             voice=voice,
+            smoke_text=smoke_text,
+            stream_text=stream_text,
+            stream_text_file=stream_text_file,
+            stream_text_repeat=stream_text_repeat,
+            min_stream_text_chunks=min_stream_text_chunks,
         )
 
 
@@ -100,6 +125,11 @@ def _run_release_checks_with_package_path(
     token: str | None,
     token_file: str | None,
     voice: str | None,
+    smoke_text: str | None,
+    stream_text: str | None,
+    stream_text_file: str | None,
+    stream_text_repeat: int,
+    min_stream_text_chunks: int,
 ) -> dict[str, object]:
     checks = [
         ("ruff", [python_executable, "-m", "ruff", "check", "."]),
@@ -138,6 +168,11 @@ def _run_release_checks_with_package_path(
                     token=token,
                     token_file=token_file,
                     voice=voice,
+                    smoke_text=smoke_text,
+                    stream_text=stream_text,
+                    stream_text_file=stream_text_file,
+                    stream_text_repeat=stream_text_repeat,
+                    min_stream_text_chunks=min_stream_text_chunks,
                 ),
             )
         )
@@ -161,6 +196,11 @@ def _build_live_smoke_command(
     token: str | None,
     token_file: str | None,
     voice: str | None,
+    smoke_text: str | None,
+    stream_text: str | None,
+    stream_text_file: str | None,
+    stream_text_repeat: int,
+    min_stream_text_chunks: int,
 ) -> list[str]:
     command = [
         python_executable,
@@ -174,6 +214,16 @@ def _build_live_smoke_command(
         command.extend(["--token-file", token_file])
     if voice:
         command.extend(["--voice", voice])
+    if smoke_text:
+        command.extend(["--text", smoke_text])
+    if stream_text:
+        command.extend(["--stream-text", stream_text])
+    if stream_text_file:
+        command.extend(["--stream-text-file", stream_text_file])
+    if stream_text_repeat != 1:
+        command.extend(["--stream-text-repeat", str(stream_text_repeat)])
+    if min_stream_text_chunks != 1:
+        command.extend(["--min-stream-text-chunks", str(min_stream_text_chunks)])
     return command
 
 
@@ -182,6 +232,8 @@ def _redact_command(command: list[str]) -> list[str]:
     for index, value in enumerate(redacted[:-1]):
         if value == "--token":
             redacted[index + 1] = "<redacted>"
+        if value in {"--text", "--stream-text"}:
+            redacted[index + 1] = "<text-redacted>"
     return redacted
 
 
