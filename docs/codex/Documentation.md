@@ -11,13 +11,13 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first Windows-friendly service-run slice added
-  `tts serve`. The command starts the local service from `config/config.toml`,
-  uses configured host, port, and log level, refuses non-loopback hosts by
-  default, and gives missing-config guidance back to `tts setup-local`.
+- Current loop result: The first Windows-friendly packaging slice added
+  PowerShell/CMD launchers under `scripts/windows/`. They set repo-local
+  `PYTHONPATH`, prefer `.venv\Scripts\python.exe` or `py -3`, run
+  `tts setup-local` when config is missing, then start `tts serve`.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 104 tests.
+  - `py -3 -m pytest -q` passed with 106 tests.
   - `py -3 scripts/check_extension.py` passed, including resume-wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -111,6 +111,8 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts serve` uses config host/port/log level, supports explicit host/port
     overrides, and requires `--allow-non-local-host` before binding outside
     loopback hosts.
+  - `scripts/windows/run_service.ps1` and `run_service.cmd` provide
+    Windows-friendly local launchers for setup fallback plus service start.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -120,8 +122,9 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue Windows-friendly service install/packaging flow.
-- Then continue Chrome extension onboarding/installability.
+- Continue Chrome extension onboarding/installability.
+- Leave permanent Windows service manager or auto-start install as an explicit
+  later product choice.
 
 ## Decisions Made And Why
 
@@ -165,6 +168,9 @@ This file is the live status log and shared memory for future Codex loops.
   direction is explicit.
 - Installed CLI service startup should prefer `tts serve`; `scripts/dev_run.py`
   remains a development convenience.
+- Windows launcher scripts are acceptable packaging progress without choosing a
+  persistent service mechanism. Do not silently choose NSSM, Task Scheduler,
+  pywin32, or startup-folder auto-run without an explicit product decision.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -195,6 +201,7 @@ Service start:
 ```bash
 tts serve
 python3 scripts/dev_run.py
+scripts/windows/run_service.cmd
 ```
 
 Public-contract smoke commands after the service is running:

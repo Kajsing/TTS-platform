@@ -75,6 +75,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Improve catalog listing and install progress output
 - [x] Add Windows-friendly local first-run setup helper
 - [x] Add Windows-friendly service run command
+- [x] Add Windows-friendly service launcher scripts
 - [ ] Add Windows-friendly service install/packaging flow
 - [ ] Improve Chrome extension onboarding and installability
 - [ ] Close release-hardening gaps for docs, security defaults, and tests

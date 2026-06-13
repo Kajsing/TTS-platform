@@ -51,6 +51,21 @@ the model/config root, and starts Uvicorn with the configured host, port, and
 log level. It only allows loopback hosts (`127.0.0.1`, `localhost`, or `::1`) by
 default; `--allow-non-local-host` must be explicit for any trusted-network bind.
 
+Windows launcher scripts are also available:
+
+```powershell
+.\scripts\windows\run_service.ps1
+```
+
+```cmd
+scripts\windows\run_service.cmd
+```
+
+The launchers set `PYTHONPATH` for the repo-local service/core packages, prefer
+`.venv\Scripts\python.exe` when present, fall back to `py -3`, run
+`setup-local` if `config/config.toml` is missing, and then run `tts serve`.
+They are convenience launchers, not persistent Windows service installers.
+
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice
 `sherpa-en-debug`.
@@ -278,6 +293,12 @@ Start the local service:
 
 ```bash
 tts serve
+```
+
+Or, on Windows:
+
+```powershell
+.\scripts\windows\run_service.ps1
 ```
 
 List catalog entries:

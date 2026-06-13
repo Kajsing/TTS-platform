@@ -160,5 +160,7 @@ catalog-list summary/warning output, and install progress metadata/status lines.
 The first Windows-friendly setup slice now adds `tts setup-local` for local
 config/token bootstrap and manifest readiness reporting. The first service-run
 slice now adds `tts serve` as the normal installed-CLI localhost run command.
-Continue with Windows-friendly service install/packaging flow unless a
-reader-flow bug appears.
+The first packaging slice now adds PowerShell/CMD Windows launchers that run
+setup fallback plus `tts serve` without choosing a permanent service manager.
+Continue with Chrome extension onboarding/installability unless a reader-flow
+bug appears.

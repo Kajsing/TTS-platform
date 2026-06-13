@@ -44,6 +44,8 @@ backend-realism work, and early v1 model-management helpers:
   initialization, and manifest/default-voice readiness reporting
 - local service run command wiring for configured host/port/log level, explicit
   overrides, missing-config guidance, and loopback-only default binding
+- Windows launcher structure, including repo-local `PYTHONPATH`, module CLI
+  invocation, setup fallback, and PowerShell delegation from the CMD launcher
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

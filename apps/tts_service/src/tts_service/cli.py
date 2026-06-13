@@ -1150,3 +1150,7 @@ def _remove_model(*, model_id: str, models_root: Path, manifest_path: Path) -> d
         "removed_files": removed_files,
         "removed_manifest_entry": removed_manifest_entry,
     }
+
+
+if __name__ == "__main__":
+    main()

@@ -100,6 +100,19 @@ Start the local service in a separate terminal:
 tts serve
 ```
 
+On Windows, the repository also includes launchers that set the local source
+paths, run `tts setup-local` when needed, and then start `tts serve`:
+
+```powershell
+.\scripts\windows\run_service.ps1
+```
+
+or double-click/run:
+
+```cmd
+scripts\windows\run_service.cmd
+```
+
 ## CLI Usage
 
 Examples:
@@ -127,6 +140,8 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 voice/manifest readiness, and prints next steps without exposing the token.
 `serve` starts the local service from `config/config.toml`, binds only to
 loopback hosts by default, and uses the configured host, port, and log level.
+The Windows launchers in `scripts/windows/` are a convenience packaging step for
+local runs; they do not install a persistent Windows service.
 
 The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
 commands are local model-management helpers and do not require service auth
