@@ -94,6 +94,12 @@ tts setup-local
 python -m pytest -q
 ```
 
+Start the local service in a separate terminal:
+
+```bash
+tts serve
+```
+
 ## CLI Usage
 
 Examples:
@@ -105,6 +111,7 @@ tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts setup-local
+tts serve
 tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
@@ -118,6 +125,8 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 `config/config.toml` from `config/config.example.toml` when missing, initializes
 `config/token.txt` through the same auth path the service uses, reports default
 voice/manifest readiness, and prints next steps without exposing the token.
+`serve` starts the local service from `config/config.toml`, binds only to
+loopback hosts by default, and uses the configured host, port, and log level.
 
 The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
 commands are local model-management helpers and do not require service auth

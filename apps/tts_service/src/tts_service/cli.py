@@ -132,6 +132,16 @@ def main(argv: list[str] | None = None) -> None:
             )
             return
 
+        if args.command == "serve":
+            _serve_local(
+                repo_root=Path(args.repo_root),
+                config_path=Path(args.config_path),
+                host=args.host,
+                port=args.port,
+                allow_non_local_host=args.allow_non_local_host,
+            )
+            return
+
         if args.command == "catalog-list":
             catalog, _ = _load_model_catalog(args.catalog)
             _print_json(
@@ -224,6 +234,17 @@ def _build_parser() -> argparse.ArgumentParser:
         default="config/config.example.toml",
     )
     setup_local_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument("--repo-root", default=".")
+    serve_parser.add_argument("--config-path", default="config/config.toml")
+    serve_parser.add_argument("--host", default=None)
+    serve_parser.add_argument("--port", type=int, default=None)
+    serve_parser.add_argument(
+        "--allow-non-local-host",
+        action="store_true",
+        help="Allow binding outside localhost. The default run path only allows loopback hosts.",
+    )
 
     catalog_list_parser = subparsers.add_parser("catalog-list")
     catalog_list_parser.add_argument("--catalog", required=True)
@@ -517,12 +538,70 @@ def _setup_local_next_steps(
     token_created: bool,
     default_voice_in_manifest: bool,
 ) -> list[str]:
-    steps = ["py -3 scripts/dev_run.py", "tts health", "tts list-voices"]
+    steps = ["tts serve", "tts health", "tts list-voices"]
     if not default_voice_in_manifest:
         steps.insert(0, "tts model-install <model-id> --catalog <catalog> --activate")
     if config_created or token_created:
         steps.append("read config/token.txt when a protected client needs the bearer token")
     return steps
+
+
+def _serve_local(
+    *,
+    repo_root: Path,
+    config_path: Path,
+    host: str | None,
+    port: int | None,
+    allow_non_local_host: bool,
+    uvicorn_run: Callable[..., None] | None = None,
+) -> None:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
+    if not resolved_config_path.exists():
+        raise SystemExit(
+            f"Config does not exist: {resolved_config_path}. Run 'tts setup-local' first."
+        )
+
+    try:
+        config = load_config(resolved_config_path)
+    except ValueError as exc:
+        raise SystemExit(f"Config is invalid: {exc}") from exc
+
+    resolved_host = host or config.server.host
+    resolved_port = port if port is not None else config.server.port
+    if resolved_port <= 0:
+        raise SystemExit("server port must be positive")
+    if not allow_non_local_host and not _is_loopback_host(resolved_host):
+        raise SystemExit(
+            "Refusing to bind outside localhost by default. "
+            "Use --allow-non-local-host only for an intentional trusted-network setup."
+        )
+
+    from .main import create_app
+
+    app = create_app(config=config, repo_root=resolved_repo_root)
+    runner = uvicorn_run or _run_uvicorn
+    print(
+        f"[serve] starting local TTS service at http://{resolved_host}:{resolved_port}",
+        file=sys.stderr,
+    )
+    runner(
+        app,
+        host=resolved_host,
+        port=resolved_port,
+        log_level=config.server.log_level,
+        reload=False,
+    )
+
+
+def _is_loopback_host(host: str) -> bool:
+    return host.strip().lower() in {"127.0.0.1", "localhost", "::1"}
+
+
+def _run_uvicorn(*args: object, **kwargs: object) -> None:
+    import uvicorn
+
+    uvicorn.run(*args, **kwargs)
 
 
 def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], Path | None]:

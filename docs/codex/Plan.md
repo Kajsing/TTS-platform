@@ -158,5 +158,7 @@ The first long-document slices are now:
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, and install progress metadata/status lines.
 The first Windows-friendly setup slice now adds `tts setup-local` for local
-config/token bootstrap and manifest readiness reporting. Continue with
-Windows-friendly service run/install flow unless a reader-flow bug appears.
+config/token bootstrap and manifest readiness reporting. The first service-run
+slice now adds `tts serve` as the normal installed-CLI localhost run command.
+Continue with Windows-friendly service install/packaging flow unless a
+reader-flow bug appears.

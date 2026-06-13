@@ -42,6 +42,8 @@ backend-realism work, and early v1 model-management helpers:
   removal
 - local first-run setup helper behavior for config creation, token
   initialization, and manifest/default-voice readiness reporting
+- local service run command wiring for configured host/port/log level, explicit
+  overrides, missing-config guidance, and loopback-only default binding
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

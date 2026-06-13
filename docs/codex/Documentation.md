@@ -11,14 +11,13 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first Windows-friendly setup slice added
-  `tts setup-local`. The helper creates `config/config.toml` from the example
-  when missing, initializes `config/token.txt` through the service auth path,
-  reports service URL and manifest/default-voice readiness, and returns safe
-  next steps without printing the bearer token.
+- Current loop result: The first Windows-friendly service-run slice added
+  `tts serve`. The command starts the local service from `config/config.toml`,
+  uses configured host, port, and log level, refuses non-loopback hosts by
+  default, and gives missing-config guidance back to `tts setup-local`.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 99 tests.
+  - `py -3 -m pytest -q` passed with 104 tests.
   - `py -3 scripts/check_extension.py` passed, including resume-wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -107,6 +106,11 @@ This file is the live status log and shared memory for future Codex loops.
     default voice is present in `models/MANIFEST.json`.
   - setup output deliberately reports only the token file path, not the bearer
     token value.
+  - `tts serve` starts the local service from installed CLI tooling without
+    needing `scripts/dev_run.py`.
+  - `tts serve` uses config host/port/log level, supports explicit host/port
+    overrides, and requires `--allow-non-local-host` before binding outside
+    loopback hosts.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -116,7 +120,7 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue Windows-friendly service run/install flow.
+- Continue Windows-friendly service install/packaging flow.
 - Then continue Chrome extension onboarding/installability.
 
 ## Decisions Made And Why
@@ -159,6 +163,8 @@ This file is the live status log and shared memory for future Codex loops.
 - First-run setup may create local config and token files, but should not choose
   a Windows service manager or persistence mechanism until that product
   direction is explicit.
+- Installed CLI service startup should prefer `tts serve`; `scripts/dev_run.py`
+  remains a development convenience.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -187,6 +193,7 @@ tts setup-local
 Service start:
 
 ```bash
+tts serve
 python3 scripts/dev_run.py
 ```
 

@@ -40,6 +40,17 @@ path the service uses, checks whether the configured default voice appears in
 `models/MANIFEST.json`, and returns next steps as JSON. It does not print the
 bearer token; read `config/token.txt` locally when a protected client needs it.
 
+Start the service with:
+
+```powershell
+tts serve
+```
+
+`tts serve` loads `config/config.toml`, creates the app with the current repo as
+the model/config root, and starts Uvicorn with the configured host, port, and
+log level. It only allows loopback hosts (`127.0.0.1`, `localhost`, or `::1`) by
+default; `--allow-non-local-host` must be explicit for any trusted-network bind.
+
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice
 `sherpa-en-debug`.
@@ -261,6 +272,12 @@ Initialize local config and token files:
 
 ```bash
 tts setup-local
+```
+
+Start the local service:
+
+```bash
+tts serve
 ```
 
 List catalog entries:

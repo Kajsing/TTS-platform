@@ -79,7 +79,7 @@ def test_setup_local_creates_config_and_token(
     assert payload["service"]["base_url"] == "http://127.0.0.1:7777"
     assert payload["manifest"]["default_voice_in_manifest"] is True
     assert payload["next_steps"] == [
-        "py -3 scripts/dev_run.py",
+        "tts serve",
         "tts health",
         "tts list-voices",
         "read config/token.txt when a protected client needs the bearer token",
