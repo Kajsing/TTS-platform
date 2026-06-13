@@ -68,9 +68,10 @@ for long web-page text.
   loopback ports, runs public-contract smoke, and stops the process trees.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
-  starts the installed `tts serve` entrypoint, runs public-contract smoke, and
-  shuts the service down. When the bundled install script is present, the check
-  uses it for the venv/package/setup stage.
+  validates installed setup next-step guidance, starts the installed
+  `tts serve` entrypoint, runs public-contract smoke, and shuts the service
+  down. When the bundled install script is present, the check uses it for the
+  venv/package/setup stage.
 
 ## Manual Gates
 

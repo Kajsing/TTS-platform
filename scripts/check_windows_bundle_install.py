@@ -127,6 +127,7 @@ def check_windows_bundle_install(
         token_file = Path(str(setup_payload.get("token_file", "")))
         if not token_file.is_file():
             raise WindowsBundleInstallError("Installed setup-local did not create a token file.")
+        _assert_setup_next_steps(setup_payload)
 
         port = _reserve_loopback_port()
         base_url = f"http://127.0.0.1:{port}"
@@ -195,6 +196,7 @@ def check_windows_bundle_install(
                 setup_payload.get("manifest"),
                 "default_voice_in_manifest",
             ),
+            "next_steps": _string_list(setup_payload.get("next_steps")),
         },
         "service": _summarize_smoke(smoke_payload),
     }
@@ -464,6 +466,24 @@ def _dict_payload(raw_payload: object, *, label: str) -> dict[str, object]:
     if not isinstance(raw_payload, dict):
         raise WindowsBundleInstallError(f"{label} payload must be a JSON object.")
     return raw_payload
+
+
+def _assert_setup_next_steps(setup_payload: dict[str, object]) -> None:
+    next_steps = setup_payload.get("next_steps")
+    if not isinstance(next_steps, list) or "tts serve" not in next_steps:
+        raise WindowsBundleInstallError(
+            "Installed setup-local next steps do not include tts serve."
+        )
+    if "tts model-check" not in next_steps:
+        raise WindowsBundleInstallError(
+            "Installed setup-local next steps do not include tts model-check."
+        )
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _installer_bool(

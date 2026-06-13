@@ -61,6 +61,7 @@ def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
                 "token_file": str(cwd / "config" / "token.txt"),
                 "default_voice": "sherpa-en-debug",
                 "manifest": {"default_voice_in_manifest": True},
+                "next_steps": ["tts model-check", "tts serve"],
             }
         calls.append("smoke")
         return {
@@ -115,6 +116,8 @@ def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
         "entrypoint": ".venv\\Scripts\\tts.exe",
     }
     assert summary["setup"]["config_created"] is True
+    assert "tts model-check" in summary["setup"]["next_steps"]
+    assert "tts serve" in summary["setup"]["next_steps"]
     assert summary["service"]["job_status"] == "completed"
 
 
@@ -155,6 +158,7 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
                 "token_file": str(bundle_root / "config" / "token.txt"),
                 "default_voice": "sherpa-en-debug",
                 "manifest": {"default_voice_in_manifest": True},
+                "next_steps": ["tts model-check", "tts serve"],
             },
         }
 
@@ -205,6 +209,7 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
     assert calls == ["extract", "installer", "health", "smoke", "terminate"]
     assert summary["venv"]["installer_script"] is True
     assert summary["setup"]["token_created"] is True
+    assert "tts model-check" in summary["setup"]["next_steps"]
     assert summary["service"]["job_status"] == "completed"
 
 

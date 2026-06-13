@@ -11,19 +11,19 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Local service and Windows bundle bootstrap checks now
-  expose and validate `setup-local` next-step guidance, including
-  `tts model-check`, in release evidence.
+- Current loop result: The Windows bundle install check now exposes and
+  validates installed `setup-local` next-step guidance, including
+  `tts model-check`, after the bundled venv/install path.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_local_service_bootstrap.py scripts\check_windows_bundle_bootstrap.py apps\tts_service\tests\test_local_service_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
+    `py -3 -m ruff check scripts\check_windows_bundle_install.py apps\tts_service\tests\test_windows_bundle_install_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_local_service_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
-    and reported 4 passed.
+    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py -q`
+    and reported 3 passed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
-  - `py -3 scripts\check_local_service_bootstrap.py` passed and reported
-    `next_steps` containing `tts model-check`.
+  - `py -3 scripts\check_windows_bundle_install.py` passed after sandbox
+    escalation and reported `setup.next_steps` containing `tts model-check`.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 162 tests.
   - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
@@ -273,6 +273,9 @@ This file is the live status log and shared memory for future Codex loops.
     Windows bundle through temporary `.venv` creation, package install,
     installed `tts setup-local`, installed `tts serve`, and public-contract
     smoke.
+  - `scripts/check_windows_bundle_install.py` now exposes and validates the
+    installed `setup-local` next-step guidance, including `tts model-check`, in
+    its JSON summary.
   - `scripts/check_windows_launchers.py` now extracts a Windows bundle and
     verifies the bundled PowerShell/CMD launchers in setup-only mode when
     Windows launcher executables are available.
