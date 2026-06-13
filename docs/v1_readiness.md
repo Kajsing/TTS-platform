@@ -162,8 +162,10 @@ for long web-page text.
   a real browser must be present. Missing service worker skips include observed
   target diagnostics to separate unloaded unpacked extensions from generic CDP
   startup failures.
-- JavaScript syntax validation in `scripts/check_extension.py` requires `node`
-  to be installed.
+- JavaScript syntax validation in `scripts/check_extension.py` runs when
+  `node` is available on `PATH`, or when `--node-executable`/`TTS_PLATFORM_NODE`
+  points at Node.js. Use `--require-js-syntax` when missing Node.js should fail
+  the gate instead of reporting a skip.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
 - Extended foreground PowerShell/CMD launcher observation remains manual; the

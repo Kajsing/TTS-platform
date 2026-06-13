@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def package_extension(*, out_path: Path) -> dict[str, object]:
     with redirect_stdout(sys.stderr):
-        check_extension.main()
+        check_extension.main([])
     resolved_out_path = out_path.expanduser().resolve()
     files = _collect_extension_files()
     resolved_out_path.parent.mkdir(parents=True, exist_ok=True)

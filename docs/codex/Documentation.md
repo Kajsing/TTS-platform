@@ -255,6 +255,10 @@ This file is the live status log and shared memory for future Codex loops.
   - optional Chrome/MV3 smoke skips now include a compact observed browser
     target summary when the extension service worker is missing, making local
     browser-environment failures easier to triage.
+  - extension JavaScript syntax validation can now be made strict with
+    `scripts/check_extension.py --require-js-syntax`, and Node.js can be
+    supplied with `--node-executable` or `TTS_PLATFORM_NODE` when it is not on
+    `PATH`.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend
@@ -644,7 +648,10 @@ python3 scripts/package_windows_bundle.py
 - In this Windows session, Chrome/Edge discovery succeeded, but the headless MV3
   service worker target did not start; the smoke therefore returned a skipped
   JSON result in default mode.
-- `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.
+- `python3 scripts/check_extension.py` still skips JavaScript syntax checks by
+  default in this environment because `node` is not installed on `PATH`, but it
+  now supports `--require-js-syntax`, `--node-executable`, and
+  `TTS_PLATFORM_NODE` for strict validation when Node.js is available elsewhere.
 
 ## Resume Instructions For The Next Codex Loop
 

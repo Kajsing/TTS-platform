@@ -150,7 +150,9 @@ python3 scripts/check_extension.py
 
 This checks manifest references, linked popup/offscreen assets, manifest policy,
 local install assets, extension privacy/layering boundaries, and JavaScript
-syntax when `node` is available.
+syntax when `node` is available. Use `--require-js-syntax` to fail instead of
+skipping when Node.js is missing, and use `--node-executable <path>` or
+`TTS_PLATFORM_NODE=<path>` when Node.js is installed outside `PATH`.
 
 Run the onboarding contract check with:
 

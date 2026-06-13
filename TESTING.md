@@ -322,10 +322,12 @@ python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
 ```
 
-For a lightweight extension syntax check when `node` is available:
+For lightweight extension checks:
 
 ```bash
 python3 scripts/check_extension.py
+python3 scripts/check_extension.py --require-js-syntax
+python3 scripts/check_extension.py --node-executable <path-to-node> --require-js-syntax
 python3 scripts/check_chrome_extension_smoke.py
 python3 scripts/package_extension.py
 python3 scripts/package_windows_bundle.py
@@ -335,4 +337,5 @@ node --check apps/chrome_extension/offscreen/offscreen.js
 ```
 
 On Windows, run the Python check as `py -3 scripts/check_extension.py` when
-`python3` is unavailable.
+`python3` is unavailable. `scripts/check_extension.py` also honors
+`TTS_PLATFORM_NODE=<path-to-node>` when Node.js is installed outside `PATH`.

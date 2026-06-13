@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import shutil
 import struct
 import subprocess
@@ -20,7 +22,16 @@ ALLOWED_EXTENSION_PERMISSIONS = {
 }
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="check_extension")
+    parser.add_argument("--node-executable", default=None)
+    parser.add_argument(
+        "--require-js-syntax",
+        action="store_true",
+        help="Fail instead of skipping when a Node.js executable is unavailable.",
+    )
+    args = parser.parse_args(argv)
+
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     verify_manifest_policy(manifest)
     referenced_paths = collect_manifest_paths(manifest)
@@ -50,9 +61,16 @@ def main() -> None:
     verify_extension_privacy_boundaries()
     print("Extension policy resolved.")
 
-    node_binary = shutil.which("node")
+    node_binary = resolve_node_executable(
+        node_executable=args.node_executable,
+        require=args.require_js_syntax,
+    )
     if node_binary is None:
-        print("Skipped JavaScript syntax checks because node is not installed.")
+        print(
+            "Skipped JavaScript syntax checks because node is not installed. "
+            "Use --node-executable, TTS_PLATFORM_NODE, or --require-js-syntax "
+            "for strict validation."
+        )
         return
 
     js_paths = sorted(
@@ -63,6 +81,31 @@ def main() -> None:
     for path in js_paths:
         subprocess.run([node_binary, "--check", str(path)], check=True)
     print("JavaScript syntax checks passed.")
+
+
+def resolve_node_executable(
+    *,
+    node_executable: str | None,
+    require: bool,
+    env: dict[str, str] | None = None,
+) -> str | None:
+    raw_env = os.environ if env is None else env
+    configured_node = node_executable or raw_env.get("TTS_PLATFORM_NODE")
+    if configured_node:
+        node_path = Path(configured_node).expanduser()
+        if not node_path.is_file():
+            raise SystemExit(f"Configured Node.js executable does not exist: {node_path}")
+        return str(node_path.resolve())
+
+    node_binary = shutil.which("node")
+    if node_binary is not None:
+        return node_binary
+    if require:
+        raise SystemExit(
+            "Node.js is required for JavaScript syntax checks. "
+            "Install node, pass --node-executable, or set TTS_PLATFORM_NODE."
+        )
+    return None
 
 
 def collect_manifest_paths(manifest: dict[str, object]) -> set[Path]:

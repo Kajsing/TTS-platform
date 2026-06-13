@@ -11,7 +11,11 @@ PACKAGE_SCRIPT_PATH = REPO_ROOT / "scripts" / "package_extension.py"
 def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatch) -> None:
     package_module = _load_package_module()
     check_calls: list[bool] = []
-    monkeypatch.setattr(package_module.check_extension, "main", lambda: check_calls.append(True))
+    monkeypatch.setattr(
+        package_module.check_extension,
+        "main",
+        lambda argv=None: check_calls.append(argv == []),
+    )
 
     out_path = tmp_path / "extension.zip"
     payload = package_module.package_extension(out_path=out_path)

@@ -357,5 +357,8 @@ committed `.[real]` optional dependency extra when both `sherpa-onnx` and
 The fifty-third extension-flow hardening slice adds observed-browser-target
 diagnostics when the optional Chrome/MV3 smoke cannot find the extension
 service worker, making skipped browser evidence easier to triage.
+The fifty-fourth release-hardening slice makes extension JavaScript syntax
+validation configurable and strict-capable via `--node-executable`,
+`TTS_PLATFORM_NODE`, and `--require-js-syntax`.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

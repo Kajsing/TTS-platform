@@ -72,6 +72,45 @@ def test_check_extension_rejects_content_script_network_access(tmp_path: Path) -
         check_module.verify_extension_privacy_boundaries(extension_root)
 
 
+def test_check_extension_resolves_configured_node_executable(tmp_path: Path) -> None:
+    check_module = _load_check_extension_module()
+    node_path = tmp_path / "node.exe"
+    node_path.write_text("", encoding="utf-8")
+
+    resolved = check_module.resolve_node_executable(
+        node_executable=None,
+        require=False,
+        env={"TTS_PLATFORM_NODE": str(node_path)},
+    )
+
+    assert resolved == str(node_path.resolve())
+
+
+def test_check_extension_rejects_invalid_configured_node(tmp_path: Path) -> None:
+    check_module = _load_check_extension_module()
+
+    with pytest.raises(SystemExit, match="Configured Node.js executable does not exist"):
+        check_module.resolve_node_executable(
+            node_executable=str(tmp_path / "missing-node.exe"),
+            require=False,
+            env={},
+        )
+
+
+def test_check_extension_can_require_node_for_syntax_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_extension_module()
+    monkeypatch.setattr(check_module.shutil, "which", lambda _name: None)
+
+    with pytest.raises(SystemExit, match="Node.js is required"):
+        check_module.resolve_node_executable(
+            node_executable=None,
+            require=True,
+            env={},
+        )
+
+
 def _load_check_extension_module():
     spec = importlib.util.spec_from_file_location(
         "tts_platform_check_extension",
