@@ -186,5 +186,8 @@ local service. The fourth release-hardening slice redacts inline live-smoke
 tokens in release-check summaries. The fifth release-hardening slice now keeps
 HTTP request logs low-sensitivity by replacing unsafe client-provided request
 ids and adding regression coverage for query string, token, and raw text
-omission. Continue with remaining release hardening unless a reader-flow bug
-appears.
+omission. The sixth release-hardening slice now adds
+`scripts/check_security_defaults.py` and wires it into the release gate so the
+example config and ignore policy keep localhost, auth, empty allow-list,
+long-stream, local CPU backend, and local artifact defaults explicit. Continue
+with remaining release hardening unless a reader-flow bug appears.

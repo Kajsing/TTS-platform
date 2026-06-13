@@ -152,6 +152,13 @@ This file is the live status log and shared memory for future Codex loops.
     summary so release logs do not echo bearer tokens.
   - `scripts/release_check.py` now validates the Windows local reader bundle in
     addition to ruff, pytest, extension validation, and extension zip packaging.
+  - `scripts/check_security_defaults.py` now verifies `config/config.example.toml`
+    and `.gitignore` keep the v1 local-reader defaults fail-closed: loopback
+    host, token auth, repo-local token path, empty origin allow-list, rate
+    limiting, metrics, long stream limit, local CPU backend defaults, and
+    ignored local token/model artifacts.
+  - `scripts/release_check.py` now runs the security-default verification as
+    part of the local release gate.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -166,8 +173,7 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue release hardening: docs, security defaults, smoke coverage, and
-  remaining test gaps.
+- Continue release hardening: docs, smoke coverage, and remaining test gaps.
 - Leave permanent Windows service manager or auto-start install as an explicit
   later product choice.
 

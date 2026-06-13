@@ -10,4 +10,5 @@ build/
 *.egg-info/
 config/config.toml
 config/token.txt
+models/voices/
 out.wav

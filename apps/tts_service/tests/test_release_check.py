@@ -25,6 +25,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
     assert [check["name"] for check in summary["checks"]] == [
         "ruff",
         "pytest",
+        "security_defaults",
         "extension",
         "extension_package",
         "windows_bundle",
@@ -34,6 +35,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
     assert calls == [
         (["python-test", "-m", "ruff", "check", "."], REPO_ROOT, True),
         (["python-test", "-m", "pytest", "-q"], REPO_ROOT, True),
+        (["python-test", "scripts/check_security_defaults.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension.py"], REPO_ROOT, True),
         (
             [

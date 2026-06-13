@@ -17,6 +17,9 @@ backend-realism work, and early v1 model-management helpers:
 - origin filtering
 - security allowed-origin config validation for explicit origins and rejection
   of wildcard, null, path-bearing, and unsupported-scheme entries
+- config example security-default verification for loopback binding, token auth,
+  empty origin allow-list, rate limits, metrics, long stream limits, local CPU
+  backend defaults, and ignored token/model artifacts
 - rate limiting
 - job creation, status polling, and queued-job cancellation
 - running-job cancellation that remains terminal even when backend interruption is best-effort
@@ -63,8 +66,9 @@ backend-realism work, and early v1 model-management helpers:
 - Windows local reader bundle packaging that includes the service source,
   Windows launchers, docs, config example, model manifest, extension source,
   and a validated extension zip while excluding local token/model artifacts
-- repo-native release check orchestration for ruff, pytest, extension
-  validation, extension package build, and Windows bundle build
+- repo-native release check orchestration for ruff, pytest, security-default
+  verification, extension validation, extension package build, and Windows
+  bundle build
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.

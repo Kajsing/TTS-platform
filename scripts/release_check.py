@@ -104,6 +104,10 @@ def _run_release_checks_with_package_path(
     checks = [
         ("ruff", [python_executable, "-m", "ruff", "check", "."]),
         ("pytest", [python_executable, "-m", "pytest", "-q"]),
+        (
+            "security_defaults",
+            [python_executable, "scripts/check_security_defaults.py"],
+        ),
         ("extension", [python_executable, "scripts/check_extension.py"]),
         (
             "extension_package",
