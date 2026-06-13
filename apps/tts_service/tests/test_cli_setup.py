@@ -81,6 +81,7 @@ def test_setup_local_creates_config_and_token(
     assert payload["manifest"]["default_voice_in_manifest"] is True
     assert payload["next_steps"] == [
         "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
         "tts serve",
         "tts health",
         "tts list-voices",
@@ -122,7 +123,11 @@ def test_setup_local_preserves_existing_config_and_token(
         "voice_count": 0,
         "default_voice_in_manifest": False,
     }
-    assert payload["next_steps"][0] == "tts model-install <model-id> --catalog <catalog> --activate"
+    assert payload["next_steps"][:3] == [
+        "tts model-install <model-id> --catalog <catalog> --activate",
+        "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
+    ]
 
 
 def test_extension_allow_origin_adds_chrome_extension_origin(

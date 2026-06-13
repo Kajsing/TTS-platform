@@ -11,24 +11,23 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension local install guide now points
-  packaged handoff users at the Windows bundle `install_local` bootstrap before
-  service launch, Chrome loading, allow-list setup, and token save. Extension
-  and bundle packaging tests now assert that guidance remains present.
+- Current loop result: `tts setup-local` next-step guidance now points
+  operators at `tts model-check` before they expect real acoustic output from
+  an installed/default voice.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py`.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py -q`
-    and reported 7 passed.
-  - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
-    skipped because `node` is not installed.
+    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_local_service_bootstrap_check.py -q`
+    and reported 10 passed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
+  - `py -3 scripts\check_local_service_bootstrap.py` passed after sandbox
+    escalation for Windows temp/service access.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 162 tests.
-  - `py -3 scripts\release_check.py` passed, including the tightened packaged
-    extension install guide contract.
+  - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
+    Windows bundle bootstrap/install, and model-management flow checks.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -187,6 +186,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/windows/install_local.ps1` and `install_local.cmd` now bootstrap
     an extracted bundle by creating `.venv`, installing the local package, and
     running `setup-local` without choosing a persistent service manager.
+  - `tts setup-local` next-step guidance now includes `tts model-check` so
+    operators can verify configured/default voice readiness before expecting
+    real acoustic output.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, and

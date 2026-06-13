@@ -584,7 +584,7 @@ def _setup_local_next_steps(
     token_created: bool,
     default_voice_in_manifest: bool,
 ) -> list[str]:
-    steps = ["tts serve", "tts health", "tts list-voices"]
+    steps = ["tts model-check", "tts serve", "tts health", "tts list-voices"]
     steps.insert(0, "tts extension-allow-origin <chrome-extension-origin>")
     if not default_voice_in_manifest:
         steps.insert(0, "tts model-install <model-id> --catalog <catalog> --activate")

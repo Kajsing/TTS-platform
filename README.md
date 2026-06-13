@@ -151,7 +151,8 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 `setup-local` is the Windows-friendly first-run helper: it creates
 `config/config.toml` from `config/config.example.toml` when missing, initializes
 `config/token.txt` through the same auth path the service uses, reports default
-voice/manifest readiness, and prints next steps without exposing the token.
+voice/manifest readiness, and prints next steps, including `tts model-check`,
+without exposing the token.
 `extension-allow-origin` adds a copied Chrome extension origin to
 `security.allowed_origins` in `config/config.toml`, preserving existing origins
 and rejecting non-`chrome-extension` origins for this onboarding path.
