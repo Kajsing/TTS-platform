@@ -23,6 +23,7 @@ backend-realism work, and early v1 model-management helpers:
 - WebSocket auth via either bearer headers or the browser-friendly `start` event token field
 - PCM streaming and `done` events
 - WebSocket long-text streaming above the shorter HTTP/job request limit
+- WebSocket reader progress metadata and `start_text_chunk_index` resume anchor
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids

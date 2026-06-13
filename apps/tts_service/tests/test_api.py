@@ -285,6 +285,9 @@ def test_stream_execution_uses_backend_streaming_path(tmp_path: Path, monkeypatc
     ]
     assert [chunk.chunk_index for chunk in chunks] == [0, 1, 2, 3]
     assert [chunk.is_last for chunk in chunks] == [False, False, False, True]
+    assert [chunk.text_chunk_index for chunk in chunks] == [0, 0, 1, 1]
+    assert [chunk.text_chunk_count for chunk in chunks] == [2, 2, 2, 2]
+    assert chunks[-1].text_char_end == chunks[-1].text_char_count
 
 
 def test_synthesis_execution_stops_between_chunks_after_cancel(

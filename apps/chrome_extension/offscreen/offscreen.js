@@ -15,6 +15,7 @@ let playbackState = {
   channels: 1,
   bufferedMs: 0,
   underrunCount: 0,
+  readerProgress: null,
   lastEvent: null,
 };
 
@@ -74,6 +75,7 @@ async function startStream(config) {
     activeStreamId: null,
     bufferedMs: 0,
     underrunCount: 0,
+    readerProgress: null,
     lastEvent: "connect",
     prebufferMs: config.prebufferMs,
     lowWatermarkMs: config.lowWatermarkMs,
@@ -93,6 +95,7 @@ async function startStream(config) {
           text: config.text,
           voice: config.voice || undefined,
         },
+        start_text_chunk_index: config.startTextChunkIndex || undefined,
       })
     );
   };
@@ -143,6 +146,7 @@ async function handleJsonEvent(event, config) {
       activeStreamId: event.job_id,
       sampleRateHz: event.sample_rate_hz,
       channels: event.channels,
+      readerProgress: event.progress || null,
       lastEvent: "started",
     });
     return;
@@ -153,6 +157,7 @@ async function handleJsonEvent(event, config) {
     await setState({
       lastEvent: "mark",
       bufferedMs: estimateBufferedMs(),
+      readerProgress: event.progress || playbackState.readerProgress,
     });
     return;
   }
@@ -163,6 +168,7 @@ async function handleJsonEvent(event, config) {
       status: "draining",
       message: "Finishing queued audio",
       lastEvent: "done",
+      readerProgress: event.progress || playbackState.readerProgress,
     });
     finalizeIfDrained();
     return;
@@ -174,6 +180,7 @@ async function handleJsonEvent(event, config) {
       status: "cancelled",
       message: "Playback cancelled",
       lastEvent: "cancelled",
+      readerProgress: event.progress || playbackState.readerProgress,
     });
     await stopAudioSources();
     return;
@@ -322,6 +329,7 @@ async function stopStream({ notifyServer }) {
     message: "Ready",
     activeStreamId: null,
     bufferedMs: 0,
+    readerProgress: null,
     lastEvent: "stop",
   });
 }

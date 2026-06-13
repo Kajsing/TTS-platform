@@ -235,6 +235,10 @@ def _register_routes(app: FastAPI) -> None:
             stream_id = str(uuid4())
             synthesis_service = _build_synthesis_service(container)
             execution = synthesis_service.prepare_stream_request(payload, job_id=stream_id)
+            start_text_chunk_index = _parse_start_text_chunk_index(
+                initial_message.get("start_text_chunk_index")
+            )
+            _validate_start_text_chunk_index(start_text_chunk_index, execution)
         except ValidationError as exc:
             api_error = invalid_request(
                 "Request body validation failed.",
@@ -260,6 +264,7 @@ def _register_routes(app: FastAPI) -> None:
                     execution.request.voice
                 ).sample_rate_hz,
                 "channels": 1,
+                "progress": _start_progress(execution, start_text_chunk_index),
             }
         )
 
@@ -275,9 +280,13 @@ def _register_routes(app: FastAPI) -> None:
         first_chunk_sent = False
         chunk_count = 0
         bytes_sent = 0
+        latest_progress = _start_progress(execution, start_text_chunk_index)
 
         try:
-            iterator = synthesis_service.synthesize_stream_execution(execution)
+            iterator = synthesis_service.synthesize_stream_execution(
+                execution,
+                start_text_chunk_index=start_text_chunk_index,
+            )
             while True:
                 if cancel_event.is_set():
                     container.backend.cancel(stream_id)
@@ -297,6 +306,7 @@ def _register_routes(app: FastAPI) -> None:
                     )
                     first_chunk_sent = True
 
+                latest_progress = _chunk_progress(chunk)
                 await websocket.send_json(
                     {
                         "type": "mark",
@@ -304,6 +314,7 @@ def _register_routes(app: FastAPI) -> None:
                         "chunk_index": chunk.chunk_index,
                         "duration_ms": chunk.duration_ms,
                         "is_last": chunk.is_last,
+                        "progress": latest_progress,
                     }
                 )
                 await websocket.send_bytes(chunk.pcm_bytes)
@@ -318,6 +329,7 @@ def _register_routes(app: FastAPI) -> None:
                         "type": "cancelled",
                         "job_id": stream_id,
                         "chunks_sent": chunk_count,
+                        "progress": latest_progress,
                     }
                 )
             else:
@@ -328,6 +340,7 @@ def _register_routes(app: FastAPI) -> None:
                         "job_id": stream_id,
                         "chunks_sent": chunk_count,
                         "bytes_sent": bytes_sent,
+                        "progress": _completion_progress(execution),
                     }
                 )
         except WebSocketDisconnect:
@@ -340,6 +353,7 @@ def _register_routes(app: FastAPI) -> None:
                     "type": "cancelled",
                     "job_id": stream_id,
                     "chunks_sent": chunk_count,
+                    "progress": latest_progress,
                 }
             )
         except Exception as exc:
@@ -387,6 +401,92 @@ def _build_synthesis_service(container: object) -> SynthesisService:
         stream_frame_ms=container.config.streaming.audio_frame_ms,
         observability=container.observability,
     )
+
+
+def _parse_start_text_chunk_index(raw_value: object) -> int:
+    if raw_value is None:
+        return 0
+    if isinstance(raw_value, bool):
+        raise invalid_request(
+            "start_text_chunk_index must be an integer.",
+            param="start_text_chunk_index",
+        )
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise invalid_request(
+            "start_text_chunk_index must be an integer.",
+            param="start_text_chunk_index",
+        ) from exc
+    if value < 0:
+        raise invalid_request(
+            "start_text_chunk_index must not be negative.",
+            param="start_text_chunk_index",
+        )
+    return value
+
+
+def _validate_start_text_chunk_index(
+    start_text_chunk_index: int,
+    execution: object,
+) -> None:
+    text_chunk_count = len(execution.chunk_plan.chunks)
+    if start_text_chunk_index >= text_chunk_count:
+        raise invalid_request(
+            "start_text_chunk_index is outside the chunk plan.",
+            param="start_text_chunk_index",
+            details={"text_chunk_count": text_chunk_count},
+        )
+
+
+def _start_progress(execution: object, start_text_chunk_index: int) -> dict[str, object]:
+    text_char_count = _text_char_count(execution)
+    completed_text_chars = sum(
+        chunk.char_count for chunk in execution.chunk_plan.chunks[:start_text_chunk_index]
+    )
+    return {
+        "text_chunk_index": start_text_chunk_index,
+        "text_chunk_count": len(execution.chunk_plan.chunks),
+        "text_char_count": text_char_count,
+        "completed_text_chars": completed_text_chars,
+        "percent": _progress_percent(completed_text_chars, text_char_count),
+    }
+
+
+def _chunk_progress(chunk: object) -> dict[str, object]:
+    text_char_count = int(chunk.text_char_count or 0)
+    completed_text_chars = int(chunk.text_char_end or 0)
+    return {
+        "text_chunk_index": chunk.text_chunk_index,
+        "text_chunk_count": chunk.text_chunk_count,
+        "text_char_start": chunk.text_char_start,
+        "text_char_end": chunk.text_char_end,
+        "text_char_count": text_char_count,
+        "completed_text_chars": completed_text_chars,
+        "percent": _progress_percent(completed_text_chars, text_char_count),
+    }
+
+
+def _completion_progress(execution: object) -> dict[str, object]:
+    text_chunk_count = len(execution.chunk_plan.chunks)
+    text_char_count = _text_char_count(execution)
+    return {
+        "text_chunk_index": max(text_chunk_count - 1, 0),
+        "text_chunk_count": text_chunk_count,
+        "text_char_count": text_char_count,
+        "completed_text_chars": text_char_count,
+        "percent": 1.0 if text_char_count else 0.0,
+    }
+
+
+def _text_char_count(execution: object) -> int:
+    return sum(chunk.char_count for chunk in execution.chunk_plan.chunks)
+
+
+def _progress_percent(completed_text_chars: int, text_char_count: int) -> float:
+    if text_char_count <= 0:
+        return 0.0
+    return round(min(1.0, completed_text_chars / text_char_count), 4)
 
 
 async def _receive_stream_control(

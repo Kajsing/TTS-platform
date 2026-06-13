@@ -285,15 +285,24 @@ The current long-text path is therefore:
 - let the service normalize, segment, plan chunks, synthesize, stream, and allow
   cancellation between planned chunks.
 
+`WS /v1/tts/stream` also reports reader progress:
+
+- `started.progress` includes the planned text chunk count, total planned text
+  characters, completed characters, and percent complete.
+- each `mark.progress` reports the planned text chunk currently producing audio.
+- `done.progress` reports completion.
+- a browser client can send `start_text_chunk_index` in the initial `start`
+  event to begin from a later planned text chunk.
+
 When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
 backend streaming path emits audio from those callbacks instead of waiting for
 the full generated audio buffer. Older runtimes or runtimes without a usable
 callback fall back to the full-buffer path.
 
 The server-side chunk planner now improves chunk boundaries, the stream path has
-a separate page-scale text limit, and the real runtime path can stream callback
-audio. The product still needs a richer long-document reader workflow before
-the Chrome reader is fully v1-ready.
+a separate page-scale text limit, the real runtime path can stream callback
+audio, and stream events expose reader progress. The product still needs a
+richer long-document reader UX before the Chrome reader is fully v1-ready.
 
 ## Cancellation Limits
 

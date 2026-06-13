@@ -182,10 +182,15 @@ class SynthesisService:
     def synthesize_stream_execution(
         self,
         execution: SynthesisExecution,
+        *,
+        start_text_chunk_index: int = 0,
     ) -> Iterator[AudioChunk]:
         start_time = monotonic()
         try:
-            for chunk in self._stream_chunk_plan(execution):
+            for chunk in self._stream_chunk_plan(
+                execution,
+                start_text_chunk_index=start_text_chunk_index,
+            ):
                 yield chunk
             self._record_synthesis("stream", "success", start_time)
         except SynthesisCancelledError:
@@ -250,12 +255,35 @@ class SynthesisService:
             channels=resolved_channels,
         )
 
-    def _stream_chunk_plan(self, execution: SynthesisExecution) -> Iterator[AudioChunk]:
+    def _stream_chunk_plan(
+        self,
+        execution: SynthesisExecution,
+        *,
+        start_text_chunk_index: int = 0,
+    ) -> Iterator[AudioChunk]:
+        if start_text_chunk_index < 0:
+            raise invalid_request(
+                "start_text_chunk_index must not be negative.",
+                param="start_text_chunk_index",
+            )
+
         global_chunk_index = 0
         total_chunks = len(execution.chunk_plan.chunks)
+        if start_text_chunk_index >= total_chunks:
+            raise invalid_request(
+                "start_text_chunk_index is outside the chunk plan.",
+                param="start_text_chunk_index",
+                details={"text_chunk_count": total_chunks},
+            )
+
+        text_offsets = self._text_chunk_offsets(execution)
+        total_text_chars = text_offsets[-1][1] if text_offsets else 0
         expected_sample_rate_hz: int | None = None
         expected_channels: int | None = None
         for plan_index, planned_chunk in enumerate(execution.chunk_plan.chunks):
+            if plan_index < start_text_chunk_index:
+                continue
+
             self._raise_if_cancelled(execution)
             chunk_request = self._build_chunk_request(execution.request, planned_chunk.text)
             for backend_chunk in self.backend.synthesize_stream(chunk_request):
@@ -278,6 +306,7 @@ class SynthesisService:
                     )
 
                 is_last = plan_index == total_chunks - 1 and backend_chunk.is_last
+                text_char_start, text_char_end = text_offsets[plan_index]
                 yield AudioChunk(
                     job_id=backend_chunk.job_id,
                     chunk_index=global_chunk_index,
@@ -286,8 +315,22 @@ class SynthesisService:
                     pcm_bytes=backend_chunk.pcm_bytes,
                     duration_ms=max(backend_chunk.duration_ms, 1),
                     is_last=is_last,
+                    text_chunk_index=plan_index,
+                    text_chunk_count=total_chunks,
+                    text_char_start=text_char_start,
+                    text_char_end=text_char_end,
+                    text_char_count=total_text_chars,
                 )
                 global_chunk_index += 1
+
+    def _text_chunk_offsets(self, execution: SynthesisExecution) -> tuple[tuple[int, int], ...]:
+        offsets: list[tuple[int, int]] = []
+        cursor = 0
+        for planned_chunk in execution.chunk_plan.chunks:
+            start = cursor
+            cursor += planned_chunk.char_count
+            offsets.append((start, cursor))
+        return tuple(offsets)
 
     def _build_chunk_request(
         self,

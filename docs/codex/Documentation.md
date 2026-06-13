@@ -11,14 +11,14 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first Post-Phase 7 v1 reader slice added a separate
-  long-text WebSocket streaming limit. `/v1/tts` and `/v1/tts/jobs` still use
-  `tts.max_chars_per_request`, while `WS /v1/tts/stream` uses
-  `tts.max_chars_per_stream` so the Chrome reader can send page-scale text to
-  the streaming path without widening the short request contracts.
+- Current loop result: The second Post-Phase 7 v1 reader slice added stream
+  reader progress metadata and a resume anchor. WebSocket `started`, `mark`,
+  `done`, and `cancelled` events now include a `progress` object derived from
+  the planned text chunks, and the `start` event accepts `start_text_chunk_index`
+  to begin streamed playback from a later planned text chunk.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 91 tests.
+  - `py -3 -m pytest -q` passed with 93 tests.
   - `py -3 scripts/check_extension.py` passed, with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -80,6 +80,12 @@ This file is the live status log and shared memory for future Codex loops.
     maximum of `48000`, matching the service's default stream ceiling.
   - tests cover stream acceptance above the HTTP/job limit and rejection above
     the stream limit.
+  - stream events now expose `progress` metadata with planned text chunk count,
+    completed text chars, and percent complete.
+  - WebSocket start events now accept `start_text_chunk_index`, giving future
+    extension UX a stable resume anchor.
+  - the extension offscreen player stores stream progress in playback state and
+    the popup displays it.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -89,9 +95,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Next reader slice: add reader progress/resume semantics for long page
-  playback, likely by surfacing total planned text chunks and current progress
-  through WebSocket events and extension playback state.
+- Next reader slice: add richer extension UX for resuming from saved reader
+  progress, now that the service has a `start_text_chunk_index` anchor.
 - Continue v1 model-management after that with clearer install progress output,
   catalog guidance, and first-run defaults.
 - Then move to Windows-friendly service setup and Chrome extension
@@ -124,6 +129,9 @@ This file is the live status log and shared memory for future Codex loops.
   `tts.max_chars_per_stream` instead of raising `tts.max_chars_per_request` for
   every endpoint. This keeps sync HTTP and async job memory/latency expectations
   bounded while allowing the browser reader to handle page-scale text.
+- Reader progress should stay tied to planned text chunks, not audio frame
+  counts, because audio frame counts vary by backend/runtime while planned text
+  chunks are stable enough to support resume UX.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -191,8 +199,9 @@ python3 scripts/check_extension.py
 - The default example config still points at the development stub voice. A real
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
-- Long page playback now has a larger WebSocket text limit, but the reader still
-  lacks first-class progress, resume, and section navigation semantics.
+- Long page playback now has a larger WebSocket text limit and stream progress
+  metadata, but the extension still lacks a dedicated resume button and section
+  navigation semantics.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.

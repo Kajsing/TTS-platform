@@ -69,7 +69,8 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 ## V1 Reader Track
 
 - [x] Add a separate long-text WebSocket stream limit for page-scale playback
-- [ ] Add reader progress/resume semantics for long page playback
+- [x] Add reader progress/resume semantics for long page playback
+- [ ] Add richer extension UX for resuming from saved reader progress
 - [ ] Improve model-management UX and first-run guidance
 - [ ] Add Windows-friendly service setup flow
 - [ ] Improve Chrome extension onboarding and installability

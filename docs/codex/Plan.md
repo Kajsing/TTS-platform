@@ -148,6 +148,10 @@ order unless `Documentation.md` records a deliberate reorder:
 Keep browser-specific behavior inside `apps/chrome_extension/`, and keep the
 service contract stable while adding any long-document orchestration.
 
-The first long-document slice is now the separate `tts.max_chars_per_stream`
-limit for WebSocket playback. Continue by adding richer reader progress and
-resume semantics rather than raising the short `/v1/tts` and job limits.
+The first long-document slices are now:
+
+- separate `tts.max_chars_per_stream` limit for WebSocket playback;
+- stream progress metadata plus `start_text_chunk_index` as a resume anchor.
+
+Continue by adding richer extension UX for resuming from saved reader progress
+rather than raising the short `/v1/tts` and job limits.

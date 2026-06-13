@@ -88,6 +88,11 @@ class AudioChunk:
     pcm_bytes: bytes
     duration_ms: int
     is_last: bool = False
+    text_chunk_index: int | None = None
+    text_chunk_count: int | None = None
+    text_char_start: int | None = None
+    text_char_end: int | None = None
+    text_char_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

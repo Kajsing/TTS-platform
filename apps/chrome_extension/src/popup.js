@@ -176,12 +176,23 @@ function formatPlaybackState(state) {
     `Message: ${state.message}`,
     state.source ? `Source: ${state.source}` : null,
     state.activeStreamId ? `Stream: ${state.activeStreamId}` : null,
+    state.readerProgress ? `Progress: ${formatReaderProgress(state.readerProgress)}` : null,
     state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
     state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
     state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
     state.lastEvent ? `Last Event: ${state.lastEvent}` : null,
   ];
   return lines.filter(Boolean).join("\n");
+}
+
+function formatReaderProgress(progress) {
+  const chunkIndex = Number(progress.text_chunk_index ?? 0);
+  const chunkCount = Number(progress.text_chunk_count ?? 0);
+  const percent = Math.round(Number(progress.percent ?? 0) * 100);
+  if (chunkCount > 0) {
+    return `${Math.min(chunkIndex + 1, chunkCount)}/${chunkCount} chunks (${percent}%)`;
+  }
+  return `${percent}%`;
 }
 
 function formatServiceSnapshot(snapshot) {

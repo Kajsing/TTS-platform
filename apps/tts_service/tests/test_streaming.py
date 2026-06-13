@@ -159,6 +159,8 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
         started = websocket.receive_json()
         assert started["type"] == "started"
         assert started["job_id"]
+        assert started["progress"]["text_chunk_count"] >= 1
+        assert started["progress"]["percent"] == 0.0
 
         binary_frames = 0
         mark_events = 0
@@ -169,6 +171,8 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
                 mark_events += 1
                 assert payload["chunk_index"] >= 0
                 assert payload["duration_ms"] >= 1
+                assert payload["progress"]["text_chunk_index"] >= 0
+                assert payload["progress"]["text_chunk_count"] >= 1
                 continue
             if message_type == "bytes":
                 binary_frames += 1
@@ -182,6 +186,7 @@ def test_websocket_stream_returns_audio_frames_and_done_event(tmp_path: Path) ->
         assert mark_events == binary_frames
         assert done_payload is not None
         assert done_payload["chunks_sent"] == binary_frames
+        assert done_payload["progress"]["percent"] == 1.0
 
     health_response = client.get("/v1/health")
     streaming_metrics = health_response.json()["streaming"]
@@ -243,6 +248,7 @@ def test_websocket_stream_accepts_text_above_http_request_limit(tmp_path: Path) 
 
         started = websocket.receive_json()
         assert started["type"] == "started"
+        assert started["progress"]["text_chunk_count"] > 1
 
         binary_frames = 0
         done_payload = None
@@ -257,6 +263,7 @@ def test_websocket_stream_accepts_text_above_http_request_limit(tmp_path: Path) 
 
     assert binary_frames > 0
     assert done_payload is not None
+    assert done_payload["progress"]["percent"] == 1.0
 
 
 def test_websocket_stream_rejects_text_above_stream_limit(tmp_path: Path) -> None:
@@ -287,6 +294,77 @@ def test_websocket_stream_rejects_text_above_stream_limit(tmp_path: Path) -> Non
     assert error_payload["error"]["type"] == "invalid_request"
     assert error_payload["error"]["param"] == "text"
     assert error_payload["error"]["details"]["max_chars_per_stream"] == 120
+
+
+def test_websocket_stream_can_start_from_text_chunk_index(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={"streaming": {"audio_frame_ms": 1000}},
+    )
+    long_sentence = (
+        "Alpha clause introduces the topic with concrete examples, "
+        "beta clause adds more context about timing and workflow, "
+        "gamma clause expands on reliability, observability, and safety, "
+        "delta clause closes the idea with a practical takeaway."
+    )
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "start_text_chunk_index": 1,
+                "payload": {
+                    "text": long_sentence,
+                    "voice": "manifest-voice",
+                },
+            }
+        )
+
+        started = websocket.receive_json()
+        assert started["type"] == "started"
+        assert started["progress"]["text_chunk_index"] == 1
+        assert started["progress"]["text_chunk_count"] == 2
+        assert started["progress"]["completed_text_chars"] > 0
+
+        first_mark_payload = None
+        done_payload = None
+        for _ in range(64):
+            message_type, payload = _read_next_message(websocket)
+            if message_type == "json" and payload["type"] == "mark":
+                first_mark_payload = payload
+                continue
+            if message_type == "json" and payload["type"] == "done":
+                done_payload = payload
+                break
+
+    assert first_mark_payload is not None
+    assert first_mark_payload["progress"]["text_chunk_index"] == 1
+    assert done_payload is not None
+    assert done_payload["progress"]["percent"] == 1.0
+
+
+def test_websocket_stream_rejects_start_text_chunk_index_outside_plan(
+    tmp_path: Path,
+) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "start_text_chunk_index": 99,
+                "payload": {
+                    "text": "Hello streaming world.",
+                    "voice": "manifest-voice",
+                },
+            }
+        )
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["param"] == "start_text_chunk_index"
+    assert error_payload["error"]["details"]["text_chunk_count"] == 1
 
 
 def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:
@@ -334,6 +412,7 @@ def test_websocket_stream_can_be_cancelled(tmp_path: Path, monkeypatch) -> None:
 
         assert cancelled_payload is not None
         assert cancelled_payload["chunks_sent"] >= 1
+        assert cancelled_payload["progress"]["text_chunk_count"] >= 1
 
     health_response = client.get("/v1/health")
     streaming_metrics = health_response.json()["streaming"]
