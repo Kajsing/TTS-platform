@@ -92,6 +92,11 @@ python3 scripts/release_check.py
 ```
 
 On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.
+If the service is already running, include the public-contract smoke path:
+
+```bash
+python3 scripts/release_check.py --live-smoke --token-file config/token.txt
+```
 
 CLI example:
 

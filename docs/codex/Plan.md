@@ -167,5 +167,7 @@ validator coverage for its wiring. The first extension packaging slice now adds
 `scripts/package_extension.py` for validated local zip builds. The first
 release-hardening slice now rejects unsafe `security.allowed_origins` entries
 at config load. The second release-hardening slice now adds
-`scripts/release_check.py` as a repo-native local release gate. Continue with
-remaining release hardening unless a reader-flow bug appears.
+`scripts/release_check.py` as a repo-native local release gate. The third
+release-hardening slice adds optional `--live-smoke` coverage for a running
+local service. Continue with remaining release hardening unless a reader-flow
+bug appears.

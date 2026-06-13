@@ -44,6 +44,42 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
     ]
 
 
+def test_release_check_can_include_optional_live_smoke(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert cwd == REPO_ROOT
+        assert check is True
+        calls.append(command)
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        live_smoke=True,
+        base_url="http://localhost:8888/",
+        token_file="config/token.txt",
+        voice="voice-a",
+    )
+
+    assert summary["checks"][-1]["name"] == "live_smoke"
+    assert calls[-1] == [
+        "python-test",
+        "scripts/smoke_service.py",
+        "--base-url",
+        "http://localhost:8888",
+        "--token-file",
+        "config/token.txt",
+        "--voice",
+        "voice-a",
+    ]
+
+
 def _load_release_check_module():
     spec = importlib.util.spec_from_file_location(
         "tts_platform_release_check",

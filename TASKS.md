@@ -81,4 +81,5 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add Chrome extension zip packaging script
 - [x] Harden allowed-origin config validation
 - [x] Add repo-native release check script
+- [x] Add optional live smoke to release check
 - [ ] Close release-hardening gaps for docs, security defaults, and tests

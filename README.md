@@ -180,6 +180,12 @@ python3 scripts/release_check.py
 It runs ruff, pytest, extension validation, and extension zip packaging with a
 temporary package output.
 
+With the service already running, add the live public-contract smoke:
+
+```bash
+python3 scripts/release_check.py --live-smoke --token-file config/token.txt
+```
+
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 
 ## Chrome Extension Prototype
