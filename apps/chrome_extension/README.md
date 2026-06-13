@@ -24,8 +24,10 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   the offscreen document is unavailable
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
-- show service health and a ready-to-copy allow-list snippet for the extension origin
-- show a setup checklist for service reachability, saved token, origin snippet, voice discovery, and health
+- show service health and ready-to-copy allow-list command/snippet for the
+  extension origin
+- show a setup checklist for service reachability, saved token, allow-list
+  command/snippet, voice discovery, and health
 - include `INSTALL.md` and manifest/action icons in local handoff packages
 - recover more deliberately from playback underruns by rebuffering before audio resumes
 - retry offscreen playback startup if the offscreen document has gone stale
@@ -40,7 +42,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 4. Run `tts extension-allow-origin <copied-origin>`.
 5. Start or restart the service on a localhost URL that the extension can reach.
 
-The popup shows the extension origin so it can be copied into the service allow-list.
+The popup shows the extension origin plus an allow-list command that can be
+copied into the service shell.
 The popup can also refresh service health and voice discovery directly from the local service.
 The setup checklist in the popup summarizes the first-run state after each
 refresh or settings save.

@@ -426,6 +426,7 @@ async function getServiceSnapshot() {
     baseUrl: config.baseUrl,
     extensionOrigin: config.extensionOrigin,
     originConfigSnippet: buildOriginConfigSnippet(config.extensionOrigin),
+    originCliCommand: buildOriginCliCommand(config.extensionOrigin),
     reachable: false,
     health: null,
     voices: [],
@@ -803,6 +804,10 @@ function buildOriginConfigSnippet(extensionOrigin) {
     "[security]",
     `allowed_origins = ["${extensionOrigin}"]`,
   ].join("\n");
+}
+
+function buildOriginCliCommand(extensionOrigin) {
+  return `tts extension-allow-origin ${extensionOrigin}`;
 }
 
 function isActivePlaybackStatus(status) {

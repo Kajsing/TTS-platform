@@ -112,13 +112,16 @@ backend-realism work, and early v1 model-management helpers:
   in Chrome or Edge through DevTools Protocol when a browser is available,
   starts an isolated local service, opens a generated long article, verifies
   extension page capture, and starts page playback
+- extension popup copy-command coverage for the `tts extension-allow-origin`
+  first-run helper
 
 Recommended extension checks:
 
 - confirm the popup can load service health and voice discovery from the configured base URL
 - confirm the setup checklist reflects service reachability, token state,
-  origin snippet readiness, voice discovery, and health
+- allow-list command/snippet readiness, voice discovery, and health
 - confirm the allow-list snippet matches the current extension origin
+- verify the popup can copy the exact `tts extension-allow-origin ...` command
 - verify selection playback on a normal web page
 - verify stop and restart behavior after an active stream
 - verify the popup still shows a sensible playback state after reopening it mid-stream

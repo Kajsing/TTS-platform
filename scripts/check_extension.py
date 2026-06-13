@@ -213,6 +213,8 @@ def verify_extension_wiring() -> None:
             'id="previous-section"',
             'id="next-section"',
             'id="onboarding-status"',
+            'id="copy-command"',
+            'id="origin-command"',
         ],
         EXTENSION_ROOT / "src" / "popup.js": [
             '"tts-extension:resume-page"',
@@ -223,6 +225,7 @@ def verify_extension_wiring() -> None:
             "formatPageCapture",
             "formatPageStructure",
             "checklistLine",
+            "snapshot.originCliCommand",
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
@@ -243,6 +246,7 @@ def verify_extension_wiring() -> None:
             "sanitizePageStructureMeta",
             "resolveResumeTextChunkIndex",
             "startTextChunkIndex",
+            "buildOriginCliCommand",
         ],
         EXTENSION_ROOT / "src" / "content-script.js": [
             "getPageCapture",

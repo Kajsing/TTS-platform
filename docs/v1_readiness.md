@@ -17,7 +17,7 @@ for long web-page text.
   is installed.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
-  `tts extension-allow-origin` first-run helper before checking the
+  copyable `tts extension-allow-origin` first-run helper before checking the
   health/voice-discovery service snapshot used by the popup.
 - `python3 scripts/check_extension_reader_flow.py` verifies long-page reader
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
@@ -87,7 +87,7 @@ for long web-page text.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.
-- Load `apps/chrome_extension` in Chrome, copy the extension origin, run
+- Load `apps/chrome_extension` in Chrome, copy the allow-list command, run
   `tts extension-allow-origin <copied-origin>`, restart the service, save the
   token in the popup, and confirm actual Chrome popup health plus voice
   discovery. The static

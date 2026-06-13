@@ -212,8 +212,8 @@ manager, scheduled task, or auto-start entry.
    - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
      playback checklist.
 
-6. Copy the extension origin from the popup, add it to
-   `security.allowed_origins` with:
+6. Copy the `Allow-List Command` from the popup, then run it to update
+   `security.allowed_origins`:
 
    ```powershell
    .\\.venv\\Scripts\\tts.exe extension-allow-origin <copied-origin>

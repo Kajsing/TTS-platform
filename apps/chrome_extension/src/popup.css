@@ -131,3 +131,7 @@ button.primary {
   padding: 10px;
   min-height: 72px;
 }
+
+.status.compact {
+  min-height: 0;
+}

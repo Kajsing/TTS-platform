@@ -10,17 +10,18 @@ It is not Chrome Web Store signed.
 3. Enable Developer Mode.
 4. Choose `Load unpacked`.
 5. Select the extracted `apps\chrome_extension` directory.
-6. Open the extension popup and copy the extension origin.
-7. Add that origin to the local service `security.allowed_origins` allow-list:
-
-   ```powershell
-   .\.venv\Scripts\tts.exe extension-allow-origin <copied-origin>
-   ```
-
-   If the editable checkout is already active in your shell, use:
+6. Open the extension popup and copy the `Allow-List Command`.
+7. Run the command to update `security.allowed_origins`:
 
    ```powershell
    tts extension-allow-origin <copied-origin>
+   ```
+
+   If you are using the extracted Windows bundle and `tts` is not on `PATH`,
+   run the same command through the bundled virtual environment:
+
+   ```powershell
+   .\.venv\Scripts\tts.exe extension-allow-origin <copied-origin>
    ```
 
 8. Restart the local service.

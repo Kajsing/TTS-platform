@@ -12,6 +12,7 @@ const statusText = document.querySelector("#status-text");
 const extensionOrigin = document.querySelector("#extension-origin");
 const serviceStatus = document.querySelector("#service-status");
 const onboardingStatus = document.querySelector("#onboarding-status");
+const originCommand = document.querySelector("#origin-command");
 const originSnippet = document.querySelector("#origin-snippet");
 const voiceHint = document.querySelector("#voice-hint");
 const actionMessage = document.querySelector("#action-message");
@@ -38,6 +39,7 @@ async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
   const snapshot = await sendMessage({ type: "tts-extension:get-service-snapshot" });
   serviceStatus.textContent = formatServiceSnapshot(snapshot);
   onboardingStatus.textContent = formatOnboardingStatus(snapshot);
+  originCommand.textContent = snapshot.originCliCommand;
   originSnippet.textContent = snapshot.originConfigSnippet;
   populateVoiceOptions({
     voices: snapshot.voices,
@@ -145,6 +147,15 @@ document.querySelector("#copy-origin").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(extensionOrigin.textContent);
     setActionMessage("Extension origin copied.", "success");
+  } catch (error) {
+    setActionMessage(error.message, "error");
+  }
+});
+
+document.querySelector("#copy-command").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(originCommand.textContent);
+    setActionMessage("Allow-list command copied.", "success");
   } catch (error) {
     setActionMessage(error.message, "error");
   }
@@ -273,7 +284,12 @@ function formatOnboardingStatus(snapshot) {
     checklistLine("Service reachable", snapshot.reachable, snapshot.message),
     checklistLine("Token saved", Boolean(fields.token.value.trim()), "Paste config/token.txt"),
     checklistLine(
-      "Origin snippet ready",
+      "Allow-list command ready",
+      Boolean(snapshot.originCliCommand),
+      snapshot.originCliCommand
+    ),
+    checklistLine(
+      "Allow-list snippet ready",
       Boolean(snapshot.originConfigSnippet),
       snapshot.extensionOrigin
     ),

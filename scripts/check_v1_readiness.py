@@ -73,6 +73,7 @@ READINESS_MARKERS = (
     "--allow-missing-checksum",
     "python3 scripts/check_chrome_extension_smoke.py",
     "tts extension-allow-origin <copied-origin>",
+    "copyable `tts extension-allow-origin`",
     "strict Chrome/MV3 smoke requires Chrome or Edge",
     "Permanent Windows auto-start/service-manager installation remains undecided",
 )
@@ -100,6 +101,8 @@ REQUIRED_TEXT_MARKERS = {
         "verify_extension_install_assets",
         '"tts-extension:continue-page"',
         "maybeAutoContinuePage",
+        "origin-command",
+        "buildOriginCliCommand",
     ),
     "scripts/check_extension_reader_flow.py": (
         '"tts-extension:continue-page"',
@@ -121,6 +124,8 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_extension_onboarding.py": (
         "extension-allow-origin",
         "_verify_allow_list_cli_helper",
+        "copy-command",
+        "originCliCommand",
     ),
     "scripts/smoke_service.py": (
         "--stream-text-repeat",
@@ -167,6 +172,7 @@ REQUIRED_TEXT_MARKERS = {
         "truncated text-offset continuation",
         "check_chrome_extension_smoke.py",
         "extension-allow-origin",
+        "copy-command",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",
@@ -175,6 +181,7 @@ REQUIRED_TEXT_MARKERS = {
         "next known text character offset",
         "check_chrome_extension_smoke.py",
         "extension-allow-origin",
+        "allow-list command",
     ),
     "docs/backend_model_setup.md": (
         "Continue Page",

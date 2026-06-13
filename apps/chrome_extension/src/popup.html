@@ -51,6 +51,7 @@
           <p class="meta-label">Service Status</p>
           <div class="button-row">
             <button id="copy-origin" type="button">Copy Origin</button>
+            <button id="copy-command" type="button">Copy Command</button>
             <button id="copy-snippet" type="button">Copy Snippet</button>
             <button id="refresh-service" type="button">Refresh</button>
           </div>
@@ -67,8 +68,10 @@
         <p class="meta-label">Extension Origin</p>
         <p id="extension-origin" class="mono"></p>
         <p class="subtle">Add this origin to the local service allow-list.</p>
+        <p class="meta-label">Allow-List Command</p>
+        <pre id="origin-command" class="status compact">Loading...</pre>
         <p class="meta-label">Allow-List Snippet</p>
-        <pre id="origin-snippet" class="status">Loading...</pre>
+        <pre id="origin-snippet" class="status compact">Loading...</pre>
       </section>
 
       <section class="panel actions">

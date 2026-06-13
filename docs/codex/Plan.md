@@ -283,5 +283,8 @@ The thirty-first extension-onboarding slice adds
 `tts extension-allow-origin <chrome-extension-origin>`, making first-run
 allow-list setup idempotent and config-validated instead of requiring manual
 TOML edits.
+The thirty-second extension-onboarding slice adds a popup-side copyable
+allow-list command, so the extension can hand the operator the exact
+`tts extension-allow-origin ...` command during first-run setup.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

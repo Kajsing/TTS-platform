@@ -138,10 +138,12 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
         "save-config": {"tag": "button"},
         "refresh-service": {"tag": "button"},
         "copy-origin": {"tag": "button"},
+        "copy-command": {"tag": "button"},
         "copy-snippet": {"tag": "button"},
         "service-status": {"tag": "pre"},
         "onboarding-status": {"tag": "pre"},
         "extension-origin": {"tag": "p"},
+        "origin-command": {"tag": "pre"},
         "origin-snippet": {"tag": "pre"},
     }
     errors: list[str] = []
@@ -158,11 +160,13 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
     required_fragments = [
         '"tts-extension:get-service-snapshot"',
         "snapshot.originConfigSnippet",
+        "snapshot.originCliCommand",
         "snapshot.extensionOrigin",
         "formatOnboardingStatus",
         'checklistLine("Service reachable"',
         'checklistLine("Token saved"',
-        '"Origin snippet ready"',
+        '"Allow-list command ready"',
+        '"Allow-list snippet ready"',
         '"Voice available"',
         '"Health ok"',
         "populateVoiceOptions({",
@@ -177,8 +181,9 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
 
     return {
         "required_element_count": len(required_elements),
-        "checklist_items": 5,
+        "checklist_items": 6,
         "voice_selector": True,
+        "copy_command": True,
         "copy_snippet": True,
     }
 
@@ -187,6 +192,8 @@ def _verify_allow_list_snippet(extension_origin: str) -> dict[str, object]:
     background_js = (EXTENSION_ROOT / "src" / "background.js").read_text(encoding="utf-8")
     required_fragments = [
         "function buildOriginConfigSnippet(extensionOrigin)",
+        "function buildOriginCliCommand(extensionOrigin)",
+        "tts extension-allow-origin",
         '"[security]"',
         '`allowed_origins = ["${extensionOrigin}"]`',
     ]

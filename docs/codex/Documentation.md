@@ -11,32 +11,28 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The service CLI now includes
-  `tts extension-allow-origin <chrome-extension-origin>`, an idempotent
-  first-run helper for adding a copied Chrome extension origin to
-  `security.allowed_origins` in `config/config.toml`. It preserves existing
-  origins, rejects non-extension origins for this onboarding path, and is used
-  by both the onboarding check and Chrome/MV3 smoke harness instead of direct
-  TOML editing.
+- Current loop result: The Chrome extension popup now exposes a copyable
+  allow-list command alongside the raw extension origin and TOML snippet. The
+  service snapshot includes `originCliCommand`, the popup can copy it via
+  `Copy Command`, and the setup checklist now verifies both command and snippet
+  readiness for first-run Chrome onboarding.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py scripts\check_extension_onboarding.py scripts\check_chrome_extension_smoke.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_chrome_extension_smoke_check.py scripts\check_v1_readiness.py`.
+    `py -3 -m ruff check scripts\check_extension.py scripts\check_extension_onboarding.py scripts\check_v1_readiness.py apps\tts_service\tests\test_extension_onboarding_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 15 passed.
-  - `py -3 scripts\check_extension_onboarding.py` passed and reported the new
-    `cli_helper` contract.
-  - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 29
+    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_v1_readiness_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
+    and reported 10 passed.
+  - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
+    skipped because `node` is not installed.
+  - `py -3 scripts\check_extension_onboarding.py` passed and reported
+    `copy_command = true`, 13 popup elements, and 6 checklist items.
+  - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
-  - `py -3 scripts\check_chrome_extension_smoke.py` passed with a skipped
-    result because Chrome/Edge was found but the MV3 service worker did not
-    start in the headless smoke session on this machine.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 162 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including the updated
-    `extension_onboarding` CLI-helper check and the skip-aware
-    `chrome_extension_smoke`.
+  - `py -3 scripts\release_check.py` passed, including the updated extension
+    onboarding contract with `copy_command = true`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -192,7 +188,11 @@ This file is the live status log and shared memory for future Codex loops.
     running `setup-local` without choosing a persistent service manager.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
-    token state, origin snippet readiness, voice discovery, and health status.
+    token state, allow-list command/snippet readiness, voice discovery, and
+    health status.
+  - the popup now includes a copyable allow-list command generated from the
+    current Chrome extension origin, so first-run setup can copy
+    `tts extension-allow-origin ...` directly.
   - `tts extension-allow-origin <chrome-extension-origin>` now updates
     `security.allowed_origins` for a copied extension origin without requiring
     manual TOML edits.
