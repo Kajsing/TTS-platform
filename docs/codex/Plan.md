@@ -310,5 +310,9 @@ The thirty-eighth release-hardening slice extends
 `scripts/check_local_service_bootstrap.py` to seed the default catalog and fail
 if first-run `setup-local` output does not put that concrete default model
 install command first.
+The thirty-ninth packaging UX slice updates the generated
+`WINDOWS_BUNDLE_README.md` so the first-run model section installs
+`vits-piper-en_US-lessac-medium` before re-checking readiness, matching the
+catalog-aware `setup-local` next steps.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

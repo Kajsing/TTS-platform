@@ -11,18 +11,17 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `scripts/check_local_service_bootstrap.py` now seeds the
-  default catalog into its temp first-run repo and fails if `setup-local` does
-  not put `tts model-install vits-piper-en_US-lessac-medium --activate` first.
+- Current loop result: the generated `WINDOWS_BUNDLE_README.md` now mirrors the
+  catalog-aware first-run flow by installing
+  `vits-piper-en_US-lessac-medium` before re-checking readiness.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_local_service_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_local_service_bootstrap_check.py`.
-  - Targeted local-service bootstrap tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_local_service_bootstrap_check.py -q`
-    and reported 2 passed.
-  - `py -3 scripts\check_local_service_bootstrap.py` passed and reported the
-    `catalog_single_installable_model` value
-    `vits-piper-en_US-lessac-medium` plus the concrete install command first.
+    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_windows_bundle.py`.
+  - Targeted Windows bundle package tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py -q`
+    and reported 1 passed.
+  - `py -3 scripts\package_windows_bundle.py --out dist\windows\tts-platform-local-reader.zip`
+    passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 174 tests.
@@ -331,6 +330,9 @@ This file is the live status log and shared memory for future Codex loops.
     before extension packaging.
   - `scripts/package_windows_bundle.py` now includes the Chrome/MV3 smoke
     harness in the Windows local reader bundle.
+  - The generated `WINDOWS_BUNDLE_README.md` now puts the default English
+    `model-install` command before model readiness re-checking, matching
+    `setup-local` next-step guidance.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.

@@ -155,6 +155,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/check_windows_launchers.py",
         "scripts/windows/install_local.ps1",
         "scripts/windows/install_local.cmd",
+        "should put the `model-install` command above first",
         "extension-allow-origin",
     ),
     "scripts/check_windows_bundle_install.py": (
