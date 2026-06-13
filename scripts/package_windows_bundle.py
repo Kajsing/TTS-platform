@@ -37,6 +37,7 @@ INCLUDED_FILES = (
     "scripts/check_security_defaults.py",
     "scripts/check_v1_readiness.py",
     "scripts/check_windows_bundle_bootstrap.py",
+    "scripts/check_windows_bundle_install.py",
     "scripts/dev_run.py",
     "scripts/package_extension.py",
     "scripts/package_windows_bundle.py",

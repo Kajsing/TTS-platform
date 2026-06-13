@@ -79,6 +79,10 @@ Chrome extension zip under `dist\chrome_extension\`. It deliberately excludes
 local secrets such as `config\token.txt` and installed model files under
 `models\voices\`. The generated `WINDOWS_BUNDLE_README.md` explains the
 extract, virtualenv, launcher, and extension-loading flow.
+`scripts/check_windows_bundle_install.py` verifies the extracted bundle in a
+temporary virtual environment by installing the package, running the installed
+`tts setup-local` and `tts serve` entrypoint, and executing public-contract
+smoke against the started service.
 
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice

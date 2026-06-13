@@ -90,3 +90,4 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add automated local first-run service bootstrap smoke
 - [x] Add automated local model-management flow smoke
 - [x] Add automated Chrome extension onboarding contract smoke
+- [x] Add automated Windows bundle virtualenv install/start smoke

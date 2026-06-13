@@ -34,12 +34,16 @@ for long web-page text.
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks the embedded extension zip, and runs `setup-local` from the
   extracted source paths.
+- `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
+  reader bundle, creates a temporary `.venv`, installs the extracted package,
+  starts the installed `tts serve` entrypoint, runs public-contract smoke, and
+  shuts the service down.
 
 ## Manual Gates
 
-- Create a virtualenv in an extracted Windows local reader bundle, install the
-  package, and start the service with `scripts/windows/run_service.ps1` or
-  `tts serve` for manual Windows operator verification.
+- Run the Windows launcher scripts directly on an operator machine for manual
+  PowerShell/CMD verification. The extracted-bundle venv install plus installed
+  `tts serve` path is automated; direct launcher-script UX remains manual.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
@@ -73,6 +77,6 @@ for long web-page text.
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
-- Full extracted-bundle virtualenv installation remains manual; the automated
-  gates cover safe extraction, `setup-local`, loopback service startup, and
-  stub-backed smoke from source paths.
+- Direct PowerShell/CMD launcher UX remains manual; the automated gates cover
+  safe extraction, `setup-local`, temporary venv installation, installed
+  `tts serve`, loopback service startup, and stub-backed smoke.

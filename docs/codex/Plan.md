@@ -211,6 +211,9 @@ covering a generated local catalog/artifact install, activate, service smoke,
 and remove flow. The thirteenth release-hardening slice now adds
 `scripts/check_extension_onboarding.py`, covering popup setup controls,
 extension-origin allow-list snippet compatibility, and service health/voice
-discovery without requiring a full Chrome MV3 harness. Continue from the
-readiness audit: either automate another listed manual gate or take the next
-reader-flow/product slice.
+discovery without requiring a full Chrome MV3 harness. The fourteenth
+release-hardening slice now adds `scripts/check_windows_bundle_install.py`,
+covering extracted-bundle temporary venv creation, package install, installed
+`tts setup-local`, installed `tts serve`, and public-contract smoke. Continue
+from the readiness audit: either automate another listed manual gate or take the
+next reader-flow/product slice.

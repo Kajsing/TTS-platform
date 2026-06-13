@@ -11,20 +11,20 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The extension-onboarding readiness slice adds a
-  deterministic popup/service contract check. It verifies popup setup controls,
-  Chrome-extension origin allow-list snippet compatibility, and health/voice
-  discovery against a temporary local service without requiring a full Chrome
-  MV3 browser harness.
+- Current loop result: The Windows bundle install readiness slice adds a
+  temporary-venv install/start smoke for the extracted bundle. It installs build
+  tooling in the temp venv, installs the bundle package editable with
+  `--no-deps`, runs installed `tts setup-local`, starts installed `tts serve`,
+  runs public-contract smoke, and shuts the service down.
 - Validation status for the current loop:
-  - `py -3 scripts/check_extension_onboarding.py` passed.
-  - `py -3 -m pytest apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_check_extension.py -q` passed with 9 tests.
-  - Targeted `py -3 -m ruff check ...` passed.
+  - `py -3 scripts/check_windows_bundle_install.py --stream-text-repeat 1` passed.
+  - `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q` passed with 8 tests.
+  - Targeted `py -3 -m ruff check ...` passed after line wrapping.
   - `py -3 scripts/check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 134 tests.
+  - `py -3 -m pytest -q` passed with 136 tests.
   - `py -3 scripts/release_check.py` passed, including
-    `extension_onboarding`.
+    `windows_bundle_install`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -198,6 +198,10 @@ This file is the live status log and shared memory for future Codex loops.
     source paths.
   - `scripts/release_check.py` now runs the Windows bundle bootstrap check after
     building the bundle.
+  - `scripts/check_windows_bundle_install.py` now verifies a built/extracted
+    Windows bundle through temporary `.venv` creation, package install,
+    installed `tts setup-local`, installed `tts serve`, and public-contract
+    smoke.
   - `scripts/check_local_service_bootstrap.py` now starts a temp first-run
     loopback service and runs public-contract smoke without repo-local config
     or token side effects.
@@ -320,6 +324,7 @@ python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_v1_readiness.py
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
+python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
 First-run setup:
@@ -388,7 +393,9 @@ python3 scripts/package_windows_bundle.py
   visibility. It now preserves short headings and reports structure counts, but
   still lacks a full named reader-mode outline.
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
-  loading, and service allow-list configuration after extraction.
+  loading, and service allow-list configuration after extraction. The
+  virtualenv install/start path is now covered by an automated temp-venv smoke,
+  but direct PowerShell/CMD launcher UX still needs manual operator validation.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.

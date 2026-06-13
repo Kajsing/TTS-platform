@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CHECK_SCRIPT_PATH = REPO_ROOT / "scripts" / "check_windows_bundle_install.py"
+
+
+def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    calls: list[str] = []
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    def fake_extract_bundle(*, bundle_path: Path, extract_root: Path) -> None:
+        calls.append("extract")
+        bundle_root = extract_root / "tts-platform"
+        (bundle_root / ".venv" / "Scripts").mkdir(parents=True)
+        (bundle_root / ".venv" / "Scripts" / "tts.exe").write_text("", encoding="utf-8")
+        (bundle_root / ".venv" / "Scripts" / "python.exe").write_text("", encoding="utf-8")
+        (bundle_root / "config").mkdir()
+        (bundle_root / "config" / "token.txt").write_text("token", encoding="utf-8")
+
+    def fake_create_venv(*, python_executable: str, venv_dir: Path, timeout_s: float) -> None:
+        calls.append("venv")
+
+    def fake_install_build_tooling(
+        *,
+        venv_python: Path,
+        bundle_root: Path,
+        timeout_s: float,
+    ) -> None:
+        calls.append("build-tooling")
+
+    def fake_install_bundle_package(
+        *,
+        venv_python: Path,
+        bundle_root: Path,
+        timeout_s: float,
+    ) -> None:
+        calls.append("install")
+
+    def fake_run_json_command(
+        command: list[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        if command[1] == "setup-local":
+            calls.append("setup")
+            return {
+                "config_created": True,
+                "token_created": True,
+                "token_file": str(cwd / "config" / "token.txt"),
+                "default_voice": "sherpa-en-debug",
+                "manifest": {"default_voice_in_manifest": True},
+            }
+        calls.append("smoke")
+        return {
+            "health": {"status": "ok"},
+            "voice": "sherpa-en-debug",
+            "voices": {"count": 1},
+            "http": {"bytes": 10},
+            "stream": {"frames": 2},
+            "job": {"status": "completed"},
+        }
+
+    class FakeProcess:
+        def poll(self) -> None:
+            return None
+
+        def terminate(self) -> None:
+            calls.append("terminate")
+
+        def communicate(self, timeout: float) -> tuple[str, str]:
+            return "", ""
+
+    monkeypatch.setattr(check_module, "_extract_bundle", fake_extract_bundle)
+    monkeypatch.setattr(check_module, "_create_venv", fake_create_venv)
+    monkeypatch.setattr(check_module, "_install_build_tooling", fake_install_build_tooling)
+    monkeypatch.setattr(check_module, "_install_bundle_package", fake_install_bundle_package)
+    monkeypatch.setattr(check_module, "_run_json_command", fake_run_json_command)
+    monkeypatch.setattr(check_module, "_wait_for_health", lambda **kwargs: calls.append("health"))
+    monkeypatch.setattr(check_module, "_reserve_loopback_port", lambda: 7778)
+    monkeypatch.setattr(check_module.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
+
+    summary = check_module.check_windows_bundle_install(
+        bundle_path=bundle_path,
+        python_executable="python-test",
+    )
+
+    assert calls == [
+        "extract",
+        "venv",
+        "build-tooling",
+        "install",
+        "setup",
+        "health",
+        "smoke",
+        "terminate",
+    ]
+    assert summary["venv"] == {
+        "created": True,
+        "system_site_packages": True,
+        "build_tooling_installed": True,
+        "editable_install": True,
+        "entrypoint": ".venv\\Scripts\\tts.exe",
+    }
+    assert summary["setup"]["config_created"] is True
+    assert summary["service"]["job_status"] == "completed"
+
+
+def test_windows_bundle_install_check_rejects_invalid_stream_repeat(tmp_path: Path) -> None:
+    check_module = _load_check_module()
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    with pytest.raises(check_module.WindowsBundleInstallError, match="stream-text-repeat"):
+        check_module.check_windows_bundle_install(
+            bundle_path=bundle_path,
+            python_executable="python-test",
+            stream_text_repeat=0,
+        )
+
+
+def _load_check_module():
+    spec = importlib.util.spec_from_file_location(
+        "tts_platform_check_windows_bundle_install",
+        CHECK_SCRIPT_PATH,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

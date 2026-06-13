@@ -164,6 +164,12 @@ Check the built bundle's first-run bootstrap path with:
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
+Check the built bundle's temporary virtualenv install/start path with:
+
+```bash
+python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
+```
+
 Check the source first-run service bootstrap path directly with:
 
 ```bash

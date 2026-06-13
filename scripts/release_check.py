@@ -182,6 +182,15 @@ def _run_release_checks_with_package_path(
                 str(windows_bundle_out_path),
             ],
         ),
+        (
+            "windows_bundle_install",
+            [
+                python_executable,
+                "scripts/check_windows_bundle_install.py",
+                "--bundle",
+                str(windows_bundle_out_path),
+            ],
+        ),
     ]
     if live_smoke:
         checks.append(
