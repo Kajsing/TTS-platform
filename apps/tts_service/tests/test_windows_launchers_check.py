@@ -45,7 +45,12 @@ def test_windows_launchers_check_orchestrates_available_launchers(
             "base_url": "http://127.0.0.1:7777",
             "default_voice": "sherpa-en-debug",
             "manifest_default_voice": True,
-            "next_steps": ["tts model-check", "tts serve"],
+            "catalog_single_installable_model": "vits-piper-en_US-lessac-medium",
+            "next_steps": [
+                "tts model-install vits-piper-en_US-lessac-medium --activate",
+                "tts model-check",
+                "tts serve",
+            ],
         }
 
     def fake_check_launcher_service(
@@ -204,7 +209,14 @@ def test_check_launcher_setup_only_exposes_setup_next_steps(
         "service": {"base_url": "http://127.0.0.1:7777"},
         "default_voice": "sherpa-en-debug",
         "manifest": {"default_voice_in_manifest": True},
-        "next_steps": ["tts model-check", "tts serve"],
+        "catalog": {
+            "single_installable_model_id": "vits-piper-en_US-lessac-medium",
+        },
+        "next_steps": [
+            "tts model-install vits-piper-en_US-lessac-medium --activate",
+            "tts model-check",
+            "tts serve",
+        ],
     }
 
     monkeypatch.setattr(check_module, "_extract_bundle", fake_extract_bundle)
@@ -223,7 +235,15 @@ def test_check_launcher_setup_only_exposes_setup_next_steps(
         timeout_s=3.0,
     )
 
-    assert summary["next_steps"] == ["tts model-check", "tts serve"]
+    assert (
+        summary["catalog_single_installable_model"]
+        == "vits-piper-en_US-lessac-medium"
+    )
+    assert summary["next_steps"] == [
+        "tts model-install vits-piper-en_US-lessac-medium --activate",
+        "tts model-check",
+        "tts serve",
+    ]
 
 
 def test_check_launcher_service_runs_smoke_and_stops_process(

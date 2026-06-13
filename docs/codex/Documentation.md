@@ -11,19 +11,19 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Windows bundle bootstrap/install checks now fail if
-  extracted or installed `setup-local` output does not expose the default
-  catalog and put the concrete default model install command first.
+- Current loop result: Windows launcher setup-only summaries now expose
+  `catalog_single_installable_model`, aligning launcher, bundle bootstrap, and
+  installed bundle first-run evidence.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_windows_bundle_bootstrap.py scripts\check_windows_bundle_install.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_install_check.py`.
-  - Targeted Windows bundle bootstrap/install tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_install_check.py -q`
+    `py -3 -m ruff check scripts\check_windows_launchers.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_launchers_check.py`.
+  - Targeted Windows launcher tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`
     and reported 5 passed.
-  - `py -3 scripts\check_windows_bundle_bootstrap.py --bundle dist\windows\tts-platform-local-reader.zip`
-    passed.
-  - `py -3 scripts\check_windows_bundle_install.py --bundle dist\windows\tts-platform-local-reader.zip`
-    passed.
+  - `py -3 scripts\check_windows_launchers.py --bundle dist\windows\tts-platform-local-reader.zip`
+    passed and reported `catalog_single_installable_model` as
+    `vits-piper-en_US-lessac-medium` for both PowerShell and CMD setup-only
+    launchers.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 174 tests.
@@ -316,6 +316,9 @@ This file is the live status log and shared memory for future Codex loops.
   - Windows launcher setup-only summaries now expose `setup-local` next-step
     guidance, including `tts model-check`, alongside config/token creation
     evidence.
+  - Windows launcher setup-only summaries now also expose
+    `catalog_single_installable_model`, matching bundle bootstrap/install
+    summaries.
   - `scripts/check_windows_launchers.py` now also starts bundled PowerShell/CMD
     launchers as foreground services on reserved loopback ports, runs
     public-contract smoke, and stops the process trees.

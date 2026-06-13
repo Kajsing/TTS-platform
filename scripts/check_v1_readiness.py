@@ -184,6 +184,7 @@ REQUIRED_TEXT_MARKERS = {
         "_check_launcher_service",
         '"service_smoke"',
         '"foreground_service"',
+        "catalog_single_installable_model",
     ),
     "TESTING.md": (
         "v1-readiness",

@@ -317,5 +317,8 @@ catalog-aware `setup-local` next steps.
 The fortieth release-hardening slice makes the Windows bundle bootstrap and
 install checks fail if extracted/installed `setup-local` output does not expose
 the default catalog and put the concrete default model install command first.
+The forty-first release-hardening slice exposes the same
+`catalog_single_installable_model` signal from Windows launcher setup-only
+summaries, keeping all Windows first-run checks aligned.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

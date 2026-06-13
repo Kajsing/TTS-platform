@@ -222,6 +222,10 @@ def _check_launcher_setup_only(
             payload.get("manifest"),
             "default_voice_in_manifest",
         ),
+        "catalog_single_installable_model": _dict_get(
+            payload.get("catalog"),
+            "single_installable_model_id",
+        ),
         "next_steps": _string_list(payload.get("next_steps")),
     }
 
