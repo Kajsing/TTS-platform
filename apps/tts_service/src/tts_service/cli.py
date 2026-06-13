@@ -20,6 +20,9 @@ import httpx
 import websockets
 from tts_core.audio import encode_wav_pcm16
 
+from .auth import initialize_auth
+from .config import load_config
+
 
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
@@ -118,6 +121,17 @@ def main(argv: list[str] | None = None) -> None:
             )
             return
 
+        if args.command == "setup-local":
+            _print_json(
+                _setup_local(
+                    repo_root=Path(args.repo_root),
+                    config_path=Path(args.config_path),
+                    example_config_path=Path(args.example_config_path),
+                    manifest_path=Path(args.manifest_path),
+                )
+            )
+            return
+
         if args.command == "catalog-list":
             catalog, _ = _load_model_catalog(args.catalog)
             _print_json(
@@ -201,6 +215,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     job_cancel_parser = subparsers.add_parser("job-cancel")
     job_cancel_parser.add_argument("job_id")
+
+    setup_local_parser = subparsers.add_parser("setup-local")
+    setup_local_parser.add_argument("--repo-root", default=".")
+    setup_local_parser.add_argument("--config-path", default="config/config.toml")
+    setup_local_parser.add_argument(
+        "--example-config-path",
+        default="config/config.example.toml",
+    )
+    setup_local_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
 
     catalog_list_parser = subparsers.add_parser("catalog-list")
     catalog_list_parser.add_argument("--catalog", required=True)
@@ -394,6 +417,112 @@ def _require_token(token: str | None, *, command: str) -> None:
     raise SystemExit(
         f"The '{command}' command requires a token. Use --token or set TTS_PLATFORM_TOKEN."
     )
+
+
+def _setup_local(
+    *,
+    repo_root: Path,
+    config_path: Path,
+    example_config_path: Path,
+    manifest_path: Path,
+) -> dict[str, object]:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
+    resolved_example_config_path = _resolve_under_root(resolved_repo_root, example_config_path)
+    resolved_manifest_path = _resolve_under_root(resolved_repo_root, manifest_path)
+
+    config_created = False
+    if not resolved_config_path.exists():
+        if not resolved_example_config_path.exists():
+            raise SystemExit(f"Example config does not exist: {resolved_example_config_path}")
+        resolved_config_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(resolved_example_config_path, resolved_config_path)
+        config_created = True
+
+    try:
+        config = load_config(resolved_config_path, env={})
+    except ValueError as exc:
+        raise SystemExit(f"Config is invalid: {exc}") from exc
+
+    try:
+        auth_state = initialize_auth(config.auth, repo_root=resolved_repo_root)
+    except ValueError as exc:
+        raise SystemExit(f"Auth setup failed: {exc}") from exc
+
+    manifest_status = _inspect_manifest(
+        manifest_path=resolved_manifest_path,
+        default_voice=config.tts.default_voice,
+    )
+    base_url = f"http://{config.server.host}:{config.server.port}"
+    return {
+        "repo_root": str(resolved_repo_root),
+        "config_path": str(resolved_config_path),
+        "config_created": config_created,
+        "auth_enabled": auth_state.enabled,
+        "token_file": str(auth_state.token_file),
+        "token_created": auth_state.generated,
+        "service": {
+            "host": config.server.host,
+            "port": config.server.port,
+            "base_url": base_url,
+        },
+        "default_voice": config.tts.default_voice,
+        "manifest": manifest_status,
+        "next_steps": _setup_local_next_steps(
+            config_created=config_created,
+            token_created=auth_state.generated,
+            default_voice_in_manifest=bool(manifest_status["default_voice_in_manifest"]),
+        ),
+    }
+
+
+def _resolve_under_root(repo_root: Path, path: Path) -> Path:
+    expanded = path.expanduser()
+    if expanded.is_absolute():
+        return expanded.resolve()
+    return (repo_root / expanded).resolve()
+
+
+def _inspect_manifest(*, manifest_path: Path, default_voice: str) -> dict[str, object]:
+    if not manifest_path.exists():
+        return {
+            "path": str(manifest_path),
+            "exists": False,
+            "voice_count": 0,
+            "default_voice_in_manifest": False,
+        }
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("Manifest root must be a JSON object.")
+    voices = payload.get("voices", [])
+    if not isinstance(voices, list):
+        raise SystemExit("Manifest field 'voices' must be a list.")
+    voice_ids = [
+        str(voice.get("id", "")).strip()
+        for voice in voices
+        if isinstance(voice, dict) and str(voice.get("id", "")).strip()
+    ]
+    return {
+        "path": str(manifest_path),
+        "exists": True,
+        "voice_count": len(voice_ids),
+        "default_voice_in_manifest": default_voice in voice_ids,
+    }
+
+
+def _setup_local_next_steps(
+    *,
+    config_created: bool,
+    token_created: bool,
+    default_voice_in_manifest: bool,
+) -> list[str]:
+    steps = ["py -3 scripts/dev_run.py", "tts health", "tts list-voices"]
+    if not default_voice_in_manifest:
+        steps.insert(0, "tts model-install <model-id> --catalog <catalog> --activate")
+    if config_created or token_created:
+        steps.append("read config/token.txt when a protected client needs the bearer token")
+    return steps
 
 
 def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], Path | None]:

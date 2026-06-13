@@ -11,14 +11,14 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The second v1 model-management UX slice improved
-  `tts catalog-list` and `tts model-install` output. Catalog listing now reports
-  counts, model summaries, install-readiness warnings, and next-step guidance.
-  Model install keeps JSON on stdout while emitting progress status lines to
-  stderr and recording structured `install_steps`.
+- Current loop result: The first Windows-friendly setup slice added
+  `tts setup-local`. The helper creates `config/config.toml` from the example
+  when missing, initializes `config/token.txt` through the service auth path,
+  reports service URL and manifest/default-voice readiness, and returns safe
+  next steps without printing the bearer token.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 96 tests.
+  - `py -3 -m pytest -q` passed with 99 tests.
   - `py -3 scripts/check_extension.py` passed, including resume-wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -100,6 +100,13 @@ This file is the live status log and shared memory for future Codex loops.
     or incomplete-entry warnings, and install next-step guidance.
   - `tts model-install` now emits progress status lines to stderr and includes
     structured `install_steps` in its JSON stdout result.
+- Windows-friendly first-run setup has started:
+  - `tts setup-local` bootstraps local config and token files without requiring
+    the service to be running.
+  - setup output reports the service base URL and whether the configured
+    default voice is present in `models/MANIFEST.json`.
+  - setup output deliberately reports only the token file path, not the bearer
+    token value.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -109,7 +116,7 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Move to Windows-friendly service setup and first-run robustness.
+- Continue Windows-friendly service run/install flow.
 - Then continue Chrome extension onboarding/installability.
 
 ## Decisions Made And Why
@@ -149,6 +156,9 @@ This file is the live status log and shared memory for future Codex loops.
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any
   human progress chatter belongs on stderr.
+- First-run setup may create local config and token files, but should not choose
+  a Windows service manager or persistence mechanism until that product
+  direction is explicit.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -166,6 +176,12 @@ Baseline validation:
 ```bash
 python3 -m pytest -q
 python3 -m ruff check .
+```
+
+First-run setup:
+
+```bash
+tts setup-local
 ```
 
 Service start:

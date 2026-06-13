@@ -40,6 +40,8 @@ backend-realism work, and early v1 model-management helpers:
   update, safe zip extraction, install progress metadata, overwrite refusal,
   install-and-activate first-run shortcut, default-voice activation, and model
   removal
+- local first-run setup helper behavior for config creation, token
+  initialization, and manifest/default-voice readiness reporting
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

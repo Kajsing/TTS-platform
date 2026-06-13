@@ -73,6 +73,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add richer extension UX for resuming from saved reader progress
 - [x] Add `model-install --activate` first-run shortcut and install guidance output
 - [x] Improve catalog listing and install progress output
-- [ ] Add Windows-friendly service setup flow
+- [x] Add Windows-friendly local first-run setup helper
+- [ ] Add Windows-friendly service run/install flow
 - [ ] Improve Chrome extension onboarding and installability
 - [ ] Close release-hardening gaps for docs, security defaults, and tests

@@ -28,6 +28,18 @@ The service reads `config/config.toml` when started through
 `python3 scripts/dev_run.py`. If the file is absent, built-in defaults are used.
 The token file path defaults to `./config/token.txt`.
 
+For first-run setup, run:
+
+```powershell
+tts setup-local
+```
+
+The helper copies `config/config.example.toml` to `config/config.toml` when the
+local config is missing, initializes `config/token.txt` through the same auth
+path the service uses, checks whether the configured default voice appears in
+`models/MANIFEST.json`, and returns next steps as JSON. It does not print the
+bearer token; read `config/token.txt` locally when a protected client needs it.
+
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice
 `sherpa-en-debug`.
@@ -244,6 +256,12 @@ Unsafe zip entries include absolute paths, Windows drive-qualified paths, and
 path traversal using either `/` or `\`.
 
 ## Model CLI Workflow
+
+Initialize local config and token files:
+
+```bash
+tts setup-local
+```
 
 List catalog entries:
 

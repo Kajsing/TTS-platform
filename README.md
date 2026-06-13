@@ -71,7 +71,7 @@ scripts/
 
 1. Create a virtual environment.
 2. Install dependencies from [`pyproject.toml`](pyproject.toml).
-3. Copy [`config/config.example.toml`](config/config.example.toml) to `config/config.toml`.
+3. Run the local first-run setup helper.
 4. Run the tests.
 
 Example:
@@ -80,6 +80,7 @@ Example:
 python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -e ".[dev]"
+tts setup-local
 python3 -m pytest -q
 ```
 
@@ -89,6 +90,7 @@ On Windows, use `py -3` if `python3` resolves to the Microsoft Store alias:
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
+tts setup-local
 python -m pytest -q
 ```
 
@@ -102,6 +104,7 @@ tts list-voices
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
+tts setup-local
 tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
@@ -110,6 +113,11 @@ tts model-remove sherpa-en-v1
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
+
+`setup-local` is the Windows-friendly first-run helper: it creates
+`config/config.toml` from `config/config.example.toml` when missing, initializes
+`config/token.txt` through the same auth path the service uses, reports default
+voice/manifest readiness, and prints next steps without exposing the token.
 
 The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
 commands are local model-management helpers and do not require service auth
