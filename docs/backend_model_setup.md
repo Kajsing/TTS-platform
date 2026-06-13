@@ -466,8 +466,10 @@ a separate page-scale text limit, the real runtime path can stream callback
 audio, stream events expose reader progress, and the extension has a basic
 resume action plus previous/next section navigation with truncated-page
 continuation and manual/automatic text-offset continuation for flat long pages.
-The product still needs manual Chrome playback evidence before the Chrome
-reader is fully v1-ready.
+`scripts/check_chrome_extension_smoke.py` can run an optional real Chrome/Edge
+MV3 smoke that loads the extension, starts a temporary loopback service, opens a
+generated long article, verifies capture, and starts page playback. Strict
+browser evidence still requires Chrome or Edge on the operator machine.
 
 ## Cancellation Limits
 
@@ -540,6 +542,7 @@ Baseline:
 python3 -m pytest -q
 python3 -m ruff check .
 python3 scripts/check_model_management_flow.py
+python3 scripts/check_chrome_extension_smoke.py
 ```
 
 Windows PowerShell fallback:

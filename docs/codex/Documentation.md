@@ -11,30 +11,32 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension package now includes local handoff
-  installability assets: `INSTALL.md`, manifest/action PNG icons, validator
-  coverage, package summary output, and Windows bundle bootstrap checks for the
-  embedded extension zip.
+- Current loop result: The repo now includes an optional Chrome/MV3 browser
+  smoke harness at `scripts/check_chrome_extension_smoke.py`. The default mode
+  is opportunistic for release gates: it validates the static extension
+  contract, tries to load the unpacked extension in Chrome/Edge through
+  DevTools Protocol, starts an isolated loopback service with the generated
+  extension origin allow-listed, opens a generated long article, verifies page
+  capture, starts page playback, and observes playback state. It returns a
+  skipped JSON result when the local browser/MV3 environment cannot run the
+  smoke; `--require-browser` makes that path strict for operator evidence.
 - Validation status for the current loop:
-  - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
-    skipped because `node` is not installed.
-  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-extension-check.zip`
-    passed and reported `file_count = 17`, `install_guide_path = INSTALL.md`,
-    and `icon_count = 4`.
-  - `py -3 scripts\check_windows_bundle_bootstrap.py` passed and verified the
-    embedded extension package contains the install guide and icon set.
-  - `py -3 scripts\check_v1_readiness.py` passed with 36 checked files and 27
-    readiness markers.
-  - Targeted installability tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+  - `py -3 scripts\check_chrome_extension_smoke.py` passed with a skipped
+    result because Chrome/Edge was found but the MV3 service worker did not
+    start in the headless smoke session on this machine.
+  - Targeted ruff passed with
+    `py -3 -m ruff check scripts\check_chrome_extension_smoke.py scripts\release_check.py scripts\package_windows_bundle.py scripts\check_v1_readiness.py apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py`.
+  - Targeted tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
     and reported 11 passed.
+  - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 28
+    readiness markers.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 154 tests.
+  - `py -3 -m pytest -q` passed with 160 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including extension install-asset
-    validation, extension package validation, Windows bundle packaging, bundle
-    bootstrap checks, launcher foreground service smoke, and bundle install
-    smoke.
+  - `py -3 scripts\release_check.py` passed, including
+    `chrome_extension_smoke`, which returned the same skipped result for this
+    local browser/MV3 environment.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -200,6 +202,8 @@ This file is the live status log and shared memory for future Codex loops.
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
   - the Chrome extension package now includes `INSTALL.md` plus manifest/action
     PNG icons for local Chrome handoff builds.
+  - `scripts/check_chrome_extension_smoke.py` now provides an optional real
+    Chrome/Edge MV3 smoke for page capture and playback startup evidence.
   - the extension manifest no longer requests `<all_urls>` in
     `host_permissions`; service host permissions are limited to localhost, while
     page access remains in the declared content script.
@@ -270,6 +274,10 @@ This file is the live status log and shared memory for future Codex loops.
     a deterministic local gate before extension packaging.
   - `scripts/release_check.py` now runs extension reader-flow smoke before
     extension packaging.
+  - `scripts/release_check.py` now runs the skip-aware Chrome/MV3 browser smoke
+    before extension packaging.
+  - `scripts/package_windows_bundle.py` now includes the Chrome/MV3 smoke
+    harness in the Windows local reader bundle.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.
@@ -450,6 +458,8 @@ tts model-remove <model-id>
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_extension_onboarding.py
 python3 scripts/check_extension_reader_flow.py
+python3 scripts/check_chrome_extension_smoke.py
+python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
@@ -462,6 +472,7 @@ Extension structural smoke:
 
 ```bash
 python3 scripts/check_extension.py
+python3 scripts/check_chrome_extension_smoke.py
 python3 scripts/package_extension.py
 python3 scripts/package_windows_bundle.py
 ```
@@ -496,8 +507,13 @@ python3 scripts/package_windows_bundle.py
   PowerShell/CMD.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
-- The browser prototype still depends on manual Chrome loading and manual allow-list setup, but the extension zip now carries local install guidance and icon assets.
-- There is still no full automated MV3 test harness in the repository.
+- The default Chrome/MV3 smoke is opportunistic so offline release gates remain
+  usable across machines. Use
+  `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
+  when strict local browser evidence is required.
+- In this Windows session, Chrome/Edge discovery succeeded, but the headless MV3
+  service worker target did not start; the smoke therefore returned a skipped
+  JSON result in default mode.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.
 
 ## Resume Instructions For The Next Codex Loop

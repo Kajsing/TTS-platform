@@ -107,8 +107,10 @@ backend-realism work, and early v1 model-management helpers:
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
 - live smoke support for separate long WebSocket stream text, minimum stream
   text-chunk assertions, and release-check redaction of inline smoke text
-
-The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
+- optional Chrome/MV3 browser smoke harness coverage that loads the extension
+  in Chrome or Edge through DevTools Protocol when a browser is available,
+  starts an isolated local service, opens a generated long article, verifies
+  extension page capture, and starts page playback
 
 Recommended extension checks:
 
@@ -185,6 +187,10 @@ contract includes previous/next section navigation, truncated-section
 continuation, manual and automatic truncated text-offset continuation,
 stop/restart recovery wiring, and the popup state fields used after reopening
 the popup.
+It runs a skip-aware Chrome/MV3 browser smoke that uses Chrome or Edge when one
+is installed. When the local browser/MV3 environment cannot run the smoke, the
+gate reports a skipped smoke rather than failing the offline release gate; use
+`--require-browser` on the smoke script when strict browser evidence is needed.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -262,6 +268,18 @@ Check the Chrome extension long-page reader-flow contract directly with:
 python3 scripts/check_extension_reader_flow.py
 ```
 
+Check the optional Chrome/MV3 browser smoke directly with:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py
+```
+
+For strict browser evidence on a machine with Chrome or Edge installed:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
+```
+
 CLI example:
 
 ```bash
@@ -284,6 +302,7 @@ For a lightweight extension syntax check when `node` is available:
 
 ```bash
 python3 scripts/check_extension.py
+python3 scripts/check_chrome_extension_smoke.py
 python3 scripts/package_extension.py
 python3 scripts/package_windows_bundle.py
 node --check apps/chrome_extension/src/background.js

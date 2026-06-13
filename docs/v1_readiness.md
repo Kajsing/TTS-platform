@@ -26,6 +26,14 @@ for long web-page text.
   truncated segment finishes, plus stop/restart recovery and popup
   reopen-state signals, then streams a
   generated thousand-word article through the local service WebSocket contract.
+- `python3 scripts/check_chrome_extension_smoke.py` validates the extension
+  static contract, then uses Chrome or Edge through DevTools Protocol when a
+  browser is available. It loads the unpacked MV3 extension, starts an isolated
+  loopback service with the generated extension origin allow-listed, opens a
+  generated long article, verifies content-script page capture and background
+  health fetch, starts `Speak Page`, and observes playback state. Without
+  Chrome or Edge, or when the local browser/MV3 environment cannot run the
+  smoke, it reports a skipped smoke unless `--require-browser` is set.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   runs the public-contract smoke, and shuts the service down.
@@ -81,14 +89,18 @@ for long web-page text.
 - Load `apps/chrome_extension` in Chrome, copy the extension origin into
   `security.allowed_origins`, restart the service, save the token in the popup,
   and confirm actual Chrome popup health plus voice discovery. The static
-  popup/origin/service-snapshot contract is automated.
+  popup/origin/service-snapshot contract is automated, and
+  `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
+  can provide strict local Chrome/MV3 browser smoke evidence on a machine with
+  Chrome or Edge installed.
 - On a long article page, verify `Speak Page`, progress display, truncation
   metadata, `Resume Page`, `Continue Page`, `Previous Section`,
   `Next Section`, stop/restart behavior, and popup state after reopening in
-  actual Chrome. The reader-flow contract now automates truncated-section
-  continuation, manual and automatic truncated text-offset continuation,
-  stop/recovery wiring, and popup state fields, while actual Chrome playback
-  remains manual.
+  actual Chrome if operator comfort evidence is desired. The reader-flow
+  contract automates truncated-section continuation, manual and automatic
+  truncated text-offset continuation, stop/recovery wiring, and popup state
+  fields; the Chrome/MV3 smoke automates one real browser path when Chrome or
+  Edge is available.
 
 ## Product Choices
 
@@ -102,8 +114,11 @@ for long web-page text.
 
 ## Known Not Yet Automated
 
-- There is no full automated Chrome MV3 browser harness in the repository; the
-  automated onboarding gate does not replace manual Chrome loading/playback.
+- strict Chrome/MV3 smoke requires Chrome or Edge to be installed and able to
+  load the unpacked MV3 extension. The default release gate can skip the
+  browser smoke when the local browser environment cannot run it;
+  run `python3 scripts/check_chrome_extension_smoke.py --require-browser` when
+  a real browser must be present.
 - JavaScript syntax validation in `scripts/check_extension.py` requires `node`
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live

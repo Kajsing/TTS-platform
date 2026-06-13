@@ -16,6 +16,7 @@ REQUIRED_FILES = (
     "scripts/release_check.py",
     "scripts/check_security_defaults.py",
     "scripts/check_extension.py",
+    "scripts/check_chrome_extension_smoke.py",
     "scripts/check_extension_onboarding.py",
     "scripts/check_extension_reader_flow.py",
     "scripts/check_local_service_bootstrap.py",
@@ -70,7 +71,8 @@ READINESS_MARKERS = (
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
     "tts model-check <model-id>",
     "--allow-missing-checksum",
-    "no full automated Chrome MV3 browser harness",
+    "python3 scripts/check_chrome_extension_smoke.py",
+    "strict Chrome/MV3 smoke requires Chrome or Edge",
     "Permanent Windows auto-start/service-manager installation remains undecided",
 )
 
@@ -83,6 +85,7 @@ REQUIRED_TEXT_MARKERS = {
         '"extension"',
         '"extension_onboarding"',
         '"extension_reader_flow"',
+        '"chrome_extension_smoke"',
         '"extension_package"',
         '"windows_bundle"',
         '"windows_bundle_bootstrap"',
@@ -107,6 +110,12 @@ REQUIRED_TEXT_MARKERS = {
         '"automatic_truncated_text_continuation"',
         '"truncated_text_continuation"',
     ),
+    "scripts/check_chrome_extension_smoke.py": (
+        "--require-browser",
+        "chrome-extension://",
+        "tts-extension:speak-page",
+        "playbackState",
+    ),
     "scripts/smoke_service.py": (
         "--stream-text-repeat",
         "--min-stream-text-chunks",
@@ -115,6 +124,7 @@ REQUIRED_TEXT_MARKERS = {
         "docs/v1_readiness.md",
         "apps\\\\chrome_extension\\\\INSTALL.md",
         "scripts/check_v1_readiness.py",
+        "scripts/check_chrome_extension_smoke.py",
         "scripts/check_extension_onboarding.py",
         "scripts/check_extension_reader_flow.py",
         "scripts/check_local_service_bootstrap.py",
@@ -146,16 +156,19 @@ REQUIRED_TEXT_MARKERS = {
         "icon",
         "Continue Page",
         "truncated text-offset continuation",
+        "check_chrome_extension_smoke.py",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",
         "icons",
         "Continue Page",
         "next known text character offset",
+        "check_chrome_extension_smoke.py",
     ),
     "docs/backend_model_setup.md": (
         "Continue Page",
         "non-textual character offset",
+        "check_chrome_extension_smoke.py",
     ),
 }
 

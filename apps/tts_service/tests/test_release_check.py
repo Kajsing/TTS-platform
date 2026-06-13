@@ -32,6 +32,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "extension",
         "extension_onboarding",
         "extension_reader_flow",
+        "chrome_extension_smoke",
         "extension_package",
         "windows_bundle",
         "windows_bundle_bootstrap",
@@ -50,6 +51,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         (["python-test", "scripts/check_extension.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension_onboarding.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension_reader_flow.py"], REPO_ROOT, True),
+        (["python-test", "scripts/check_chrome_extension_smoke.py"], REPO_ROOT, True),
         (
             [
                 "python-test",

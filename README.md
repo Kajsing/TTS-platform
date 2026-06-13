@@ -215,9 +215,10 @@ python3 scripts/release_check.py
 It runs ruff, pytest, security-default verification, v1-readiness verification,
 local service bootstrap smoke, local model-management flow smoke, extension
 validation, extension onboarding contract smoke, long-page reader-flow smoke,
-and extension zip packaging with a temporary package output. It also builds,
-bootstrap-checks, launcher setup/service-smoke checks, and temporary-venv
-install-checks the Windows local reader bundle with a temporary output path.
+skip-aware Chrome/MV3 browser smoke, and extension zip packaging with a
+temporary package output. It also builds, bootstrap-checks, launcher
+setup/service-smoke checks, and temporary-venv install-checks the Windows local
+reader bundle with a temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
 
@@ -280,3 +281,10 @@ python3 scripts/package_extension.py
 
 The zip includes `INSTALL.md` plus the extension icon set used by the manifest
 and toolbar action.
+
+To run the optional real-browser Chrome/MV3 smoke when Chrome or Edge is
+available:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
+```

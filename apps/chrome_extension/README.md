@@ -29,7 +29,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - include `INSTALL.md` and manifest/action icons in local handoff packages
 - recover more deliberately from playback underruns by rebuffering before audio resumes
 - retry offscreen playback startup if the offscreen document has gone stale
-- provide a troubleshooting guide and a lightweight repo-native validation script
+- provide a troubleshooting guide, a lightweight repo-native validation script,
+  and an optional Chrome/MV3 browser smoke script
 
 ## Before loading the extension
 
@@ -158,5 +159,18 @@ truncated-section continuation, manual and automatic truncated text-offset
 continuation, stop/restart recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
+
+Run the optional Chrome/MV3 browser smoke with:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py
+```
+
+The smoke uses Chrome or Edge through DevTools Protocol when a browser is
+available, loads this unpacked extension, starts an isolated local service,
+opens a generated long article, verifies page capture, starts page playback,
+and observes playback state. It skips truthfully when the local browser/MV3
+environment cannot run the smoke; add `--require-browser --headed` when strict
+local browser evidence is needed.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

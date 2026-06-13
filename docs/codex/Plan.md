@@ -274,5 +274,10 @@ metadata and source tab without storing raw page text.
 The twenty-ninth extension-installability slice adds a local `INSTALL.md`
 handoff guide and manifest/action PNG icon assets to the Chrome extension
 package, with validator, package, and Windows bundle bootstrap coverage.
+The thirtieth release-hardening slice adds
+`scripts/check_chrome_extension_smoke.py`, a skip-aware Chrome/Edge MV3 browser
+smoke that loads the unpacked extension, starts an isolated local service,
+opens a generated long article, verifies page capture, starts page playback,
+observes playback state, and can be made strict with `--require-browser`.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
