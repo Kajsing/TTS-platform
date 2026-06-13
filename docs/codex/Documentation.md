@@ -11,21 +11,18 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `tts setup-local` now inspects the default catalog,
-  includes catalog readiness in its JSON output, and suggests
-  `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
-  next step when the configured default voice is still the development stub.
+- Current loop result: `scripts/check_local_service_bootstrap.py` now seeds the
+  default catalog into its temp first-run repo and fails if `setup-local` does
+  not put `tts model-install vits-piper-en_US-lessac-medium --activate` first.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py scripts\check_v1_readiness.py`.
-  - Targeted setup/bootstrap tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_local_service_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_windows_bundle_install_check.py -q`
-    and reported 15 passed.
-  - `py -3 -m tts_service.cli setup-local` passed and reported
-    `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
-    next step for the current debug default voice.
-  - `py -3 scripts\check_local_service_bootstrap.py` passed.
-  - `py -3 scripts\check_model_management_flow.py` passed.
+    `py -3 -m ruff check scripts\check_local_service_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_local_service_bootstrap_check.py`.
+  - Targeted local-service bootstrap tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_local_service_bootstrap_check.py -q`
+    and reported 2 passed.
+  - `py -3 scripts\check_local_service_bootstrap.py` passed and reported the
+    `catalog_single_installable_model` value
+    `vits-piper-en_US-lessac-medium` plus the concrete install command first.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 174 tests.
@@ -321,6 +318,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_local_service_bootstrap.py` now starts a temp first-run
     loopback service and runs public-contract smoke without repo-local config
     or token side effects.
+  - `scripts/check_local_service_bootstrap.py` now seeds the default catalog
+    and validates that first-run setup output starts with the concrete default
+    English model install command.
   - `scripts/release_check.py` now runs local service bootstrap and
     model-management flow smoke checks as deterministic offline readiness gates.
   - `scripts/release_check.py` now runs extension onboarding contract smoke as

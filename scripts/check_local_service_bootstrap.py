@@ -80,6 +80,7 @@ def check_local_service_bootstrap(
         token_file = Path(str(setup_payload.get("token_file", "")))
         if not token_file.is_file():
             raise LocalServiceBootstrapError("setup-local did not create a token file.")
+        _assert_setup_guidance(setup_payload)
 
         port = _reserve_loopback_port()
         base_url = f"http://127.0.0.1:{port}"
@@ -135,7 +136,11 @@ def check_local_service_bootstrap(
 
 
 def _seed_temp_repo(repo_root: Path) -> None:
-    for relative_path in ("config/config.example.toml", "models/MANIFEST.json"):
+    for relative_path in (
+        "config/config.example.toml",
+        "models/MANIFEST.json",
+        "models/catalog.json",
+    ):
         source = REPO_ROOT / relative_path
         destination = repo_root / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -255,6 +260,12 @@ def _summarize_setup(payload: dict[str, object]) -> dict[str, object]:
     manifest_default_voice = False
     if isinstance(manifest, dict):
         manifest_default_voice = bool(manifest.get("default_voice_in_manifest"))
+    catalog = payload.get("catalog")
+    catalog_exists = False
+    catalog_single_installable_model = None
+    if isinstance(catalog, dict):
+        catalog_exists = bool(catalog.get("exists"))
+        catalog_single_installable_model = catalog.get("single_installable_model_id")
     service = payload.get("service")
     configured_base_url = None
     if isinstance(service, dict):
@@ -266,8 +277,38 @@ def _summarize_setup(payload: dict[str, object]) -> dict[str, object]:
         "default_voice": payload.get("default_voice"),
         "configured_base_url": configured_base_url,
         "manifest_default_voice": manifest_default_voice,
+        "catalog_exists": catalog_exists,
+        "catalog_single_installable_model": catalog_single_installable_model,
         "next_steps": _string_list(payload.get("next_steps")),
     }
+
+
+def _assert_setup_guidance(setup_payload: dict[str, object]) -> None:
+    next_steps = _string_list(setup_payload.get("next_steps"))
+    if "tts serve" not in next_steps:
+        raise LocalServiceBootstrapError("setup-local next steps do not include tts serve.")
+    if "tts model-check" not in next_steps:
+        raise LocalServiceBootstrapError(
+            "setup-local next steps do not include tts model-check."
+        )
+
+    catalog = setup_payload.get("catalog")
+    if not isinstance(catalog, dict) or catalog.get("exists") is not True:
+        raise LocalServiceBootstrapError("setup-local did not report the default catalog.")
+    single_installable_model_id = str(
+        catalog.get("single_installable_model_id") or ""
+    ).strip()
+    if not single_installable_model_id:
+        raise LocalServiceBootstrapError(
+            "setup-local default catalog did not expose one installable model."
+        )
+    expected_install_step = (
+        f"tts model-install {single_installable_model_id} --activate"
+    )
+    if not next_steps or next_steps[0] != expected_install_step:
+        raise LocalServiceBootstrapError(
+            "setup-local did not put the default catalog install step first."
+        )
 
 
 def _summarize_smoke(payload: dict[str, object]) -> dict[str, object]:

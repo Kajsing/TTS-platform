@@ -26,6 +26,14 @@ def test_local_service_bootstrap_check_runs_temp_service() -> None:
     assert summary["setup"]["token_created"] is True
     assert summary["setup"]["auth_enabled"] is True
     assert summary["setup"]["manifest_default_voice"] is True
+    assert summary["setup"]["catalog_exists"] is True
+    assert (
+        summary["setup"]["catalog_single_installable_model"]
+        == "vits-piper-en_US-lessac-medium"
+    )
+    assert summary["setup"]["next_steps"][0] == (
+        "tts model-install vits-piper-en_US-lessac-medium --activate"
+    )
     assert "tts model-check" in summary["setup"]["next_steps"]
     assert "tts serve" in summary["setup"]["next_steps"]
     assert summary["smoke"]["health"]["status"] == "ok"

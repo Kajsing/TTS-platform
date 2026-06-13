@@ -134,6 +134,12 @@ REQUIRED_TEXT_MARKERS = {
         "--stream-text-repeat",
         "--min-stream-text-chunks",
     ),
+    "scripts/check_local_service_bootstrap.py": (
+        "models/catalog.json",
+        "_assert_setup_guidance",
+        "catalog_single_installable_model",
+        "setup-local did not put the default catalog install step first",
+    ),
     "scripts/package_windows_bundle.py": (
         "docs/v1_readiness.md",
         "models/catalog.json",
