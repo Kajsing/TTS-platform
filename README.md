@@ -138,9 +138,9 @@ tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts setup-local
 tts serve
 tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
-tts catalog-list --catalog ./models/catalog.json
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
+tts catalog-list
+tts model-install sherpa-en-v1 --overwrite
+tts model-install sherpa-en-v1 --activate
 tts model-activate sherpa-en-v1
 tts model-check sherpa-en-v1
 tts model-remove sherpa-en-v1
@@ -178,12 +178,14 @@ first Chrome playback.
 
 The `catalog-list`, `model-install`, `model-activate`, `model-check`, and
 `model-remove` commands are local model-management helpers and do not require
-service auth tokens. `catalog-list` reports catalog counts, install readiness, checksum
-coverage, warnings, and next-step guidance while preserving the raw model
-entries in JSON. `model-install` downloads or reads a catalog artifact, verifies
-`artifact_sha256` by default, resolves relative artifacts against the local
-catalog path or remote catalog URL, stages the artifact in a temporary file,
-extracts the zip safely under
+service auth tokens. `catalog-list` reports catalog counts, install readiness,
+checksum coverage, warnings, and next-step guidance while preserving the raw
+model entries in JSON. By default, `catalog-list` and `model-install` read
+`models/catalog.json`; pass `--catalog <path-or-url>` for a different local
+catalog file or remote catalog URL. `model-install` downloads or reads a
+catalog artifact, verifies `artifact_sha256` by default, resolves relative
+artifacts against the local catalog path or remote catalog URL, stages the
+artifact in a temporary file, extracts the zip safely under
 `models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
 status to stderr, and keeps its structured result on stdout. Use
 `--allow-missing-checksum` only for trusted local artifacts.

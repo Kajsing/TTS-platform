@@ -41,6 +41,7 @@ for long web-page text.
   the service down.
 - `python3 scripts/check_model_management_flow.py` creates a local loopback
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
+  verifies the default `models/catalog.json` path behavior, runs
   download/install, activate, service smoke with the installed voice, read-only
   model readiness diagnostics, and remove without external downloads. Model
   installs require `artifact_sha256` by default, with

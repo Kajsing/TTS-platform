@@ -26,6 +26,8 @@ from tts_core.backends.sherpa_onnx import SherpaOnnxVoiceRuntimeConfig
 from .auth import initialize_auth
 from .config import SecurityConfig, load_config
 
+DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
+
 
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
@@ -278,11 +280,11 @@ def _build_parser() -> argparse.ArgumentParser:
     extension_allow_parser.add_argument("--config-path", default="config/config.toml")
 
     catalog_list_parser = subparsers.add_parser("catalog-list")
-    catalog_list_parser.add_argument("--catalog", required=True)
+    catalog_list_parser.add_argument("--catalog", default=DEFAULT_MODEL_CATALOG_PATH)
 
     model_install_parser = subparsers.add_parser("model-install")
     model_install_parser.add_argument("model_id")
-    model_install_parser.add_argument("--catalog", required=True)
+    model_install_parser.add_argument("--catalog", default=DEFAULT_MODEL_CATALOG_PATH)
     model_install_parser.add_argument("--models-root", default="models/voices")
     model_install_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
     model_install_parser.add_argument("--config-path", default="config/config.toml")
@@ -769,7 +771,15 @@ def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], Catalog
         return payload, catalog_source
 
     catalog_path = Path(catalog_source).expanduser().resolve()
-    payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    if not catalog_path.is_file():
+        raise SystemExit(
+            f"Catalog does not exist: {catalog_path}. "
+            f"Create {DEFAULT_MODEL_CATALOG_PATH} or pass --catalog <path-or-url>."
+        )
+    try:
+        payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Catalog is not valid JSON: {catalog_path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise SystemExit("Catalog root must be a JSON object.")
     return payload, catalog_path
@@ -813,7 +823,7 @@ def _build_catalog_list_payload(
         "models": models,
         "model_summaries": [_catalog_model_summary(model) for model in models],
         "warnings": warnings,
-        "next_steps": _catalog_next_steps(models=models),
+        "next_steps": _catalog_next_steps(models=models, catalog_source=catalog_source),
     }
 
 
@@ -856,7 +866,11 @@ def _catalog_warnings(models: list[dict[str, object]]) -> list[str]:
     return warnings
 
 
-def _catalog_next_steps(*, models: list[dict[str, object]]) -> list[str]:
+def _catalog_next_steps(
+    *,
+    models: list[dict[str, object]],
+    catalog_source: str,
+) -> list[str]:
     if not models:
         return []
     installable_models = [
@@ -868,9 +882,14 @@ def _catalog_next_steps(*, models: list[dict[str, object]]) -> list[str]:
         model_ref = installable_models[0]
     else:
         model_ref = "<model-id>"
+    catalog_argument = (
+        ""
+        if catalog_source == DEFAULT_MODEL_CATALOG_PATH
+        else " --catalog <catalog>"
+    )
     return [
         "review model_summaries for installable models and checksum coverage",
-        f"tts model-install {model_ref} --catalog <catalog> --activate",
+        f"tts model-install {model_ref}{catalog_argument} --activate",
     ]
 
 

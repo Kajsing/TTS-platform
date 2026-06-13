@@ -278,9 +278,11 @@ Example real VITS voice entry:
 
 ## Catalog Format
 
-`tts catalog-list` and `tts model-install` read a catalog JSON file or URL. The
-catalog root must be an object with a `models` list. Each model entry must
-include at least:
+`tts catalog-list` and `tts model-install` read a catalog JSON file or URL.
+When `--catalog` is omitted, both commands use `models/catalog.json` from the
+current working directory. Pass `--catalog <path-or-url>` for a different local
+catalog file or remote catalog URL. The catalog root must be an object with a
+`models` list. Each model entry must include at least:
 
 - `id`
 - `artifact_url`
@@ -363,18 +365,21 @@ Or, on Windows:
 List catalog entries:
 
 ```bash
+tts catalog-list
 tts catalog-list --catalog ./models/catalog.json
 ```
 
 Install a model:
 
 ```bash
+tts model-install sherpa-en-v1
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json
 ```
 
 Install and activate a model in one first-run command:
 
 ```bash
+tts model-install sherpa-en-v1 --activate
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
 ```
 

@@ -68,7 +68,8 @@ backend-realism work, and early v1 model-management helpers:
   update, remote catalog relative-artifact download, temporary-file artifact
   staging before checksum/extraction, safe zip extraction, install progress
   metadata, overwrite refusal, checksum-required-by-default install behavior
-  with an explicit trusted-local override,
+  with an explicit trusted-local override, default `models/catalog.json`
+  discovery with friendly missing-file guidance,
   install-and-activate first-run shortcut, default-voice activation, read-only
   real-backend readiness diagnostics, and model removal
 - local first-run setup helper behavior for config creation, token

@@ -271,6 +271,56 @@ def test_model_install_command_can_activate_model(
     assert "[model-install] activate model: completed" in captured.err
 
 
+def test_model_install_command_uses_default_catalog_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    artifact_path = tmp_path / "models" / "voice-a.zip"
+    artifact_path.parent.mkdir()
+    artifact_bytes = _build_zip(
+        artifact_path,
+        files={
+            "model.onnx": "fake-model",
+            "tokens.txt": "fake-tokens",
+        },
+    )
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_path = tmp_path / "models" / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "artifact_url": "voice-a.zip",
+                        "artifact_sha256": checksum,
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "model.onnx",
+                            "tokens": "tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    cli.main(["model-install", "voice-a", "--activate"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["installed_model"] == "voice-a"
+    assert payload["activated_model"] == "voice-a"
+    assert (tmp_path / "models" / "voices" / "voice-a" / "model.onnx").exists()
+    assert load_config(tmp_path / "config" / "config.toml", env={}).tts.default_voice == (
+        "voice-a"
+    )
+
+
 def test_model_install_requires_checksum_by_default(tmp_path: Path) -> None:
     artifact_path = tmp_path / "voice-a.zip"
     _build_zip(artifact_path, files={"model.onnx": "fake-model"})
@@ -541,6 +591,52 @@ def test_catalog_list_command_prints_models(
         "review model_summaries for installable models and checksum coverage",
         "tts model-install <model-id> --catalog <catalog> --activate",
     ]
+
+
+def test_catalog_list_uses_default_catalog_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    catalog_path = tmp_path / "models" / "catalog.json"
+    catalog_path.parent.mkdir()
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "artifact_url": "voice-a.zip",
+                        "artifact_sha256": "a" * 64,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    cli.main(["catalog-list"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["catalog"]["source"] == cli.DEFAULT_MODEL_CATALOG_PATH
+    assert payload["catalog"]["model_count"] == 1
+    assert payload["next_steps"] == [
+        "review model_summaries for installable models and checksum coverage",
+        "tts model-install voice-a --activate",
+    ]
+
+
+def test_catalog_list_reports_missing_default_catalog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit, match="Create models/catalog.json"):
+        cli.main(["catalog-list"])
 
 
 def test_catalog_list_reports_install_readiness_warnings(

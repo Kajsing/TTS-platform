@@ -286,5 +286,9 @@ TOML edits.
 The thirty-second extension-onboarding slice adds a popup-side copyable
 allow-list command, so the extension can hand the operator the exact
 `tts extension-allow-origin ...` command during first-run setup.
+The thirty-third model-management UX slice makes `--catalog` optional for
+`tts catalog-list` and `tts model-install`, defaulting both commands to
+`models/catalog.json`, adds friendly missing-default-catalog guidance, and
+extends the model-management smoke with default-catalog next-step evidence.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

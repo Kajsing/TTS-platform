@@ -86,6 +86,8 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert ".\\scripts\\windows\\install_local.ps1" in readme
     assert "python -m tts_service.cli setup-local --repo-root ." in readme
     assert ".\\.venv\\Scripts\\tts.exe model-check" in readme
+    assert ".\\.venv\\Scripts\\tts.exe catalog-list" in readme
+    assert "tts.exe model-install <model-id> --activate" in readme
     assert "tts.exe model-install <model-id> --catalog <catalog> --activate" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "apps\\chrome_extension\\INSTALL.md" in readme

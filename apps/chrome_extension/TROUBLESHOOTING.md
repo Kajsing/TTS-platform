@@ -18,7 +18,8 @@
 - `Origin snippet ready`: copy the allow-list snippet from the popup into
   `config/config.toml`.
 - `Voice available`: run `tts list-voices` or install and activate a voice with
-  `tts model-install <model-id> --catalog <catalog> --activate`.
+  `tts model-install <model-id> --activate` when the catalog is saved as
+  `models/catalog.json`; otherwise pass `--catalog <path-or-url>`.
 - `Health ok`: refresh after setup changes or inspect `/v1/health` for the
   degraded check.
 

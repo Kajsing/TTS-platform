@@ -75,6 +75,14 @@ def check_model_management_flow(
             artifact=artifact,
             artifact_url=f"artifacts/{MODEL_ID}.zip",
         )
+        default_catalog_artifact = _write_local_model_artifact(
+            repo_root / "models" / "artifacts" / f"{MODEL_ID}.zip"
+        )
+        _write_catalog(
+            catalog_path=repo_root / "models" / "catalog.json",
+            artifact=default_catalog_artifact,
+            artifact_url=f"artifacts/{MODEL_ID}.zip",
+        )
 
         setup_payload = _run_json_command(
             [
@@ -91,6 +99,18 @@ def check_model_management_flow(
         token_file = Path(str(setup_payload.get("token_file", "")))
         if not token_file.is_file():
             raise ModelManagementFlowError("setup-local did not create a token file.")
+
+        default_catalog_payload = _run_json_command(
+            [
+                python_executable,
+                "-m",
+                "tts_service.cli",
+                "catalog-list",
+            ],
+            cwd=repo_root,
+            env=env,
+            timeout_s=command_timeout_s,
+        )
 
         with _serve_catalog_root(catalog_root) as catalog_url:
             catalog_payload = _run_json_command(
@@ -198,6 +218,7 @@ def check_model_management_flow(
 
     return {
         "model_id": MODEL_ID,
+        "default_catalog": _summarize_default_catalog(default_catalog_payload),
         "catalog": _summarize_catalog(catalog_payload),
         "install": _summarize_install(install_payload),
         "model_check": _summarize_model_check(model_check_payload),
@@ -299,13 +320,14 @@ def _source_env() -> dict[str, str]:
 def _run_json_command(
     command: list[str],
     *,
+    cwd: Path = REPO_ROOT,
     env: dict[str, str],
     timeout_s: float,
 ) -> dict[str, object]:
     try:
         completed = subprocess.run(
             command,
-            cwd=REPO_ROOT,
+            cwd=cwd,
             env=env,
             capture_output=True,
             text=True,
@@ -459,6 +481,17 @@ def _summarize_catalog(payload: dict[str, object]) -> dict[str, object]:
         "installable_count": _dict_get(catalog, "installable_count"),
         "checksum_count": _dict_get(catalog, "checksum_count"),
         "warnings": payload.get("warnings"),
+    }
+
+
+def _summarize_default_catalog(payload: dict[str, object]) -> dict[str, object]:
+    catalog = payload.get("catalog", {})
+    return {
+        "source": _dict_get(catalog, "source"),
+        "model_count": _dict_get(catalog, "model_count"),
+        "installable_count": _dict_get(catalog, "installable_count"),
+        "checksum_count": _dict_get(catalog, "checksum_count"),
+        "next_steps": payload.get("next_steps"),
     }
 
 

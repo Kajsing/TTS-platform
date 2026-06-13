@@ -19,6 +19,16 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
     )
 
     assert summary["model_id"] == "local-flow-voice"
+    assert summary["default_catalog"] == {
+        "source": "models/catalog.json",
+        "model_count": 1,
+        "installable_count": 1,
+        "checksum_count": 1,
+        "next_steps": [
+            "review model_summaries for installable models and checksum coverage",
+            "tts model-install local-flow-voice --activate",
+        ],
+    }
     assert summary["catalog"] == {
         "source": "local_http",
         "model_count": 1,

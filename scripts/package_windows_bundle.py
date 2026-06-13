@@ -197,9 +197,12 @@ manager, scheduled task, or auto-start entry.
 
    The bundled manifest includes the development/debug voice for local service
    smoke tests. For real local TTS output, install and activate a real model
-   from a catalog, then re-check readiness:
+   from a catalog, then re-check readiness. If the catalog is saved as
+   `models\\catalog.json`, `--catalog` can be omitted:
 
    ```powershell
+   .\\.venv\\Scripts\\tts.exe catalog-list
+   .\\.venv\\Scripts\\tts.exe model-install <model-id> --activate
    .\\.venv\\Scripts\\tts.exe model-install <model-id> --catalog <catalog> --activate
    .\\.venv\\Scripts\\tts.exe model-check <model-id>
    ```
