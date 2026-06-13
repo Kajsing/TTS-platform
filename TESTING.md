@@ -30,6 +30,8 @@ backend-realism work, and early v1 model-management helpers:
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids
+- low-sensitivity HTTP request logging that omits query strings, auth tokens,
+  and raw request text while replacing unsafe client-provided request ids
 - structural audio regression checks
 - rate-sensitive audio regression behavior
 - backend runtime config for `stub`, `auto`, and `real` modes

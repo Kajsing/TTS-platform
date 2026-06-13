@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from contextlib import suppress
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -27,6 +28,8 @@ from .security import (
 )
 from .synthesis import SynthesisCancelledError, SynthesisService
 
+_CLIENT_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,35}$")
+
 
 def create_app(
     *,
@@ -48,6 +51,25 @@ def create_app(
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
+
+
+def _resolve_request_id(raw_request_id: str | None, *, auth_token: str | None) -> str:
+    if raw_request_id is None:
+        return str(uuid4())
+    candidate = raw_request_id.strip()
+    if _is_safe_client_request_id(candidate, auth_token=auth_token):
+        return candidate
+    return str(uuid4())
+
+
+def _is_safe_client_request_id(candidate: str, *, auth_token: str | None) -> bool:
+    if not candidate:
+        return False
+    if auth_token is not None and candidate == auth_token:
+        return False
+    if candidate.lower().startswith("bearer "):
+        return False
+    return _CLIENT_REQUEST_ID_PATTERN.fullmatch(candidate) is not None
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -87,7 +109,10 @@ def _register_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def observe_http_requests(request: Request, call_next) -> FastAPIResponse:
         container = app.state.container
-        request_id = request.headers.get("x-request-id", str(uuid4()))
+        request_id = _resolve_request_id(
+            request.headers.get("x-request-id"),
+            auth_token=container.auth.token,
+        )
         start_time = monotonic()
         response: FastAPIResponse | None = None
         status_code = 500

@@ -413,7 +413,12 @@ thread returns.
 - `security.allowed_origins` entries must be explicit `http`, `https`, or
   `chrome-extension` origins. Wildcard `*`, `null`, paths, query strings, and
   fragments are rejected when config loads.
-- Raw input text should not be logged.
+- HTTP request logs include low-sensitivity metadata only: method, path without
+  query string, status, duration, outcome, and request id.
+- Raw input text, auth tokens, and query strings should not be logged.
+- Client-provided `X-Request-ID` values are only reused when they are short,
+  simple identifiers. Unsafe values, bearer-shaped values, and values equal to
+  the current auth token are replaced with a server-generated id.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
 - Installed model files stay under `models/voices/<voice-id>`.
