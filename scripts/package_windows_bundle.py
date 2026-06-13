@@ -182,6 +182,10 @@ manager, scheduled task, or auto-start entry.
    without `-SetupOnly` then starts `tts serve` on the configured loopback
    address.
 
+   `scripts\\check_windows_launchers.py` validates both the setup-only path and
+   the foreground service smoke path for the bundled PowerShell/CMD launchers on
+   Windows.
+
 5. Load the Chrome extension:
 
    - use `apps\\chrome_extension` with Chrome's `Load unpacked`, or

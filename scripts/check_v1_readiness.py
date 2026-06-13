@@ -54,6 +54,7 @@ READINESS_MARKERS = (
     "python3 scripts/check_windows_bundle_bootstrap.py",
     "python3 scripts/check_windows_launchers.py",
     "python3 scripts/check_windows_bundle_install.py",
+    "launcher foreground service smoke",
     "python3 scripts/release_check.py --live-smoke --token-file config/token.txt",
     "--stream-text-repeat 200 --min-stream-text-chunks 2",
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
@@ -96,6 +97,11 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/check_windows_bundle_bootstrap.py",
         "scripts/check_windows_bundle_install.py",
         "scripts/check_windows_launchers.py",
+    ),
+    "scripts/check_windows_launchers.py": (
+        "_check_launcher_service",
+        '"service_smoke"',
+        '"foreground_service"',
     ),
     "TESTING.md": (
         "v1-readiness",

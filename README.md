@@ -205,8 +205,8 @@ It runs ruff, pytest, security-default verification, v1-readiness verification,
 local service bootstrap smoke, local model-management flow smoke, extension
 validation, extension onboarding contract smoke, long-page reader-flow smoke,
 and extension zip packaging with a temporary package output. It also builds,
-bootstrap-checks, launcher setup-checks, and temporary-venv install-checks the
-Windows local reader bundle with a temporary output path.
+bootstrap-checks, launcher setup/service-smoke checks, and temporary-venv
+install-checks the Windows local reader bundle with a temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
 

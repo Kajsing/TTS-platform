@@ -81,10 +81,13 @@ backend-realism work, and early v1 model-management helpers:
 - Windows launcher setup-only checks that run the bundled PowerShell/CMD
   launchers far enough to create local config/token files without starting a
   long-lived service process
+- Windows launcher foreground service smoke checks that start the bundled
+  PowerShell/CMD launchers on reserved loopback ports, run public-contract
+  smoke, and stop the process tree
 - repo-native release check orchestration for ruff, pytest, security-default
   verification, v1-readiness verification, extension validation, extension
-  package build, Windows bundle build, launcher setup checks, and Windows
-  bundle bootstrap/install checks
+  package build, Windows bundle build, launcher setup/service-smoke checks, and
+  Windows bundle bootstrap/install checks
 - v1-readiness documentation checks that keep automated gates, manual gates,
   product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
@@ -145,7 +148,9 @@ catalog-list, install, activate, read-only model readiness output, service smoke
 with the installed voice, and remove.
 It runs the bundled Windows launchers in setup-only mode when Windows launcher
 executables are available, verifying direct first-run setup without choosing a
-permanent service manager.
+permanent service manager. On Windows, the same check also starts the bundled
+PowerShell/CMD launchers as foreground services on reserved loopback ports,
+runs public-contract smoke, and stops the launcher process trees.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
@@ -187,7 +192,8 @@ Check the built bundle's temporary virtualenv install/start path with:
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
-Check the built bundle's PowerShell/CMD launcher setup-only path with:
+Check the built bundle's PowerShell/CMD launcher setup and foreground service
+smoke paths with:
 
 ```bash
 python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip

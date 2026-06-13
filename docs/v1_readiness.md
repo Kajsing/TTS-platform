@@ -43,7 +43,9 @@ for long web-page text.
 - `python3 scripts/check_windows_launchers.py` extracts a Windows local reader
   bundle and runs the bundled PowerShell/CMD launchers in setup-only mode when
   Windows launcher executables are available, verifying direct first-run
-  config/token creation without starting a long-lived service process.
+  config/token creation without starting a long-lived service process. On
+  Windows, it also starts both launchers as foreground services on reserved
+  loopback ports, runs public-contract smoke, and stops the process trees.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   starts the installed `tts serve` entrypoint, runs public-contract smoke, and
@@ -52,9 +54,10 @@ for long web-page text.
 ## Manual Gates
 
 - Run the Windows launcher scripts directly on an operator machine for manual
-  long-running service verification. The extracted-bundle launcher setup-only
-  path, venv install, and installed `tts serve` path are automated; manually
-  observing the launcher as a foreground service remains manual.
+  long-running service observation if desired. The extracted-bundle launcher
+  setup-only path, foreground launcher smoke, venv install, and installed
+  `tts serve` path are automated; extended operator comfort checks remain
+  manual.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
@@ -92,7 +95,8 @@ for long web-page text.
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
-- Foreground PowerShell/CMD launcher service UX remains manual; the automated
-  gates cover safe extraction, launcher setup-only execution, `setup-local`,
-  temporary venv installation, installed `tts serve`, loopback service startup,
-  and stub-backed smoke.
+- Extended foreground PowerShell/CMD launcher observation remains manual; the
+  automated gates cover safe extraction, launcher setup-only execution,
+  launcher foreground service smoke, `setup-local`, temporary venv
+  installation, installed `tts serve`, loopback service startup, and
+  stub-backed smoke.

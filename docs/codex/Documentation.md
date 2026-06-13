@@ -11,25 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The extension reader navigation slice adds popup-side
-  `Previous Section` support. It reuses heading offsets and active-tab
-  re-extraction like `Next Section`, so long article navigation can move
-  backward without storing raw page text in extension state.
+- Current loop result: The Windows launcher hardening slice extends
+  `scripts/check_windows_launchers.py` beyond setup-only validation. On
+  Windows it now starts bundled PowerShell/CMD launchers as foreground services
+  on reserved loopback ports, waits for health, runs public-contract smoke, and
+  stops the launcher process trees without choosing a permanent service
+  manager.
 - Validation status for the current loop:
-  - Targeted extension validation passed with `py -3 scripts\check_extension.py`.
-  - Targeted extension reader-flow validation passed with
-    `py -3 scripts\check_extension_reader_flow.py`.
-  - Targeted extension tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`.
-  - Targeted ruff checks passed with
-    `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py scripts\check_extension.py apps\tts_service\tests\test_check_extension.py`.
+  - Targeted launcher ruff passed with
+    `py -3 -m ruff check scripts\check_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py`.
+  - Targeted launcher tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`.
+  - `py -3 scripts\check_windows_launchers.py` passed, including setup-only
+    and foreground service smoke for bundled PowerShell/CMD launchers.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 145 tests.
-  - `py -3 scripts\release_check.py` passed, including local service
-    bootstrap, model-management flow, extension onboarding, extension
-    reader-flow, extension package, Windows bundle, launcher, and bundle-install
-    checks.
+  - `py -3 -m pytest -q` passed with 146 tests.
+  - `py -3 scripts\release_check.py` passed, including the updated
+    `windows_launchers` gate with PowerShell/CMD setup-only checks and
+    foreground service smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -225,6 +225,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_windows_launchers.py` now extracts a Windows bundle and
     verifies the bundled PowerShell/CMD launchers in setup-only mode when
     Windows launcher executables are available.
+  - `scripts/check_windows_launchers.py` now also starts bundled PowerShell/CMD
+    launchers as foreground services on reserved loopback ports, runs
+    public-contract smoke, and stops the process trees.
   - `scripts/check_local_service_bootstrap.py` now starts a temp first-run
     loopback service and runs public-contract smoke without repo-local config
     or token side effects.
@@ -352,6 +355,7 @@ python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_v1_readiness.py
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
+python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
@@ -425,8 +429,8 @@ python3 scripts/package_windows_bundle.py
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction. The
   virtualenv install/start path is now covered by an automated temp-venv smoke,
-  and launcher setup-only execution is covered for PowerShell/CMD; foreground
-  launcher service observation still needs manual operator validation.
+  and launcher setup-only plus foreground service smoke execution is covered for
+  PowerShell/CMD.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.

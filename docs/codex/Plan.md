@@ -233,5 +233,9 @@ backend mode, `sherpa_onnx` availability, and concrete next steps before
 operators expect real acoustic output. The nineteenth reader-flow slice adds
 popup-side `Previous Section` navigation, reusing heading offsets and active-tab
 re-extraction so long article navigation can move backward without storing raw
-page text. Continue from the readiness audit: either automate another listed
-manual gate or take the next reader-flow/product slice.
+page text. The twentieth release-hardening slice extends
+`scripts/check_windows_launchers.py` to start bundled PowerShell/CMD launchers
+as foreground services on reserved loopback ports, run public-contract smoke,
+and stop the process trees without choosing a permanent service manager.
+Continue from the readiness audit: either automate another listed manual gate
+or take the next reader-flow/product slice.

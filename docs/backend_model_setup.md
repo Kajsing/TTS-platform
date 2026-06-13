@@ -82,7 +82,9 @@ local secrets such as `config\token.txt` and installed model files under
 `models\voices\`. The generated `WINDOWS_BUNDLE_README.md` explains the
 extract, virtualenv, launcher, and extension-loading flow.
 `scripts/check_windows_launchers.py` verifies the bundled PowerShell/CMD
-launchers in setup-only mode when Windows launcher executables are available.
+launchers in setup-only mode and, on Windows, starts them as foreground
+services on reserved loopback ports before running public-contract smoke and
+stopping the process trees.
 `scripts/check_windows_bundle_install.py` verifies the extracted bundle in a
 temporary virtual environment by installing the package, running the installed
 `tts setup-local` and `tts serve` entrypoint, and executing public-contract
