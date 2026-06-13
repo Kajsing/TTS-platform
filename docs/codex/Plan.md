@@ -162,5 +162,6 @@ config/token bootstrap and manifest readiness reporting. The first service-run
 slice now adds `tts serve` as the normal installed-CLI localhost run command.
 The first packaging slice now adds PowerShell/CMD Windows launchers that run
 setup fallback plus `tts serve` without choosing a permanent service manager.
-Continue with Chrome extension onboarding/installability unless a reader-flow
-bug appears.
+The first extension onboarding slice now adds a popup setup checklist and
+validator coverage for its wiring. Continue with Chrome extension
+packaging/installability unless a reader-flow bug appears.

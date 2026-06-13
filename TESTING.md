@@ -46,12 +46,16 @@ backend-realism work, and early v1 model-management helpers:
   overrides, missing-config guidance, and loopback-only default binding
 - Windows launcher structure, including repo-local `PYTHONPATH`, module CLI
   invocation, setup fallback, and PowerShell delegation from the CMD launcher
+- Chrome extension popup setup-checklist wiring through the lightweight
+  extension validator
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
 Recommended extension checks:
 
 - confirm the popup can load service health and voice discovery from the configured base URL
+- confirm the setup checklist reflects service reachability, token state,
+  origin snippet readiness, voice discovery, and health
 - confirm the allow-list snippet matches the current extension origin
 - verify selection playback on a normal web page
 - verify stop and restart behavior after an active stream

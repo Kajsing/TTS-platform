@@ -185,6 +185,8 @@ The extension currently supports:
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config
+- displaying a setup checklist for service reachability, saved token, origin
+  snippet readiness, voice discovery, and health
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events.
 

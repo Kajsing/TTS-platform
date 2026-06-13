@@ -6,6 +6,21 @@
 - Confirm the popup `Base URL` matches the service host and port.
 - Confirm the service is listening on a localhost URL that Chrome can reach.
 - Use the popup `Refresh` button and read the `Service Status` panel.
+- Use the popup `Setup Checklist` panel to see whether service reachability,
+  token setup, voice discovery, and health are passing.
+
+## Setup checklist shows todo items
+
+- `Service reachable`: start the service with `tts serve` or the Windows
+  launcher and confirm the popup `Base URL`.
+- `Token saved`: paste the local bearer token from `config/token.txt` into the
+  popup and save settings.
+- `Origin snippet ready`: copy the allow-list snippet from the popup into
+  `config/config.toml`.
+- `Voice available`: run `tts list-voices` or install and activate a voice with
+  `tts model-install <model-id> --catalog <catalog> --activate`.
+- `Health ok`: refresh after setup changes or inspect `/v1/health` for the
+  degraded check.
 
 ## Playback fails immediately
 

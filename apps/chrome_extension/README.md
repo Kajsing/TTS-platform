@@ -13,6 +13,7 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
+- show a setup checklist for service reachability, saved token, origin snippet, voice discovery, and health
 - recover more deliberately from playback underruns by rebuffering before audio resumes
 - retry offscreen playback startup if the offscreen document has gone stale
 - provide a troubleshooting guide and a lightweight repo-native validation script
@@ -26,6 +27,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 
 The popup shows the extension origin so it can be copied into the service allow-list.
 The popup can also refresh service health and voice discovery directly from the local service.
+The setup checklist in the popup summarizes the first-run state after each
+refresh or settings save.
 
 ## Load in Chrome
 
@@ -46,13 +49,15 @@ The popup can also refresh service health and voice discovery directly from the 
 1. Start the local service.
 2. Load the extension.
 3. Open the popup and confirm that service status loads successfully.
-4. Confirm that the voice list populates from `/v1/voices`.
-5. Save the token and other settings.
-6. Speak a text selection from a normal web page.
-7. Stop playback once and start it again to confirm the offscreen flow recovers cleanly.
-8. Reopen the popup during or after playback and confirm the state still looks sensible.
-9. During long page playback, confirm the playback state includes reader progress.
-10. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+4. Confirm the setup checklist reports service reachability, saved token,
+   origin snippet readiness, voice discovery, and health.
+5. Confirm that the voice list populates from `/v1/voices`.
+6. Save the token and other settings.
+7. Speak a text selection from a normal web page.
+8. Stop playback once and start it again to confirm the offscreen flow recovers cleanly.
+9. Reopen the popup during or after playback and confirm the state still looks sensible.
+10. During long page playback, confirm the playback state includes reader progress.
+11. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 

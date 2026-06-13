@@ -11,6 +11,7 @@ const fields = {
 const statusText = document.querySelector("#status-text");
 const extensionOrigin = document.querySelector("#extension-origin");
 const serviceStatus = document.querySelector("#service-status");
+const onboardingStatus = document.querySelector("#onboarding-status");
 const originSnippet = document.querySelector("#origin-snippet");
 const voiceHint = document.querySelector("#voice-hint");
 const actionMessage = document.querySelector("#action-message");
@@ -36,6 +37,7 @@ async function refreshState() {
 async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
   const snapshot = await sendMessage({ type: "tts-extension:get-service-snapshot" });
   serviceStatus.textContent = formatServiceSnapshot(snapshot);
+  onboardingStatus.textContent = formatOnboardingStatus(snapshot);
   originSnippet.textContent = snapshot.originConfigSnippet;
   populateVoiceOptions({
     voices: snapshot.voices,
@@ -152,6 +154,7 @@ setInterval(() => {
 loadPopup().catch((error) => {
   statusText.textContent = error.message;
   serviceStatus.textContent = error.message;
+  onboardingStatus.textContent = error.message;
   setActionMessage(error.message, "error");
 });
 
@@ -211,4 +214,32 @@ function formatServiceSnapshot(snapshot) {
     Object.keys(checks).length ? `Checks: ${JSON.stringify(checks)}` : null,
   ];
   return lines.filter(Boolean).join("\n");
+}
+
+function formatOnboardingStatus(snapshot) {
+  const checklist = [
+    checklistLine("Service reachable", snapshot.reachable, snapshot.message),
+    checklistLine("Token saved", Boolean(fields.token.value.trim()), "Paste config/token.txt"),
+    checklistLine(
+      "Origin snippet ready",
+      Boolean(snapshot.originConfigSnippet),
+      snapshot.extensionOrigin
+    ),
+    checklistLine(
+      "Voice available",
+      snapshot.voices.length > 0,
+      `${snapshot.voices.length} voice(s) discovered`
+    ),
+    checklistLine(
+      "Health ok",
+      snapshot.health?.status === "ok",
+      snapshot.health?.status ?? "unavailable"
+    ),
+  ];
+  return checklist.join("\n");
+}
+
+function checklistLine(label, ok, detail) {
+  const marker = ok ? "[ok]" : "[todo]";
+  return `${marker} ${label}: ${detail || "pending"}`;
 }
