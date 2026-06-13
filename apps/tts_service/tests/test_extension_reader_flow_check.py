@@ -23,6 +23,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "page_capture_metadata": True,
         "resume_and_section_navigation": True,
         "automatic_truncated_text_continuation": True,
+        "popup_long_page_status": True,
         "truncated_text_continuation": True,
         "truncated_section_continuation": True,
         "stop_restart_recovery": True,

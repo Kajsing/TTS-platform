@@ -208,6 +208,7 @@ function formatPlaybackState(state) {
     state.activeStreamId ? `Stream: ${state.activeStreamId}` : null,
     state.readerProgress ? `Progress: ${formatReaderProgress(state.readerProgress)}` : null,
     state.pageCapture ? `Page Capture: ${formatPageCapture(state.pageCapture)}` : null,
+    state.pageCapture ? formatLongPageStatus(state) : null,
     state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
     state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
     state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
@@ -235,6 +236,40 @@ function formatPageCapture(capture) {
   const blocks = readableBlocks > 0 ? `, ${readableBlocks} blocks` : "";
   const structure = formatPageStructure(capture.structure);
   return `${textChars}/${maxChars} chars, ${status}, ${source}${blocks}${structure}`;
+}
+
+function formatLongPageStatus(state) {
+  const capture = state.pageCapture;
+  const structure = capture?.structure;
+  if (!structure) {
+    return null;
+  }
+  const startTextChar = Number(structure.startTextChar ?? 0);
+  const nextTextCharStart =
+    structure.nextTextCharStart == null ? null : Number(structure.nextTextCharStart);
+  const nextSectionIndex =
+    structure.nextSectionIndex == null ? null : Number(structure.nextSectionIndex);
+  const hasContinuation =
+    Boolean(capture.truncated) && Number.isFinite(nextTextCharStart) && nextTextCharStart > 0;
+  const hasLongPageSignal =
+    hasContinuation ||
+    (Number.isFinite(startTextChar) && startTextChar > 0) ||
+    Number.isFinite(nextSectionIndex);
+  if (!hasLongPageSignal) {
+    return null;
+  }
+
+  const continuationLabel =
+    state.status === "done" ? "auto-continue ready" : "next continuation char";
+  const details = [
+    Number.isFinite(startTextChar) && startTextChar > 0
+      ? `segment starts at char ${startTextChar}`
+      : "first page segment",
+    state.source === "page-auto-continue" ? "automatic continuation active" : null,
+    hasContinuation ? `${continuationLabel} ${nextTextCharStart}` : null,
+    Number.isFinite(nextSectionIndex) ? `next known section ${nextSectionIndex + 1}` : null,
+  ].filter(Boolean);
+  return `Long Page: ${details.join(", ")}`;
 }
 
 function formatPageStructure(structure) {

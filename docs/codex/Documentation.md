@@ -11,28 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension popup now exposes a copyable
-  allow-list command alongside the raw extension origin and TOML snippet. The
-  service snapshot includes `originCliCommand`, the popup can copy it via
-  `Copy Command`, and the setup checklist now verifies both command and snippet
-  readiness for first-run Chrome onboarding.
+- Current loop result: The Chrome extension popup now shows a dedicated
+  long-page status line for truncated page playback, reporting segment offsets,
+  automatic continuation state, next continuation character, and next known
+  section metadata without storing raw page text.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_extension.py scripts\check_extension_onboarding.py scripts\check_v1_readiness.py apps\tts_service\tests\test_extension_onboarding_check.py`.
+    `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_v1_readiness_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
-    and reported 10 passed.
+    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
+    and reported 3 passed.
+  - `py -3 scripts\check_extension_reader_flow.py` passed and reported
+    `popup_long_page_status = true`, a 2,963-word generated article, and 145
+    stream text chunks.
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
     skipped because `node` is not installed.
-  - `py -3 scripts\check_extension_onboarding.py` passed and reported
-    `copy_command = true`, 13 popup elements, and 6 checklist items.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 162 tests.
-  - `git diff --check` passed with only CRLF normalization warnings.
   - `py -3 scripts\release_check.py` passed, including the updated extension
-    onboarding contract with `copy_command = true`.
+    reader-flow contract with `popup_long_page_status = true`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -122,6 +121,9 @@ This file is the live status log and shared memory for future Codex loops.
     has a `nextTextCharStart`, the background worker now starts the next
     segment automatically from the original source tab without storing raw page
     text.
+  - the popup now displays a `Long Page` status line for truncated page
+    segments, showing the current text offset, automatic continuation state,
+    next continuation character, and next known section metadata when present.
   - the popup now exposes `Previous Section`; background resolves the previous
     heading-backed section from current reader progress and page-capture
     metadata, re-extracts the active tab from that section index, and starts

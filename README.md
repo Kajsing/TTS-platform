@@ -262,6 +262,8 @@ The extension currently supports:
   the page has no later heading-backed section
 - automatically continuing from that text offset when a truncated page segment
   finishes normally
+- displaying long-page status for segment offsets, automatic continuation, and
+  next known section metadata without storing raw page text
 - stopping playback and preserving a truthful interrupted/recovered state when
   the popup is reopened after the offscreen playback document is gone
 - local storage of base URL, token, voice, and buffering settings

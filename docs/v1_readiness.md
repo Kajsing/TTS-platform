@@ -21,11 +21,11 @@ for long web-page text.
   health/voice-discovery service snapshot used by the popup.
 - `python3 scripts/check_extension_reader_flow.py` verifies long-page reader
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
-  `Continue Page`, previous/next section navigation, truncated-page
-  continuation to the first known uncaptured section, truncated text-offset
-  continuation without storing raw page text, automatic continuation after a
-  truncated segment finishes, plus stop/restart recovery and popup
-  reopen-state signals, then streams a
+  `Continue Page`, popup long-page status, previous/next section navigation,
+  truncated-page continuation to the first known uncaptured section, truncated
+  text-offset continuation without storing raw page text, automatic
+  continuation after a truncated segment finishes, plus stop/restart recovery
+  and popup reopen-state signals, then streams a
   generated thousand-word article through the local service WebSocket contract.
 - `python3 scripts/check_chrome_extension_smoke.py` validates the extension
   static contract, then uses Chrome or Edge through DevTools Protocol when a
