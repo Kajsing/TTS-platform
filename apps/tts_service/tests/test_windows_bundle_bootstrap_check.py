@@ -66,6 +66,8 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
     assert summary["setup"]["token_created"] is True
     assert summary["setup"]["base_url"] == "http://127.0.0.1:7777"
     assert summary["setup"]["manifest_default_voice"] is True
+    assert "tts model-check" in summary["setup"]["next_steps"]
+    assert "tts serve" in summary["setup"]["next_steps"]
 
 
 def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(

@@ -266,6 +266,7 @@ def _summarize_setup(payload: dict[str, object]) -> dict[str, object]:
         "default_voice": payload.get("default_voice"),
         "configured_base_url": configured_base_url,
         "manifest_default_voice": manifest_default_voice,
+        "next_steps": _string_list(payload.get("next_steps")),
     }
 
 
@@ -299,6 +300,12 @@ def _audio_summary(raw_payload: object) -> dict[str, object]:
         "bytes": raw_payload.get("bytes"),
         "sample_rate_hz": raw_payload.get("sample_rate_hz"),
     }
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _dict_get(raw_payload: object, key: str) -> object:

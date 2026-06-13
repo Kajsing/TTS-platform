@@ -111,6 +111,7 @@ def check_windows_bundle_bootstrap(
             "manifest_default_voice": setup_payload["manifest"][
                 "default_voice_in_manifest"
             ],
+            "next_steps": _string_list(setup_payload.get("next_steps")),
         },
     }
 
@@ -221,6 +222,14 @@ def _assert_setup_payload(*, setup_payload: dict[str, object], bundle_root: Path
         raise WindowsBundleBootstrapError("setup-local did not find models/MANIFEST.json")
     if not isinstance(next_steps, list) or "tts serve" not in next_steps:
         raise WindowsBundleBootstrapError("setup-local next steps do not include tts serve")
+    if "tts model-check" not in next_steps:
+        raise WindowsBundleBootstrapError("setup-local next steps do not include tts model-check")
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _assert_safe_archive_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:

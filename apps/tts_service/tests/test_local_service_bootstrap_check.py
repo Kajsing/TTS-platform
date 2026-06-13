@@ -26,6 +26,8 @@ def test_local_service_bootstrap_check_runs_temp_service() -> None:
     assert summary["setup"]["token_created"] is True
     assert summary["setup"]["auth_enabled"] is True
     assert summary["setup"]["manifest_default_voice"] is True
+    assert "tts model-check" in summary["setup"]["next_steps"]
+    assert "tts serve" in summary["setup"]["next_steps"]
     assert summary["smoke"]["health"]["status"] == "ok"
     assert summary["smoke"]["voices"]["count"] >= 1
     assert summary["smoke"]["http"]["bytes"] > 0

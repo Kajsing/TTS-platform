@@ -37,7 +37,8 @@ for long web-page text.
   smoke, it reports a skipped smoke unless `--require-browser` is set.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
-  runs the public-contract smoke, and shuts the service down.
+  verifies setup next-step guidance, runs the public-contract smoke, and shuts
+  the service down.
 - `python3 scripts/check_model_management_flow.py` creates a local loopback
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
   download/install, activate, service smoke with the installed voice, read-only
@@ -58,7 +59,7 @@ for long web-page text.
 - `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks the embedded extension zip, and runs `setup-local` from the
-  extracted source paths.
+  extracted source paths with first-run next-step guidance validation.
 - `python3 scripts/check_windows_launchers.py` extracts a Windows local reader
   bundle and runs the bundled PowerShell/CMD launchers in setup-only mode when
   Windows launcher executables are available, verifying direct first-run
