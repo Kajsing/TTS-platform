@@ -127,6 +127,7 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
   const structure = createStructureSummary(root);
   structure.startSectionIndex = startSectionIndex;
   let truncated = false;
+  let captureLimitReached = false;
   let currentSectionIndex = -1;
   const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
   for (const element of candidates) {
@@ -149,6 +150,13 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
     if (currentSectionIndex < 0 && startSectionIndex > 0) {
       continue;
     }
+    if (captureLimitReached) {
+      if (blockKind === "heading") {
+        structure.nextSectionIndex = currentSectionIndex;
+        break;
+      }
+      continue;
+    }
 
     blockEntries.push({
       text,
@@ -161,7 +169,7 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
 
     if (joinBlockEntries(blockEntries).length >= maxChars) {
       truncated = true;
-      break;
+      captureLimitReached = true;
     }
   }
 
@@ -249,6 +257,7 @@ function emptyStructureSummary() {
     listItemCount: 0,
     quoteBlockCount: 0,
     startSectionIndex: 0,
+    nextSectionIndex: null,
     sections: [],
   };
 }

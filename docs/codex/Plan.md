@@ -166,6 +166,9 @@ The first long-document slices are now:
 - popup-side `Previous Section` action that uses the same heading offsets and
   re-extracts active-tab text from an earlier captured section without storing
   heading text.
+- truncated-page continuation metadata so `Next Section` can jump to the first
+  known uncaptured section after the current capture limit without storing
+  heading text or raw page text.
 
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, install progress metadata/status lines,
@@ -246,5 +249,9 @@ manager or auto-start mechanism.
 The twenty-second model-management hardening slice makes `artifact_sha256`
 required by default for `model-install`, with `--allow-missing-checksum` as an
 explicit trusted-local override.
+The twenty-third reader-flow slice extends page-capture structure metadata with
+a `nextSectionIndex` continuation marker for truncated captures, allowing
+`Next Section` to re-extract from the first known uncaptured heading-backed
+section without storing raw page text or heading text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

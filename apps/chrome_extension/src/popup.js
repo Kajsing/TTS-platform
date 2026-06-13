@@ -232,8 +232,11 @@ function formatPageStructure(structure) {
   const listItemCount = Number(structure.listItemCount ?? 0);
   const quoteBlockCount = Number(structure.quoteBlockCount ?? 0);
   const startSectionIndex = Number(structure.startSectionIndex ?? 0);
+  const nextSectionIndex =
+    structure.nextSectionIndex == null ? null : Number(structure.nextSectionIndex);
   const details = [
     startSectionIndex > 0 ? `from section ${startSectionIndex + 1}` : null,
+    Number.isFinite(nextSectionIndex) ? `next section ${nextSectionIndex + 1}` : null,
     headingCount > 0 ? `${capturedHeadingCount}/${headingCount} headings` : null,
     bodyBlockCount > 0 ? `${bodyBlockCount} body` : null,
     listItemCount > 0 ? `${listItemCount} list` : null,

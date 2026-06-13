@@ -19,9 +19,10 @@ for long web-page text.
   health/voice-discovery service snapshot used by the popup.
 - `python3 scripts/check_extension_reader_flow.py` verifies long-page reader
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
-  previous/next section navigation, plus stop/restart recovery and popup
-  reopen-state signals, then streams a generated thousand-word article through
-  the local service WebSocket contract.
+  previous/next section navigation, including truncated-page continuation to
+  the first known uncaptured section without storing heading text, plus
+  stop/restart recovery and popup reopen-state signals, then streams a
+  generated thousand-word article through the local service WebSocket contract.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   runs the public-contract smoke, and shuts the service down.
@@ -78,9 +79,9 @@ for long web-page text.
   popup/origin/service-snapshot contract is automated.
 - On a long article page, verify `Speak Page`, progress display, truncation
   metadata, `Resume Page`, `Previous Section`, `Next Section`, stop/restart
-  behavior, and popup state after reopening in actual Chrome. The reader-flow contract now
-  automates the stop/recovery wiring and popup state fields, while actual
-  Chrome playback remains manual.
+  behavior, and popup state after reopening in actual Chrome. The reader-flow
+  contract now automates truncated-section continuation, stop/recovery wiring,
+  and popup state fields, while actual Chrome playback remains manual.
 
 ## Product Choices
 

@@ -416,10 +416,8 @@ function resolveResumeTextChunkIndex(progress) {
 }
 
 function resolveNextSectionIndex({ progress, pageCapture }) {
-  const sections = pageCapture?.structure?.sections ?? [];
-  if (!Array.isArray(sections) || sections.length === 0) {
-    return null;
-  }
+  const structure = pageCapture?.structure ?? {};
+  const sections = Array.isArray(structure.sections) ? structure.sections : [];
   const completedTextChars = Math.max(
     0,
     Number(progress?.completed_text_chars ?? progress?.text_char_end ?? 0)
@@ -429,7 +427,12 @@ function resolveNextSectionIndex({ progress, pageCapture }) {
     return Number.isFinite(textCharStart) && textCharStart > completedTextChars;
   });
   if (!nextSection) {
-    return null;
+    return resolveNextUncapturedSectionIndex({
+      progress,
+      pageCapture,
+      structure,
+      sections,
+    });
   }
   const sectionIndex = Number(nextSection.index);
   if (!Number.isFinite(sectionIndex) || sectionIndex < 0) {
@@ -441,6 +444,18 @@ function resolveNextSectionIndex({ progress, pageCapture }) {
 function resolvePreviousSectionIndex({ progress, pageCapture }) {
   const structure = pageCapture?.structure ?? {};
   const sections = Array.isArray(structure.sections) ? structure.sections : [];
+  const currentSectionIndex = resolveCurrentSectionIndex({
+    progress,
+    structure,
+    sections,
+  });
+  if (currentSectionIndex == null || currentSectionIndex <= 0) {
+    return null;
+  }
+  return currentSectionIndex - 1;
+}
+
+function resolveCurrentSectionIndex({ progress, structure, sections }) {
   const completedTextChars = Math.max(
     0,
     Number(progress?.completed_text_chars ?? progress?.text_char_end ?? 0)
@@ -464,10 +479,26 @@ function resolvePreviousSectionIndex({ progress, pageCapture }) {
     const startSectionIndex = Number(structure.startSectionIndex ?? 0);
     currentSectionIndex = Number.isFinite(startSectionIndex) ? Math.floor(startSectionIndex) : 0;
   }
-  if (currentSectionIndex <= 0) {
+  return currentSectionIndex;
+}
+
+function resolveNextUncapturedSectionIndex({ progress, pageCapture, structure, sections }) {
+  if (!pageCapture?.truncated) {
     return null;
   }
-  return currentSectionIndex - 1;
+  const nextSectionIndex = Number(structure.nextSectionIndex);
+  if (!Number.isFinite(nextSectionIndex) || nextSectionIndex < 0) {
+    return null;
+  }
+  const currentSectionIndex = resolveCurrentSectionIndex({
+    progress,
+    structure,
+    sections,
+  });
+  if (currentSectionIndex != null && nextSectionIndex <= currentSectionIndex) {
+    return null;
+  }
+  return Math.floor(nextSectionIndex);
 }
 
 function sanitizePageCaptureMeta(meta, fallback) {
@@ -491,8 +522,20 @@ function sanitizePageStructureMeta(structure) {
     listItemCount: sanitizeNumber(structure?.listItemCount, 0, 0),
     quoteBlockCount: sanitizeNumber(structure?.quoteBlockCount, 0, 0),
     startSectionIndex: sanitizeNumber(structure?.startSectionIndex, 0, 0),
+    nextSectionIndex: sanitizeOptionalSectionIndex(structure?.nextSectionIndex),
     sections: sanitizePageSections(structure?.sections),
   };
+}
+
+function sanitizeOptionalSectionIndex(value) {
+  if (value == null) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.floor(parsed);
 }
 
 function sanitizePageSections(sections) {

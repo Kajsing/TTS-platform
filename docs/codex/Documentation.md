@@ -11,25 +11,26 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model-install checksum hardening slice makes
-  `artifact_sha256` required by default before extraction. Trusted local
-  artifacts without checksums now require the explicit
-  `--allow-missing-checksum` override, and install output marks that path with a
-  warning.
+- Current loop result: The extension reader-flow slice now records a
+  non-textual `nextSectionIndex` marker when a page capture is truncated before
+  a later heading-backed section. `Next Section` can use that marker to
+  re-extract the active tab from the first known uncaptured section without
+  storing raw page text or heading text.
 - Validation status for the current loop:
-  - Targeted model-install ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py`.
-  - Targeted model-management tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`.
-  - `py -3 scripts\check_model_management_flow.py` passed.
+  - Targeted extension validation passed with `py -3 scripts\check_extension.py`;
+    JavaScript syntax checks were skipped because `node` is not installed.
+  - Targeted reader-flow smoke passed with
+    `py -3 scripts\check_extension_reader_flow.py`; the generated long article
+    streamed as 145 text chunks.
+  - Targeted extension tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`.
   - `py -3 scripts\check_v1_readiness.py` passed.
-  - Targeted v1-readiness ruff/tests passed with
-    `py -3 -m ruff check scripts\check_v1_readiness.py apps\tts_service\tests\test_v1_readiness_check.py` and
-    `py -3 -m pytest apps\tts_service\tests\test_v1_readiness_check.py -q`.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 151 tests.
-  - `py -3 scripts\release_check.py` passed, including the model-management
-    flow with a checksummed artifact and the updated v1-readiness markers.
+  - `git diff --check` passed with only CRLF normalization warnings.
+  - `py -3 scripts\release_check.py` passed, including extension reader-flow
+    smoke, extension packaging, Windows bundle packaging, launcher foreground
+    service smoke, and bundle install smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -108,6 +109,9 @@ This file is the live status log and shared memory for future Codex loops.
   - the popup now exposes `Next Section`; background resolves the next heading
     offset from current reader progress, re-extracts the active tab from that
     section index, and starts page playback from there.
+  - truncated page captures now include a non-textual next-section continuation
+    marker when a later heading-backed section exists beyond the current
+    capture limit, and `Next Section` uses it as a fallback.
   - the popup now exposes `Previous Section`; background resolves the previous
     heading-backed section from current reader progress and page-capture
     metadata, re-extracts the active tab from that section index, and starts
@@ -307,6 +311,10 @@ This file is the live status log and shared memory for future Codex loops.
 - Extension section navigation should re-extract active-tab text from a section
   index rather than persisting raw page text. Current navigation is heading
   offset based; richer named outlines remain future UX work.
+- Truncated-page continuation should remain metadata-only. A section index is
+  enough for `Next Section` to ask the content script to re-extract from the
+  active tab, while raw page text and heading text stay out of extension
+  storage.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any

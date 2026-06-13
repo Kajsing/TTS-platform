@@ -79,7 +79,8 @@
 - `Previous Section` needs an earlier heading-backed section than the current
   reader position. It will be unavailable near the start of the captured text.
 - `Next Section` needs a later captured heading offset than the current reader
-  progress. It will be unavailable near the end of the captured text.
+  progress, or a known uncaptured section index from a truncated page capture.
+  It will be unavailable near the end only when neither signal exists.
 - Pages without semantic `h1` to `h4` headings may not expose usable sections.
 - The actions re-extract the active tab from a section index; if the page
   content changed, the new section position may shift.
