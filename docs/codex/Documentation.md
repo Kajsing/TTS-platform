@@ -173,6 +173,14 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/release_check.py --live-smoke` forwards those long-stream smoke
     options and redacts inline `--text` / `--stream-text` values from its JSON
     summary.
+  - `docs/v1_readiness.md` now records automated gates, manual gates, explicit
+    product choices, and known not-yet-automated checks for the local reader v1
+    target.
+  - `scripts/check_v1_readiness.py` now verifies that readiness evidence stays
+    wired into docs, release checks, extension validation, smoke tooling, and the
+    Windows local reader bundle.
+  - `scripts/release_check.py` now runs the v1-readiness verification as part of
+    the local release gate.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -187,7 +195,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue release hardening: docs, smoke coverage, and remaining test gaps.
+- Continue from the v1-readiness audit: either automate a listed manual gate or
+  take the next reader-flow/product slice from `Plan.md`.
 - Leave permanent Windows service manager or auto-start install as an explicit
   later product choice.
 
@@ -285,6 +294,7 @@ python3 -m ruff check .
 python3 scripts/release_check.py
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/package_windows_bundle.py
+python3 scripts/check_v1_readiness.py
 ```
 
 First-run setup:

@@ -194,9 +194,12 @@ Run the local release gate with:
 python3 scripts/release_check.py
 ```
 
-It runs ruff, pytest, security-default verification, extension validation, and
-extension zip packaging with a temporary package output. It also builds the
-Windows local reader bundle with a temporary output path.
+It runs ruff, pytest, security-default verification, v1-readiness verification,
+extension validation, and extension zip packaging with a temporary package
+output. It also builds the Windows local reader bundle with a temporary output
+path.
+See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
+between automated gates, manual gates, and explicit product choices.
 
 With the service already running, add the live public-contract smoke:
 

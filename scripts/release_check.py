@@ -138,6 +138,10 @@ def _run_release_checks_with_package_path(
             "security_defaults",
             [python_executable, "scripts/check_security_defaults.py"],
         ),
+        (
+            "v1_readiness",
+            [python_executable, "scripts/check_v1_readiness.py"],
+        ),
         ("extension", [python_executable, "scripts/check_extension.py"]),
         (
             "extension_package",

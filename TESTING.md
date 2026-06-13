@@ -72,8 +72,10 @@ backend-realism work, and early v1 model-management helpers:
   Windows launchers, docs, config example, model manifest, extension source,
   and a validated extension zip while excluding local token/model artifacts
 - repo-native release check orchestration for ruff, pytest, security-default
-  verification, extension validation, extension package build, and Windows
-  bundle build
+  verification, v1-readiness verification, extension validation, extension
+  package build, and Windows bundle build
+- v1-readiness documentation checks that keep automated gates, manual gates,
+  product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
 - live smoke support for separate long WebSocket stream text, minimum stream
   text-chunk assertions, and release-check redaction of inline smoke text
@@ -121,6 +123,8 @@ python3 scripts/release_check.py
 ```
 
 On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.
+The release gate also verifies `docs/v1_readiness.md`, which separates
+automated gates from manual live checks and unresolved product choices.
 If the service is already running, include the public-contract smoke path:
 
 ```bash

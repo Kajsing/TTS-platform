@@ -196,5 +196,9 @@ minimum stream text-chunk count, and redact inline smoke text from release-check
 summaries. The eighth release-hardening slice now removes `<all_urls>` from
 extension `host_permissions` and expands `scripts/check_extension.py` with
 manifest-policy and privacy/layering checks so service permissions stay
-localhost-only while page access remains content-script based. Continue with
-remaining release hardening unless a reader-flow bug appears.
+localhost-only while page access remains content-script based. The ninth
+release-hardening slice now adds `docs/v1_readiness.md` and
+`scripts/check_v1_readiness.py`, wiring readiness verification into the release
+gate and Windows bundle so automated gates, manual gates, product choices, and
+known not-yet-automated items stay explicit. Continue from the readiness audit:
+either automate a listed manual gate or take the next reader-flow/product slice.
