@@ -158,7 +158,8 @@ whether `sherpa_onnx` is importable in the active environment. When the
 configured default voice is still the development stub and the default catalog
 has a single installable model, those next steps start with the concrete
 `tts model-install vits-piper-en_US-lessac-medium --activate` command and add
-`python -m pip install sherpa-onnx` when the runtime package is missing.
+`python -m pip install sherpa-onnx` and `python -m pip install numpy` when
+runtime packages needed by real async/stream paths are missing.
 `extension-allow-origin` adds a copied Chrome extension origin to
 `security.allowed_origins` in `config/config.toml`, preserving existing origins
 and rejecting non-`chrome-extension` origins for this onboarding path.
@@ -201,9 +202,9 @@ status to stderr, and keeps its structured result on stdout. Use
 The committed default catalog currently includes the English
 `vits-piper-en_US-lessac-medium` sherpa-onnx voice. Install it with
 `tts model-install vits-piper-en_US-lessac-medium --activate` before expecting
-real acoustic output from the local reader, and install `sherpa-onnx` into the
-same Python environment when `setup-local`, `model-list`, or `model-check`
-reports `python -m pip install sherpa-onnx`.
+real acoustic output from the local reader, and install `sherpa-onnx` plus
+`numpy` into the same Python environment when `setup-local`, `model-list`, or
+`model-check` reports the corresponding `python -m pip install ...` step.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 `model-check` reports whether the selected or default voice has manifest
@@ -261,6 +262,14 @@ WebSocket stream text:
 
 ```bash
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2
+```
+
+For an optional real English voice demo that installs the default catalog model
+into ignored `dist/real-demo`, starts a temporary loopback service, runs public
+contract smoke, writes a WAV, and stops the service:
+
+```bash
+python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 ```
 
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.

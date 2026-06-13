@@ -56,8 +56,9 @@ for long web-page text.
   default catalog and suggests the concrete default English model when the
   configured development stub is not real-backend ready.
 - `tts setup-local` and `tts model-list` expose `sherpa_onnx` runtime status
-  and include `python -m pip install sherpa-onnx` in next-step guidance when
-  real local playback is relevant but the runtime package is missing.
+  plus `numpy` callback dependency status, and include the matching
+  `python -m pip install ...` guidance when real local playback is relevant but
+  a runtime package needed by real async/stream paths is missing.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
@@ -104,9 +105,15 @@ for long web-page text.
   `tts setup-local` for catalog-aware first-run guidance, then
   `tts model-list` to inspect installed manifest voices and
   `tts model-check <model-id>` to verify local manifest/backend assets plus
-  `sherpa_onnx` runtime availability before expecting real acoustic output.
+  `sherpa_onnx` and `numpy` runtime availability before expecting real
+  acoustic output.
   When prompted, install the runtime in the active environment with
-  `python -m pip install sherpa-onnx`.
+  `python -m pip install sherpa-onnx` and `python -m pip install numpy`.
+- Run `python3 scripts/demo_real_voice.py --python-executable
+  .venv/Scripts/python.exe` to reproduce the real English voice demo in ignored
+  `dist/real-demo`; it installs the default catalog model there, starts a
+  temporary service, runs public-contract smoke with `--token-file`, writes a
+  WAV, and stops the service.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

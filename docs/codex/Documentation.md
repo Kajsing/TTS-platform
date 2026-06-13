@@ -228,6 +228,14 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts setup-local` now reports default catalog readiness and suggests the
     concrete default English install command first when the current default
     voice is only a development stub.
+  - `scripts/demo_real_voice.py` now automates an optional real English voice
+    demo in ignored `dist/real-demo`: it seeds first-run files, installs and
+    activates the default catalog model when needed, starts a temporary
+    loopback service, runs public-contract smoke with `--token-file`, writes a
+    WAV, and stops the service.
+  - real-runtime readiness now checks `numpy` in addition to `sherpa_onnx`,
+    because the real async job and streaming callback paths can require
+    `numpy` even when short sync synthesis succeeds.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

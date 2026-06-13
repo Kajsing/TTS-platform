@@ -332,5 +332,12 @@ checklist, with validator coverage for those first-run signals.
 The forty-fifth release-hardening slice makes the extension onboarding smoke
 explicitly assert and report `backend_ready` and `default_voice_loaded` from
 the service snapshot.
+The forty-sixth real-audio UX slice adds `scripts/demo_real_voice.py`, an
+optional reproducible Lessac demo that seeds ignored `dist/real-demo`, installs
+the default catalog model there, runs public-contract smoke, writes a WAV, and
+stops its temporary service.
+The forty-seventh runtime-readiness hardening slice makes `model-check`,
+`model-list`, and `setup-local` report `numpy` availability too, because the
+real async/stream callback path needs it even when short sync synthesis works.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

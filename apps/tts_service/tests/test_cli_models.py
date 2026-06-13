@@ -1099,7 +1099,7 @@ def test_model_list_reports_manifest_models_and_default(
     monkeypatch.setattr(
         cli.importlib.util,
         "find_spec",
-        lambda name: object() if name == "sherpa_onnx" else None,
+        lambda name: object() if name in {"sherpa_onnx", "numpy"} else None,
     )
 
     payload = cli._list_models(
@@ -1113,6 +1113,7 @@ def test_model_list_reports_manifest_models_and_default(
     assert payload["manifest"]["voice_count"] == 1
     assert payload["manifest"]["default_voice_in_manifest"] is True
     assert payload["runtime"]["sherpa_onnx_installed"] is True
+    assert payload["runtime"]["numpy_installed"] is True
     assert payload["models"] == [
         {
             "id": "voice-a",
@@ -1153,6 +1154,7 @@ def test_model_list_suggests_default_catalog_install_when_manifest_missing(
         "tts catalog-list",
         "tts model-install voice-a --activate",
         "python -m pip install sherpa-onnx",
+        "python -m pip install numpy",
     ]
 
 
@@ -1192,6 +1194,7 @@ def test_model_list_suggests_catalog_install_for_default_stub_voice(
     assert payload["next_steps"] == [
         "tts model-install voice-a --activate",
         "python -m pip install sherpa-onnx",
+        "python -m pip install numpy",
         "tts model-check",
     ]
 
@@ -1370,7 +1373,7 @@ def test_model_check_reports_real_voice_ready_when_assets_and_runtime_exist(
     monkeypatch.setattr(
         cli.importlib.util,
         "find_spec",
-        lambda name: object() if name == "sherpa_onnx" else None,
+        lambda name: object() if name in {"sherpa_onnx", "numpy"} else None,
     )
 
     payload = cli._check_model_readiness(
@@ -1386,10 +1389,37 @@ def test_model_check_reports_real_voice_ready_when_assets_and_runtime_exist(
     assert payload["backend"]["assets_ready"] is True
     assert payload["backend"]["missing_assets"] == []
     assert payload["runtime"]["sherpa_onnx_installed"] is True
+    assert payload["runtime"]["numpy_installed"] is True
     assert payload["next_steps"] == [
         "restart the local service if it is already running",
         "python3 scripts/smoke_service.py --token-file config/token.txt --voice voice-a",
     ]
+
+
+def test_model_check_requires_numpy_for_real_runtime_callbacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = _write_model_check_manifest(tmp_path)
+    _write_real_voice_assets(tmp_path)
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "sherpa_onnx" else None,
+    )
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["ready"] is False
+    assert payload["runtime"]["sherpa_onnx_installed"] is True
+    assert payload["runtime"]["numpy_installed"] is False
+    assert "python -m pip install numpy" in payload["next_steps"]
 
 
 def test_model_check_reports_missing_real_voice_asset(
@@ -1404,7 +1434,7 @@ def test_model_check_reports_missing_real_voice_asset(
     monkeypatch.setattr(
         cli.importlib.util,
         "find_spec",
-        lambda name: object() if name == "sherpa_onnx" else None,
+        lambda name: object() if name in {"sherpa_onnx", "numpy"} else None,
     )
 
     payload = cli._check_model_readiness(

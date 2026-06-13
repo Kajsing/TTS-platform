@@ -29,6 +29,7 @@ from .config import SecurityConfig, load_config
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
 SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
+NUMPY_INSTALL_STEP = "python -m pip install numpy"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1818,6 +1819,13 @@ def _append_sherpa_onnx_install_step(
         and SHERPA_ONNX_INSTALL_STEP not in steps
     ):
         steps.append(SHERPA_ONNX_INSTALL_STEP)
+    if (
+        real_output_expected
+        and runtime_status.get("real_mode_enabled") is True
+        and runtime_status.get("numpy_installed") is not True
+        and NUMPY_INSTALL_STEP not in steps
+    ):
+        steps.append(NUMPY_INSTALL_STEP)
 
 
 def _check_model_readiness(
@@ -1861,6 +1869,7 @@ def _check_model_readiness(
         and backend_status.get("assets_ready") is True
         and runtime_status.get("real_mode_enabled") is True
         and runtime_status.get("sherpa_onnx_installed") is True
+        and runtime_status.get("numpy_installed") is True
     )
 
     return {
@@ -2115,6 +2124,7 @@ def _inspect_runtime_for_model_check(config_status: dict[str, object]) -> dict[s
         "backend_mode": backend_mode or None,
         "real_mode_enabled": backend_mode in {"auto", "real"},
         "sherpa_onnx_installed": importlib.util.find_spec("sherpa_onnx") is not None,
+        "numpy_installed": importlib.util.find_spec("numpy") is not None,
     }
 
 
@@ -2200,6 +2210,8 @@ def _model_check_next_steps(
         )
     if runtime_status.get("sherpa_onnx_installed") is not True:
         steps.append(SHERPA_ONNX_INSTALL_STEP)
+    if runtime_status.get("numpy_installed") is not True:
+        steps.append(NUMPY_INSTALL_STEP)
     if runtime_status.get("real_mode_enabled") is not True:
         steps.append("set [backend].mode to auto or real in config/config.toml")
     if not steps:

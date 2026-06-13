@@ -81,6 +81,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/check_windows_bundle_bootstrap.py" in names
     assert "tts-platform/scripts/check_windows_bundle_install.py" in names
     assert "tts-platform/scripts/check_windows_launchers.py" in names
+    assert "tts-platform/scripts/demo_real_voice.py" in names
     assert "tts-platform/scripts/package_windows_bundle.py" in names
     assert "tts-platform/scripts/release_check.py" in names
     assert "tts-platform/dist/chrome_extension/tts-platform-prototype.zip" in names
@@ -90,8 +91,11 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert ".\\.venv\\Scripts\\tts.exe catalog-list" in readme
     assert ".\\.venv\\Scripts\\tts.exe model-list" in readme
     assert ".\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx" in readme
+    assert ".\\.venv\\Scripts\\python.exe -m pip install numpy" in readme
     assert "tts.exe model-install vits-piper-en_US-lessac-medium --activate" in readme
     assert "tts.exe model-check vits-piper-en_US-lessac-medium" in readme
+    assert "scripts\\demo_real_voice.py" in readme
+    assert "dist\\real-demo\\lessac-demo.wav" in readme
     assert "should put the `model-install` command above first" in readme
     assert "tts.exe model-install <model-id> --catalog <catalog> --activate" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme

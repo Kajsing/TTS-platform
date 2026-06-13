@@ -555,6 +555,7 @@ def _summarize_model_list(payload: dict[str, object]) -> dict[str, object]:
         "default_catalog_exists": _dict_get(catalog, "exists"),
         "real_mode_enabled": _dict_get(runtime, "real_mode_enabled"),
         "sherpa_onnx_installed": _dict_get(runtime, "sherpa_onnx_installed"),
+        "numpy_installed": _dict_get(runtime, "numpy_installed"),
         "next_steps": payload.get("next_steps"),
     }
 
@@ -584,6 +585,7 @@ def _summarize_model_check(payload: dict[str, object]) -> dict[str, object]:
         "assets_ready": _dict_get(backend, "assets_ready"),
         "real_mode_enabled": _dict_get(runtime, "real_mode_enabled"),
         "sherpa_onnx_installed": _dict_get(runtime, "sherpa_onnx_installed"),
+        "numpy_installed": _dict_get(runtime, "numpy_installed"),
         "default_catalog_exists": _dict_get(catalog, "exists"),
         "next_steps": payload.get("next_steps"),
     }

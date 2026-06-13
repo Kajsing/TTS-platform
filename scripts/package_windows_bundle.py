@@ -42,6 +42,7 @@ INCLUDED_FILES = (
     "scripts/check_windows_bundle_bootstrap.py",
     "scripts/check_windows_bundle_install.py",
     "scripts/check_windows_launchers.py",
+    "scripts/demo_real_voice.py",
     "scripts/dev_run.py",
     "scripts/package_extension.py",
     "scripts/package_windows_bundle.py",
@@ -197,6 +198,7 @@ manager, scheduled task, or auto-start entry.
    .\\.venv\\Scripts\\tts.exe catalog-list
    .\\.venv\\Scripts\\tts.exe model-list
    .\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx
+   .\\.venv\\Scripts\\python.exe -m pip install numpy
    .\\.venv\\Scripts\\tts.exe model-install vits-piper-en_US-lessac-medium --activate
    .\\.venv\\Scripts\\tts.exe model-check vits-piper-en_US-lessac-medium
    ```
@@ -204,16 +206,30 @@ manager, scheduled task, or auto-start entry.
    The bundled manifest includes the development/debug voice for local service
    smoke tests. `setup-local` prints JSON next steps and, with the bundled
    default catalog, should put the `model-install` command above first. If
-   `sherpa_onnx` is not importable in `.venv`, setup/list/check guidance also
-   includes the runtime install command above. For alternate catalogs, install
-   and activate a real model from that catalog, then re-check readiness:
+   `sherpa_onnx` or `numpy` is not importable in `.venv`, setup/list/check
+   guidance also includes the runtime install commands above. For alternate
+   catalogs, install and activate a real model from that catalog, then re-check
+   readiness:
 
    ```powershell
    .\\.venv\\Scripts\\tts.exe model-install <model-id> --catalog <catalog> --activate
    .\\.venv\\Scripts\\tts.exe model-check <model-id>
    ```
 
-5. Start the local service:
+5. Optionally generate a real English voice demo WAV from an isolated
+   `dist\\real-demo` root:
+
+   ```powershell
+   .\\.venv\\Scripts\\python.exe scripts\\demo_real_voice.py `
+     --python-executable .\\.venv\\Scripts\\python.exe
+   ```
+
+   The demo script installs the default catalog model in the ignored demo
+   root, starts a temporary loopback service, runs public-contract smoke with a
+   token file, writes `dist\\real-demo\\lessac-demo.wav`, and stops the
+   service process.
+
+6. Start the local service:
 
    ```powershell
    .\\scripts\\windows\\run_service.ps1 -SetupOnly
@@ -229,7 +245,7 @@ manager, scheduled task, or auto-start entry.
    the foreground service smoke path for the bundled PowerShell/CMD launchers on
    Windows.
 
-6. Load the Chrome extension:
+7. Load the Chrome extension:
 
    - use `apps\\chrome_extension` with Chrome's `Load unpacked`, or
    - extract `dist\\chrome_extension\\tts-platform-prototype.zip` for a packaged
@@ -237,7 +253,7 @@ manager, scheduled task, or auto-start entry.
    - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
      playback checklist.
 
-7. Copy the `Allow-List Command` from the popup, then run it to update
+8. Copy the `Allow-List Command` from the popup, then run it to update
    `security.allowed_origins`:
 
    ```powershell

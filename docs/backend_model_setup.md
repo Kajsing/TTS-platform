@@ -431,12 +431,12 @@ tts model-check
 `model-list` is read-only and does not require the service to be running. It
 reports installed manifest voices, which one matches `[tts].default_voice`,
 whether each voice has backend configuration, default catalog status,
-`sherpa_onnx` runtime status, and next-step guidance.
+`sherpa_onnx`/`numpy` runtime status, and next-step guidance.
 
 `model-check` is also read-only. It reports config validity, the
 selected/default voice, manifest presence, whether the voice has a sherpa-onnx
 backend config, which backend asset paths exist, whether `[backend].mode` is
-non-stub, whether `sherpa_onnx` can be imported, whether the default
+non-stub, whether `sherpa_onnx` and `numpy` can be imported, whether the default
 `models/catalog.json` exists, which installable model ids it contains, and
 concrete next steps. When the default catalog exists, install guidance omits
 `--catalog`; otherwise it tells the operator to pass `--catalog <path-or-url>`.
@@ -464,6 +464,19 @@ service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
 and reports the config path in its JSON output. `model-install` JSON also
 includes `install_steps`, so scripts can inspect which local steps completed
 without parsing stderr progress lines.
+
+For a reproducible local real-voice demo without committing local model files,
+run:
+
+```bash
+python3 -m pip install sherpa-onnx numpy
+python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
+```
+
+The demo seeds ignored `dist/real-demo`, installs and activates the default
+catalog model there when needed, starts a temporary loopback service, runs
+public-contract smoke with `--token-file`, writes
+`dist/real-demo/lessac-demo.wav`, and stops the service process.
 
 ## Long-Text Implications
 
