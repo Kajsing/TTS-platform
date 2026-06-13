@@ -410,6 +410,9 @@ thread returns.
 - The service is expected to bind to `127.0.0.1`.
 - Protected synthesis/job endpoints require bearer-token auth.
 - Browser clients must be explicitly allow-listed by origin.
+- `security.allowed_origins` entries must be explicit `http`, `https`, or
+  `chrome-extension` origins. Wildcard `*`, `null`, paths, query strings, and
+  fragments are rejected when config loads.
 - Raw input text should not be logged.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.

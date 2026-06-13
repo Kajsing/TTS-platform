@@ -11,12 +11,13 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first Chrome extension packaging slice added
-  `scripts/package_extension.py`. The script runs extension validation first and
-  writes a local Chrome-loadable zip with `manifest.json` at the archive root.
+- Current loop result: The first release-hardening slice tightened
+  `security.allowed_origins` config validation. Config loading now rejects
+  wildcard `*`, `null`, paths, query strings, fragments, and unsupported schemes
+  in the browser origin allow-list.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 107 tests.
+  - `py -3 -m pytest -q` passed with 112 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
 - Tooling status:
@@ -119,6 +120,11 @@ This file is the live status log and shared memory for future Codex loops.
     with manifest, asset, and resume wiring.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
+- Release hardening has started:
+  - `security.allowed_origins` entries are normalized for harmless trailing
+    slashes and must be explicit `http`, `https`, or `chrome-extension` origins.
+  - wildcard, `null`, path-bearing, query-bearing, fragment-bearing, and
+    unsupported-scheme origin entries fail config load.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -182,6 +188,9 @@ This file is the live status log and shared memory for future Codex loops.
   browser-specific behavior remains inside `apps/chrome_extension/`.
 - Extension zip packaging is local handoff/installability only; Chrome Web Store
   signing or publishing is out of scope until explicitly chosen.
+- Browser allow-list config should fail closed. Empty `allowed_origins` remains
+  the secure default; configured entries must be explicit origins, not wildcards
+  or URL paths.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex

@@ -164,5 +164,7 @@ The first packaging slice now adds PowerShell/CMD Windows launchers that run
 setup fallback plus `tts serve` without choosing a permanent service manager.
 The first extension onboarding slice now adds a popup setup checklist and
 validator coverage for its wiring. The first extension packaging slice now adds
-`scripts/package_extension.py` for validated local zip builds. Continue with
-release hardening unless a reader-flow bug appears.
+`scripts/package_extension.py` for validated local zip builds. The first
+release-hardening slice now rejects unsafe `security.allowed_origins` entries
+at config load. Continue with remaining release hardening unless a reader-flow
+bug appears.

@@ -125,3 +125,52 @@ def test_load_config_reads_backend_section(tmp_path: Path) -> None:
     assert config.backend.num_threads == 2
     assert config.backend.debug is True
     assert config.backend.max_num_sentences == 3
+
+
+def test_load_config_normalizes_allowed_origins(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[security]",
+                'allowed_origins = [" chrome-extension://abc123/ ", "http://localhost:7777/"]',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path, env={})
+
+    assert config.security.allowed_origins == (
+        "chrome-extension://abc123",
+        "http://localhost:7777",
+    )
+
+
+@pytest.mark.parametrize(
+    ("origin", "message"),
+    [
+        ('"*"', "wildcard"),
+        ('"null"', "null origin"),
+        ('"file://local-file"', "explicit http, https, or chrome-extension origins"),
+        ('"http://localhost:7777/path"', "must not include paths"),
+    ],
+)
+def test_load_config_rejects_unsafe_allowed_origins(
+    tmp_path: Path,
+    origin: str,
+    message: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[security]",
+                f"allowed_origins = [{origin}]",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_config(config_path, env={})

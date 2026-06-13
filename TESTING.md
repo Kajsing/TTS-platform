@@ -15,6 +15,8 @@ backend-realism work, and early v1 model-management helpers:
 - invalid bearer-format rejection
 - token rotation
 - origin filtering
+- security allowed-origin config validation for explicit origins and rejection
+  of wildcard, null, path-bearing, and unsupported-scheme entries
 - rate limiting
 - job creation, status polling, and queued-job cancellation
 - running-job cancellation that remains terminal even when backend interruption is best-effort

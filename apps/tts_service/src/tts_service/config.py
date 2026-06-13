@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 try:
     import tomllib
@@ -140,7 +141,9 @@ class SecurityConfig:
         if not isinstance(raw_origins, list):
             raise ValueError("security.allowed_origins must be a list")
         cleaned_origins = tuple(
-            str(origin).strip() for origin in raw_origins if str(origin).strip()
+            normalized
+            for origin in raw_origins
+            if (normalized := _normalize_allowed_origin(origin)) is not None
         )
         return cls(
             allowed_origins=cleaned_origins,
@@ -292,3 +295,25 @@ def _coerce_env_value(raw_value: str) -> Any:
         return float(lowered)
     except ValueError:
         return normalized
+
+
+def _normalize_allowed_origin(raw_origin: object) -> str | None:
+    origin = str(raw_origin).strip()
+    if not origin:
+        return None
+    origin = origin.rstrip("/")
+    lowered = origin.lower()
+    if lowered == "*":
+        raise ValueError("security.allowed_origins must not include wildcard '*'")
+    if lowered == "null":
+        raise ValueError("security.allowed_origins must not include the null origin")
+
+    parsed = urlparse(origin)
+    if parsed.scheme not in {"http", "https", "chrome-extension"} or not parsed.netloc:
+        raise ValueError(
+            "security.allowed_origins entries must be explicit http, https, "
+            "or chrome-extension origins"
+        )
+    if parsed.path or parsed.params or parsed.query or parsed.fragment:
+        raise ValueError("security.allowed_origins entries must not include paths")
+    return origin
