@@ -40,6 +40,16 @@ path the service uses, checks whether the configured default voice appears in
 `models/MANIFEST.json`, and returns next steps as JSON. It does not print the
 bearer token; read `config/token.txt` locally when a protected client needs it.
 
+Add a copied Chrome extension origin to the service allow-list with:
+
+```powershell
+tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
+```
+
+The helper updates `security.allowed_origins` in `config/config.toml`, preserves
+existing origins, rejects non-extension origins for this onboarding path, and
+prints restart/popup next steps.
+
 Start the service with:
 
 ```powershell
@@ -334,6 +344,12 @@ Start the local service:
 
 ```bash
 tts serve
+```
+
+Allow-list a locally loaded Chrome extension:
+
+```bash
+tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
 ```
 
 Or, on Windows:

@@ -99,3 +99,4 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add automatic extension continuation for truncated long page captures
 - [x] Add local Chrome extension install guide and packaged icon assets
 - [x] Add optional Chrome/MV3 browser smoke harness
+- [x] Add CLI helper for Chrome extension origin allow-list setup

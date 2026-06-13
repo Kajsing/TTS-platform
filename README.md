@@ -137,6 +137,7 @@ tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts setup-local
 tts serve
+tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
 tts catalog-list --catalog ./models/catalog.json
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
@@ -151,6 +152,9 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 `config/config.toml` from `config/config.example.toml` when missing, initializes
 `config/token.txt` through the same auth path the service uses, reports default
 voice/manifest readiness, and prints next steps without exposing the token.
+`extension-allow-origin` adds a copied Chrome extension origin to
+`security.allowed_origins` in `config/config.toml`, preserving existing origins
+and rejecting non-`chrome-extension` origins for this onboarding path.
 `serve` starts the local service from `config/config.toml`, binds only to
 loopback hosts by default, and uses the configured host, port, and log level.
 The Windows launchers in `scripts/windows/` are a convenience packaging step for

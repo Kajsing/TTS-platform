@@ -76,6 +76,12 @@ def check_extension_onboarding(
         token_file = Path(str(setup_payload.get("token_file", "")))
         if not token_file.is_file():
             raise ExtensionOnboardingError("setup-local did not create a token file.")
+        allow_list_summary["cli_helper"] = _verify_allow_list_cli_helper(
+            python_executable=python_executable,
+            repo_root=temp_repo_root,
+            env=env,
+            timeout_s=command_timeout_s,
+        )
 
         port = service_bootstrap._reserve_loopback_port()
         base_url = f"http://127.0.0.1:{port}"
@@ -202,6 +208,39 @@ def _verify_allow_list_snippet(extension_origin: str) -> dict[str, object]:
         raise ExtensionOnboardingError("Generated extension origin is not config-loadable.")
     return {
         "sample_origin": extension_origin,
+        "config_loadable": True,
+    }
+
+
+def _verify_allow_list_cli_helper(
+    *,
+    python_executable: str,
+    repo_root: Path,
+    env: dict[str, str],
+    timeout_s: float,
+) -> dict[str, object]:
+    payload = service_bootstrap._run_json_command(
+        [
+            python_executable,
+            "-m",
+            "tts_service.cli",
+            "extension-allow-origin",
+            SAMPLE_EXTENSION_ORIGIN,
+            "--repo-root",
+            str(repo_root),
+        ],
+        env=env,
+        timeout_s=timeout_s,
+    )
+    allowed_origins = payload.get("allowed_origins")
+    if not isinstance(allowed_origins, list) or SAMPLE_EXTENSION_ORIGIN not in allowed_origins:
+        raise ExtensionOnboardingError("extension-allow-origin did not add the sample origin.")
+    config = load_config(repo_root / "config" / "config.toml", env={})
+    if config.security.allowed_origins != (SAMPLE_EXTENSION_ORIGIN,):
+        raise ExtensionOnboardingError("extension-allow-origin wrote an invalid config.")
+    return {
+        "command": "tts extension-allow-origin <chrome-extension-origin>",
+        "added": payload.get("added") is True,
         "config_loadable": True,
     }
 

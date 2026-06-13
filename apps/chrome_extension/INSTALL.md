@@ -5,13 +5,24 @@ It is not Chrome Web Store signed.
 
 ## Load Unpacked
 
-1. Start the local service with `scripts\windows\run_service.ps1`.
+1. Start first-run setup with `scripts\windows\run_service.ps1 -SetupOnly`.
 2. Open `chrome://extensions`.
 3. Enable Developer Mode.
 4. Choose `Load unpacked`.
 5. Select the extracted `apps\chrome_extension` directory.
 6. Open the extension popup and copy the extension origin.
-7. Add that origin to `security.allowed_origins` in `config\config.toml`.
+7. Add that origin to the local service `security.allowed_origins` allow-list:
+
+   ```powershell
+   .\.venv\Scripts\tts.exe extension-allow-origin <copied-origin>
+   ```
+
+   If the editable checkout is already active in your shell, use:
+
+   ```powershell
+   tts extension-allow-origin <copied-origin>
+   ```
+
 8. Restart the local service.
 9. Save the token from `config\token.txt` in the popup.
 10. Refresh service status and confirm the setup checklist is all `[ok]`.

@@ -212,9 +212,15 @@ manager, scheduled task, or auto-start entry.
    - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
      playback checklist.
 
-6. Copy the extension origin from the popup into `security.allowed_origins` in
-   `config\\config.toml`, restart the service, then save the token from
-   `config\\token.txt` in the popup.
+6. Copy the extension origin from the popup, add it to
+   `security.allowed_origins` with:
+
+   ```powershell
+   .\\.venv\\Scripts\\tts.exe extension-allow-origin <copied-origin>
+   ```
+
+   Restart the service, then save the token from `config\\token.txt` in the
+   popup.
 
 ## Notes
 

@@ -72,6 +72,7 @@ READINESS_MARKERS = (
     "tts model-check <model-id>",
     "--allow-missing-checksum",
     "python3 scripts/check_chrome_extension_smoke.py",
+    "tts extension-allow-origin <copied-origin>",
     "strict Chrome/MV3 smoke requires Chrome or Edge",
     "Permanent Windows auto-start/service-manager installation remains undecided",
 )
@@ -113,8 +114,13 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_chrome_extension_smoke.py": (
         "--require-browser",
         "chrome-extension://",
+        "extension-allow-origin",
         "tts-extension:speak-page",
         "playbackState",
+    ),
+    "scripts/check_extension_onboarding.py": (
+        "extension-allow-origin",
+        "_verify_allow_list_cli_helper",
     ),
     "scripts/smoke_service.py": (
         "--stream-text-repeat",
@@ -134,6 +140,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/check_windows_launchers.py",
         "scripts/windows/install_local.ps1",
         "scripts/windows/install_local.cmd",
+        "extension-allow-origin",
     ),
     "scripts/check_windows_bundle_install.py": (
         "_run_windows_install_script",
@@ -143,6 +150,8 @@ REQUIRED_TEXT_MARKERS = {
         "--allow-missing-checksum",
         "Catalog model",
         "missing artifact_sha256",
+        "extension-allow-origin",
+        "_allow_extension_origin",
     ),
     "scripts/check_windows_launchers.py": (
         "_check_launcher_service",
@@ -157,6 +166,7 @@ REQUIRED_TEXT_MARKERS = {
         "Continue Page",
         "truncated text-offset continuation",
         "check_chrome_extension_smoke.py",
+        "extension-allow-origin",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",
@@ -164,11 +174,13 @@ REQUIRED_TEXT_MARKERS = {
         "Continue Page",
         "next known text character offset",
         "check_chrome_extension_smoke.py",
+        "extension-allow-origin",
     ),
     "docs/backend_model_setup.md": (
         "Continue Page",
         "non-textual character offset",
         "check_chrome_extension_smoke.py",
+        "extension-allow-origin",
     ),
 }
 

@@ -25,6 +25,11 @@ def test_extension_onboarding_check_validates_popup_service_and_origin_snippet()
     }
     assert summary["allow_list"]["config_loadable"] is True
     assert summary["allow_list"]["sample_origin"].startswith("chrome-extension://")
+    assert summary["allow_list"]["cli_helper"] == {
+        "command": "tts extension-allow-origin <chrome-extension-origin>",
+        "added": True,
+        "config_loadable": True,
+    }
     assert summary["service_snapshot"]["health_status"] == "ok"
     assert summary["service_snapshot"]["auth_enabled"] is True
     assert summary["service_snapshot"]["default_voice"] == "sherpa-en-debug"

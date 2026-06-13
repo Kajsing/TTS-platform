@@ -279,5 +279,9 @@ The thirtieth release-hardening slice adds
 smoke that loads the unpacked extension, starts an isolated local service,
 opens a generated long article, verifies page capture, starts page playback,
 observes playback state, and can be made strict with `--require-browser`.
+The thirty-first extension-onboarding slice adds
+`tts extension-allow-origin <chrome-extension-origin>`, making first-run
+allow-list setup idempotent and config-validated instead of requiring manual
+TOML edits.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

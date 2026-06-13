@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from tts_service import cli
+from tts_service.config import load_config
 
 
 def _write_setup_config(path: Path, *, default_voice: str = "voice-a") -> None:
@@ -79,6 +80,7 @@ def test_setup_local_creates_config_and_token(
     assert payload["service"]["base_url"] == "http://127.0.0.1:7777"
     assert payload["manifest"]["default_voice_in_manifest"] is True
     assert payload["next_steps"] == [
+        "tts extension-allow-origin <chrome-extension-origin>",
         "tts serve",
         "tts health",
         "tts list-voices",
@@ -121,6 +123,78 @@ def test_setup_local_preserves_existing_config_and_token(
         "default_voice_in_manifest": False,
     }
     assert payload["next_steps"][0] == "tts model-install <model-id> --catalog <catalog> --activate"
+
+
+def test_extension_allow_origin_adds_chrome_extension_origin(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = tmp_path / "config" / "config.toml"
+    _write_setup_config(config_path, default_voice="voice-a")
+
+    cli.main(
+        [
+            "extension-allow-origin",
+            " chrome-extension://abcdefghijklmnopabcdefghijklmnop/ ",
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["added"] is True
+    assert payload["origin"] == "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+    assert payload["allowed_origins"] == [
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+    ]
+    config = load_config(config_path, env={})
+    assert config.security.allowed_origins == (
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+    )
+
+
+def test_extension_allow_origin_preserves_existing_origins_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config" / "config.toml"
+    _write_setup_config(config_path, default_voice="voice-a")
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "\n[security]\n"
+        + 'allowed_origins = ["chrome-extension://existingexistingexistingexis"]\n',
+        encoding="utf-8",
+    )
+
+    added = cli._allow_extension_origin(
+        repo_root=tmp_path,
+        config_path=Path("config/config.toml"),
+        origin="chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+    )
+    duplicate = cli._allow_extension_origin(
+        repo_root=tmp_path,
+        config_path=Path("config/config.toml"),
+        origin="chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+    )
+
+    assert added["added"] is True
+    assert duplicate["added"] is False
+    config = load_config(config_path, env={})
+    assert config.security.allowed_origins == (
+        "chrome-extension://existingexistingexistingexis",
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+    )
+
+
+def test_extension_allow_origin_rejects_non_extension_origin(tmp_path: Path) -> None:
+    config_path = tmp_path / "config" / "config.toml"
+    _write_setup_config(config_path, default_voice="voice-a")
+
+    with pytest.raises(SystemExit, match="chrome-extension://"):
+        cli._allow_extension_origin(
+            repo_root=tmp_path,
+            config_path=Path("config/config.toml"),
+            origin="http://localhost:7777",
+        )
 
 
 def test_setup_local_requires_example_config_when_config_is_missing(tmp_path: Path) -> None:

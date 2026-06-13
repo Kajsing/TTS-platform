@@ -34,10 +34,11 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 
 ## Before loading the extension
 
-1. Start the local service.
+1. Run `tts setup-local` or `scripts\windows\run_service.ps1 -SetupOnly`.
 2. Ensure the service token is available.
-3. Add the extension origin to `security.allowed_origins` in the local service config.
-4. Keep the service running on a localhost URL that the extension can reach.
+3. Copy the extension origin from the popup.
+4. Run `tts extension-allow-origin <copied-origin>`.
+5. Start or restart the service on a localhost URL that the extension can reach.
 
 The popup shows the extension origin so it can be copied into the service allow-list.
 The popup can also refresh service health and voice discovery directly from the local service.

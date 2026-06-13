@@ -155,9 +155,12 @@ def _run_browser_smoke(
             token_file = Path(str(setup_payload.get("token_file", "")))
             if not token_file.is_file():
                 raise ChromeExtensionSmokeError("setup-local did not create a token file.")
-            _allow_extension_origin(
-                config_path=Path(str(setup_payload["config_path"])),
+            _run_extension_allow_origin(
+                python_executable=python_executable,
+                repo_root=repo_root,
                 extension_origin=extension_origin,
+                env=env,
+                timeout_s=command_timeout_s,
             )
 
             service_port = service_bootstrap._reserve_loopback_port()
@@ -378,13 +381,30 @@ def _extension_id_from_target(target: dict[str, object]) -> str:
     return parsed.netloc
 
 
-def _allow_extension_origin(*, config_path: Path, extension_origin: str) -> None:
-    text = config_path.read_text(encoding="utf-8")
-    marker = "allowed_origins = []"
-    replacement = f'allowed_origins = ["{extension_origin}"]'
-    if marker not in text:
-        raise ChromeExtensionSmokeError("Generated config has no empty allowed_origins marker.")
-    config_path.write_text(text.replace(marker, replacement), encoding="utf-8")
+def _run_extension_allow_origin(
+    *,
+    python_executable: str,
+    repo_root: Path,
+    extension_origin: str,
+    env: dict[str, str],
+    timeout_s: float,
+) -> None:
+    payload = service_bootstrap._run_json_command(
+        [
+            python_executable,
+            "-m",
+            "tts_service.cli",
+            "extension-allow-origin",
+            extension_origin,
+            "--repo-root",
+            str(repo_root),
+        ],
+        env=env,
+        timeout_s=timeout_s,
+    )
+    allowed_origins = payload.get("allowed_origins")
+    if not isinstance(allowed_origins, list) or extension_origin not in allowed_origins:
+        raise ChromeExtensionSmokeError("extension-allow-origin did not allow-list Chrome.")
 
 
 def _write_and_serve_article(article_dir: Path) -> str:

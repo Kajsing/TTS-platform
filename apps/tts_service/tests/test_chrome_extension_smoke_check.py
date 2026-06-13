@@ -92,25 +92,6 @@ def test_chrome_extension_smoke_requires_success_when_strict(
         )
 
 
-def test_chrome_extension_smoke_allows_generated_extension_origin(tmp_path: Path) -> None:
-    check_module = _load_chrome_smoke_module()
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(
-        "[security]\nallowed_origins = []\n",
-        encoding="utf-8",
-    )
-
-    check_module._allow_extension_origin(
-        config_path=config_path,
-        extension_origin="chrome-extension://abcdefghijklmnopabcdefghijklmnop",
-    )
-
-    assert (
-        'allowed_origins = ["chrome-extension://abcdefghijklmnopabcdefghijklmnop"]'
-        in config_path.read_text(encoding="utf-8")
-    )
-
-
 def test_chrome_extension_smoke_extracts_extension_id() -> None:
     check_module = _load_chrome_smoke_module()
 

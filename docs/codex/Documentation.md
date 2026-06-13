@@ -11,32 +11,32 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The repo now includes an optional Chrome/MV3 browser
-  smoke harness at `scripts/check_chrome_extension_smoke.py`. The default mode
-  is opportunistic for release gates: it validates the static extension
-  contract, tries to load the unpacked extension in Chrome/Edge through
-  DevTools Protocol, starts an isolated loopback service with the generated
-  extension origin allow-listed, opens a generated long article, verifies page
-  capture, starts page playback, and observes playback state. It returns a
-  skipped JSON result when the local browser/MV3 environment cannot run the
-  smoke; `--require-browser` makes that path strict for operator evidence.
+- Current loop result: The service CLI now includes
+  `tts extension-allow-origin <chrome-extension-origin>`, an idempotent
+  first-run helper for adding a copied Chrome extension origin to
+  `security.allowed_origins` in `config/config.toml`. It preserves existing
+  origins, rejects non-extension origins for this onboarding path, and is used
+  by both the onboarding check and Chrome/MV3 smoke harness instead of direct
+  TOML editing.
 - Validation status for the current loop:
+  - Targeted ruff passed with
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py scripts\check_extension_onboarding.py scripts\check_chrome_extension_smoke.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_chrome_extension_smoke_check.py scripts\check_v1_readiness.py`.
+  - Targeted tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 15 passed.
+  - `py -3 scripts\check_extension_onboarding.py` passed and reported the new
+    `cli_helper` contract.
+  - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 29
+    readiness markers.
   - `py -3 scripts\check_chrome_extension_smoke.py` passed with a skipped
     result because Chrome/Edge was found but the MV3 service worker did not
     start in the headless smoke session on this machine.
-  - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_chrome_extension_smoke.py scripts\release_check.py scripts\package_windows_bundle.py scripts\check_v1_readiness.py apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py`.
-  - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 11 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 28
-    readiness markers.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 160 tests.
+  - `py -3 -m pytest -q` passed with 162 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including
-    `chrome_extension_smoke`, which returned the same skipped result for this
-    local browser/MV3 environment.
+  - `py -3 scripts\release_check.py` passed, including the updated
+    `extension_onboarding` CLI-helper check and the skip-aware
+    `chrome_extension_smoke`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -193,17 +193,22 @@ This file is the live status log and shared memory for future Codex loops.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, origin snippet readiness, voice discovery, and health status.
+  - `tts extension-allow-origin <chrome-extension-origin>` now updates
+    `security.allowed_origins` for a copied extension origin without requiring
+    manual TOML edits.
   - `scripts/check_extension.py` now validates setup-checklist wiring along
     with manifest, asset, and resume wiring.
   - `scripts/check_extension_onboarding.py` now validates the popup onboarding
     surface, config-loadable Chrome extension origin snippet, and service
-    health/voice snapshot used by the popup.
+    health/voice snapshot used by the popup. It also validates the
+    `extension-allow-origin` CLI helper against a fresh `setup-local` repo.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
   - the Chrome extension package now includes `INSTALL.md` plus manifest/action
     PNG icons for local Chrome handoff builds.
   - `scripts/check_chrome_extension_smoke.py` now provides an optional real
-    Chrome/Edge MV3 smoke for page capture and playback startup evidence.
+    Chrome/Edge MV3 smoke for page capture and playback startup evidence, and
+    it uses `extension-allow-origin` for service allow-list setup.
   - the extension manifest no longer requests `<all_urls>` in
     `host_permissions`; service host permissions are limited to localhost, while
     page access remains in the declared content script.
@@ -455,6 +460,7 @@ tts model-install <model-id> --catalog ./models/catalog.json
 tts model-activate <model-id>
 tts model-check <model-id>
 tts model-remove <model-id>
+tts extension-allow-origin <chrome-extension-origin>
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_extension_onboarding.py
 python3 scripts/check_extension_reader_flow.py

@@ -24,7 +24,7 @@ from tts_core.backends.base import BackendNotReadyError
 from tts_core.backends.sherpa_onnx import SherpaOnnxVoiceRuntimeConfig
 
 from .auth import initialize_auth
-from .config import load_config
+from .config import SecurityConfig, load_config
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -145,6 +145,16 @@ def main(argv: list[str] | None = None) -> None:
             )
             return
 
+        if args.command == "extension-allow-origin":
+            _print_json(
+                _allow_extension_origin(
+                    repo_root=Path(args.repo_root),
+                    config_path=Path(args.config_path),
+                    origin=args.origin,
+                )
+            )
+            return
+
         if args.command == "catalog-list":
             catalog, _ = _load_model_catalog(args.catalog)
             _print_json(
@@ -261,6 +271,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow binding outside localhost. The default run path only allows loopback hosts.",
     )
+
+    extension_allow_parser = subparsers.add_parser("extension-allow-origin")
+    extension_allow_parser.add_argument("origin")
+    extension_allow_parser.add_argument("--repo-root", default=".")
+    extension_allow_parser.add_argument("--config-path", default="config/config.toml")
 
     catalog_list_parser = subparsers.add_parser("catalog-list")
     catalog_list_parser.add_argument("--catalog", required=True)
@@ -570,11 +585,109 @@ def _setup_local_next_steps(
     default_voice_in_manifest: bool,
 ) -> list[str]:
     steps = ["tts serve", "tts health", "tts list-voices"]
+    steps.insert(0, "tts extension-allow-origin <chrome-extension-origin>")
     if not default_voice_in_manifest:
         steps.insert(0, "tts model-install <model-id> --catalog <catalog> --activate")
     if config_created or token_created:
         steps.append("read config/token.txt when a protected client needs the bearer token")
     return steps
+
+
+def _allow_extension_origin(
+    *,
+    repo_root: Path,
+    config_path: Path,
+    origin: str,
+) -> dict[str, object]:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
+    if not resolved_config_path.exists():
+        raise SystemExit(
+            f"Config does not exist: {resolved_config_path}. Run 'tts setup-local' first."
+        )
+
+    normalized_origin = _normalize_extension_origin_for_cli(origin)
+    try:
+        config = load_config(resolved_config_path, env={})
+    except ValueError as exc:
+        raise SystemExit(f"Config is invalid: {exc}") from exc
+
+    allowed_origins = list(config.security.allowed_origins)
+    added = normalized_origin not in allowed_origins
+    if added:
+        allowed_origins.append(normalized_origin)
+        _set_allowed_origins_in_config(
+            config_path=resolved_config_path,
+            origins=allowed_origins,
+        )
+
+    return {
+        "config_path": str(resolved_config_path),
+        "origin": normalized_origin,
+        "added": added,
+        "allowed_origins": allowed_origins,
+        "next_steps": [
+            "restart the local service if it is already running",
+            "save config/token.txt in the Chrome extension popup",
+            "open the popup and refresh service health",
+        ],
+    }
+
+
+def _normalize_extension_origin_for_cli(origin: str) -> str:
+    try:
+        normalized_origins = SecurityConfig.from_mapping(
+            {"allowed_origins": [origin]}
+        ).allowed_origins
+    except ValueError as exc:
+        raise SystemExit(f"Extension origin is invalid: {exc}") from exc
+    if not normalized_origins:
+        raise SystemExit("Extension origin must not be empty.")
+    normalized_origin = normalized_origins[0]
+    if not normalized_origin.startswith("chrome-extension://"):
+        raise SystemExit("Extension origin must start with chrome-extension://")
+    return normalized_origin
+
+
+def _set_allowed_origins_in_config(*, config_path: Path, origins: list[str]) -> None:
+    origins_line = (
+        "allowed_origins = ["
+        + ", ".join(_toml_string(origin) for origin in origins)
+        + "]"
+    )
+    text = config_path.read_text(encoding="utf-8")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    security_section_index = _find_toml_table(lines, "security")
+
+    if security_section_index is None:
+        prefix = text
+        if prefix and not prefix.endswith(("\n", "\r")):
+            prefix += newline
+        if prefix:
+            prefix += newline
+        config_path.write_text(
+            f"{prefix}[security]{newline}{origins_line}{newline}",
+            encoding="utf-8",
+        )
+        return
+
+    section_end = _find_next_toml_table(lines, start=security_section_index + 1)
+    allowed_origins_pattern = re.compile(r"^(\s*)allowed_origins\s*=")
+    for index in range(security_section_index + 1, section_end):
+        match = allowed_origins_pattern.match(lines[index])
+        if match:
+            if "[" in lines[index] and "]" not in lines[index]:
+                raise SystemExit(
+                    "security.allowed_origins must be a single-line TOML array before "
+                    "this command can update it."
+                )
+            lines[index] = f"{match.group(1)}{origins_line}"
+            _write_toml_lines(config_path=config_path, lines=lines, newline=newline)
+            return
+
+    lines.insert(security_section_index + 1, origins_line)
+    _write_toml_lines(config_path=config_path, lines=lines, newline=newline)
 
 
 def _serve_local(

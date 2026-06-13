@@ -20,6 +20,7 @@ backend-realism work, and early v1 model-management helpers:
 - config example security-default verification for loopback binding, token auth,
   empty origin allow-list, rate limits, metrics, long stream limits, local CPU
   backend defaults, and ignored token/model artifacts
+- CLI `extension-allow-origin` helper coverage for first-run Chrome onboarding
 - rate limiting
 - job creation, status polling, and queued-job cancellation
 - running-job cancellation that remains terminal even when backend interruption is best-effort
@@ -178,7 +179,7 @@ create `.venv`, install the local package, and run `setup-local` before the
 installed foreground service smoke.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
-extension-origin allow-list snippet shape.
+extension-origin allow-list snippet plus CLI helper behavior.
 It verifies Chrome extension installability assets by checking local
 `INSTALL.md` guidance and the manifest/action icon set.
 It also verifies the long-page reader-flow contract and streams a generated
