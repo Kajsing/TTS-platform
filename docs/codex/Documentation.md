@@ -11,18 +11,20 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The section-navigation slice adds a popup `Next Section`
-  action. It uses heading offsets and section indexes from page-capture metadata
-  to re-extract the active tab from a later captured section without storing
-  heading text or raw page text.
+- Current loop result: The model-management readiness slice adds a local
+  artifact/catalog smoke that exercises catalog-list, install, activate,
+  service smoke with the installed voice, and remove without external downloads.
+  `model-remove` now warns when the removed model id is still configured as the
+  active default voice.
 - Validation status for the current loop:
+  - `py -3 scripts/check_model_management_flow.py` passed.
+  - `py -3 -m pytest apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py -q` passed with 24 tests.
+  - `py -3 scripts/check_v1_readiness.py` passed.
+  - Targeted `py -3 -m ruff check ...` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 118 tests.
-  - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
-    with JavaScript syntax checks skipped because `node` is not installed.
-  - `py -3 scripts/package_extension.py --out "$env:TEMP\tts-platform-prototype-test.zip"` passed.
-  - `py -3 scripts/package_windows_bundle.py --out "$env:TEMP\tts-platform-local-reader-test.zip"` passed.
-  - `py -3 scripts/release_check.py` passed.
+  - `py -3 -m pytest -q` passed with 132 tests.
+  - `py -3 scripts/release_check.py` passed, including the local service
+    bootstrap and model-management flow gates.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -112,6 +114,12 @@ This file is the live status log and shared memory for future Codex loops.
     or incomplete-entry warnings, and install next-step guidance.
   - `tts model-install` now emits progress status lines to stderr and includes
     structured `install_steps` in its JSON stdout result.
+  - `tts model-remove` now reports whether the removed model id is still
+    configured as `[tts].default_voice`, with next-step guidance to activate
+    another voice before service restart.
+  - `scripts/check_model_management_flow.py` now verifies local catalog-list,
+    install, activate, service smoke with the installed voice, and remove using
+    a generated local artifact and temp repo root.
 - Windows-friendly first-run setup has started:
   - `tts setup-local` bootstraps local config and token files without requiring
     the service to be running.
@@ -187,6 +195,11 @@ This file is the live status log and shared memory for future Codex loops.
     source paths.
   - `scripts/release_check.py` now runs the Windows bundle bootstrap check after
     building the bundle.
+  - `scripts/check_local_service_bootstrap.py` now starts a temp first-run
+    loopback service and runs public-contract smoke without repo-local config
+    or token side effects.
+  - `scripts/release_check.py` now runs local service bootstrap and
+    model-management flow smoke checks as deterministic offline readiness gates.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -329,6 +342,7 @@ tts catalog-list --catalog ./models/catalog.json
 tts model-install <model-id> --catalog ./models/catalog.json
 tts model-activate <model-id>
 tts model-remove <model-id>
+python3 scripts/check_model_management_flow.py
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2

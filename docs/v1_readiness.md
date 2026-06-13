@@ -17,6 +17,9 @@ for long web-page text.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
   runs the public-contract smoke, and shuts the service down.
+- `python3 scripts/check_model_management_flow.py` creates a local
+  model-artifact catalog, runs catalog-list, install, activate, service smoke
+  with the installed voice, and remove without external downloads.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
@@ -36,6 +39,8 @@ for long web-page text.
   `tts serve` for manual Windows operator verification.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
+  The local artifact workflow is automated; real acoustic-output readiness
+  still needs a real model artifact and runtime outside the default gate.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

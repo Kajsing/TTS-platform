@@ -172,6 +172,9 @@ status to stderr, and keeps its structured result on stdout.
 `config/config.toml` so new synthesis requests use that voice by default.
 Use `model-install --activate` for the first-run path when the installed model
 should immediately become the default voice.
+`model-remove` reports whether the removed model id is still configured as
+`[tts].default_voice` so operators know to activate another model before
+restarting the service.
 
 For backend modes, model asset layout, manifest conventions, catalog format,
 and current long-text limits, see
@@ -195,9 +198,10 @@ python3 scripts/release_check.py
 ```
 
 It runs ruff, pytest, security-default verification, v1-readiness verification,
-local service bootstrap smoke, extension validation, and extension zip
-packaging with a temporary package output. It also builds and bootstrap-checks
-the Windows local reader bundle with a temporary output path.
+local service bootstrap smoke, local model-management flow smoke, extension
+validation, and extension zip packaging with a temporary package output. It
+also builds and bootstrap-checks the Windows local reader bundle with a
+temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
 

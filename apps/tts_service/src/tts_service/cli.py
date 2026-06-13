@@ -180,6 +180,7 @@ def main(argv: list[str] | None = None) -> None:
                 model_id=args.model_id,
                 models_root=Path(args.models_root),
                 manifest_path=Path(args.manifest_path),
+                config_path=Path(args.config_path),
             )
             _print_json(removed)
             return
@@ -275,6 +276,7 @@ def _build_parser() -> argparse.ArgumentParser:
     model_remove_parser.add_argument("model_id")
     model_remove_parser.add_argument("--models-root", default="models/voices")
     model_remove_parser.add_argument("--manifest-path", default="models/MANIFEST.json")
+    model_remove_parser.add_argument("--config-path", default="config/config.toml")
 
     return parser
 
@@ -1120,7 +1122,17 @@ def _write_toml_lines(*, config_path: Path, lines: list[str], newline: str) -> N
     config_path.write_text(newline.join(lines) + newline, encoding="utf-8")
 
 
-def _remove_model(*, model_id: str, models_root: Path, manifest_path: Path) -> dict[str, object]:
+def _remove_model(
+    *,
+    model_id: str,
+    models_root: Path,
+    manifest_path: Path,
+    config_path: Path | None = None,
+) -> dict[str, object]:
+    config_default_status = _inspect_config_default_for_remove(
+        model_id=model_id,
+        config_path=config_path,
+    )
     install_dir = models_root / model_id
     removed_files = False
     if install_dir.exists():
@@ -1145,10 +1157,50 @@ def _remove_model(*, model_id: str, models_root: Path, manifest_path: Path) -> d
             payload["voices"] = updated_voices
             manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    return {
+    result: dict[str, object] = {
         "model_id": model_id,
         "removed_files": removed_files,
         "removed_manifest_entry": removed_manifest_entry,
+    }
+    result.update(config_default_status)
+    if config_default_status.get("active_default_voice") is True:
+        result["warning"] = (
+            "This model id is still configured as [tts].default_voice. "
+            "Activate another installed model before restarting the service."
+        )
+        result["next_steps"] = [
+            "tts model-activate <model-id>",
+            "restart the local service",
+            "tts list-voices",
+        ]
+    elif config_default_status.get("config_inspection_error"):
+        result["warning"] = config_default_status["config_inspection_error"]
+    return result
+
+
+def _inspect_config_default_for_remove(
+    *,
+    model_id: str,
+    config_path: Path | None,
+) -> dict[str, object]:
+    if config_path is None:
+        return {}
+    if not config_path.exists():
+        return {
+            "config_path": str(config_path),
+            "active_default_voice": False,
+        }
+    try:
+        config = load_config(config_path, env={})
+    except ValueError as exc:
+        return {
+            "config_path": str(config_path),
+            "active_default_voice": False,
+            "config_inspection_error": f"Could not inspect config default voice: {exc}",
+        }
+    return {
+        "config_path": str(config_path),
+        "active_default_voice": config.tts.default_voice == model_id,
     }
 
 

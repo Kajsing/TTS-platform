@@ -541,6 +541,38 @@ def test_model_remove_deletes_files_and_manifest_entry(tmp_path: Path) -> None:
     assert [voice["id"] for voice in manifest["voices"]] == ["voice-b"]
 
 
+def test_model_remove_warns_when_removed_model_is_active_default(tmp_path: Path) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "voice-a"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake", encoding="utf-8")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["voice-a", "voice-b"])
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text('[tts]\ndefault_voice = "voice-a"\n', encoding="utf-8")
+
+    payload = cli._remove_model(
+        model_id="voice-a",
+        models_root=tmp_path / "models" / "voices",
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["removed_files"] is True
+    assert payload["removed_manifest_entry"] is True
+    assert payload["active_default_voice"] is True
+    assert payload["config_path"] == str(config_path)
+    assert payload["warning"] == (
+        "This model id is still configured as [tts].default_voice. "
+        "Activate another installed model before restarting the service."
+    )
+    assert payload["next_steps"] == [
+        "tts model-activate <model-id>",
+        "restart the local service",
+        "tts list-voices",
+    ]
+
+
 def test_model_remove_is_noop_when_model_is_missing(tmp_path: Path) -> None:
     manifest_path = tmp_path / "models" / "MANIFEST.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)

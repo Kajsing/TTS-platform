@@ -130,6 +130,9 @@ The release gate also verifies `docs/v1_readiness.md`, which separates
 automated gates from manual live checks and unresolved product choices.
 It starts a temporary first-run service on a loopback port and runs the local
 public-contract smoke against that isolated config/token root.
+It also creates a temporary local model artifact/catalog, verifies
+catalog-list, install, activate, service smoke with the installed voice, and
+remove.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -162,6 +165,12 @@ Check the source first-run service bootstrap path directly with:
 
 ```bash
 python3 scripts/check_local_service_bootstrap.py
+```
+
+Check the local model-management flow directly with:
+
+```bash
+python3 scripts/check_model_management_flow.py
 ```
 
 CLI example:

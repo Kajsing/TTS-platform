@@ -351,6 +351,11 @@ Remove an installed model:
 tts model-remove sherpa-en-v1
 ```
 
+If the removed model id is still configured as `[tts].default_voice`,
+`model-remove` reports `active_default_voice: true` plus next-step guidance.
+It does not silently choose a replacement voice; activate another installed
+model before restarting the service.
+
 These model-management commands edit local files and do not call protected
 service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
 `model-install --activate` also updates `config/config.toml` `[tts].default_voice`
@@ -471,6 +476,7 @@ Baseline:
 ```bash
 python3 -m pytest -q
 python3 -m ruff check .
+python3 scripts/check_model_management_flow.py
 ```
 
 Windows PowerShell fallback:

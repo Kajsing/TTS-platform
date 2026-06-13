@@ -28,6 +28,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "security_defaults",
         "v1_readiness",
         "local_service_bootstrap",
+        "model_management_flow",
         "extension",
         "extension_package",
         "windows_bundle",
@@ -41,6 +42,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         (["python-test", "scripts/check_security_defaults.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_v1_readiness.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_local_service_bootstrap.py"], REPO_ROOT, True),
+        (["python-test", "scripts/check_model_management_flow.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension.py"], REPO_ROOT, True),
         (
             [

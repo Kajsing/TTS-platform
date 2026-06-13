@@ -146,6 +146,10 @@ def _run_release_checks_with_package_path(
             "local_service_bootstrap",
             [python_executable, "scripts/check_local_service_bootstrap.py"],
         ),
+        (
+            "model_management_flow",
+            [python_executable, "scripts/check_model_management_flow.py"],
+        ),
         ("extension", [python_executable, "scripts/check_extension.py"]),
         (
             "extension_package",
