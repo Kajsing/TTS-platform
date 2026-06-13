@@ -108,12 +108,21 @@ def verify_extension_wiring() -> None:
         EXTENSION_ROOT / "src" / "popup.js": [
             '"tts-extension:resume-page"',
             "formatOnboardingStatus",
+            "formatPageCapture",
             "checklistLine",
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
+            "pageCapture",
+            "sanitizePageCaptureMeta",
             "resolveResumeTextChunkIndex",
             "startTextChunkIndex",
+        ],
+        EXTENSION_ROOT / "src" / "content-script.js": [
+            "getPageCapture",
+            "extractReadableText(anchorElement, 1000).text",
+            "truncated",
+            "readableBlocks",
         ],
         EXTENSION_ROOT / "offscreen" / "offscreen.js": ["start_text_chunk_index"],
     }

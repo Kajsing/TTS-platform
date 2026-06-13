@@ -11,11 +11,10 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows-friendly packaging slice adds
-  `scripts/package_windows_bundle.py`, a whitelist-based local reader source
-  bundle that includes service/core source, Windows launchers, config example,
-  docs, Chrome extension source, and a validated extension zip while excluding
-  local token and installed model artifacts.
+- Current loop result: The long-page reader UX slice adds page-capture metadata
+  to the Chrome extension. Page playback now records captured character count,
+  configured page limit, extraction source, readable block count, and truncation
+  status in playback state without storing raw page text.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 117 tests.
@@ -92,6 +91,9 @@ This file is the live status log and shared memory for future Codex loops.
     the popup displays it.
   - the popup now exposes `Resume Page`; background resume reuses the latest
     planned text chunk index and re-extracts current active-tab page text.
+  - page playback now stores non-text capture metadata in session playback
+    state, and the popup reports whether a long page was truncated at the
+    configured character limit.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
@@ -195,6 +197,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Extension resume should re-extract active-tab text and reuse the latest
   planned text chunk index instead of persisting raw page text in extension
   storage.
+- Extension page-capture diagnostics should also avoid raw page text. Counts,
+  extraction source, readable block count, and truncation status are enough to
+  explain bounded long-page playback without creating a text-storage surface.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any
@@ -308,8 +313,8 @@ python3 scripts/package_windows_bundle.py
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
 - Long page playback now has a larger WebSocket text limit, stream progress
-  metadata, and a basic popup resume action. It still lacks section navigation
-  semantics.
+  metadata, a basic popup resume action, and page-capture metadata/truncation
+  visibility. It still lacks section navigation semantics.
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction.
 - Persistent Windows auto-start/service-manager installation remains an explicit

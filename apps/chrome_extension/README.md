@@ -10,6 +10,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - buffer PCM audio before playback starts
 - show reader progress for streamed page playback
 - resume page playback from the latest reader progress
+- show page-capture metadata for long pages, including captured characters,
+  readable block count, extraction source, and truncation at the configured limit
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
@@ -69,7 +71,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 8. Stop playback once and start it again to confirm the offscreen flow recovers cleanly.
 9. Reopen the popup during or after playback and confirm the state still looks sensible.
 10. During long page playback, confirm the playback state includes reader progress.
-11. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+11. Confirm the playback state includes page-capture metadata and reports
+    truncation when the readable page text reaches `Max Page Characters`.
+12. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -79,6 +83,8 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 - Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
 - Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
+- The extension stores only page-capture metadata in session playback state, not
+  raw page text.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 
 ## Validation

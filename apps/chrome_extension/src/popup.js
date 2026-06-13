@@ -184,6 +184,7 @@ function formatPlaybackState(state) {
     state.source ? `Source: ${state.source}` : null,
     state.activeStreamId ? `Stream: ${state.activeStreamId}` : null,
     state.readerProgress ? `Progress: ${formatReaderProgress(state.readerProgress)}` : null,
+    state.pageCapture ? `Page Capture: ${formatPageCapture(state.pageCapture)}` : null,
     state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
     state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
     state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
@@ -200,6 +201,16 @@ function formatReaderProgress(progress) {
     return `${Math.min(chunkIndex + 1, chunkCount)}/${chunkCount} chunks (${percent}%)`;
   }
   return `${percent}%`;
+}
+
+function formatPageCapture(capture) {
+  const textChars = Number(capture.textChars ?? 0);
+  const maxChars = Number(capture.maxChars ?? 0);
+  const readableBlocks = Number(capture.readableBlocks ?? 0);
+  const source = capture.source || "unknown";
+  const status = capture.truncated ? "truncated" : "complete";
+  const blocks = readableBlocks > 0 ? `, ${readableBlocks} blocks` : "";
+  return `${textChars}/${maxChars} chars, ${status}, ${source}${blocks}`;
 }
 
 function formatServiceSnapshot(snapshot) {

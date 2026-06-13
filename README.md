@@ -52,6 +52,8 @@ and v1-readiness work:
 - WebSocket reader progress metadata and `start_text_chunk_index` resume anchor
   for long streamed playback
 - popup-side resume action for page playback based on the latest reader progress
+- extension-side page capture metadata that reports captured character count,
+  extraction source, readable block count, and truncation at the page limit
 
 ## Repository Layout
 
@@ -211,6 +213,8 @@ The extension currently supports:
 - offscreen playback of streamed PCM audio
 - popup-side reader progress for streamed page playback
 - resuming page playback from the latest reader progress on the active tab
+- displaying page-capture metadata so long pages show whether captured text was
+  complete or truncated at the configured limit
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config

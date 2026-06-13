@@ -45,18 +45,30 @@ function getSelectedText() {
   if (!anchorElement) {
     return "";
   }
-  return extractReadableText(anchorElement, 1000);
+  return extractReadableText(anchorElement, 1000).text;
 }
 
-function getPageText(maxChars = 24000) {
+function getPageCapture(maxChars = 24000) {
+  const requestedMaxChars = sanitizeMaxChars(maxChars);
   const root = pickReadableRoot();
-  const extracted = extractReadableText(root, maxChars);
-  if (extracted) {
-    return extracted;
+  const extracted = extractReadableText(root, requestedMaxChars);
+  if (extracted.text) {
+    return buildCaptureResult(extracted.text, {
+      maxChars: requestedMaxChars,
+      source: extracted.source,
+      truncated: extracted.truncated,
+      readableBlocks: extracted.readableBlocks,
+    });
   }
 
   const fallbackText = normalizeInlineText(document.body?.innerText || "");
-  return fallbackText.slice(0, maxChars);
+  const text = fallbackText.slice(0, requestedMaxChars).trim();
+  return buildCaptureResult(text, {
+    maxChars: requestedMaxChars,
+    source: "fallback-body",
+    truncated: fallbackText.length > requestedMaxChars,
+    readableBlocks: 0,
+  });
 }
 
 function getControlSelection(element) {
@@ -90,11 +102,12 @@ function pickReadableRoot() {
 
 function extractReadableText(root, maxChars) {
   if (!root) {
-    return "";
+    return emptyCapture("missing-root", maxChars);
   }
 
   const blocks = [];
   const seen = new Set();
+  let truncated = false;
   const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
   for (const element of candidates) {
     if (shouldSkipElement(element)) {
@@ -110,15 +123,27 @@ function extractReadableText(root, maxChars) {
     seen.add(text);
 
     if (blocks.join("\n\n").length >= maxChars) {
+      truncated = true;
       break;
     }
   }
 
   const joined = blocks.join("\n\n").trim();
   if (joined) {
-    return joined.slice(0, maxChars).trim();
+    return {
+      text: joined.slice(0, maxChars).trim(),
+      source: "readable-blocks",
+      truncated: truncated || joined.length > maxChars,
+      readableBlocks: blocks.length,
+    };
   }
-  return normalizeInlineText(root.innerText || root.textContent || "").slice(0, maxChars);
+  const fallbackText = normalizeInlineText(root.innerText || root.textContent || "");
+  return {
+    text: fallbackText.slice(0, maxChars).trim(),
+    source: "root-text",
+    truncated: fallbackText.length > maxChars,
+    readableBlocks: 0,
+  };
 }
 
 function shouldSkipElement(element) {
@@ -134,6 +159,37 @@ function normalizeInlineText(text) {
   return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function sanitizeMaxChars(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 24000;
+  }
+  return Math.max(200, Math.min(48000, Math.round(parsed)));
+}
+
+function emptyCapture(source, maxChars) {
+  return {
+    text: "",
+    source,
+    truncated: false,
+    readableBlocks: 0,
+    maxChars,
+  };
+}
+
+function buildCaptureResult(text, meta) {
+  return {
+    text,
+    meta: {
+      source: meta.source,
+      textChars: text.length,
+      maxChars: meta.maxChars,
+      truncated: Boolean(meta.truncated),
+      readableBlocks: meta.readableBlocks,
+    },
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   if (message?.type === "tts-extension:get-selection") {
     sendResponse({ text: getSelectedText() });
@@ -141,6 +197,6 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   }
 
   if (message?.type === "tts-extension:get-page-text") {
-    sendResponse({ text: getPageText(message.maxChars) });
+    sendResponse(getPageCapture(message.maxChars));
   }
 });

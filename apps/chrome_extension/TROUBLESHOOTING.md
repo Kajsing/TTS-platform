@@ -54,6 +54,16 @@
   ahead, because stream progress can be reported before that chunk has fully
   played.
 
+## Page playback stops before the whole article
+
+- Check `Page Capture` in the popup playback state.
+- If it says `truncated`, the extension reached `Max Page Characters` before
+  the readable page text ended.
+- Increase `Max Page Characters` up to the local service stream limit, then save
+  settings and start page playback again.
+- The popup stores capture counts and extraction metadata only; it does not
+  store raw page text.
+
 ## Selection playback does not read the expected text
 
 - The content script prefers selected text first, then readable page content.

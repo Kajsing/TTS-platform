@@ -154,6 +154,9 @@ The first long-document slices are now:
 - stream progress metadata plus `start_text_chunk_index` as a resume anchor.
 - popup-side `Resume Page` action that re-extracts active-tab text and resumes
   from the latest reader progress.
+- extension-side page-capture metadata so long page reads report captured
+  characters, extraction source, readable block count, and truncation at the
+  configured page limit.
 
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, and install progress metadata/status lines.

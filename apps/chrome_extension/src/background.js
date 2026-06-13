@@ -85,6 +85,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message: error.message,
       activeStreamId: null,
       readerProgress: playbackState.readerProgress ?? null,
+      pageCapture: playbackState.pageCapture ?? null,
     });
     sendResponse({ ok: false, message: error.message });
   });
@@ -108,12 +109,20 @@ async function speakSelection() {
 async function speakPage() {
   const tab = await getActiveTab();
   const config = await getConfig();
-  const text = await getPageText(tab.id, config.maxChars);
-  if (!text) {
+  const capture = await getPageCapture(tab.id, config.maxChars);
+  if (!capture.text) {
     return { ok: false, message: "No page text found." };
   }
-  await startPlayback({ text, source: "page", tabId: tab.id });
-  return { ok: true, message: "Started speaking page text." };
+  await startPlayback({
+    text: capture.text,
+    source: "page",
+    tabId: tab.id,
+    pageCapture: capture.meta,
+  });
+  return {
+    ok: true,
+    message: `Started speaking page text.${formatCaptureSuffix(capture.meta)}`,
+  };
 }
 
 async function resumePage() {
@@ -125,32 +134,48 @@ async function resumePage() {
 
   const tab = await getActiveTab();
   const config = await getConfig();
-  const text = await getPageText(tab.id, config.maxChars);
-  if (!text) {
+  const capture = await getPageCapture(tab.id, config.maxChars);
+  if (!capture.text) {
     return { ok: false, message: "No page text found." };
   }
 
   await startPlayback({
-    text,
+    text: capture.text,
     source: "page-resume",
     tabId: tab.id,
     startTextChunkIndex,
+    pageCapture: capture.meta,
   });
   return {
     ok: true,
-    message: `Resumed page playback from chunk ${startTextChunkIndex + 1}.`,
+    message: `Resumed page playback from chunk ${
+      startTextChunkIndex + 1
+    }.${formatCaptureSuffix(capture.meta)}`,
   };
 }
 
-async function getPageText(tabId, maxChars) {
+async function getPageCapture(tabId, maxChars) {
   const response = await chrome.tabs.sendMessage(tabId, {
     type: "tts-extension:get-page-text",
     maxChars,
   });
-  return (response?.text || "").trim();
+  const text = (response?.text || "").trim();
+  return {
+    text,
+    meta: sanitizePageCaptureMeta(response?.meta, {
+      textChars: text.length,
+      maxChars,
+    }),
+  };
 }
 
-async function startPlayback({ text, source, tabId, startTextChunkIndex = 0 }) {
+async function startPlayback({
+  text,
+  source,
+  tabId,
+  startTextChunkIndex = 0,
+  pageCapture = null,
+}) {
   const config = await getConfig();
   if (!config.token) {
     throw new Error("Missing token. Open the popup and save a service token first.");
@@ -163,6 +188,7 @@ async function startPlayback({ text, source, tabId, startTextChunkIndex = 0 }) {
     tabId,
     readerProgress: null,
     startTextChunkIndex,
+    pageCapture,
   });
   const response = await sendOffscreenMessage({
     type: "tts-extension:start-stream",
@@ -316,6 +342,28 @@ function resolveResumeTextChunkIndex(progress) {
   return Math.min(Math.floor(chunkIndex), Math.floor(chunkCount) - 1);
 }
 
+function sanitizePageCaptureMeta(meta, fallback) {
+  const textChars = sanitizeNumber(meta?.textChars, fallback.textChars, 0);
+  const maxChars = sanitizeNumber(meta?.maxChars, fallback.maxChars, 200, 48000);
+  return {
+    source: String(meta?.source || "unknown"),
+    textChars,
+    maxChars,
+    truncated: Boolean(meta?.truncated),
+    readableBlocks: sanitizeNumber(meta?.readableBlocks, 0, 0),
+  };
+}
+
+function formatCaptureSuffix(capture) {
+  if (!capture) {
+    return "";
+  }
+  const textChars = Number(capture.textChars ?? 0);
+  const maxChars = Number(capture.maxChars ?? 0);
+  const status = capture.truncated ? " truncated" : "";
+  return ` Captured ${textChars} chars${status} at limit ${maxChars}.`;
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({
     active: true,
@@ -423,6 +471,7 @@ async function initializeExtensionState() {
       source: restoredState.source,
       tabId: restoredState.tabId,
       readerProgress: restoredState.readerProgress ?? null,
+      pageCapture: restoredState.pageCapture ?? null,
       lastEvent: "recovered",
     });
     return;
