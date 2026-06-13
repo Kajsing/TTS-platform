@@ -242,6 +242,9 @@ This file is the live status log and shared memory for future Codex loops.
   - the extension content script now skips `aria-hidden`, `hidden`, and
     `inert` subtrees during page capture, reducing hidden UI noise during
     long-page playback while keeping extraction heuristic and metadata-only.
+  - fallback plain-text page capture now uses the same filtered DOM text walk,
+    so flat pages without enough reader blocks avoid hidden UI and chrome
+    subtrees too.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

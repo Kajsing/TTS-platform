@@ -259,6 +259,10 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "HIDDEN_SUBTREE_SELECTOR",
             "[aria-hidden='true']",
             "[inert]",
+            "function extractFallbackText(root)",
+            "document.createTreeWalker",
+            "NodeFilter.SHOW_TEXT",
+            "NodeFilter.FILTER_REJECT",
         ],
         "offscreen.js": [
             "readerProgress",
@@ -298,6 +302,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "stop_restart_recovery": True,
         "popup_reopen_state": True,
         "raw_page_text_persistence": False,
+        "filtered_fallback_capture": True,
     }
 
 

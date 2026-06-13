@@ -86,7 +86,7 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
     });
   }
 
-  const fallbackText = normalizeInlineText(document.body?.innerText || "");
+  const fallbackText = extractFallbackText(document.body);
   const text = fallbackText
     .slice(requestedStartTextChar, requestedStartTextChar + requestedMaxChars)
     .trim();
@@ -226,7 +226,7 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
       structure,
     };
   }
-  const fallbackText = normalizeInlineText(root.innerText || root.textContent || "");
+  const fallbackText = extractFallbackText(root);
   const fallbackSlice = fallbackText.slice(startTextChar, startTextChar + maxChars).trim();
   structure.nextTextCharStart =
     fallbackText.length > startTextChar + maxChars ? startTextChar + fallbackSlice.length : null;
@@ -250,6 +250,32 @@ function shouldSkipElement(element) {
 function isElementHidden(element) {
   const style = window.getComputedStyle(element);
   return style.display === "none" || style.visibility === "hidden";
+}
+
+function extractFallbackText(root) {
+  if (!root) {
+    return "";
+  }
+  const textParts = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || shouldSkipElement(parent)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (!normalizeInlineText(node.textContent || "")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  while (walker.nextNode()) {
+    const text = normalizeInlineText(walker.currentNode.textContent || "");
+    if (text) {
+      textParts.push(text);
+    }
+  }
+  return normalizeInlineText(textParts.join(" "));
 }
 
 function normalizeInlineText(text) {

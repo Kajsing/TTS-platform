@@ -115,7 +115,8 @@ action.
 - The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
 - Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
 - Page text capture skips hidden and non-reader DOM subtrees such as
-  `aria-hidden`, `hidden`, `inert`, navigation, forms, and script/style assets.
+  `aria-hidden`, `hidden`, `inert`, navigation, forms, and script/style assets
+  in both structured extraction and fallback plain-text extraction.
 - Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
 - The extension stores only page-capture metadata in session playback state, not
@@ -169,8 +170,8 @@ python3 scripts/check_extension_reader_flow.py
 This verifies the `Speak Page`, reader progress, page-capture metadata,
 `Resume Page`, `Continue Page`, state-aware popup controls, previous/next
 section navigation, truncated-section continuation, manual and automatic
-truncated text-offset continuation, stop/restart recovery, and popup
-reopen-state wiring, then
+truncated text-offset continuation, filtered fallback capture, stop/restart
+recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
 

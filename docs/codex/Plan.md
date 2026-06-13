@@ -345,5 +345,8 @@ The forty-eighth install-flow slice adds a `real` optional dependency extra for
 The forty-ninth reader-flow reliability slice makes page capture skip
 `aria-hidden`, `hidden`, and `inert` DOM subtrees so long-page playback avoids
 hidden UI noise without adding a full reader-mode extractor.
+The fiftieth reader-flow reliability slice routes fallback plain-text capture
+through the same skip/hidden subtree filters, so flat pages without enough
+reader blocks still avoid hidden UI and chrome noise.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
