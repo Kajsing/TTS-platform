@@ -98,6 +98,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 - `Next Section` uses heading offsets and section indexes from the latest page
   capture metadata, then re-extracts page text from the active tab.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
+- Manifest host permissions are limited to the localhost service origins. The
+  declared content script handles page access, and the validation script checks
+  that network playback stays in the background/offscreen path.
 
 ## Validation
 
@@ -107,6 +110,8 @@ Run the lightweight extension validation script with:
 python3 scripts/check_extension.py
 ```
 
-This checks manifest references, linked popup/offscreen assets, and JavaScript syntax when `node` is available.
+This checks manifest references, linked popup/offscreen assets, manifest policy,
+extension privacy/layering boundaries, and JavaScript syntax when `node` is
+available.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

@@ -138,6 +138,13 @@ This file is the live status log and shared memory for future Codex loops.
     with manifest, asset, and resume wiring.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
+  - the extension manifest no longer requests `<all_urls>` in
+    `host_permissions`; service host permissions are limited to localhost, while
+    page access remains in the declared content script.
+  - `scripts/check_extension.py` now validates extension manifest policy and
+    privacy/layering boundaries, including blocking content-script service
+    calls, popup/offscreen storage use, broad browser persistence APIs, and
+    non-offscreen WebSocket creation.
 - Release hardening has started:
   - `security.allowed_origins` entries are normalized for harmless trailing
     slashes and must be explicit `http`, `https`, or `chrome-extension` origins.

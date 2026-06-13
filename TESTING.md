@@ -36,6 +36,11 @@ backend-realism work, and early v1 model-management helpers:
   short heading preservation in captured page text
 - extension next-section wiring that re-extracts the active tab from the next
   heading-backed section without storing heading text
+- extension manifest policy checks that keep service host permissions limited
+  to localhost while leaving page access in the content-script declaration
+- extension privacy-boundary checks that block content-script service calls,
+  popup/offscreen storage use, broad browser persistence APIs, and non-offscreen
+  WebSocket creation
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids
@@ -59,8 +64,8 @@ backend-realism work, and early v1 model-management helpers:
   overrides, missing-config guidance, and loopback-only default binding
 - Windows launcher structure, including repo-local `PYTHONPATH`, module CLI
   invocation, setup fallback, and PowerShell delegation from the CMD launcher
-- Chrome extension popup setup-checklist wiring through the lightweight
-  extension validator
+- Chrome extension popup setup-checklist, manifest-policy, and privacy-boundary
+  wiring through the lightweight extension validator
 - Chrome extension zip packaging with manifest at the archive root and
   POSIX-style relative asset paths
 - Windows local reader bundle packaging that includes the service source,

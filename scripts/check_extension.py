@@ -8,10 +8,20 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 MANIFEST_PATH = EXTENSION_ROOT / "manifest.json"
+LOCAL_SERVICE_HOST_PERMISSIONS = {"http://127.0.0.1/*", "http://localhost/*"}
+ALLOWED_EXTENSION_PERMISSIONS = {
+    "activeTab",
+    "contextMenus",
+    "offscreen",
+    "scripting",
+    "storage",
+    "tabs",
+}
 
 
 def main() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    verify_manifest_policy(manifest)
     referenced_paths = collect_manifest_paths(manifest)
 
     missing_paths = [path for path in referenced_paths if not path.exists()]
@@ -34,6 +44,8 @@ def main() -> None:
     print("HTML asset references resolved.")
     verify_extension_wiring()
     print("Extension wiring resolved.")
+    verify_extension_privacy_boundaries()
+    print("Extension policy resolved.")
 
     node_binary = shutil.which("node")
     if node_binary is None:
@@ -102,6 +114,79 @@ def collect_html_assets(path: Path) -> set[Path]:
     return assets
 
 
+def verify_manifest_policy(manifest: dict[str, object]) -> None:
+    errors: list[str] = []
+    _expect(errors, manifest.get("manifest_version") == 3, "manifest_version must be 3")
+
+    permissions = _string_set(manifest.get("permissions"))
+    _expect(
+        errors,
+        permissions == ALLOWED_EXTENSION_PERMISSIONS,
+        "permissions must stay explicit and reviewable: "
+        f"{sorted(ALLOWED_EXTENSION_PERMISSIONS)}",
+    )
+
+    host_permissions = _string_set(manifest.get("host_permissions"))
+    _expect(
+        errors,
+        host_permissions == LOCAL_SERVICE_HOST_PERMISSIONS,
+        "host_permissions must be limited to the localhost service origins",
+    )
+    _expect(
+        errors,
+        "<all_urls>" not in host_permissions,
+        "host_permissions must not include <all_urls>; page access belongs to content_scripts",
+    )
+
+    background = manifest.get("background")
+    _expect(
+        errors,
+        isinstance(background, dict)
+        and background.get("service_worker") == "src/background.js"
+        and background.get("type") == "module",
+        "background must use src/background.js as an MV3 module service worker",
+    )
+
+    action = manifest.get("action")
+    _expect(
+        errors,
+        isinstance(action, dict) and action.get("default_popup") == "src/popup.html",
+        "action.default_popup must be src/popup.html",
+    )
+
+    content_scripts = manifest.get("content_scripts")
+    content_script = (
+        content_scripts[0]
+        if isinstance(content_scripts, list)
+        and len(content_scripts) == 1
+        and isinstance(content_scripts[0], dict)
+        else {}
+    )
+    _expect(
+        errors,
+        content_script.get("matches") == ["<all_urls>"]
+        and content_script.get("js") == ["src/content-script.js"]
+        and content_script.get("run_at") == "document_idle",
+        "content_scripts must inject only src/content-script.js at document_idle",
+    )
+
+    web_accessible_resources = manifest.get("web_accessible_resources")
+    web_resource = (
+        web_accessible_resources[0]
+        if isinstance(web_accessible_resources, list)
+        and len(web_accessible_resources) == 1
+        and isinstance(web_accessible_resources[0], dict)
+        else {}
+    )
+    _expect(
+        errors,
+        web_resource.get("resources") == ["offscreen/offscreen.html"],
+        "web_accessible_resources must expose only offscreen/offscreen.html",
+    )
+
+    _raise_if_errors("Extension manifest policy failed", errors)
+
+
 def verify_extension_wiring() -> None:
     required_fragments = {
         EXTENSION_ROOT / "src" / "popup.html": [
@@ -148,6 +233,128 @@ def verify_extension_wiring() -> None:
                 missing.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
     if missing:
         raise SystemExit("Missing extension wiring:\n" + "\n".join(missing))
+
+
+def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -> None:
+    paths = {
+        "content script": extension_root / "src" / "content-script.js",
+        "popup": extension_root / "src" / "popup.js",
+        "background": extension_root / "src" / "background.js",
+        "offscreen": extension_root / "offscreen" / "offscreen.js",
+    }
+    contents = {
+        label: path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        for label, path in paths.items()
+    }
+    errors: list[str] = []
+
+    for label, text in contents.items():
+        _reject_fragments(
+            errors,
+            label,
+            text,
+            [
+                "localStorage",
+                "sessionStorage",
+                "indexedDB",
+                "XMLHttpRequest",
+                "eval(",
+                "new Function(",
+                "chrome.storage.sync",
+            ],
+        )
+
+    _reject_fragments(
+        errors,
+        "content script",
+        contents["content script"],
+        ["fetch(", "new WebSocket", "chrome.storage", "chrome.runtime.sendMessage"],
+    )
+    _reject_fragments(
+        errors,
+        "popup",
+        contents["popup"],
+        ["fetch(", "new WebSocket", "chrome.storage", "chrome.tabs", "chrome.offscreen"],
+    )
+    _reject_fragments(
+        errors,
+        "background",
+        contents["background"],
+        ["new WebSocket"],
+    )
+    _reject_fragments(
+        errors,
+        "offscreen",
+        contents["offscreen"],
+        ["fetch(", "chrome.storage", "chrome.tabs", "chrome.scripting"],
+    )
+
+    _require_fragments(
+        errors,
+        "background",
+        contents["background"],
+        [
+            "chrome.storage.local.get(DEFAULT_CONFIG)",
+            "chrome.storage.local.set(sanitizeConfig(",
+            "chrome.storage.session.set({\n    playbackState: nextState,",
+            "pageCapture: capture.meta",
+            "sanitizePageCaptureMeta",
+            'fetchJson(config.baseUrl + "/v1/health")',
+            'fetchJson(config.baseUrl + "/v1/voices")',
+            "sendOffscreenMessage({",
+        ],
+    )
+    _require_fragments(
+        errors,
+        "offscreen",
+        contents["offscreen"],
+        [
+            "new WebSocket(wsUrl)",
+            "auth_token: config.token",
+            "payload: {\n          text: config.text,",
+            'type: "tts-extension:playback-state"',
+        ],
+    )
+
+    _raise_if_errors("Extension privacy boundary check failed", errors)
+
+
+def _string_set(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {item for item in value if isinstance(item, str)}
+
+
+def _reject_fragments(
+    errors: list[str],
+    label: str,
+    text: str,
+    fragments: list[str],
+) -> None:
+    for fragment in fragments:
+        if fragment in text:
+            errors.append(f"{label} must not contain {fragment!r}")
+
+
+def _require_fragments(
+    errors: list[str],
+    label: str,
+    text: str,
+    fragments: list[str],
+) -> None:
+    for fragment in fragments:
+        if fragment not in text:
+            errors.append(f"{label} must contain {fragment!r}")
+
+
+def _expect(errors: list[str], condition: bool, message: str) -> None:
+    if not condition:
+        errors.append(message)
+
+
+def _raise_if_errors(title: str, errors: list[str]) -> None:
+    if errors:
+        raise SystemExit(title + ":\n" + "\n".join(f"- {error}" for error in errors))
 
 
 if __name__ == "__main__":

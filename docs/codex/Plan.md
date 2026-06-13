@@ -193,5 +193,8 @@ long-stream, local CPU backend, and local artifact defaults explicit. The
 seventh release-hardening slice now lets live smoke checks use separate
 page-scale WebSocket stream text, repeat it for long-reader coverage, assert a
 minimum stream text-chunk count, and redact inline smoke text from release-check
-summaries. Continue with remaining release hardening unless a reader-flow bug
-appears.
+summaries. The eighth release-hardening slice now removes `<all_urls>` from
+extension `host_permissions` and expands `scripts/check_extension.py` with
+manifest-policy and privacy/layering checks so service permissions stay
+localhost-only while page access remains content-script based. Continue with
+remaining release hardening unless a reader-flow bug appears.
