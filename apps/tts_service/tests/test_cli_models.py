@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -14,6 +16,16 @@ def _build_zip(path: Path, *, files: dict[str, str]) -> bytes:
     with zipfile.ZipFile(path, "w") as archive:
         for relative_path, content in files.items():
             archive.writestr(relative_path, content)
+    return path.read_bytes()
+
+
+def _build_tar_bz2(path: Path, *, files: dict[str, str]) -> bytes:
+    with tarfile.open(path, "w:bz2") as archive:
+        for relative_path, content in files.items():
+            content_bytes = content.encode("utf-8")
+            info = tarfile.TarInfo(relative_path)
+            info.size = len(content_bytes)
+            archive.addfile(info, io.BytesIO(content_bytes))
     return path.read_bytes()
 
 
@@ -96,6 +108,67 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
         "update_manifest",
     ]
     assert result["next_steps"][0] == "tts model-activate voice-a"
+
+
+def test_model_install_from_local_tar_catalog_updates_manifest(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "voice-a.tar.bz2"
+    artifact_bytes = _build_tar_bz2(
+        artifact_path,
+        files={
+            "voice-a/model.onnx": "fake-model",
+            "voice-a/tokens.txt": "fake-tokens",
+            "voice-a/espeak-ng-data/phontab": "fake-espeak-data",
+        },
+    )
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "language": "en",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "voice-a/model.onnx",
+                            "tokens": "voice-a/tokens.txt",
+                            "data_dir": "voice-a/espeak-ng-data",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli._install_model_from_catalog(
+        catalog_source=str(catalog_path),
+        model_id="voice-a",
+        models_root=tmp_path / "models" / "voices",
+        manifest_path=tmp_path / "models" / "MANIFEST.json",
+        overwrite=False,
+    )
+
+    assert result["installed_model"] == "voice-a"
+    voice_dir = tmp_path / "models" / "voices" / "voice-a"
+    assert (voice_dir / "voice-a" / "model.onnx").exists()
+    assert (voice_dir / "voice-a" / "tokens.txt").exists()
+    assert (voice_dir / "voice-a" / "espeak-ng-data" / "phontab").exists()
+
+    manifest_payload = json.loads(
+        (tmp_path / "models" / "MANIFEST.json").read_text(encoding="utf-8")
+    )
+    voice = manifest_payload["voices"][0]
+    assert voice["backend"]["model"] == "models/voices/voice-a/voice-a/model.onnx"
+    assert voice["backend"]["tokens"] == "models/voices/voice-a/voice-a/tokens.txt"
+    assert voice["backend"]["data_dir"] == "models/voices/voice-a/voice-a/espeak-ng-data"
+    assert result["checksum_verified"] is True
 
 
 def test_model_install_downloads_relative_artifact_from_remote_catalog(
@@ -782,6 +855,74 @@ def test_model_install_rejects_zip_drive_paths(tmp_path: Path) -> None:
             manifest_path=tmp_path / "models" / "MANIFEST.json",
             overwrite=False,
         )
+
+
+def test_model_install_rejects_tar_traversal_paths(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "unsafe.tar.bz2"
+    artifact_bytes = _build_tar_bz2(artifact_path, files={"../escape.txt": "nope"})
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "unsafe-voice",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="unsafe path traversal"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="unsafe-voice",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+    assert not (tmp_path / "models" / "voices" / "unsafe-voice").exists()
+
+
+def test_model_install_rejects_tar_link_entries(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "unsafe-link.tar.bz2"
+    with tarfile.open(artifact_path, "w:bz2") as archive:
+        info = tarfile.TarInfo("link-out")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "../escape.txt"
+        archive.addfile(info)
+    checksum = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "unsafe-link-voice",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="unsupported tar entry"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="unsafe-link-voice",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+    assert not (tmp_path / "models" / "voices" / "unsafe-link-voice").exists()
 
 
 def test_model_remove_deletes_files_and_manifest_entry(tmp_path: Path) -> None:

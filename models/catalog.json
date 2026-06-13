@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "vits-piper-en_US-lessac-medium",
+      "name": "Piper en_US Lessac Medium",
+      "engine": "sherpa_onnx",
+      "language": "en-US",
+      "sample_rate_hz": 22050,
+      "license": "Blizzard 2013 Lessac voice license",
+      "license_url": "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+      "source_url": "https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/vits.html#vits-piper-en_us-lessac-medium-english-1-speaker",
+      "upstream_url": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/lessac/medium",
+      "artifact_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2",
+      "artifact_sha256": "9e3febfacf0abf4270172d2958bcec246032b7e88efc2720840cc80c93de334e",
+      "artifact_size_bytes": 67230653,
+      "quality_tier": "medium",
+      "latency_tier": "local",
+      "tags": [
+        "english",
+        "en-us",
+        "piper",
+        "lessac",
+        "vits",
+        "sherpa-onnx",
+        "single-speaker"
+      ],
+      "capabilities": {
+        "supports_pitch": false,
+        "supports_streaming": true,
+        "supports_multi_speaker": false
+      },
+      "backend": {
+        "model_type": "vits",
+        "model": "vits-piper-en_US-lessac-medium/en_US-lessac-medium.onnx",
+        "tokens": "vits-piper-en_US-lessac-medium/tokens.txt",
+        "data_dir": "vits-piper-en_US-lessac-medium/espeak-ng-data",
+        "speaker_id": 0
+      }
+    }
+  ]
+}

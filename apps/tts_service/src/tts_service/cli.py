@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import zipfile
 from collections.abc import Callable
@@ -926,7 +927,7 @@ def _install_model_from_catalog(
         artifact = _load_artifact_file(
             artifact_url=artifact_url,
             catalog_location=catalog_location,
-            destination=Path(temp_dir) / "artifact.zip",
+            destination=Path(temp_dir) / "artifact",
         )
         _record_install_step(
             install_steps,
@@ -988,7 +989,7 @@ def _install_model_from_catalog(
             tempfile.mkdtemp(prefix=f".{model_id}.", dir=models_root)
         )
         try:
-            _extract_zip(artifact_path=artifact.path, out_dir=temp_install_dir)
+            _extract_model_artifact(artifact_path=artifact.path, out_dir=temp_install_dir)
             if install_dir.exists():
                 shutil.rmtree(install_dir)
             temp_install_dir.rename(install_dir)
@@ -1131,38 +1132,83 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest().lower()
 
 
+def _extract_model_artifact(*, artifact_path: Path, out_dir: Path) -> None:
+    if zipfile.is_zipfile(artifact_path):
+        _extract_zip(artifact_path=artifact_path, out_dir=out_dir)
+        return
+
+    if tarfile.is_tarfile(artifact_path):
+        _extract_tar(artifact_path=artifact_path, out_dir=out_dir)
+        return
+
+    raise SystemExit(
+        "Model artifact is not a supported archive. Expected zip, tar, tar.gz, tgz, "
+        "tar.bz2, or tbz2."
+    )
+
+
 def _extract_zip(*, artifact_path: Path, out_dir: Path) -> None:
     try:
         with zipfile.ZipFile(artifact_path) as archive:
-            _assert_safe_archive_members(archive=archive, out_dir=out_dir)
+            _assert_safe_zip_members(archive=archive, out_dir=out_dir)
             archive.extractall(out_dir)
     except zipfile.BadZipFile as exc:
         raise SystemExit(f"Model artifact is not a valid zip file: {exc}") from exc
 
 
-def _assert_safe_archive_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
+def _extract_tar(*, artifact_path: Path, out_dir: Path) -> None:
+    try:
+        with tarfile.open(artifact_path) as archive:
+            _assert_safe_tar_members(archive=archive, out_dir=out_dir)
+            try:
+                archive.extractall(out_dir, filter="data")
+            except TypeError:
+                archive.extractall(out_dir)
+    except tarfile.TarError as exc:
+        raise SystemExit(f"Model artifact is not a valid tar file: {exc}") from exc
+
+
+def _assert_safe_zip_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
     out_dir_resolved = out_dir.resolve()
     for member in archive.infolist():
-        posix_member_path = PurePosixPath(member.filename)
-        windows_member_path = PureWindowsPath(member.filename)
-        if (
-            posix_member_path.is_absolute()
-            or windows_member_path.is_absolute()
-            or windows_member_path.drive
-        ):
+        _assert_safe_archive_member_path(
+            member_name=member.filename,
+            out_dir_resolved=out_dir_resolved,
+        )
+
+
+def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None:
+    out_dir_resolved = out_dir.resolve()
+    for member in archive.getmembers():
+        _assert_safe_archive_member_path(
+            member_name=member.name,
+            out_dir_resolved=out_dir_resolved,
+        )
+        if not (member.isdir() or member.isfile()):
             raise SystemExit(
-                f"Model artifact contains absolute path entry: {member.filename!r}"
+                f"Model artifact contains unsupported tar entry: {member.name!r}"
             )
-        if ".." in posix_member_path.parts or ".." in windows_member_path.parts:
-            raise SystemExit(
-                f"Model artifact contains unsafe path traversal entry: {member.filename!r}"
-            )
-        member_path = Path(*posix_member_path.parts)
-        destination = (out_dir_resolved / member_path).resolve()
-        if destination != out_dir_resolved and out_dir_resolved not in destination.parents:
-            raise SystemExit(
-                f"Model artifact contains unsafe path traversal entry: {member.filename!r}"
-            )
+
+
+def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path) -> None:
+    posix_member_path = PurePosixPath(member_name)
+    windows_member_path = PureWindowsPath(member_name)
+    if (
+        posix_member_path.is_absolute()
+        or windows_member_path.is_absolute()
+        or windows_member_path.drive
+    ):
+        raise SystemExit(f"Model artifact contains absolute path entry: {member_name!r}")
+    if ".." in posix_member_path.parts or ".." in windows_member_path.parts:
+        raise SystemExit(
+            f"Model artifact contains unsafe path traversal entry: {member_name!r}"
+        )
+    member_path = Path(*posix_member_path.parts)
+    destination = (out_dir_resolved / member_path).resolve()
+    if destination != out_dir_resolved and out_dir_resolved not in destination.parents:
+        raise SystemExit(
+            f"Model artifact contains unsafe path traversal entry: {member_name!r}"
+        )
 
 
 def _build_manifest_voice_entry(*, model_id: str, model: dict[str, object]) -> dict[str, object]:

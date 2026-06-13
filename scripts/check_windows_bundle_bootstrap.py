@@ -26,7 +26,7 @@ README_MARKERS = (
     "python -m tts_service.cli setup-local --repo-root .",
     ".\\.venv\\Scripts\\tts.exe model-check",
     ".\\.venv\\Scripts\\tts.exe catalog-list",
-    "tts.exe model-install <model-id> --activate",
+    "tts.exe model-install vits-piper-en_US-lessac-medium --activate",
     "tts.exe model-install <model-id> --catalog <catalog> --activate",
     ".\\scripts\\windows\\run_service.ps1 -SetupOnly",
     ".\\scripts\\windows\\run_service.ps1",
@@ -125,6 +125,7 @@ def _assert_bundle_contents(*, names: set[str]) -> None:
     required_names = {
         f"{BUNDLE_ROOT}/pyproject.toml",
         f"{BUNDLE_ROOT}/config/config.example.toml",
+        f"{BUNDLE_ROOT}/models/catalog.json",
         f"{BUNDLE_ROOT}/models/MANIFEST.json",
         f"{BUNDLE_ROOT}/docs/v1_readiness.md",
         f"{BUNDLE_ROOT}/scripts/windows/run_service.ps1",

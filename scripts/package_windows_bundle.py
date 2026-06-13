@@ -28,6 +28,7 @@ INCLUDED_FILES = (
     "docs/codex/Plan.md",
     "docs/codex/Prompt.md",
     "docs/v1_readiness.md",
+    "models/catalog.json",
     "models/MANIFEST.json",
     "scripts/benchmark.py",
     "scripts/check_extension.py",
@@ -202,7 +203,7 @@ manager, scheduled task, or auto-start entry.
 
    ```powershell
    .\\.venv\\Scripts\\tts.exe catalog-list
-   .\\.venv\\Scripts\\tts.exe model-install <model-id> --activate
+   .\\.venv\\Scripts\\tts.exe model-install vits-piper-en_US-lessac-medium --activate
    .\\.venv\\Scripts\\tts.exe model-install <model-id> --catalog <catalog> --activate
    .\\.venv\\Scripts\\tts.exe model-check <model-id>
    ```

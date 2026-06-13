@@ -90,6 +90,7 @@ def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(
     required_entries = [
         "tts-platform/pyproject.toml",
         "tts-platform/config/config.example.toml",
+        "tts-platform/models/catalog.json",
         "tts-platform/models/MANIFEST.json",
         "tts-platform/docs/v1_readiness.md",
         "tts-platform/scripts/windows/run_service.ps1",
@@ -124,7 +125,7 @@ def _entry_payload(entry: str) -> str:
                 "python -m tts_service.cli setup-local --repo-root .",
                 ".\\.venv\\Scripts\\tts.exe model-check",
                 ".\\.venv\\Scripts\\tts.exe catalog-list",
-                "tts.exe model-install <model-id> --activate",
+                "tts.exe model-install vits-piper-en_US-lessac-medium --activate",
                 "tts.exe model-install <model-id> --catalog <catalog> --activate",
                 ".\\scripts\\windows\\run_service.ps1",
                 "apps\\chrome_extension\\INSTALL.md",

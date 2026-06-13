@@ -139,11 +139,11 @@ tts setup-local
 tts serve
 tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
 tts catalog-list
-tts model-install sherpa-en-v1 --overwrite
-tts model-install sherpa-en-v1 --activate
-tts model-activate sherpa-en-v1
-tts model-check sherpa-en-v1
-tts model-remove sherpa-en-v1
+tts model-install vits-piper-en_US-lessac-medium --activate
+tts model-install vits-piper-en_US-lessac-medium --overwrite
+tts model-activate vits-piper-en_US-lessac-medium
+tts model-check vits-piper-en_US-lessac-medium
+tts model-remove vits-piper-en_US-lessac-medium
 ```
 
 Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
@@ -185,10 +185,14 @@ model entries in JSON. By default, `catalog-list` and `model-install` read
 catalog file or remote catalog URL. `model-install` downloads or reads a
 catalog artifact, verifies `artifact_sha256` by default, resolves relative
 artifacts against the local catalog path or remote catalog URL, stages the
-artifact in a temporary file, extracts the zip safely under
+artifact in a temporary file, extracts zip or tar archives safely under
 `models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
 status to stderr, and keeps its structured result on stdout. Use
 `--allow-missing-checksum` only for trusted local artifacts.
+The committed default catalog currently includes the English
+`vits-piper-en_US-lessac-medium` sherpa-onnx voice. Install it with
+`tts model-install vits-piper-en_US-lessac-medium --activate` before expecting
+real acoustic output from the local reader.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 `model-check` reports whether the selected or default voice has manifest

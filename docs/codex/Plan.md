@@ -293,5 +293,9 @@ extends the model-management smoke with default-catalog next-step evidence.
 The thirty-fourth model-management UX slice makes `tts model-check`
 default-catalog aware, reporting whether `models/catalog.json` exists and
 omitting redundant `--catalog` guidance when the default catalog is available.
+The thirty-fifth model-management slice adds a committed default English model
+catalog entry for `vits-piper-en_US-lessac-medium`, supports official
+sherpa-onnx tar archives in `model-install` with safe extraction checks, and
+includes the default catalog in the Windows local reader bundle.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

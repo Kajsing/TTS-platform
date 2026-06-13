@@ -11,23 +11,38 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `tts model-check` now reports default
-  `models/catalog.json` availability and uses catalog-aware next-step guidance,
-  omitting redundant `--catalog` advice when the default catalog exists.
+- Current loop result: the default `models/catalog.json` now includes the
+  English `vits-piper-en_US-lessac-medium` sherpa-onnx voice with a pinned
+  SHA-256 checksum, `tts model-install` supports official sherpa-onnx tar
+  archives with safe extraction checks, and the Windows local reader bundle now
+  includes the default catalog.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py apps\tts_service\tests\test_model_management_flow_check.py`.
-  - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`
-    and reported 30 passed.
-  - `py -3 scripts\check_model_management_flow.py` passed and reported
-    `model_check.default_catalog_exists` as true with next step
-    `tts model-install local-flow-voice --activate --overwrite`.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py`.
+  - Targeted model CLI tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
+    reported 32 passed.
+  - Targeted bundle regression tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
+    and reported 3 passed.
+  - `py -3 -m tts_service.cli catalog-list` passed and reported one
+    installable/checksummed default catalog entry:
+    `vits-piper-en_US-lessac-medium`.
+  - A live `py -3 -m tts_service.cli model-install
+    vits-piper-en_US-lessac-medium --activate --overwrite` smoke passed,
+    verified the pinned checksum, extracted 359 files, updated local
+    config/manifest, and was then cleaned up with `model-remove` so the
+    committed manifest remains baseline-only.
+  - `py -3 scripts\check_model_management_flow.py` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 167 tests.
-  - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
-    Windows bundle bootstrap/install, and model-management flow checks.
+  - `py -3 -m pytest -q` passed with 170 tests.
+  - `py -3 scripts\release_check.py` passed, including security defaults,
+    v1 readiness, local service bootstrap, model-management flow, extension
+    checks, extension packaging, Windows bundle packaging/bootstrap, Windows
+    launcher smoke, and Windows bundle install smoke. The optional Chrome/MV3
+    browser smoke remained skip-aware in this environment because the extension
+    service worker target timed out.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -135,6 +150,13 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
+  - the committed default `models/catalog.json` now includes
+    `vits-piper-en_US-lessac-medium`, an English Piper Lessac medium voice
+    converted for sherpa-onnx and pinned to the official k2-fsa `tar.bz2`
+    release artifact checksum.
+  - `tts model-install` now supports zip and tar archives, including
+    `tar.bz2`, while rejecting unsafe tar traversal, absolute paths, links, and
+    non-file/non-directory entries before extraction.
   - `tts model-install --activate` updates the manifest and `config/config.toml`
     default voice in one command.
   - model install JSON output now reports installed file count, checksum
@@ -187,7 +209,8 @@ This file is the live status log and shared memory for future Codex loops.
     PowerShell.
   - `scripts/package_windows_bundle.py` builds a Windows-friendly local reader
     bundle with service/core source, Windows launchers, config example, docs,
-    Chrome extension source, and a validated extension zip.
+    default model catalog, Chrome extension source, and a validated extension
+    zip.
   - The generated Windows bundle README now includes explicit model-readiness
     handoff guidance: run `model-check`, install and activate a real model
     from a catalog, then re-check before expecting real acoustic output.
@@ -391,6 +414,15 @@ This file is the live status log and shared memory for future Codex loops.
   `startSectionIndex`, and `nextTextCharStart`, never persisted raw page text.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
+- The first default English catalog voice should use the official
+  sherpa-onnx-converted `vits-piper-en_US-lessac-medium` artifact instead of
+  the raw Piper `.onnx + .onnx.json` files, because the converted archive
+  includes `tokens.txt` and `espeak-ng-data` required by the current
+  sherpa-onnx VITS backend contract.
+- A successful real-model install should not be committed by writing the
+  installed voice into `models/MANIFEST.json` without the corresponding ignored
+  `models/voices/` assets. The committed catalog is the durable source; local
+  installs may update the manifest as local machine state.
 - Model-management CLI stdout should remain structured JSON for automation; any
   human progress chatter belongs on stderr.
 - Relative model artifact paths should be resolved from the catalog source that
@@ -479,6 +511,7 @@ Public-contract smoke commands after the service is running:
 ```bash
 tts health
 tts list-voices
+tts model-install vits-piper-en_US-lessac-medium --activate
 tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"
 tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts catalog-list --catalog ./models/catalog.json
@@ -527,6 +560,10 @@ python3 scripts/package_windows_bundle.py
 - The default example config still points at the development stub voice. A real
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
+- The default catalog can now install `vits-piper-en_US-lessac-medium`, but
+  `sherpa_onnx` is still an optional local runtime dependency. `model-check`
+  will continue to report `python -m pip install sherpa-onnx` until that package
+  is installed in the active environment.
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
   visibility. It now preserves short headings, reports structure counts, and

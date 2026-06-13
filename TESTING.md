@@ -66,7 +66,7 @@ backend-realism work, and early v1 model-management helpers:
 - chunk-plan generation and synthesis routing
 - model catalog listing summaries and warnings, local artifact install, manifest
   update, remote catalog relative-artifact download, temporary-file artifact
-  staging before checksum/extraction, safe zip extraction, install progress
+  staging before checksum/extraction, safe zip and tar extraction, install progress
   metadata, overwrite refusal, checksum-required-by-default install behavior
   with an explicit trusted-local override, default `models/catalog.json`
   discovery with friendly missing-file guidance,

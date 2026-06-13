@@ -10,6 +10,7 @@ REQUIRED_FILES = (
     "TESTING.md",
     "TASKS.md",
     "config/config.example.toml",
+    "models/catalog.json",
     "models/MANIFEST.json",
     "docs/backend_model_setup.md",
     "docs/v1_readiness.md",
@@ -69,6 +70,7 @@ READINESS_MARKERS = (
     "python3 scripts/release_check.py --live-smoke --token-file config/token.txt",
     "--stream-text-repeat 200 --min-stream-text-chunks 2",
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
+    "tts model-install vits-piper-en_US-lessac-medium --activate",
     "tts model-check <model-id>",
     "--allow-missing-checksum",
     "python3 scripts/check_chrome_extension_smoke.py",
@@ -133,6 +135,7 @@ REQUIRED_TEXT_MARKERS = {
     ),
     "scripts/package_windows_bundle.py": (
         "docs/v1_readiness.md",
+        "models/catalog.json",
         "apps\\\\chrome_extension\\\\INSTALL.md",
         "scripts/check_v1_readiness.py",
         "scripts/check_chrome_extension_smoke.py",
@@ -152,6 +155,7 @@ REQUIRED_TEXT_MARKERS = {
         '"installer_script"',
     ),
     "apps/tts_service/src/tts_service/cli.py": (
+        "tarfile",
         "--allow-missing-checksum",
         "Catalog model",
         "missing artifact_sha256",
@@ -184,6 +188,8 @@ REQUIRED_TEXT_MARKERS = {
         "allow-list command",
     ),
     "docs/backend_model_setup.md": (
+        "vits-piper-en_US-lessac-medium",
+        "tar.bz2",
         "Continue Page",
         "non-textual character offset",
         "check_chrome_extension_smoke.py",

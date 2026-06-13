@@ -45,15 +45,18 @@ for long web-page text.
   download/install, activate, service smoke with the installed voice, read-only
   model readiness diagnostics with catalog-aware next steps, and remove without
   external downloads. Model installs require `artifact_sha256` by default, with
-  `--allow-missing-checksum` reserved for trusted local artifacts.
+  `--allow-missing-checksum` reserved for trusted local artifacts. The default
+  catalog now includes the English
+  `vits-piper-en_US-lessac-medium` sherpa-onnx model, and the installer supports
+  the official `tar.bz2` release archive format.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
   input.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
-  model manifest, model-readiness handoff guidance, extension source,
-  extension install guide/icons, and validated extension zip.
+  model manifest, default model catalog, model-readiness handoff guidance,
+  extension source, extension install guide/icons, and validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package, and running `setup-local`
   without choosing a persistent service manager.
@@ -83,7 +86,9 @@ for long web-page text.
   setup-only path, foreground launcher smoke, venv install, and installed
   `tts serve` path are automated; extended operator comfort checks remain
   manual.
-- Install and activate a real local voice with
+- Install and activate the default English local voice with
+  `tts model-install vits-piper-en_US-lessac-medium --activate`. For alternate
+  catalogs, use
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
   still needs a real model artifact and runtime outside the default gate. Use

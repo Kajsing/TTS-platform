@@ -304,8 +304,19 @@ Recommended model fields:
 relative to the catalog source. Relative artifacts under a local catalog are
 resolved against the catalog file directory; relative artifacts under an HTTP
 catalog are resolved against the catalog URL before download.
+Artifacts may be zip or tar archives, including `tar.gz`, `tgz`, `tar.bz2`, and
+`tbz2`.
 `artifact_sha256` is required by default for `model-install` so artifacts are
 integrity-checked before extraction.
+
+The committed default catalog at `models/catalog.json` starts with the English
+`vits-piper-en_US-lessac-medium` sherpa-onnx voice. It points at the official
+k2-fsa `vits-piper-en_US-lessac-medium.tar.bz2` release artifact, pins its
+SHA-256 checksum, and maps the installed VITS backend to:
+
+- `vits-piper-en_US-lessac-medium/en_US-lessac-medium.onnx`
+- `vits-piper-en_US-lessac-medium/tokens.txt`
+- `vits-piper-en_US-lessac-medium/espeak-ng-data`
 
 `tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
 
@@ -324,7 +335,7 @@ Install behavior:
 - verifies `artifact_sha256` before extraction
 - rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
   for a trusted local artifact
-- rejects unsafe zip entries before extraction
+- rejects unsafe zip or tar entries before extraction
 - extracts to a temporary directory first
 - replaces an existing model directory only after extraction succeeds
 - writes or updates the manifest entry
@@ -333,8 +344,9 @@ Install behavior:
 - prints progress status lines to stderr while preserving structured JSON on
   stdout
 
-Unsafe zip entries include absolute paths, Windows drive-qualified paths, and
-path traversal using either `/` or `\`.
+Unsafe archive entries include absolute paths, Windows drive-qualified paths,
+and path traversal using either `/` or `\`. Tar symlinks, hard links, devices,
+and other non-file/non-directory entries are rejected.
 
 ## Model CLI Workflow
 
@@ -372,40 +384,40 @@ tts catalog-list --catalog ./models/catalog.json
 Install a model:
 
 ```bash
-tts model-install sherpa-en-v1
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json
+tts model-install vits-piper-en_US-lessac-medium
+tts model-install <model-id> --catalog <path-or-url>
 ```
 
 Install and activate a model in one first-run command:
 
 ```bash
-tts model-install sherpa-en-v1 --activate
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json --activate
+tts model-install vits-piper-en_US-lessac-medium --activate
+tts model-install <model-id> --catalog <path-or-url> --activate
 ```
 
 Replace an existing installed model:
 
 ```bash
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+tts model-install vits-piper-en_US-lessac-medium --overwrite
 ```
 
 Install a trusted local artifact that has no checksum only with an explicit
 override:
 
 ```bash
-tts model-install sherpa-en-v1 --catalog ./models/catalog.json --allow-missing-checksum
+tts model-install <model-id> --catalog <path-or-url> --allow-missing-checksum
 ```
 
 Activate an installed model as the default voice:
 
 ```bash
-tts model-activate sherpa-en-v1
+tts model-activate vits-piper-en_US-lessac-medium
 ```
 
 Check whether an installed or default voice is ready for real local output:
 
 ```bash
-tts model-check sherpa-en-v1
+tts model-check vits-piper-en_US-lessac-medium
 tts model-check
 ```
 
@@ -421,7 +433,7 @@ guidance omits `--catalog`; otherwise it tells the operator to pass
 Remove an installed model:
 
 ```bash
-tts model-remove sherpa-en-v1
+tts model-remove vits-piper-en_US-lessac-medium
 ```
 
 If the removed model id is still configured as `[tts].default_voice`,
