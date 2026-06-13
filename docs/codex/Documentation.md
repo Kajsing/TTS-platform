@@ -11,24 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows local install bootstrap slice adds
-  `scripts/windows/install_local.ps1` plus a CMD wrapper. The script creates
-  `.venv`, installs the local package, runs `setup-local`, and emits JSON for
-  automation without choosing a permanent service manager or auto-start path.
-  The Windows bundle install check now uses the script when it is present.
+- Current loop result: The model-install checksum hardening slice makes
+  `artifact_sha256` required by default before extraction. Trusted local
+  artifacts without checksums now require the explicit
+  `--allow-missing-checksum` override, and install output marks that path with a
+  warning.
 - Validation status for the current loop:
-  - Targeted install bootstrap ruff passed with
-    `py -3 -m ruff check scripts\check_windows_bundle_install.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_launchers.py`.
-  - Targeted install/bootstrap tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_v1_readiness_check.py -q`.
-  - `py -3 scripts\check_windows_bundle_install.py` passed and reported
-    `installer_script: true`.
+  - Targeted model-install ruff passed with
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py`.
+  - Targeted model-management tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`.
+  - `py -3 scripts\check_model_management_flow.py` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
+  - Targeted v1-readiness ruff/tests passed with
+    `py -3 -m ruff check scripts\check_v1_readiness.py apps\tts_service\tests\test_v1_readiness_check.py` and
+    `py -3 -m pytest apps\tts_service\tests\test_v1_readiness_check.py -q`.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 149 tests.
-  - `py -3 scripts\release_check.py` passed, including a Windows bundle with
-    `install_local.ps1` / `install_local.cmd` and a bundle-install smoke that
-    reported `installer_script: true`.
+  - `py -3 -m pytest -q` passed with 151 tests.
+  - `py -3 scripts\release_check.py` passed, including the model-management
+    flow with a checksummed artifact and the updated v1-readiness markers.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -42,7 +43,7 @@ This file is the live status log and shared memory for future Codex loops.
 - Chrome MV3 prototype work exists in `apps/chrome_extension/`.
 - Phase 7 work already completed includes backend runtime config (`stub` / `auto` / `real`), manifest-side backend asset binding, more truthful backend readiness, health backend snapshots, fake-runtime coverage for sync/jobs/streaming, async job benchmarking, and a first chunk-planning component shared across sync/jobs/streaming.
 - Early v1 model-management work now includes local catalog listing, model
-  artifact install with optional checksum verification, safe zip extraction
+  artifact install with checksum verification required by default, safe zip extraction
   against absolute paths, drive-qualified paths, and traversal entries, manifest
   update, default voice activation in `config/config.toml`, and model removal.
 - A new public-contract smoke script now exists:
@@ -128,6 +129,9 @@ This file is the live status log and shared memory for future Codex loops.
     or incomplete-entry warnings, and install next-step guidance.
   - `tts model-install` now emits progress status lines to stderr and includes
     structured `install_steps` in its JSON stdout result.
+  - `tts model-install` now requires `artifact_sha256` by default and only
+    permits missing checksums through `--allow-missing-checksum` for trusted
+    local artifacts.
   - `tts model-remove` now reports whether the removed model id is still
     configured as `[tts].default_voice`, with next-step guidance to activate
     another voice before service restart.

@@ -286,7 +286,8 @@ Recommended model fields:
 - `backend`
 
 `artifact_url` may be `http`, `https`, an absolute local path, or a path relative
-to the catalog file. `artifact_sha256` is optional but strongly recommended.
+to the catalog file. `artifact_sha256` is required by default for
+`model-install` so artifacts are integrity-checked before extraction.
 
 `tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
 
@@ -297,7 +298,9 @@ to the catalog file. `artifact_sha256` is optional but strongly recommended.
 
 Install behavior:
 
-- verifies `artifact_sha256` when present
+- verifies `artifact_sha256` before extraction
+- rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
+  for a trusted local artifact
 - rejects unsafe zip entries before extraction
 - extracts to a temporary directory first
 - replaces an existing model directory only after extraction succeeds
@@ -352,6 +355,13 @@ Replace an existing installed model:
 
 ```bash
 tts model-install sherpa-en-v1 --catalog ./models/catalog.json --overwrite
+```
+
+Install a trusted local artifact that has no checksum only with an explicit
+override:
+
+```bash
+tts model-install sherpa-en-v1 --catalog ./models/catalog.json --allow-missing-checksum
 ```
 
 Activate an installed model as the default voice:
@@ -491,7 +501,8 @@ Health is `degraded`:
 
 1. Confirm the model id exists in `tts catalog-list` output.
 2. Confirm the artifact URL or path is reachable.
-3. Confirm the checksum matches when `artifact_sha256` is present.
+3. Confirm `artifact_sha256` is present and matches the artifact, or use
+   `--allow-missing-checksum` only for a trusted local artifact.
 4. Confirm the zip does not contain absolute or traversal paths.
 5. Use `--overwrite` only when replacing an already-installed model.
 

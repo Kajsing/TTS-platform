@@ -168,7 +168,39 @@ def test_model_install_command_can_activate_model(
     assert "[model-install] activate model: completed" in captured.err
 
 
-def test_model_install_warns_when_catalog_has_no_checksum(tmp_path: Path) -> None:
+def test_model_install_requires_checksum_by_default(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    _build_zip(artifact_path, files={"model.onnx": "fake-model"})
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": str(artifact_path),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="missing artifact_sha256"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+
+
+def test_model_install_can_allow_missing_checksum_for_trusted_local_artifact(
+    tmp_path: Path,
+) -> None:
     artifact_path = tmp_path / "voice-a.zip"
     _build_zip(artifact_path, files={"model.onnx": "fake-model"})
     catalog_path = tmp_path / "catalog.json"
@@ -193,15 +225,60 @@ def test_model_install_warns_when_catalog_has_no_checksum(tmp_path: Path) -> Non
         models_root=tmp_path / "models" / "voices",
         manifest_path=tmp_path / "models" / "MANIFEST.json",
         overwrite=False,
+        allow_missing_checksum=True,
     )
 
     assert result["checksum_verified"] is False
-    assert result["warning"] == "Catalog entry has no artifact_sha256; use only trusted artifacts."
+    assert result["warning"] == (
+        "Catalog entry has no artifact_sha256; install was allowed only because "
+        "--allow-missing-checksum was set."
+    )
     assert result["install_steps"][2] == {
         "step": "verify_checksum",
         "status": "skipped",
-        "reason": "catalog entry has no artifact_sha256",
+        "reason": "allowed missing artifact_sha256 for trusted local artifact",
     }
+
+
+def test_model_install_command_allows_missing_checksum_with_explicit_flag(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    _build_zip(artifact_path, files={"model.onnx": "fake-model"})
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": str(artifact_path),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli.main(
+        [
+            "model-install",
+            "voice-a",
+            "--catalog",
+            str(catalog_path),
+            "--models-root",
+            str(tmp_path / "models" / "voices"),
+            "--manifest-path",
+            str(tmp_path / "models" / "MANIFEST.json"),
+            "--allow-missing-checksum",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["checksum_verified"] is False
+    assert payload["warning"].endswith("--allow-missing-checksum was set.")
 
 
 def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path) -> None:

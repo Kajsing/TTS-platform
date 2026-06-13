@@ -168,7 +168,9 @@ The first long-document slices are now:
   heading text.
 
 The first model-management UX slices now cover `model-install --activate`,
-catalog-list summary/warning output, and install progress metadata/status lines.
+catalog-list summary/warning output, install progress metadata/status lines,
+and checksum-required-by-default model installs with an explicit trusted-local
+override.
 The first Windows-friendly setup slice now adds `tts setup-local` for local
 config/token bootstrap and manifest readiness reporting. The first service-run
 slice now adds `tts serve` as the normal installed-CLI localhost run command.
@@ -241,5 +243,8 @@ The twenty-first packaging slice adds `scripts/windows/install_local.ps1` and
 `.cmd` wrapper support for extracted bundles, bootstrapping `.venv`, local
 package install, and `setup-local` without choosing a permanent service
 manager or auto-start mechanism.
+The twenty-second model-management hardening slice makes `artifact_sha256`
+required by default for `model-install`, with `--allow-missing-checksum` as an
+explicit trusted-local override.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

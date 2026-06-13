@@ -165,6 +165,7 @@ def main(argv: list[str] | None = None) -> None:
                 activate=args.activate,
                 config_path=Path(args.config_path),
                 progress=_emit_model_install_progress,
+                allow_missing_checksum=args.allow_missing_checksum,
             )
             _print_json(installed)
             return
@@ -279,6 +280,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Replace an already installed model directory and overwrite manifest entry.",
+    )
+    model_install_parser.add_argument(
+        "--allow-missing-checksum",
+        action="store_true",
+        help=(
+            "Install a catalog artifact without artifact_sha256. Use only for trusted local "
+            "artifacts; checksums are required by default."
+        ),
     )
 
     model_activate_parser = subparsers.add_parser("model-activate")
@@ -753,6 +762,7 @@ def _install_model_from_catalog(
     activate: bool = False,
     config_path: Path | None = None,
     progress: Callable[[str], None] | None = None,
+    allow_missing_checksum: bool = False,
 ) -> dict[str, object]:
     catalog_payload, catalog_path = _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
@@ -797,12 +807,25 @@ def _install_model_from_catalog(
             algorithm="sha256",
         )
     else:
+        if not allow_missing_checksum:
+            _record_install_step(
+                install_steps,
+                step="verify_checksum",
+                status="failed",
+                progress=progress,
+                reason="catalog entry has no artifact_sha256",
+            )
+            raise SystemExit(
+                f"Catalog model '{model_id}' is missing artifact_sha256. "
+                "Add artifact_sha256 to the catalog entry or pass "
+                "--allow-missing-checksum for a trusted local artifact."
+            )
         _record_install_step(
             install_steps,
             step="verify_checksum",
             status="skipped",
             progress=progress,
-            reason="catalog entry has no artifact_sha256",
+            reason="allowed missing artifact_sha256 for trusted local artifact",
         )
 
     install_dir = models_root / model_id
@@ -862,7 +885,10 @@ def _install_model_from_catalog(
         ],
     }
     if not checksum_verified:
-        result["warning"] = "Catalog entry has no artifact_sha256; use only trusted artifacts."
+        result["warning"] = (
+            "Catalog entry has no artifact_sha256; install was allowed only because "
+            "--allow-missing-checksum was set."
+        )
 
     if activate:
         resolved_config_path = config_path or Path("config/config.toml")

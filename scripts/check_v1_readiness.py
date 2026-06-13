@@ -62,6 +62,7 @@ READINESS_MARKERS = (
     "--stream-text-repeat 200 --min-stream-text-chunks 2",
     "tts model-install <model-id> --catalog ./models/catalog.json --activate",
     "tts model-check <model-id>",
+    "--allow-missing-checksum",
     "no full automated Chrome MV3 browser harness",
     "Permanent Windows auto-start/service-manager installation remains undecided",
 )
@@ -106,6 +107,11 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_windows_bundle_install.py": (
         "_run_windows_install_script",
         '"installer_script"',
+    ),
+    "apps/tts_service/src/tts_service/cli.py": (
+        "--allow-missing-checksum",
+        "Catalog model",
+        "missing artifact_sha256",
     ),
     "scripts/check_windows_launchers.py": (
         "_check_launcher_service",
