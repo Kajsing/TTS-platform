@@ -59,6 +59,8 @@ and v1-readiness work:
 - popup-side previous/next section actions that re-extract page text from
   captured headings or the first known uncaptured section after truncation
   without storing heading text
+- popup-side continuation for truncated pages without headings, using a
+  non-text character offset instead of storing raw page text
 
 ## Repository Layout
 
@@ -249,6 +251,8 @@ The extension currently supports:
   page playback
 - jumping to the previous or next page section during long page playback,
   including the first known uncaptured section after a truncated capture
+- continuing a truncated page from the next known text character offset when
+  the page has no later heading-backed section
 - stopping playback and preserving a truthful interrupted/recovered state when
   the popup is reopened after the offscreen playback document is gone
 - local storage of base URL, token, voice, and buffering settings

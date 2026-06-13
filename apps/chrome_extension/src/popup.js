@@ -125,6 +125,10 @@ document.querySelector("#resume-page").addEventListener("click", async () => {
   await runAction("tts-extension:resume-page");
 });
 
+document.querySelector("#continue-page").addEventListener("click", async () => {
+  await runAction("tts-extension:continue-page");
+});
+
 document.querySelector("#previous-section").addEventListener("click", async () => {
   await runAction("tts-extension:previous-section");
 });
@@ -232,10 +236,15 @@ function formatPageStructure(structure) {
   const listItemCount = Number(structure.listItemCount ?? 0);
   const quoteBlockCount = Number(structure.quoteBlockCount ?? 0);
   const startSectionIndex = Number(structure.startSectionIndex ?? 0);
+  const startTextChar = Number(structure.startTextChar ?? 0);
+  const nextTextCharStart =
+    structure.nextTextCharStart == null ? null : Number(structure.nextTextCharStart);
   const nextSectionIndex =
     structure.nextSectionIndex == null ? null : Number(structure.nextSectionIndex);
   const details = [
     startSectionIndex > 0 ? `from section ${startSectionIndex + 1}` : null,
+    startTextChar > 0 ? `from char ${startTextChar}` : null,
+    Number.isFinite(nextTextCharStart) ? `continue char ${nextTextCharStart}` : null,
     Number.isFinite(nextSectionIndex) ? `next section ${nextSectionIndex + 1}` : null,
     headingCount > 0 ? `${capturedHeadingCount}/${headingCount} headings` : null,
     bodyBlockCount > 0 ? `${bodyBlockCount} body` : null,

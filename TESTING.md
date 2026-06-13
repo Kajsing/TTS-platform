@@ -37,6 +37,8 @@ backend-realism work, and early v1 model-management helpers:
 - extension next-section wiring that re-extracts the active tab from the next
   heading-backed section or the first known uncaptured section after truncation
   without storing heading text
+- extension continue-page wiring that re-extracts the active tab from the next
+  text character offset after a truncated capture without storing raw page text
 - extension previous-section wiring that re-extracts the active tab from the
   previous heading-backed section without storing heading text
 - extension stop/restart recovery wiring, including persisted interrupted
@@ -123,6 +125,8 @@ Recommended extension checks:
 - verify `Next Section` restarts page playback from a later heading-backed
   section, or from the first known uncaptured section after truncation, when
   one is available
+- verify `Continue Page` restarts page playback after the previous truncated
+  capture when no later heading-backed section is available
 - verify `Previous Section` restarts page playback from an earlier
   heading-backed section when one is available
 
@@ -171,8 +175,8 @@ extension-origin allow-list snippet shape.
 It also verifies the long-page reader-flow contract and streams a generated
 thousand-word article through the WebSocket service path. That reader-flow
 contract includes previous/next section navigation, truncated-section
-continuation, stop/restart recovery wiring, and the popup state fields used
-after reopening the popup.
+continuation, truncated text-offset continuation, stop/restart recovery wiring,
+and the popup state fields used after reopening the popup.
 If the service is already running, include the public-contract smoke path:
 
 ```bash

@@ -50,15 +50,22 @@ function getSelectedText() {
   return extractReadableText(anchorElement, 1000).text;
 }
 
-function getPageCapture(maxChars = 24000, startSectionIndex = 0) {
+function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar = 0) {
   const requestedMaxChars = sanitizeMaxChars(maxChars);
   const requestedStartSectionIndex = sanitizeSectionIndex(startSectionIndex);
+  const requestedStartTextChar = sanitizeTextCharOffset(startTextChar);
   const root = pickReadableRoot();
-  const extracted = extractReadableText(root, requestedMaxChars, requestedStartSectionIndex);
+  const extracted = extractReadableText(
+    root,
+    requestedMaxChars,
+    requestedStartSectionIndex,
+    requestedStartTextChar
+  );
   if (extracted.text) {
     return buildCaptureResult(extracted.text, {
       maxChars: requestedMaxChars,
       startSectionIndex: requestedStartSectionIndex,
+      startTextChar: requestedStartTextChar,
       source: extracted.source,
       truncated: extracted.truncated,
       readableBlocks: extracted.readableBlocks,
@@ -69,6 +76,7 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0) {
     return buildCaptureResult("", {
       maxChars: requestedMaxChars,
       startSectionIndex: requestedStartSectionIndex,
+      startTextChar: requestedStartTextChar,
       source: extracted.source,
       truncated: false,
       readableBlocks: 0,
@@ -77,14 +85,24 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0) {
   }
 
   const fallbackText = normalizeInlineText(document.body?.innerText || "");
-  const text = fallbackText.slice(0, requestedMaxChars).trim();
+  const text = fallbackText
+    .slice(requestedStartTextChar, requestedStartTextChar + requestedMaxChars)
+    .trim();
+  const structure = emptyStructureSummary();
+  structure.startSectionIndex = requestedStartSectionIndex;
+  structure.startTextChar = requestedStartTextChar;
+  structure.nextTextCharStart =
+    fallbackText.length > requestedStartTextChar + requestedMaxChars
+      ? requestedStartTextChar + text.length
+      : null;
   return buildCaptureResult(text, {
     maxChars: requestedMaxChars,
     startSectionIndex: requestedStartSectionIndex,
+    startTextChar: requestedStartTextChar,
     source: "fallback-body",
-    truncated: fallbackText.length > requestedMaxChars,
+    truncated: fallbackText.length > requestedStartTextChar + requestedMaxChars,
     readableBlocks: 0,
-    structure: emptyStructureSummary(),
+    structure,
   });
 }
 
@@ -117,7 +135,7 @@ function pickReadableRoot() {
   return document.body;
 }
 
-function extractReadableText(root, maxChars, startSectionIndex = 0) {
+function extractReadableText(root, maxChars, startSectionIndex = 0, startTextChar = 0) {
   if (!root) {
     return emptyCapture("missing-root", maxChars);
   }
@@ -126,9 +144,11 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
   const seen = new Set();
   const structure = createStructureSummary(root);
   structure.startSectionIndex = startSectionIndex;
+  structure.startTextChar = startTextChar;
   let truncated = false;
   let captureLimitReached = false;
   let currentSectionIndex = -1;
+  let textCharCursor = 0;
   const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
   for (const element of candidates) {
     if (shouldSkipElement(element)) {
@@ -150,7 +170,18 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
     if (currentSectionIndex < 0 && startSectionIndex > 0) {
       continue;
     }
+    const separatorLength = textCharCursor > 0 ? 2 : 0;
+    const blockTextStart = textCharCursor + separatorLength;
+    const blockTextEnd = blockTextStart + text.length;
+    textCharCursor = blockTextEnd;
+    if (blockTextEnd <= startTextChar) {
+      seen.add(text);
+      continue;
+    }
     if (captureLimitReached) {
+      if (structure.nextTextCharStart == null) {
+        structure.nextTextCharStart = blockTextStart;
+      }
       if (blockKind === "heading") {
         structure.nextSectionIndex = currentSectionIndex;
         break;
@@ -158,8 +189,14 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
       continue;
     }
 
+    const startOffset = Math.max(0, startTextChar - blockTextStart);
+    const capturedText = text.slice(startOffset).trimStart();
+    if (!capturedText) {
+      seen.add(text);
+      continue;
+    }
     blockEntries.push({
-      text,
+      text: capturedText,
       kind: blockKind,
       sectionIndex: Math.max(currentSectionIndex, 0),
       level: getHeadingLevel(element),
@@ -176,20 +213,25 @@ function extractReadableText(root, maxChars, startSectionIndex = 0) {
   const joined = joinBlockEntries(blockEntries).trim();
   if (joined) {
     const text = joined.slice(0, maxChars).trim();
+    const isTruncated = truncated || joined.length > maxChars;
     structure.sections = buildCapturedSections(blockEntries, maxChars);
+    structure.nextTextCharStart = isTruncated ? startTextChar + text.length : null;
     return {
       text,
       source: "readable-blocks",
-      truncated: truncated || joined.length > maxChars,
+      truncated: isTruncated,
       readableBlocks: blockEntries.length,
       structure,
     };
   }
   const fallbackText = normalizeInlineText(root.innerText || root.textContent || "");
+  const fallbackSlice = fallbackText.slice(startTextChar, startTextChar + maxChars).trim();
+  structure.nextTextCharStart =
+    fallbackText.length > startTextChar + maxChars ? startTextChar + fallbackSlice.length : null;
   return {
-    text: fallbackText.slice(0, maxChars).trim(),
+    text: fallbackSlice,
     source: "root-text",
-    truncated: fallbackText.length > maxChars,
+    truncated: fallbackText.length > startTextChar + maxChars,
     readableBlocks: 0,
     structure,
   };
@@ -257,6 +299,8 @@ function emptyStructureSummary() {
     listItemCount: 0,
     quoteBlockCount: 0,
     startSectionIndex: 0,
+    startTextChar: 0,
+    nextTextCharStart: null,
     nextSectionIndex: null,
     sections: [],
   };
@@ -310,6 +354,14 @@ function sanitizeSectionIndex(value) {
   return Math.max(0, Math.floor(parsed));
 }
 
+function sanitizeTextCharOffset(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(parsed));
+}
+
 function emptyCapture(source, maxChars) {
   return {
     text: "",
@@ -324,6 +376,7 @@ function emptyCapture(source, maxChars) {
 function buildCaptureResult(text, meta) {
   const structure = meta.structure || emptyStructureSummary();
   structure.startSectionIndex = meta.startSectionIndex || structure.startSectionIndex || 0;
+  structure.startTextChar = meta.startTextChar || structure.startTextChar || 0;
   return {
     text,
     meta: {
@@ -331,6 +384,7 @@ function buildCaptureResult(text, meta) {
       textChars: text.length,
       maxChars: meta.maxChars,
       startSectionIndex: meta.startSectionIndex,
+      startTextChar: meta.startTextChar,
       truncated: Boolean(meta.truncated),
       readableBlocks: meta.readableBlocks,
       structure,
@@ -345,6 +399,8 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   }
 
   if (message?.type === "tts-extension:get-page-text") {
-    sendResponse(getPageCapture(message.maxChars, message.startSectionIndex));
+    sendResponse(
+      getPageCapture(message.maxChars, message.startSectionIndex, message.startTextChar)
+    );
   }
 });

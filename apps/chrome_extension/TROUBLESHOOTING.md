@@ -59,6 +59,8 @@
 - Check `Page Capture` in the popup playback state.
 - If it says `truncated`, the extension reached `Max Page Characters` before
   the readable page text ended.
+- Use `Continue Page` to re-extract the active tab from the next known text
+  character offset when the page has no later heading-backed section.
 - Increase `Max Page Characters` up to the local service stream limit, then save
   settings and start page playback again.
 - The popup stores capture counts and extraction metadata only; it does not
@@ -82,6 +84,8 @@
   progress, or a known uncaptured section index from a truncated page capture.
   It will be unavailable near the end only when neither signal exists.
 - Pages without semantic `h1` to `h4` headings may not expose usable sections.
+- If the page is truncated but has no later heading-backed section, use
+  `Continue Page` instead.
 - The actions re-extract the active tab from a section index; if the page
   content changed, the new section position may shift.
 

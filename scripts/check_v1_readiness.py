@@ -50,6 +50,8 @@ READINESS_MARKERS = (
     "python3 scripts/check_extension.py",
     "python3 scripts/check_extension_onboarding.py",
     "python3 scripts/check_extension_reader_flow.py",
+    "Continue Page",
+    "truncated text-offset continuation",
     "python3 scripts/check_local_service_bootstrap.py",
     "python3 scripts/check_model_management_flow.py",
     "python3 scripts/package_windows_bundle.py",
@@ -86,6 +88,13 @@ REQUIRED_TEXT_MARKERS = {
         "verify_manifest_policy",
         "verify_extension_privacy_boundaries",
         "LOCAL_SERVICE_HOST_PERMISSIONS",
+        '"tts-extension:continue-page"',
+    ),
+    "scripts/check_extension_reader_flow.py": (
+        '"tts-extension:continue-page"',
+        "resolveContinueTextCharStart",
+        "nextTextCharStart",
+        '"truncated_text_continuation"',
     ),
     "scripts/smoke_service.py": (
         "--stream-text-repeat",
@@ -121,6 +130,16 @@ REQUIRED_TEXT_MARKERS = {
     "TESTING.md": (
         "v1-readiness",
         "manual",
+        "Continue Page",
+        "truncated text-offset continuation",
+    ),
+    "apps/chrome_extension/README.md": (
+        "Continue Page",
+        "next known text character offset",
+    ),
+    "docs/backend_model_setup.md": (
+        "Continue Page",
+        "non-textual character offset",
     ),
 }
 

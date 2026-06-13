@@ -65,6 +65,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "tts-extension:resume-page":
         sendResponse(await resumePage());
         return;
+      case "tts-extension:continue-page":
+        sendResponse(await continuePage());
+        return;
       case "tts-extension:previous-section":
         sendResponse(await previousSection());
         return;
@@ -160,6 +163,34 @@ async function resumePage() {
   };
 }
 
+async function continuePage() {
+  const currentState = await getPlaybackState();
+  const startTextChar = resolveContinueTextCharStart(currentState.pageCapture);
+  if (startTextChar == null) {
+    return { ok: false, message: "No truncated page continuation is available." };
+  }
+
+  const tab = await getActiveTab();
+  const config = await getConfig();
+  const capture = await getPageCapture(tab.id, config.maxChars, 0, startTextChar);
+  if (!capture.text) {
+    return { ok: false, message: "No page text found for continuation." };
+  }
+
+  await startPlayback({
+    text: capture.text,
+    source: "page-continue",
+    tabId: tab.id,
+    pageCapture: capture.meta,
+  });
+  return {
+    ok: true,
+    message: `Continued page playback from character ${startTextChar}.${formatCaptureSuffix(
+      capture.meta
+    )}`,
+  };
+}
+
 async function previousSection() {
   const currentState = await getPlaybackState();
   const previousSectionIndex = resolvePreviousSectionIndex({
@@ -222,11 +253,12 @@ async function nextSection() {
   };
 }
 
-async function getPageCapture(tabId, maxChars, startSectionIndex = 0) {
+async function getPageCapture(tabId, maxChars, startSectionIndex = 0, startTextChar = 0) {
   const response = await chrome.tabs.sendMessage(tabId, {
     type: "tts-extension:get-page-text",
     maxChars,
     startSectionIndex,
+    startTextChar,
   });
   const text = (response?.text || "").trim();
   return {
@@ -415,6 +447,17 @@ function resolveResumeTextChunkIndex(progress) {
   return Math.min(Math.floor(chunkIndex), Math.floor(chunkCount) - 1);
 }
 
+function resolveContinueTextCharStart(pageCapture) {
+  if (!pageCapture?.truncated) {
+    return null;
+  }
+  const nextTextCharStart = Number(pageCapture?.structure?.nextTextCharStart);
+  if (!Number.isFinite(nextTextCharStart) || nextTextCharStart <= 0) {
+    return null;
+  }
+  return Math.floor(nextTextCharStart);
+}
+
 function resolveNextSectionIndex({ progress, pageCapture }) {
   const structure = pageCapture?.structure ?? {};
   const sections = Array.isArray(structure.sections) ? structure.sections : [];
@@ -522,6 +565,8 @@ function sanitizePageStructureMeta(structure) {
     listItemCount: sanitizeNumber(structure?.listItemCount, 0, 0),
     quoteBlockCount: sanitizeNumber(structure?.quoteBlockCount, 0, 0),
     startSectionIndex: sanitizeNumber(structure?.startSectionIndex, 0, 0),
+    startTextChar: sanitizeNumber(structure?.startTextChar, 0, 0),
+    nextTextCharStart: sanitizeOptionalTextCharOffset(structure?.nextTextCharStart),
     nextSectionIndex: sanitizeOptionalSectionIndex(structure?.nextSectionIndex),
     sections: sanitizePageSections(structure?.sections),
   };
@@ -533,6 +578,17 @@ function sanitizeOptionalSectionIndex(value) {
   }
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
+function sanitizeOptionalTextCharOffset(value) {
+  if (value == null) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return null;
   }
   return Math.floor(parsed);

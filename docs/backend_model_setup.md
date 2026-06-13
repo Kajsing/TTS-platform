@@ -447,6 +447,10 @@ The extension also uses page-capture heading offsets for `Previous Section` and
 storing raw page text. If a capture is truncated before a later heading-backed
 section, `Next Section` can use a non-textual continuation section index to
 re-extract from the first known uncaptured section.
+For long pages without a later heading-backed section, `Continue Page` uses a
+non-textual character offset from the latest truncated capture metadata and
+re-extracts the active tab from that offset. It still does not persist raw page
+text.
 
 When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
 backend streaming path emits audio from those callbacks instead of waiting for
@@ -457,8 +461,9 @@ The server-side chunk planner now improves chunk boundaries, the stream path has
 a separate page-scale text limit, the real runtime path can stream callback
 audio, stream events expose reader progress, and the extension has a basic
 resume action plus previous/next section navigation with truncated-page
-continuation. The product still needs manual Chrome playback evidence before
-the Chrome reader is fully v1-ready.
+continuation and text-offset continuation for flat long pages. The product
+still needs manual Chrome playback evidence before the Chrome reader is fully
+v1-ready.
 
 ## Cancellation Limits
 

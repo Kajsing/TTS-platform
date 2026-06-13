@@ -264,5 +264,9 @@ The twenty-sixth release-hardening slice extends
 `scripts/check_model_management_flow.py` to serve the generated catalog and
 relative artifact over loopback HTTP, proving the remote-catalog download path
 inside the offline release gate.
+The twenty-seventh reader-flow slice adds popup-side `Continue Page` for
+truncated captures that do not expose a later heading-backed section. It uses a
+non-textual `nextTextCharStart` offset and re-extracts active-tab text without
+storing raw page text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

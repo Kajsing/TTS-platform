@@ -19,9 +19,10 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
 
     assert contract == {
         "checked_files": 5,
-        "popup_actions": 4,
+        "popup_actions": 5,
         "page_capture_metadata": True,
         "resume_and_section_navigation": True,
+        "truncated_text_continuation": True,
         "truncated_section_continuation": True,
         "stop_restart_recovery": True,
         "popup_reopen_state": True,

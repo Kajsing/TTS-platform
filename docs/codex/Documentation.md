@@ -11,23 +11,28 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model-management release smoke now serves its
-  generated catalog and relative artifact over loopback HTTP, so the offline
-  release gate proves the remote-catalog download/install path without external
-  network access.
+- Current loop result: The Chrome extension reader flow now includes
+  `Continue Page` for truncated long pages that do not expose a later
+  heading-backed section. The action uses non-textual character-offset metadata
+  and re-extracts active-tab text without storing raw page text.
 - Validation status for the current loop:
-  - Targeted model-management flow ruff passed with
-    `py -3 -m ruff check scripts\check_model_management_flow.py apps\tts_service\tests\test_model_management_flow_check.py`.
-  - Targeted model-management flow test passed with
-    `py -3 -m pytest apps\tts_service\tests\test_model_management_flow_check.py -q`.
-  - `py -3 scripts\check_model_management_flow.py` passed and reported
-    `catalog.source = local_http`.
-  - `py -3 scripts\check_v1_readiness.py` passed.
+  - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
+    skipped because `node` is not installed.
+  - `py -3 scripts\check_extension_reader_flow.py` passed and reported
+    `popup_actions = 5`, `truncated_text_continuation = true`, and a generated
+    2,963-word article streamed through the local WebSocket service path.
+  - `py -3 scripts\check_v1_readiness.py` passed with 31 checked files and 27
+    readiness markers.
+  - Targeted reader-flow/readiness ruff passed with
+    `py -3 -m ruff check scripts\check_extension.py scripts\check_extension_reader_flow.py scripts\check_v1_readiness.py apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_v1_readiness_check.py`.
+  - Targeted reader-flow/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 8 passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 152 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including the strengthened
-    model-management flow smoke, extension reader-flow smoke, Windows launcher
+  - `py -3 scripts\release_check.py` passed, including extension reader-flow
+    smoke, extension package validation, Windows bundle packaging, launcher
     foreground service smoke, and bundle install smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -110,6 +115,10 @@ This file is the live status log and shared memory for future Codex loops.
   - truncated page captures now include a non-textual next-section continuation
     marker when a later heading-backed section exists beyond the current
     capture limit, and `Next Section` uses it as a fallback.
+  - the popup now exposes `Continue Page`; background uses the latest truncated
+    page-capture `nextTextCharStart` offset and re-extracts the active tab from
+    that character position, so flat long pages can continue without storing
+    raw page text.
   - the popup now exposes `Previous Section`; background resolves the previous
     heading-backed section from current reader progress and page-capture
     metadata, re-extracts the active tab from that section index, and starts
@@ -255,6 +264,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.
+  - `scripts/check_extension_reader_flow.py` now verifies `Continue Page`
+    wiring and truncated text-offset continuation metadata in addition to
+    truncated section continuation.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -319,6 +331,10 @@ This file is the live status log and shared memory for future Codex loops.
 - Truncated-page continuation should remain metadata-only. A section index is
   enough for `Next Section` to ask the content script to re-extract from the
   active tab, while raw page text and heading text stay out of extension
+  storage.
+- Truncated flat-page continuation should also remain metadata-only. A
+  character offset is enough for `Continue Page` to ask the content script to
+  re-extract from the active tab, while raw page text stays out of extension
   storage.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
@@ -453,8 +469,9 @@ python3 scripts/package_windows_bundle.py
   normal local run path.
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
-  visibility. It now preserves short headings and reports structure counts, but
-  still lacks a full named reader-mode outline.
+  visibility. It now preserves short headings, reports structure counts, and
+  can continue truncated flat pages by text offset, but still lacks a full
+  named reader-mode outline.
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction. The
   virtualenv install/start path is now covered by an automated temp-venv smoke,
