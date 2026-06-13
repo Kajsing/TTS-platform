@@ -102,6 +102,9 @@ REQUIRED_TEXT_MARKERS = {
         '"windows_bundle_bootstrap"',
         '"windows_launchers"',
         '"windows_bundle_install"',
+        "--node-executable",
+        "--require-js-syntax",
+        "TTS_PLATFORM_NODE",
     ),
     "scripts/check_extension.py": (
         "verify_manifest_policy",

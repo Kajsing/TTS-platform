@@ -154,6 +154,49 @@ def test_release_check_can_include_optional_live_smoke(
     ]
 
 
+def test_release_check_can_require_extension_js_syntax(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+    node_path = tmp_path / "node.exe"
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        check: bool,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        assert cwd == REPO_ROOT
+        assert check is True
+        calls.append((command, env))
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=tmp_path / "windows.zip",
+        node_executable=str(node_path),
+        require_js_syntax=True,
+    )
+
+    extension_call = calls[6]
+    assert extension_call[0] == [
+        "python-test",
+        "scripts/check_extension.py",
+        "--node-executable",
+        str(node_path.resolve()),
+        "--require-js-syntax",
+    ]
+    assert extension_call[1] is not None
+    assert extension_call[1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert calls[10][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert summary["checks"][6]["command"] == extension_call[0]
+
+
 def test_release_check_redacts_inline_live_smoke_token(
     tmp_path: Path,
     monkeypatch,

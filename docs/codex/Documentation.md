@@ -259,6 +259,10 @@ This file is the live status log and shared memory for future Codex loops.
     `scripts/check_extension.py --require-js-syntax`, and Node.js can be
     supplied with `--node-executable` or `TTS_PLATFORM_NODE` when it is not on
     `PATH`.
+  - `scripts/release_check.py` now accepts `--node-executable` and
+    `--require-js-syntax`, propagating the Node path into package/bundle child
+    checks so full release gates can require extension JavaScript syntax
+    parsing.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

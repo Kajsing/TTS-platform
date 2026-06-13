@@ -8,7 +8,9 @@ for long web-page text.
 
 - `python3 scripts/release_check.py` runs ruff, pytest, security-default
   verification, local service bootstrap smoke, extension validation, extension
-  packaging, and Windows bundle packaging.
+  packaging, and Windows bundle packaging. Use
+  `--node-executable <path-to-node> --require-js-syntax` when the release gate
+  must fail instead of skipping extension JavaScript syntax checks.
 - `python3 scripts/check_security_defaults.py` verifies fail-closed local
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,

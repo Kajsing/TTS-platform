@@ -360,5 +360,9 @@ service worker, making skipped browser evidence easier to triage.
 The fifty-fourth release-hardening slice makes extension JavaScript syntax
 validation configurable and strict-capable via `--node-executable`,
 `TTS_PLATFORM_NODE`, and `--require-js-syntax`.
+The fifty-fifth release-hardening slice propagates `--node-executable` and
+`--require-js-syntax` through `scripts/release_check.py`, so full release gates
+can require extension JavaScript syntax parsing without manual environment
+setup.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

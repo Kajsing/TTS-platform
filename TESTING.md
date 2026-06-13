@@ -168,6 +168,7 @@ Run the local release gate with:
 
 ```bash
 python3 scripts/release_check.py
+python3 scripts/release_check.py --node-executable <path-to-node> --require-js-syntax
 ```
 
 On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.

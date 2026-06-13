@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--stream-text-file", default=None)
     parser.add_argument("--stream-text-repeat", type=int, default=1)
     parser.add_argument("--min-stream-text-chunks", type=int, default=1)
+    parser.add_argument("--node-executable", default=None)
+    parser.add_argument(
+        "--require-js-syntax",
+        action="store_true",
+        help="Fail extension validation when JavaScript syntax checks cannot run.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -47,6 +54,8 @@ def main(argv: list[str] | None = None) -> None:
             stream_text_file=args.stream_text_file,
             stream_text_repeat=args.stream_text_repeat,
             min_stream_text_chunks=args.min_stream_text_chunks,
+            node_executable=args.node_executable,
+            require_js_syntax=args.require_js_syntax,
         )
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
@@ -69,6 +78,8 @@ def run_release_checks(
     stream_text_file: str | None = None,
     stream_text_repeat: int = 1,
     min_stream_text_chunks: int = 1,
+    node_executable: str | None = None,
+    require_js_syntax: bool = False,
 ) -> dict[str, object]:
     if package_out_path is not None and windows_bundle_out_path is not None:
         return _run_release_checks_with_package_path(
@@ -85,6 +96,8 @@ def run_release_checks(
             stream_text_file=stream_text_file,
             stream_text_repeat=stream_text_repeat,
             min_stream_text_chunks=min_stream_text_chunks,
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
         )
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-release-") as temp_dir:
@@ -112,6 +125,8 @@ def run_release_checks(
             stream_text_file=stream_text_file,
             stream_text_repeat=stream_text_repeat,
             min_stream_text_chunks=min_stream_text_chunks,
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
         )
 
 
@@ -130,7 +145,10 @@ def _run_release_checks_with_package_path(
     stream_text_file: str | None,
     stream_text_repeat: int,
     min_stream_text_chunks: int,
+    node_executable: str | None,
+    require_js_syntax: bool,
 ) -> dict[str, object]:
+    child_env = _build_release_env(node_executable=node_executable)
     checks = [
         ("ruff", [python_executable, "-m", "ruff", "check", "."]),
         ("pytest", [python_executable, "-m", "pytest", "-q"]),
@@ -150,7 +168,14 @@ def _run_release_checks_with_package_path(
             "model_management_flow",
             [python_executable, "scripts/check_model_management_flow.py"],
         ),
-        ("extension", [python_executable, "scripts/check_extension.py"]),
+        (
+            "extension",
+            _build_extension_check_command(
+                python_executable=python_executable,
+                node_executable=node_executable,
+                require_js_syntax=require_js_syntax,
+            ),
+        ),
         (
             "extension_onboarding",
             [python_executable, "scripts/check_extension_onboarding.py"],
@@ -230,7 +255,10 @@ def _run_release_checks_with_package_path(
     completed: list[dict[str, object]] = []
     for name, command in checks:
         print(f"[release-check] {name}", file=sys.stderr)
-        subprocess.run(command, cwd=REPO_ROOT, check=True)
+        if child_env is None:
+            subprocess.run(command, cwd=REPO_ROOT, check=True)
+        else:
+            subprocess.run(command, cwd=REPO_ROOT, check=True, env=child_env)
         completed.append({"name": name, "command": _redact_command(command)})
 
     return {
@@ -238,6 +266,28 @@ def _run_release_checks_with_package_path(
         "package_path": str(package_out_path),
         "windows_bundle_path": str(windows_bundle_out_path),
     }
+
+
+def _build_release_env(*, node_executable: str | None) -> dict[str, str] | None:
+    if not node_executable:
+        return None
+    env = os.environ.copy()
+    env["TTS_PLATFORM_NODE"] = str(Path(node_executable).expanduser().resolve())
+    return env
+
+
+def _build_extension_check_command(
+    *,
+    python_executable: str,
+    node_executable: str | None,
+    require_js_syntax: bool,
+) -> list[str]:
+    command = [python_executable, "scripts/check_extension.py"]
+    if node_executable:
+        command.extend(["--node-executable", str(Path(node_executable).expanduser().resolve())])
+    if require_js_syntax:
+        command.append("--require-js-syntax")
+    return command
 
 
 def _build_live_smoke_command(
