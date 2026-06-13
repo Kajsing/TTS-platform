@@ -11,20 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The long-page extension reader-flow slice adds a
-  deterministic gate for `Speak Page`, reader progress, page-capture metadata,
-  `Resume Page`, `Next Section`, raw page-text non-persistence, and a generated
-  thousand-word article streamed through the WebSocket service path.
+- Current loop result: The extension stop/restart recovery slice persists
+  interrupted playback state when popup/background state is restored without an
+  offscreen document, keeps the manual stop fallback truthful, and extends the
+  long-page reader-flow gate with stop/restart recovery plus popup reopen-state
+  signals.
 - Validation status for the current loop:
   - `py -3 scripts/check_extension_reader_flow.py` passed with a 2,963-word
-    generated article and 145 stream text chunks.
-  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q` passed with 9 tests.
-  - Targeted `py -3 -m ruff check ...` passed after line wrapping.
+    generated article, 145 stream text chunks, `stop_restart_recovery: true`,
+    and `popup_reopen_state: true`.
+  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
+    passed with 3 tests.
+  - Targeted `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py`
+    passed.
+  - `py -3 scripts/check_extension.py` passed; JavaScript syntax checks were
+    skipped because `node` is not installed.
   - `py -3 scripts/check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 139 tests.
   - `py -3 scripts/release_check.py` passed, including
-    `extension_reader_flow`.
+    `extension_reader_flow`, Windows bundle bootstrap, and Windows bundle
+    install checks.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -106,6 +113,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_extension_reader_flow.py` now verifies long-page reader
     wiring and streams a generated thousand-word article through the local
     service WebSocket contract.
+  - the extension background now persists interrupted playback state if an
+    active stream loses its offscreen document, and the reader-flow gate checks
+    stop/restart recovery plus popup reopen-state fields.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
@@ -214,6 +224,9 @@ This file is the live status log and shared memory for future Codex loops.
     a deterministic local gate before extension packaging.
   - `scripts/release_check.py` now runs extension reader-flow smoke before
     extension packaging.
+  - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
+    and popup reopen-state wiring in addition to the generated long-page stream
+    smoke.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -228,8 +241,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## What Is Next
 
 - Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue from the v1-readiness audit: either automate a listed manual gate or
-  take the next reader-flow/product slice from `Plan.md`.
+- Continue from the v1-readiness audit: either automate another listed manual
+  gate or take the next reader-flow/product slice from `Plan.md`.
 - Leave permanent Windows service manager or auto-start install as an explicit
   later product choice.
 

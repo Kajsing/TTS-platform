@@ -22,6 +22,8 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "popup_actions": 3,
         "page_capture_metadata": True,
         "resume_and_next_section": True,
+        "stop_restart_recovery": True,
+        "popup_reopen_state": True,
         "raw_page_text_persistence": False,
     }
     assert fixture_summary["word_count"] >= 1000

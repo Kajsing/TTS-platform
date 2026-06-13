@@ -16,6 +16,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   structure counts in playback state
 - jump to the next captured page section by re-extracting the active tab from
   the next heading index
+- stop playback and keep popup state truthful if playback is interrupted while
+  the offscreen document is unavailable
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
@@ -132,7 +134,8 @@ python3 scripts/check_extension_reader_flow.py
 ```
 
 This verifies the `Speak Page`, reader progress, page-capture metadata,
-`Resume Page`, and `Next Section` wiring, then streams a generated thousand-word
-article through the local WebSocket service path.
+`Resume Page`, `Next Section`, stop/restart recovery, and popup reopen-state
+wiring, then streams a generated thousand-word article through the local
+WebSocket service path.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

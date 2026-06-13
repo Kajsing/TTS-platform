@@ -253,6 +253,7 @@ async function stopPlayback() {
     status: "idle",
     message: "Ready",
     activeStreamId: null,
+    lastEvent: "stop",
   });
 }
 
@@ -275,12 +276,15 @@ async function getPlaybackState() {
 
   const offscreenReady = await hasOffscreenDocument();
   if (!offscreenReady && isActivePlaybackStatus(playbackState.status)) {
-    return {
+    await setPlaybackState({
       ...playbackState,
       offscreenReady,
       status: "interrupted",
       message: "Playback was interrupted because the offscreen document is unavailable.",
-    };
+      activeStreamId: null,
+      lastEvent: "interrupted",
+    });
+    return playbackState;
   }
 
   return {
@@ -547,14 +551,19 @@ function isActivePlaybackStatus(status) {
 }
 
 async function initializeExtensionState() {
-  const restoredState = await getPlaybackState();
-  if (!restoredState.offscreenReady && isActivePlaybackStatus(restoredState.status)) {
+  const stored = await chrome.storage.session.get({ playbackState });
+  const restoredState = {
+    ...playbackState,
+    ...(stored.playbackState ?? {}),
+  };
+  const offscreenReady = await hasOffscreenDocument();
+  if (!offscreenReady && isActivePlaybackStatus(restoredState.status)) {
     await setPlaybackState({
+      ...restoredState,
+      offscreenReady,
       status: "interrupted",
       message: "Recovered after background restart, but playback was no longer active.",
       activeStreamId: null,
-      source: restoredState.source,
-      tabId: restoredState.tabId,
       readerProgress: restoredState.readerProgress ?? null,
       pageCapture: restoredState.pageCapture ?? null,
       lastEvent: "recovered",
@@ -562,7 +571,7 @@ async function initializeExtensionState() {
     return;
   }
 
-  playbackState = restoredState;
+  playbackState = await getPlaybackState();
   await updateBadge();
 }
 

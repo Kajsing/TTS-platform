@@ -36,6 +36,8 @@ backend-realism work, and early v1 model-management helpers:
   short heading preservation in captured page text
 - extension next-section wiring that re-extracts the active tab from the next
   heading-backed section without storing heading text
+- extension stop/restart recovery wiring, including persisted interrupted
+  state when popup/background state is restored without an offscreen document
 - extension manifest policy checks that keep service host permissions limited
   to localhost while leaving page access in the content-script declaration
 - extension privacy-boundary checks that block content-script service calls,
@@ -137,7 +139,9 @@ It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
 It also verifies the long-page reader-flow contract and streams a generated
-thousand-word article through the WebSocket service path.
+thousand-word article through the WebSocket service path. That reader-flow
+contract includes stop/restart recovery wiring and the popup state fields used
+after reopening the popup.
 If the service is already running, include the public-contract smoke path:
 
 ```bash

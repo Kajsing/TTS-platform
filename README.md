@@ -237,6 +237,8 @@ The extension currently supports:
 - preserving short article headings and showing page-structure counts for long
   page playback
 - jumping to the next captured page section during long page playback
+- stopping playback and preserving a truthful interrupted/recovered state when
+  the popup is reopened after the offscreen playback document is gone
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config

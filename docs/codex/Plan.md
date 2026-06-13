@@ -217,6 +217,9 @@ covering extracted-bundle temporary venv creation, package install, installed
 `tts setup-local`, installed `tts serve`, and public-contract smoke. The
 fifteenth release-hardening slice now adds
 `scripts/check_extension_reader_flow.py`, covering long-page reader wiring plus
-generated thousand-word WebSocket stream smoke. Continue from the readiness
-audit: either automate another listed manual gate or take the next
-reader-flow/product slice.
+generated thousand-word WebSocket stream smoke. The sixteenth
+release-hardening slice tightens extension stop/restart and popup reopen-state
+recovery by persisting interrupted playback state when the offscreen document is
+gone and extending the reader-flow gate to cover those signals. Continue from
+the readiness audit: either automate another listed manual gate or take the
+next reader-flow/product slice.
