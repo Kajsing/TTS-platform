@@ -169,6 +169,17 @@ python3 scripts/benchmark.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"
 ```
 
+## Release Check
+
+Run the local release gate with:
+
+```bash
+python3 scripts/release_check.py
+```
+
+It runs ruff, pytest, extension validation, and extension zip packaging with a
+temporary package output.
+
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 
 ## Chrome Extension Prototype

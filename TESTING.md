@@ -52,6 +52,8 @@ backend-realism work, and early v1 model-management helpers:
   extension validator
 - Chrome extension zip packaging with manifest at the archive root and
   POSIX-style relative asset paths
+- repo-native release check orchestration for ruff, pytest, extension
+  validation, and extension package build
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 
@@ -82,6 +84,14 @@ python3 -m ruff check .
 ```
 
 On Windows, use `py -3 -m ruff check .` when `python3` is unavailable.
+
+Run the local release gate with:
+
+```bash
+python3 scripts/release_check.py
+```
+
+On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.
 
 CLI example:
 

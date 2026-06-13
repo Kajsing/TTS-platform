@@ -11,15 +11,15 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The first release-hardening slice tightened
-  `security.allowed_origins` config validation. Config loading now rejects
-  wildcard `*`, `null`, paths, query strings, fragments, and unsupported schemes
-  in the browser origin allow-list.
+- Current loop result: The second release-hardening slice added
+  `scripts/release_check.py`, a repo-native local release gate that runs ruff,
+  pytest, extension validation, and extension zip packaging.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 112 tests.
+  - `py -3 -m pytest -q` passed with 113 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
+  - `py -3 scripts/release_check.py` passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -125,6 +125,8 @@ This file is the live status log and shared memory for future Codex loops.
     slashes and must be explicit `http`, `https`, or `chrome-extension` origins.
   - wildcard, `null`, path-bearing, query-bearing, fragment-bearing, and
     unsupported-scheme origin entries fail config load.
+  - `scripts/release_check.py` now runs the local release gate without requiring
+    live service credentials.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -191,6 +193,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Browser allow-list config should fail closed. Empty `allowed_origins` remains
   the secure default; configured entries must be explicit origins, not wildcards
   or URL paths.
+- The local release gate should avoid requiring live service credentials. Live
+  public-contract smoke tests remain separate because they require a running
+  service and token.
 - Under the current Codex sandbox, some service tests that depend on local socket/network capabilities needed unsandboxed execution to validate correctly. The repo itself passed once run without those sandbox limits.
 - Because this repository is jointly owned by the user and Codex, successful
   Codex runs now default to committing and pushing the completed slice. Codex
@@ -208,6 +213,7 @@ Baseline validation:
 ```bash
 python3 -m pytest -q
 python3 -m ruff check .
+python3 scripts/release_check.py
 ```
 
 First-run setup:
