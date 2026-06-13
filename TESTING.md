@@ -199,10 +199,13 @@ contract includes previous/next section navigation, truncated-section
 continuation, manual and automatic truncated text-offset continuation,
 stop/restart recovery wiring, and the popup state fields used after reopening
 the popup.
-It runs a skip-aware Chrome/MV3 browser smoke that uses Chrome or Edge when one
-is installed. When the local browser/MV3 environment cannot run the smoke, the
-gate reports a skipped smoke rather than failing the offline release gate; use
-`--require-browser` on the smoke script when strict browser evidence is needed.
+It runs a skip-aware Chrome/MV3 browser smoke that uses Chrome or Edge when a
+compatible browser build can load unpacked extensions from automation. When the
+local browser/MV3 environment cannot run the smoke, the gate reports a skipped
+smoke rather than failing the offline release gate; use `--require-browser` on
+the smoke script when strict browser evidence is needed. Branded Chrome 137+ may
+ignore `--load-extension`; for strict automated evidence, pass Chrome for
+Testing or Chromium with `--browser-executable`.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -299,10 +302,17 @@ Check the optional Chrome/MV3 browser smoke directly with:
 python3 scripts/check_chrome_extension_smoke.py
 ```
 
-For strict browser evidence on a machine with Chrome or Edge installed:
+For strict browser evidence on a machine with a compatible browser build:
 
 ```bash
 python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
+```
+
+If the installed browser ignores command-line unpacked extension loading, pass a
+Chrome for Testing or Chromium executable:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py --require-browser --browser-executable <path-to-browser>
 ```
 
 CLI example:

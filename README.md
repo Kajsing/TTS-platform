@@ -341,9 +341,16 @@ python3 scripts/package_extension.py
 The zip includes `INSTALL.md` plus the extension icon set used by the manifest
 and toolbar action.
 
-To run the optional real-browser Chrome/MV3 smoke when Chrome or Edge is
-available:
+To run the optional real-browser Chrome/MV3 smoke when a compatible Chrome,
+Chrome for Testing, Chromium, or Edge build is available:
 
 ```bash
 python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
+```
+
+If the installed browser ignores command-line unpacked extension loading, pass a
+compatible browser explicitly:
+
+```bash
+python3 scripts/check_chrome_extension_smoke.py --require-browser --browser-executable <path-to-browser>
 ```

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -135,6 +136,99 @@ def test_chrome_extension_smoke_reports_observed_targets(
     message = str(exc_info.value)
     assert "about:blank" in message
     assert "background_page" in message
+
+
+def test_chrome_extension_smoke_reads_extension_id_from_preferences(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_chrome_smoke_module()
+    extension_root = tmp_path / "apps" / "chrome_extension"
+    extension_root.mkdir(parents=True)
+    monkeypatch.setattr(check_module, "EXTENSION_ROOT", extension_root)
+    preferences_path = tmp_path / "Default" / "Preferences"
+    preferences_path.parent.mkdir()
+    preferences_path.write_text(
+        json.dumps(
+            {
+                "extensions": {
+                    "settings": {
+                        "abcdefghijklmnopabcdefghijklmnop": {
+                            "path": str(extension_root),
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    extension_id = check_module._extension_id_from_preferences(preferences_path)
+
+    assert extension_id == "abcdefghijklmnopabcdefghijklmnop"
+
+
+def test_chrome_extension_smoke_opens_popup_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_chrome_smoke_module()
+    created_urls: list[str] = []
+
+    def fake_create_page_target(*, cdp_port: int, url: str) -> str:
+        assert cdp_port == 7777
+        created_urls.append(url)
+        return "target-1"
+
+    def fake_wait_for_page_target(*, cdp_port: int, target_id: str):
+        assert cdp_port == 7777
+        assert target_id == "target-1"
+        return {"id": target_id, "url": created_urls[0]}
+
+    monkeypatch.setattr(check_module, "_create_page_target", fake_create_page_target)
+    monkeypatch.setattr(check_module, "_wait_for_page_target", fake_wait_for_page_target)
+
+    target = check_module._create_extension_page_target(
+        cdp_port=7777,
+        extension_id="abcdefghijklmnopabcdefghijklmnop",
+    )
+
+    assert created_urls == [
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop/src/popup.html",
+    ]
+    assert target["url"] == created_urls[0]
+
+
+def test_chrome_extension_smoke_start_expression_targets_article_url() -> None:
+    check_module = _load_chrome_smoke_module()
+
+    expression = check_module._start_expression(
+        base_url="http://127.0.0.1:5000",
+        page_url="http://127.0.0.1:5001/article.html",
+        token="secret-token",
+        max_capture_chars=1600,
+    )
+
+    assert "chrome.tabs.query({})" in expression
+    assert 'candidate.url === "http://127.0.0.1:5001/article.html"' in expression
+    assert "active: true" not in expression
+
+
+def test_chrome_extension_smoke_chrome_registration_hint() -> None:
+    check_module = _load_chrome_smoke_module()
+
+    hint = check_module._browser_extension_load_hint(
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+    )
+
+    assert "Chrome 137+" in hint
+    assert "Chrome for Testing" in hint
+    assert "--browser-executable" in hint
+
+    compatible_hint = check_module._browser_extension_load_hint(
+        Path(r"C:\Tools\Chrome for Testing\chrome.exe")
+    )
+    assert "Chrome 137+" not in compatible_hint
+    assert "supports command-line unpacked extension loading" in compatible_hint
 
 
 def _load_chrome_smoke_module():

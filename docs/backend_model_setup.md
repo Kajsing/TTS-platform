@@ -537,8 +537,12 @@ resume action plus previous/next section navigation with truncated-page
 continuation and manual/automatic text-offset continuation for flat long pages.
 `scripts/check_chrome_extension_smoke.py` can run an optional real Chrome/Edge
 MV3 smoke that loads the extension, starts a temporary loopback service, opens a
-generated long article, verifies capture, and starts page playback. Strict
-browser evidence still requires Chrome or Edge on the operator machine.
+generated long article, verifies capture, starts page playback from an
+extension popup CDP context, and observes playback state. Strict browser
+evidence still requires a compatible browser on the operator machine. Branded
+Chrome 137+ may ignore command-line unpacked extension loading; use Chrome for
+Testing or Chromium with `--browser-executable` when strict automated evidence
+is required.
 
 ## Cancellation Limits
 

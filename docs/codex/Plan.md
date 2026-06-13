@@ -364,5 +364,9 @@ The fifty-fifth release-hardening slice propagates `--node-executable` and
 `--require-js-syntax` through `scripts/release_check.py`, so full release gates
 can require extension JavaScript syntax parsing without manual environment
 setup.
+The fifty-sixth extension-flow hardening slice makes the Chrome/MV3 smoke
+discover the unpacked extension id from the temporary Chrome profile and execute
+from the extension popup CDP context, avoiding a false dependency on eager MV3
+service-worker startup before page playback is exercised.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

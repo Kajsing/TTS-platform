@@ -188,9 +188,12 @@ python3 scripts/check_chrome_extension_smoke.py
 The smoke uses Chrome or Edge through DevTools Protocol when a browser is
 available, loads this unpacked extension, starts an isolated local service,
 opens a generated long article, verifies page capture, starts page playback,
-and observes playback state. It skips truthfully when the local browser/MV3
-environment cannot run the smoke, including a short observed-target summary
-when the extension service worker is missing; add `--require-browser --headed`
-when strict local browser evidence is needed.
+and observes playback state from an extension popup CDP context. It skips
+truthfully when the local browser/MV3 environment cannot run the smoke,
+including profile-registration diagnostics when the unpacked extension is not
+available to Chrome; add `--require-browser --headed` when strict local browser
+evidence is needed. Branded Chrome 137+ may ignore command-line unpacked
+extension loading; pass Chrome for Testing or Chromium with
+`--browser-executable` for strict automated evidence.
 
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

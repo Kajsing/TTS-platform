@@ -4,38 +4,41 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-06-13
+- Date: 2026-06-14
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 are complete at the repository behavior and
   test-contract level. The active long-horizon implementation target is now the
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `tts setup-local` and `tts model-list` now expose
-  `sherpa_onnx` runtime status and add
-  `python -m pip install sherpa-onnx` to next-step guidance when real local
-  playback is relevant but the runtime package is missing.
+- Current loop result: `scripts/check_chrome_extension_smoke.py` now discovers
+  the unpacked extension id from the temporary Chrome profile, opens the
+  extension popup as the CDP execution context, and targets the generated
+  article tab by exact URL instead of depending on eager MV3 service-worker
+  startup. When installed branded Chrome does not register the unpacked
+  extension from `--load-extension`, the skip/strict failure now points at the
+  Chrome 137+ command-line limitation and `--browser-executable` with Chrome
+  for Testing or Chromium.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py scripts\check_model_management_flow.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py`.
-  - Targeted setup/model/package tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_setup.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
-    and reported 50 passed.
-  - `py -3 -m tts_service.cli setup-local` and
-    `py -3 -m tts_service.cli model-list` passed and reported
-    `python -m pip install sherpa-onnx` immediately after the default Lessac
-    install step in this environment.
-  - `py -3 scripts\check_model_management_flow.py` passed and now reports
-    runtime status in the `model_list` summary.
+    `py -3 -m ruff check scripts\check_chrome_extension_smoke.py apps\tts_service\tests\test_chrome_extension_smoke_check.py scripts\check_v1_readiness.py`.
+  - Targeted Chrome-smoke/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 12 passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
+  - `py -3 scripts\check_chrome_extension_smoke.py` returned a skip-aware JSON
+    result explaining that installed branded Chrome did not register the
+    unpacked extension from `--load-extension`, with Chrome for
+    Testing/Chromium guidance for strict automated evidence.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 178 tests.
-  - `py -3 scripts\release_check.py` passed, including security defaults,
-    v1 readiness, local service bootstrap, model-management flow, extension
-    checks, extension packaging, Windows bundle packaging/bootstrap, Windows
-    launcher smoke, and Windows bundle install smoke. The optional Chrome/MV3
-    browser smoke remained skip-aware in this environment because the extension
-    service worker target timed out.
+  - `py -3 -m pytest -q` passed with 191 tests.
+  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+    passed, including strict extension JavaScript syntax parsing, security
+    defaults, v1 readiness, local service bootstrap, model-management flow,
+    extension checks, extension packaging, Windows bundle
+    packaging/bootstrap/install, and Windows launcher smoke. The optional
+    Chrome/MV3 browser smoke remained skip-aware in this environment because
+    installed branded Chrome did not register the unpacked extension.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -252,9 +255,10 @@ This file is the live status log and shared memory for future Codex loops.
     `python -m pip install -e ".[real]"` when both `sherpa-onnx` and `numpy`
     are missing, while keeping targeted single-package guidance for partial
     installs.
-  - optional Chrome/MV3 smoke skips now include a compact observed browser
-    target summary when the extension service worker is missing, making local
-    browser-environment failures easier to triage.
+  - optional Chrome/MV3 smoke can now discover the unpacked extension id from
+    the temporary Chrome profile and execute from the extension popup CDP
+    context, avoiding a false dependency on eager MV3 service-worker startup
+    before page playback is exercised.
   - extension JavaScript syntax validation can now be made strict with
     `scripts/check_extension.py --require-js-syntax`, and Node.js can be
     supplied with `--node-executable` or `TTS_PLATFORM_NODE` when it is not on
@@ -648,10 +652,13 @@ python3 scripts/package_windows_bundle.py
 - The default Chrome/MV3 smoke is opportunistic so offline release gates remain
   usable across machines. Use
   `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
-  when strict local browser evidence is required.
-- In this Windows session, Chrome/Edge discovery succeeded, but the headless MV3
-  service worker target did not start; the smoke therefore returned a skipped
-  JSON result in default mode.
+  when strict local browser evidence is required. Branded Chrome 137+ may ignore
+  command-line unpacked extension loading; for strict automated evidence, pass
+  Chrome for Testing or Chromium with `--browser-executable`.
+- In this Windows session, Chrome discovery succeeded, but the installed branded
+  Chrome did not register the unpacked extension from `--load-extension`; the
+  smoke therefore returns a skipped JSON result in default mode with extension
+  registration diagnostics.
 - `python3 scripts/check_extension.py` still skips JavaScript syntax checks by
   default in this environment because `node` is not installed on `PATH`, but it
   now supports `--require-js-syntax`, `--node-executable`, and

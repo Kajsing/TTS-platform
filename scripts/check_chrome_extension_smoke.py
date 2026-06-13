@@ -26,6 +26,7 @@ EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 DEFAULT_MAX_CAPTURE_CHARS = 1600
+EXTENSION_POPUP_PATH = "src/popup.html"
 
 for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC):
     if str(path) not in sys.path:
@@ -122,19 +123,24 @@ def _run_browser_smoke(
     with tempfile.TemporaryDirectory(prefix="tts-platform-chrome-smoke-") as temp_dir:
         temp_root = Path(temp_dir)
         cdp_port = service_bootstrap._reserve_loopback_port()
+        profile_dir = temp_root / "chrome-profile"
         browser_process = _start_browser(
             browser_path=browser_path,
             cdp_port=cdp_port,
-            profile_dir=temp_root / "chrome-profile",
+            profile_dir=profile_dir,
             headed=headed,
         )
         try:
             _wait_for_cdp(cdp_port=cdp_port, timeout_s=startup_timeout_s)
-            extension_target = _wait_for_extension_target(
-                cdp_port=cdp_port,
-                timeout_s=startup_timeout_s,
-            )
-            extension_id = _extension_id_from_target(extension_target)
+            try:
+                extension_id = _wait_for_loaded_extension_id(
+                    profile_dir=profile_dir,
+                    timeout_s=startup_timeout_s,
+                )
+            except ChromeExtensionSmokeError as exc:
+                raise ChromeExtensionSmokeError(
+                    f"{exc} {_browser_extension_load_hint(browser_path)}"
+                ) from exc
             extension_origin = f"chrome-extension://{extension_id}"
 
             repo_root = temp_root / "repo"
@@ -183,9 +189,14 @@ def _run_browser_smoke(
                     page_url = f"{static_base_url}/{article_url}"
                     target_id = _create_page_target(cdp_port=cdp_port, url=page_url)
                     _wait_for_page_target(cdp_port=cdp_port, target_id=target_id)
+                    extension_target = _create_extension_page_target(
+                        cdp_port=cdp_port,
+                        extension_id=extension_id,
+                    )
                     smoke = _run_extension_smoke(
                         extension_target=extension_target,
                         base_url=base_url,
+                        page_url=page_url,
                         token=token_file.read_text(encoding="utf-8").strip(),
                         max_capture_chars=max_capture_chars,
                         command_timeout_s=command_timeout_s,
@@ -356,6 +367,80 @@ def _wait_for_extension_target(*, cdp_port: int, timeout_s: float) -> dict[str, 
     )
 
 
+def _wait_for_loaded_extension_id(*, profile_dir: Path, timeout_s: float) -> str:
+    deadline = time.perf_counter() + timeout_s
+    preferences_path = profile_dir / "Default" / "Preferences"
+    observed_ids: list[str] = []
+    while time.perf_counter() < deadline:
+        try:
+            extension_id = _extension_id_from_preferences(preferences_path)
+            if extension_id:
+                return extension_id
+            observed_ids = _extension_setting_ids(preferences_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
+        time.sleep(0.2)
+    observed_text = json.dumps(observed_ids[:10], sort_keys=True)
+    raise ChromeExtensionSmokeError(
+        "Timed out waiting for unpacked extension registration in Chrome profile. "
+        f"Observed extension setting ids: {observed_text}"
+    )
+
+
+def _extension_id_from_preferences(preferences_path: Path) -> str | None:
+    preferences = json.loads(preferences_path.read_text(encoding="utf-8"))
+    settings = preferences.get("extensions", {}).get("settings", {})
+    if not isinstance(settings, dict):
+        return None
+    for extension_id, setting in settings.items():
+        if not isinstance(setting, dict):
+            continue
+        path = setting.get("path")
+        if isinstance(extension_id, str) and isinstance(path, str) and _same_path(
+            path,
+            EXTENSION_ROOT,
+        ):
+            return extension_id
+    return None
+
+
+def _extension_setting_ids(preferences_path: Path) -> list[str]:
+    preferences = json.loads(preferences_path.read_text(encoding="utf-8"))
+    settings = preferences.get("extensions", {}).get("settings", {})
+    if not isinstance(settings, dict):
+        return []
+    return [str(extension_id) for extension_id in settings]
+
+
+def _same_path(left: str | Path, right: str | Path) -> bool:
+    try:
+        left_path = Path(left).expanduser().resolve()
+        right_path = Path(right).expanduser().resolve()
+    except OSError:
+        return False
+    return os.path.normcase(str(left_path)) == os.path.normcase(str(right_path))
+
+
+def _browser_extension_load_hint(browser_path: Path) -> str:
+    executable_name = browser_path.name.lower()
+    browser_text = str(browser_path).lower()
+    if (
+        executable_name in {"chrome.exe", "google chrome"}
+        and "chrome for testing" not in browser_text
+        and "chromium" not in browser_text
+    ):
+        return (
+            "Branded Chrome 137+ may ignore --load-extension for unpacked "
+            "extensions; pass a Chrome for Testing or Chromium executable with "
+            "--browser-executable for strict automated MV3 evidence."
+        )
+    return (
+        "Ensure this browser build supports command-line unpacked extension "
+        "loading, or pass a Chrome for Testing or Chromium executable with "
+        "--browser-executable."
+    )
+
+
 def _summarize_browser_targets(targets: list[object]) -> list[dict[str, str]]:
     summaries: list[dict[str, str]] = []
     for target in targets[:10]:
@@ -471,10 +556,19 @@ def _create_page_target(*, cdp_port: int, url: str) -> str:
     return target_id
 
 
+def _create_extension_page_target(*, cdp_port: int, extension_id: str) -> dict[str, object]:
+    target_id = _create_page_target(
+        cdp_port=cdp_port,
+        url=f"chrome-extension://{extension_id}/{EXTENSION_POPUP_PATH}",
+    )
+    return _wait_for_page_target(cdp_port=cdp_port, target_id=target_id)
+
+
 def _run_extension_smoke(
     *,
     extension_target: dict[str, object],
     base_url: str,
+    page_url: str,
     token: str,
     max_capture_chars: int,
     command_timeout_s: float,
@@ -487,6 +581,7 @@ def _run_extension_smoke(
             cdp,
             _start_expression(
                 base_url=base_url,
+                page_url=page_url,
                 token=token,
                 max_capture_chars=max_capture_chars,
             ),
@@ -515,7 +610,13 @@ def _run_extension_smoke(
     }
 
 
-def _start_expression(*, base_url: str, token: str, max_capture_chars: int) -> str:
+def _start_expression(
+    *,
+    base_url: str,
+    page_url: str,
+    token: str,
+    max_capture_chars: int,
+) -> str:
     return f"""
 (async () => {{
   await chrome.storage.local.set({{
@@ -527,8 +628,11 @@ def _start_expression(*, base_url: str, token: str, max_capture_chars: int) -> s
     highWatermarkMs: 100,
     maxChars: {max_capture_chars}
   }});
-  const tabs = await chrome.tabs.query({{active: true, currentWindow: true}});
-  const tab = tabs[0];
+  const tabs = await chrome.tabs.query({{}});
+  const tab = tabs.find((candidate) => candidate.url === {json.dumps(page_url)});
+  if (!tab || typeof tab.id !== "number") {{
+    throw new Error("Article tab not found for smoke URL: " + {json.dumps(page_url)});
+  }}
   const capture = await chrome.tabs.sendMessage(tab.id, {{
     type: "tts-extension:get-page-text",
     maxChars: {max_capture_chars}

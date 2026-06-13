@@ -34,13 +34,15 @@ for long web-page text.
   service WebSocket contract.
 - `python3 scripts/check_chrome_extension_smoke.py` validates the extension
   static contract, then uses Chrome or Edge through DevTools Protocol when a
-  browser is available. It loads the unpacked MV3 extension, starts an isolated
-  loopback service with the generated extension origin allow-listed, opens a
-  generated long article, verifies content-script page capture and background
-  health fetch, starts `Speak Page`, and observes playback state. Without
-  Chrome or Edge, or when the local browser/MV3 environment cannot run the
-  smoke, it reports a skipped smoke unless `--require-browser` is set; missing
-  extension service worker skips include a short observed-browser-targets
+  browser is available. It loads the unpacked MV3 extension, discovers the
+  registered extension id from the temporary Chrome profile, opens the
+  extension popup as the CDP execution context, starts an isolated loopback
+  service with the generated extension origin allow-listed, opens a generated
+  long article, verifies content-script page capture and background health
+  fetch, starts `Speak Page`, and observes playback state. Without Chrome or
+  Edge, or when the local browser/MV3 environment cannot run the smoke, it
+  reports a skipped smoke unless `--require-browser` is set;
+  extension-registration skips include a short observed profile-extension id
   diagnostic.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
@@ -158,12 +160,14 @@ for long web-page text.
 ## Known Not Yet Automated
 
 - strict Chrome/MV3 smoke requires Chrome or Edge to be installed and able to
-  load the unpacked MV3 extension. The default release gate can skip the
-  browser smoke when the local browser environment cannot run it;
-  run `python3 scripts/check_chrome_extension_smoke.py --require-browser` when
-  a real browser must be present. Missing service worker skips include observed
-  target diagnostics to separate unloaded unpacked extensions from generic CDP
-  startup failures.
+  load the unpacked MV3 extension from automation. The default release gate can
+  skip the browser smoke when the local browser environment cannot run it; run
+  `python3 scripts/check_chrome_extension_smoke.py --require-browser` when a
+  real browser must be present. Branded Chrome 137+ may ignore
+  `--load-extension`; for strict automated evidence, pass Chrome for Testing or
+  Chromium with `--browser-executable`. Missing extension-registration skips
+  include observed profile-extension ids to separate unloaded unpacked
+  extensions from generic CDP startup failures.
 - JavaScript syntax validation in `scripts/check_extension.py` runs when
   `node` is available on `PATH`, or when `--node-executable`/`TTS_PLATFORM_NODE`
   points at Node.js. Use `--require-js-syntax` when missing Node.js should fail
