@@ -87,3 +87,4 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add optional live smoke to release check
 - [x] Redact inline live-smoke tokens in release check summaries
 - [x] Close release-hardening gaps for docs, security defaults, and tests
+- [x] Add automated local first-run service bootstrap smoke

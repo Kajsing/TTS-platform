@@ -128,6 +128,8 @@ python3 scripts/release_check.py
 On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.
 The release gate also verifies `docs/v1_readiness.md`, which separates
 automated gates from manual live checks and unresolved product choices.
+It starts a temporary first-run service on a loopback port and runs the local
+public-contract smoke against that isolated config/token root.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -154,6 +156,12 @@ Check the built bundle's first-run bootstrap path with:
 
 ```bash
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
+```
+
+Check the source first-run service bootstrap path directly with:
+
+```bash
+python3 scripts/check_local_service_bootstrap.py
 ```
 
 CLI example:

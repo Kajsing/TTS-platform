@@ -31,6 +31,7 @@ INCLUDED_FILES = (
     "models/MANIFEST.json",
     "scripts/benchmark.py",
     "scripts/check_extension.py",
+    "scripts/check_local_service_bootstrap.py",
     "scripts/check_security_defaults.py",
     "scripts/check_v1_readiness.py",
     "scripts/check_windows_bundle_bootstrap.py",

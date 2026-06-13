@@ -195,9 +195,9 @@ python3 scripts/release_check.py
 ```
 
 It runs ruff, pytest, security-default verification, v1-readiness verification,
-extension validation, and extension zip packaging with a temporary package
-output. It also builds and bootstrap-checks the Windows local reader bundle
-with a temporary output path.
+local service bootstrap smoke, extension validation, and extension zip
+packaging with a temporary package output. It also builds and bootstrap-checks
+the Windows local reader bundle with a temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
 

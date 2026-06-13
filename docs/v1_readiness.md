@@ -7,13 +7,16 @@ for long web-page text.
 ## Automated Gates
 
 - `python3 scripts/release_check.py` runs ruff, pytest, security-default
-  verification, extension validation, extension packaging, and Windows bundle
-  packaging.
+  verification, local service bootstrap smoke, extension validation, extension
+  packaging, and Windows bundle packaging.
 - `python3 scripts/check_security_defaults.py` verifies fail-closed local
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
   boundaries, and JavaScript syntax when `node` is installed.
+- `python3 scripts/check_local_service_bootstrap.py` creates an isolated
+  first-run repo root, runs `setup-local`, starts the local service on loopback,
+  runs the public-contract smoke, and shuts the service down.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream
@@ -30,7 +33,7 @@ for long web-page text.
 
 - Create a virtualenv in an extracted Windows local reader bundle, install the
   package, and start the service with `scripts/windows/run_service.ps1` or
-  `tts serve`.
+  `tts serve` for manual Windows operator verification.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
 - Run live smoke against the started service with
@@ -60,6 +63,6 @@ for long web-page text.
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
-- Full extracted-bundle virtualenv installation and live service startup remain
-  manual; the automated bundle bootstrap gate covers safe extraction and
-  `setup-local`.
+- Full extracted-bundle virtualenv installation remains manual; the automated
+  gates cover safe extraction, `setup-local`, loopback service startup, and
+  stub-backed smoke from source paths.

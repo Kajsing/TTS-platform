@@ -142,6 +142,10 @@ def _run_release_checks_with_package_path(
             "v1_readiness",
             [python_executable, "scripts/check_v1_readiness.py"],
         ),
+        (
+            "local_service_bootstrap",
+            [python_executable, "scripts/check_local_service_bootstrap.py"],
+        ),
         ("extension", [python_executable, "scripts/check_extension.py"]),
         (
             "extension_package",

@@ -16,6 +16,7 @@ REQUIRED_FILES = (
     "scripts/release_check.py",
     "scripts/check_security_defaults.py",
     "scripts/check_extension.py",
+    "scripts/check_local_service_bootstrap.py",
     "scripts/check_windows_bundle_bootstrap.py",
     "scripts/package_extension.py",
     "scripts/package_windows_bundle.py",
@@ -40,6 +41,7 @@ READINESS_MARKERS = (
     "python3 scripts/release_check.py",
     "python3 scripts/check_security_defaults.py",
     "python3 scripts/check_extension.py",
+    "python3 scripts/check_local_service_bootstrap.py",
     "python3 scripts/package_windows_bundle.py",
     "python3 scripts/check_windows_bundle_bootstrap.py",
     "python3 scripts/release_check.py --live-smoke --token-file config/token.txt",
@@ -53,6 +55,7 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/release_check.py": (
         '"security_defaults"',
         '"v1_readiness"',
+        '"local_service_bootstrap"',
         '"extension"',
         '"extension_package"',
         '"windows_bundle"',
@@ -70,6 +73,7 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/package_windows_bundle.py": (
         "docs/v1_readiness.md",
         "scripts/check_v1_readiness.py",
+        "scripts/check_local_service_bootstrap.py",
         "scripts/check_windows_bundle_bootstrap.py",
     ),
     "TESTING.md": (
