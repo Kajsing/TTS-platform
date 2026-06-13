@@ -11,22 +11,21 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `tts catalog-list` and `tts model-install` now default
-  to `models/catalog.json` when `--catalog` is omitted, report friendly
-  missing-default-catalog guidance, and emit default-catalog next steps without
-  a redundant `--catalog <catalog>` argument.
+- Current loop result: `tts model-check` now reports default
+  `models/catalog.json` availability and uses catalog-aware next-step guidance,
+  omitting redundant `--catalog` advice when the default catalog exists.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py apps\tts_service\tests\test_model_management_flow_check.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py apps\tts_service\tests\test_model_management_flow_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
-    and reported 32 passed.
-  - `py -3 scripts\check_model_management_flow.py` passed after sandbox
-    escalation and reported `default_catalog.source` as `models/catalog.json`
-    with next step `tts model-install local-flow-voice --activate`.
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_model_management_flow_check.py -q`
+    and reported 30 passed.
+  - `py -3 scripts\check_model_management_flow.py` passed and reported
+    `model_check.default_catalog_exists` as true with next step
+    `tts model-install local-flow-voice --activate --overwrite`.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 166 tests.
+  - `py -3 -m pytest -q` passed with 167 tests.
   - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
     Windows bundle bootstrap/install, and model-management flow checks.
 - Tooling status:
@@ -161,6 +160,9 @@ This file is the live status log and shared memory for future Codex loops.
     another voice before service restart.
   - `tts model-check [model-id]` now reports read-only real-backend readiness
     diagnostics for the configured default voice or selected model id.
+  - `tts model-check [model-id]` now also reports default `models/catalog.json`
+    availability and uses it to omit redundant `--catalog` guidance when the
+    default catalog exists.
   - `scripts/check_model_management_flow.py` now verifies catalog-list,
     default `models/catalog.json` discovery, relative-artifact download/install
     from a generated loopback HTTP catalog, activate, model readiness output,

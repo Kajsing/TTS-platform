@@ -1449,12 +1449,14 @@ def _check_model_readiness(
         voice=manifest_status.get("voice"),
     )
     runtime_status = _inspect_runtime_for_model_check(config_status=config_status)
+    catalog_status = _inspect_catalog_for_model_check(repo_root=resolved_repo_root)
     next_steps = _model_check_next_steps(
         model_id=selected_model_id,
         config_status=config_status,
         manifest_status=manifest_status,
         backend_status=backend_status,
         runtime_status=runtime_status,
+        catalog_status=catalog_status,
     )
     ready = (
         bool(selected_model_id)
@@ -1475,6 +1477,7 @@ def _check_model_readiness(
         "manifest": _without_private_voice(manifest_status),
         "backend": backend_status,
         "runtime": runtime_status,
+        "catalog": catalog_status,
         "next_steps": next_steps,
     }
 
@@ -1721,6 +1724,15 @@ def _inspect_runtime_for_model_check(config_status: dict[str, object]) -> dict[s
     }
 
 
+def _inspect_catalog_for_model_check(repo_root: Path) -> dict[str, object]:
+    catalog_path = (repo_root / DEFAULT_MODEL_CATALOG_PATH).resolve()
+    return {
+        "default_path": DEFAULT_MODEL_CATALOG_PATH,
+        "path": str(catalog_path),
+        "exists": catalog_path.is_file(),
+    }
+
+
 def _model_check_next_steps(
     *,
     model_id: str,
@@ -1728,17 +1740,19 @@ def _model_check_next_steps(
     manifest_status: dict[str, object],
     backend_status: dict[str, object],
     runtime_status: dict[str, object],
+    catalog_status: dict[str, object],
 ) -> list[str]:
     steps: list[str] = []
     if config_status.get("exists") is not True:
         steps.append("tts setup-local")
+    catalog_argument = _model_check_catalog_argument(catalog_status)
     if not model_id or manifest_status.get("voice_found") is not True:
-        steps.append("tts model-install <model-id> --catalog <catalog> --activate")
+        steps.append(f"tts model-install <model-id>{catalog_argument} --activate")
         return steps
     if backend_status.get("configured") is not True:
-        steps.append(f"tts model-install {model_id} --catalog <catalog> --activate --overwrite")
+        steps.append(f"tts model-install {model_id}{catalog_argument} --activate --overwrite")
     elif backend_status.get("assets_ready") is not True:
-        steps.append(f"tts model-install {model_id} --catalog <catalog> --activate --overwrite")
+        steps.append(f"tts model-install {model_id}{catalog_argument} --activate --overwrite")
     if runtime_status.get("sherpa_onnx_installed") is not True:
         steps.append("python -m pip install sherpa-onnx")
     if runtime_status.get("real_mode_enabled") is not True:
@@ -1754,6 +1768,12 @@ def _model_check_next_steps(
             ]
         )
     return steps
+
+
+def _model_check_catalog_argument(catalog_status: dict[str, object]) -> str:
+    if catalog_status.get("exists") is True:
+        return ""
+    return " --catalog <path-or-url>"
 
 
 def _without_private_voice(manifest_status: dict[str, object]) -> dict[str, object]:

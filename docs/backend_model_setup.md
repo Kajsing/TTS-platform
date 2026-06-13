@@ -412,9 +412,11 @@ tts model-check
 `model-check` is read-only. It reports config validity, the selected/default
 voice, manifest presence, whether the voice has a sherpa-onnx backend config,
 which backend asset paths exist, whether `[backend].mode` is non-stub, whether
-`sherpa_onnx` can be imported, and concrete next steps. A development stub
-voice is expected to report `ready: false` because it has no real backend asset
-configuration.
+`sherpa_onnx` can be imported, whether the default `models/catalog.json`
+exists, and concrete next steps. When the default catalog exists, install
+guidance omits `--catalog`; otherwise it tells the operator to pass
+`--catalog <path-or-url>`. A development stub voice is expected to report
+`ready: false` because it has no real backend asset configuration.
 
 Remove an installed model:
 

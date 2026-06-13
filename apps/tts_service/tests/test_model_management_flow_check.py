@@ -44,6 +44,10 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
     assert summary["model_check"]["voice_found"] is True
     assert summary["model_check"]["backend_configured"] is False
     assert summary["model_check"]["assets_ready"] is False
+    assert summary["model_check"]["default_catalog_exists"] is True
+    assert summary["model_check"]["next_steps"][0] == (
+        "tts model-install local-flow-voice --activate --overwrite"
+    )
     assert summary["service"]["health"]["status"] == "ok"
     assert summary["service"]["voice"] == "local-flow-voice"
     assert summary["service"]["http_bytes"] > 0

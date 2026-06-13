@@ -985,8 +985,50 @@ def test_model_check_reports_default_stub_voice_is_not_real_ready(tmp_path: Path
     assert payload["selected_source"] == "config_default"
     assert payload["manifest"]["voice"]["has_backend_config"] is False
     assert payload["backend"]["configured"] is False
+    assert payload["catalog"]["exists"] is False
+    assert payload["catalog"]["default_path"] == cli.DEFAULT_MODEL_CATALOG_PATH
     assert payload["next_steps"][0] == (
-        "tts model-install sherpa-en-debug --catalog <catalog> --activate --overwrite"
+        "tts model-install sherpa-en-debug --catalog <path-or-url> --activate --overwrite"
+    )
+
+
+def test_model_check_prefers_default_catalog_next_step_when_catalog_exists(
+    tmp_path: Path,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "sherpa-en-debug",
+                        "name": "Sherpa English Debug",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / cli.DEFAULT_MODEL_CATALOG_PATH).write_text(
+        json.dumps({"version": 1, "models": []}),
+        encoding="utf-8",
+    )
+
+    payload = cli._check_model_readiness(
+        model_id=None,
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["catalog"]["exists"] is True
+    assert payload["next_steps"][0] == (
+        "tts model-install sherpa-en-debug --activate --overwrite"
     )
 
 
@@ -1050,7 +1092,7 @@ def test_model_check_reports_missing_real_voice_asset(
         str((voice_dir / "tokens.txt").resolve())
     ]
     assert payload["next_steps"][0] == (
-        "tts model-install voice-a --catalog <catalog> --activate --overwrite"
+        "tts model-install voice-a --catalog <path-or-url> --activate --overwrite"
     )
 
 

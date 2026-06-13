@@ -71,7 +71,8 @@ backend-realism work, and early v1 model-management helpers:
   with an explicit trusted-local override, default `models/catalog.json`
   discovery with friendly missing-file guidance,
   install-and-activate first-run shortcut, default-voice activation, read-only
-  real-backend readiness diagnostics, and model removal
+  real-backend readiness diagnostics with catalog-aware next steps, and model
+  removal
 - local first-run setup helper behavior for config creation, token
   initialization, and manifest/default-voice readiness reporting
 - local service run command wiring for configured host/port/log level, explicit

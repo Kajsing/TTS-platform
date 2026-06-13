@@ -290,5 +290,8 @@ The thirty-third model-management UX slice makes `--catalog` optional for
 `tts catalog-list` and `tts model-install`, defaulting both commands to
 `models/catalog.json`, adds friendly missing-default-catalog guidance, and
 extends the model-management smoke with default-catalog next-step evidence.
+The thirty-fourth model-management UX slice makes `tts model-check`
+default-catalog aware, reporting whether `models/catalog.json` exists and
+omitting redundant `--catalog` guidance when the default catalog is available.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
