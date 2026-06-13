@@ -87,11 +87,13 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/dist/chrome_extension/tts-platform-prototype.zip" in names
     assert ".\\scripts\\windows\\install_local.ps1" in readme
     assert "python -m tts_service.cli setup-local --repo-root ." in readme
+    assert 'python -m pip install -e ".[real]"' in readme
     assert ".\\.venv\\Scripts\\tts.exe model-check" in readme
     assert ".\\.venv\\Scripts\\tts.exe catalog-list" in readme
     assert ".\\.venv\\Scripts\\tts.exe model-list" in readme
     assert ".\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx" in readme
     assert ".\\.venv\\Scripts\\python.exe -m pip install numpy" in readme
+    assert '.\\.venv\\Scripts\\python.exe -m pip install -e ".[real]"' in readme
     assert "tts.exe model-install vits-piper-en_US-lessac-medium --activate" in readme
     assert "tts.exe model-check vits-piper-en_US-lessac-medium" in readme
     assert "scripts\\demo_real_voice.py" in readme

@@ -469,7 +469,7 @@ For a reproducible local real-voice demo without committing local model files,
 run:
 
 ```bash
-python3 -m pip install sherpa-onnx numpy
+python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 ```
 

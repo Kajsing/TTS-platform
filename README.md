@@ -95,6 +95,13 @@ tts setup-local
 python3 -m pytest -q
 ```
 
+For real local voice output in that environment, install the optional runtime
+extra:
+
+```bash
+python3 -m pip install -e ".[real]"
+```
+
 On Windows, use `py -3` if `python3` resolves to the Microsoft Store alias:
 
 ```powershell
@@ -103,6 +110,12 @@ py -3 -m venv .venv
 python -m pip install -e ".[dev]"
 tts setup-local
 python -m pytest -q
+```
+
+For real local voice output on Windows:
+
+```powershell
+python -m pip install -e ".[real]"
 ```
 
 Start the local service in a separate terminal:
@@ -269,6 +282,7 @@ into ignored `dist/real-demo`, starts a temporary loopback service, runs public
 contract smoke, writes a WAV, and stops the service:
 
 ```bash
+python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 ```
 

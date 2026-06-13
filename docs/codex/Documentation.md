@@ -236,6 +236,9 @@ This file is the live status log and shared memory for future Codex loops.
   - real-runtime readiness now checks `numpy` in addition to `sherpa_onnx`,
     because the real async job and streaming callback paths can require
     `numpy` even when short sync synthesis succeeds.
+  - `pyproject.toml` now exposes a `real` optional dependency extra containing
+    `sherpa-onnx` and `numpy`, so local real-voice demos can install runtime
+    dependencies with `python -m pip install -e ".[real]"`.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

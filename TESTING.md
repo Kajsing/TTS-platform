@@ -270,13 +270,15 @@ tts model-check
 Generate and verify a local real English voice demo WAV with:
 
 ```bash
-python3 -m pip install sherpa-onnx numpy
+python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 ```
 
 The demo script installs the default catalog model into ignored
 `dist/real-demo`, runs `smoke_service.py` with `--token-file`, writes
 `dist/real-demo/lessac-demo.wav`, and stops its temporary service process.
+The `real` extra installs `sherpa-onnx` plus `numpy` for the real async and
+stream callback paths.
 
 Check the Chrome extension onboarding contract directly with:
 

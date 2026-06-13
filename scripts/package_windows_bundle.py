@@ -188,6 +188,7 @@ manager, scheduled task, or auto-start entry.
    py -3 -m venv .venv
    .\\.venv\\Scripts\\Activate.ps1
    python -m pip install -e ".[dev]"
+   python -m pip install -e ".[real]"
    python -m tts_service.cli setup-local --repo-root .
    ```
 
@@ -197,6 +198,7 @@ manager, scheduled task, or auto-start entry.
    ```powershell
    .\\.venv\\Scripts\\tts.exe catalog-list
    .\\.venv\\Scripts\\tts.exe model-list
+   .\\.venv\\Scripts\\python.exe -m pip install -e ".[real]"
    .\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx
    .\\.venv\\Scripts\\python.exe -m pip install numpy
    .\\.venv\\Scripts\\tts.exe model-install vits-piper-en_US-lessac-medium --activate

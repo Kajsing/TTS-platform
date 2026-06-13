@@ -113,7 +113,9 @@ for long web-page text.
   .venv/Scripts/python.exe` to reproduce the real English voice demo in ignored
   `dist/real-demo`; it installs the default catalog model there, starts a
   temporary service, runs public-contract smoke with `--token-file`, writes a
-  WAV, and stops the service.
+  WAV, and stops the service. Install `.[real]` in the active environment first
+  with `python -m pip install -e ".[real]"` when the runtime packages are not
+  present.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

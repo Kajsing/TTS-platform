@@ -339,5 +339,8 @@ stops its temporary service.
 The forty-seventh runtime-readiness hardening slice makes `model-check`,
 `model-list`, and `setup-local` report `numpy` availability too, because the
 real async/stream callback path needs it even when short sync synthesis works.
+The forty-eighth install-flow slice adds a `real` optional dependency extra for
+`sherpa-onnx` and `numpy`, so real voice demos can use
+`python -m pip install -e ".[real]"` instead of loose runtime package commands.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
