@@ -66,6 +66,20 @@ The launchers set `PYTHONPATH` for the repo-local service/core packages, prefer
 `setup-local` if `config/config.toml` is missing, and then run `tts serve`.
 They are convenience launchers, not persistent Windows service installers.
 
+Build a Windows-friendly local reader bundle with:
+
+```powershell
+py -3 scripts\package_windows_bundle.py
+```
+
+The bundle is written to `dist\windows\tts-platform-local-reader.zip` by
+default. It includes the service source, core source, Windows launchers, config
+example, model manifest, setup docs, Chrome extension source, and a validated
+Chrome extension zip under `dist\chrome_extension\`. It deliberately excludes
+local secrets such as `config\token.txt` and installed model files under
+`models\voices\`. The generated `WINDOWS_BUNDLE_README.md` explains the
+extract, virtualenv, launcher, and extension-loading flow.
+
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice
 `sherpa-en-debug`.

@@ -162,6 +162,10 @@ config/token bootstrap and manifest readiness reporting. The first service-run
 slice now adds `tts serve` as the normal installed-CLI localhost run command.
 The first packaging slice now adds PowerShell/CMD Windows launchers that run
 setup fallback plus `tts serve` without choosing a permanent service manager.
+The second packaging slice now adds `scripts/package_windows_bundle.py` for a
+Windows-friendly local reader source bundle that includes launchers, docs,
+config example, service/core source, extension source, and a validated extension
+zip while excluding local token/model artifacts.
 The first extension onboarding slice now adds a popup setup checklist and
 validator coverage for its wiring. The first extension packaging slice now adds
 `scripts/package_extension.py` for validated local zip builds. The first

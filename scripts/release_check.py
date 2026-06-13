@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="release_check")
     parser.add_argument("--package-out", default=None)
+    parser.add_argument("--windows-bundle-out", default=None)
     parser.add_argument(
         "--live-smoke",
         action="store_true",
@@ -28,6 +29,9 @@ def main(argv: list[str] | None = None) -> None:
         summary = run_release_checks(
             python_executable=sys.executable,
             package_out_path=Path(args.package_out) if args.package_out else None,
+            windows_bundle_out_path=(
+                Path(args.windows_bundle_out) if args.windows_bundle_out else None
+            ),
             live_smoke=args.live_smoke,
             base_url=args.base_url,
             token=args.token,
@@ -44,16 +48,18 @@ def run_release_checks(
     *,
     python_executable: str,
     package_out_path: Path | None = None,
+    windows_bundle_out_path: Path | None = None,
     live_smoke: bool = False,
     base_url: str = "http://127.0.0.1:7777",
     token: str | None = None,
     token_file: str | None = None,
     voice: str | None = None,
 ) -> dict[str, object]:
-    if package_out_path is not None:
+    if package_out_path is not None and windows_bundle_out_path is not None:
         return _run_release_checks_with_package_path(
             python_executable=python_executable,
             package_out_path=package_out_path.expanduser().resolve(),
+            windows_bundle_out_path=windows_bundle_out_path.expanduser().resolve(),
             live_smoke=live_smoke,
             base_url=base_url,
             token=token,
@@ -62,9 +68,20 @@ def run_release_checks(
         )
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-release-") as temp_dir:
+        resolved_package_out_path = (
+            package_out_path.expanduser().resolve()
+            if package_out_path is not None
+            else Path(temp_dir) / "tts-platform-prototype.zip"
+        )
+        resolved_windows_bundle_out_path = (
+            windows_bundle_out_path.expanduser().resolve()
+            if windows_bundle_out_path is not None
+            else Path(temp_dir) / "tts-platform-local-reader.zip"
+        )
         return _run_release_checks_with_package_path(
             python_executable=python_executable,
-            package_out_path=Path(temp_dir) / "tts-platform-prototype.zip",
+            package_out_path=resolved_package_out_path,
+            windows_bundle_out_path=resolved_windows_bundle_out_path,
             live_smoke=live_smoke,
             base_url=base_url,
             token=token,
@@ -77,6 +94,7 @@ def _run_release_checks_with_package_path(
     *,
     python_executable: str,
     package_out_path: Path,
+    windows_bundle_out_path: Path,
     live_smoke: bool,
     base_url: str,
     token: str | None,
@@ -94,6 +112,15 @@ def _run_release_checks_with_package_path(
                 "scripts/package_extension.py",
                 "--out",
                 str(package_out_path),
+            ],
+        ),
+        (
+            "windows_bundle",
+            [
+                python_executable,
+                "scripts/package_windows_bundle.py",
+                "--out",
+                str(windows_bundle_out_path),
             ],
         ),
     ]
@@ -119,6 +146,7 @@ def _run_release_checks_with_package_path(
     return {
         "checks": completed,
         "package_path": str(package_out_path),
+        "windows_bundle_path": str(windows_bundle_out_path),
     }
 
 

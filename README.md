@@ -143,6 +143,17 @@ loopback hosts by default, and uses the configured host, port, and log level.
 The Windows launchers in `scripts/windows/` are a convenience packaging step for
 local runs; they do not install a persistent Windows service.
 
+To build a Windows-friendly local reader bundle with the service source,
+launchers, config example, docs, and a validated Chrome extension zip:
+
+```bash
+python3 scripts/package_windows_bundle.py
+```
+
+The bundle is written to `dist/windows/tts-platform-local-reader.zip` by
+default. It is a local source handoff package, not a persistent service-manager
+installer.
+
 The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
 commands are local model-management helpers and do not require service auth
 tokens. `catalog-list` reports catalog counts, install readiness, checksum
@@ -178,7 +189,8 @@ python3 scripts/release_check.py
 ```
 
 It runs ruff, pytest, extension validation, and extension zip packaging with a
-temporary package output.
+temporary package output. It also builds the Windows local reader bundle with a
+temporary output path.
 
 With the service already running, add the live public-contract smoke:
 

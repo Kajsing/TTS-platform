@@ -14,10 +14,12 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
 
     monkeypatch.setattr(release_module.subprocess, "run", fake_run)
     package_out_path = tmp_path / "extension.zip"
+    windows_bundle_out_path = tmp_path / "windows.zip"
 
     summary = release_module.run_release_checks(
         python_executable="python-test",
         package_out_path=package_out_path,
+        windows_bundle_out_path=windows_bundle_out_path,
     )
 
     assert [check["name"] for check in summary["checks"]] == [
@@ -25,8 +27,10 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "pytest",
         "extension",
         "extension_package",
+        "windows_bundle",
     ]
     assert summary["package_path"] == str(package_out_path.resolve())
+    assert summary["windows_bundle_path"] == str(windows_bundle_out_path.resolve())
     assert calls == [
         (["python-test", "-m", "ruff", "check", "."], REPO_ROOT, True),
         (["python-test", "-m", "pytest", "-q"], REPO_ROOT, True),
@@ -37,6 +41,16 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
                 "scripts/package_extension.py",
                 "--out",
                 str(package_out_path.resolve()),
+            ],
+            REPO_ROOT,
+            True,
+        ),
+        (
+            [
+                "python-test",
+                "scripts/package_windows_bundle.py",
+                "--out",
+                str(windows_bundle_out_path.resolve()),
             ],
             REPO_ROOT,
             True,
@@ -61,6 +75,7 @@ def test_release_check_can_include_optional_live_smoke(
     summary = release_module.run_release_checks(
         python_executable="python-test",
         package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=tmp_path / "windows.zip",
         live_smoke=True,
         base_url="http://localhost:8888/",
         token_file="config/token.txt",
@@ -95,6 +110,7 @@ def test_release_check_redacts_inline_live_smoke_token(
     summary = release_module.run_release_checks(
         python_executable="python-test",
         package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=tmp_path / "windows.zip",
         live_smoke=True,
         token="secret-token",
     )

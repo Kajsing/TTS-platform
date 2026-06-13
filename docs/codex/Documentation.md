@@ -11,16 +11,18 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The fifth release-hardening slice keeps HTTP request logs
-  low-sensitivity by replacing unsafe client-provided `X-Request-ID` values and
-  adding regression coverage that query strings, auth tokens, and raw request
-  text do not appear in request log payloads.
+- Current loop result: The Windows-friendly packaging slice adds
+  `scripts/package_windows_bundle.py`, a whitelist-based local reader source
+  bundle that includes service/core source, Windows launchers, config example,
+  docs, Chrome extension source, and a validated extension zip while excluding
+  local token and installed model artifacts.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 117 tests.
   - `py -3 scripts/check_extension.py` passed, including extension wiring checks,
     with JavaScript syntax checks skipped because `node` is not installed.
   - `py -3 scripts/package_extension.py --out "$env:TEMP\tts-platform-prototype-test.zip"` passed.
+  - `py -3 scripts/package_windows_bundle.py --out "$env:TEMP\tts-platform-local-reader-test.zip"` passed.
   - `py -3 scripts/release_check.py` passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -115,6 +117,11 @@ This file is the live status log and shared memory for future Codex loops.
     loopback hosts.
   - `scripts/windows/run_service.ps1` and `run_service.cmd` provide
     Windows-friendly local launchers for setup fallback plus service start.
+  - `scripts/package_windows_bundle.py` builds a Windows-friendly local reader
+    bundle with service/core source, Windows launchers, config example, docs,
+    Chrome extension source, and a validated extension zip.
+  - The Windows bundle intentionally excludes `config/token.txt` and installed
+    model files under `models/voices/`.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, origin snippet readiness, voice discovery, and health status.
@@ -134,6 +141,8 @@ This file is the live status log and shared memory for future Codex loops.
     `--token-file`, and optional `--voice`.
   - `scripts/release_check.py` redacts inline `--token` values in its JSON
     summary so release logs do not echo bearer tokens.
+  - `scripts/release_check.py` now validates the Windows local reader bundle in
+    addition to ruff, pytest, extension validation, and extension zip packaging.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -198,6 +207,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Windows launcher scripts are acceptable packaging progress without choosing a
   persistent service mechanism. Do not silently choose NSSM, Task Scheduler,
   pywin32, or startup-folder auto-run without an explicit product decision.
+- The Windows local reader bundle is a source handoff package, not a persistent
+  service-manager installer. It moves installability forward while preserving
+  the explicit later choice around NSSM, Task Scheduler, pywin32, or auto-start.
 - Extension onboarding should expose readiness state in the popup, while
   browser-specific behavior remains inside `apps/chrome_extension/`.
 - Extension zip packaging is local handoff/installability only; Chrome Web Store
@@ -234,6 +246,7 @@ python3 -m pytest -q
 python3 -m ruff check .
 python3 scripts/release_check.py
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
+python3 scripts/package_windows_bundle.py
 ```
 
 First-run setup:
@@ -273,6 +286,7 @@ Extension structural smoke:
 ```bash
 python3 scripts/check_extension.py
 python3 scripts/package_extension.py
+python3 scripts/package_windows_bundle.py
 ```
 
 ## Known Issues And Follow-Ups
@@ -296,6 +310,10 @@ python3 scripts/package_extension.py
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, and a basic popup resume action. It still lacks section navigation
   semantics.
+- The Windows bundle still requires manual virtualenv setup, Chrome extension
+  loading, and service allow-list configuration after extraction.
+- Persistent Windows auto-start/service-manager installation remains an explicit
+  later product choice.
 - The browser prototype still depends on manual Chrome loading and manual allow-list setup.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.

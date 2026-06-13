@@ -54,8 +54,11 @@ backend-realism work, and early v1 model-management helpers:
   extension validator
 - Chrome extension zip packaging with manifest at the archive root and
   POSIX-style relative asset paths
+- Windows local reader bundle packaging that includes the service source,
+  Windows launchers, docs, config example, model manifest, extension source,
+  and a validated extension zip while excluding local token/model artifacts
 - repo-native release check orchestration for ruff, pytest, extension
-  validation, and extension package build
+  validation, extension package build, and Windows bundle build
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
@@ -101,6 +104,15 @@ If the service is already running, include the public-contract smoke path:
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 ```
 
+Build the Windows local reader bundle directly with:
+
+```bash
+python3 scripts/package_windows_bundle.py
+```
+
+On Windows, use `py -3 scripts/package_windows_bundle.py` when `python3` is
+unavailable.
+
 CLI example:
 
 ```bash
@@ -123,6 +135,7 @@ For a lightweight extension syntax check when `node` is available:
 ```bash
 python3 scripts/check_extension.py
 python3 scripts/package_extension.py
+python3 scripts/package_windows_bundle.py
 node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js
