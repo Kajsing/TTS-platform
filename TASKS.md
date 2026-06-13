@@ -72,7 +72,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add reader progress/resume semantics for long page playback
 - [x] Add richer extension UX for resuming from saved reader progress
 - [x] Add `model-install --activate` first-run shortcut and install guidance output
-- [ ] Improve catalog listing and install progress output
+- [x] Improve catalog listing and install progress output
 - [ ] Add Windows-friendly service setup flow
 - [ ] Improve Chrome extension onboarding and installability
 - [ ] Close release-hardening gaps for docs, security defaults, and tests

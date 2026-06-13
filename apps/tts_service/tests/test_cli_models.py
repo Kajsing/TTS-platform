@@ -88,6 +88,13 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
     assert voices[0]["backend"]["tokens"] == "models/voices/voice-a/tokens.txt"
     assert result["checksum_verified"] is True
     assert result["files_installed"] == 2
+    assert [step["step"] for step in result["install_steps"]] == [
+        "resolve_catalog_model",
+        "load_artifact",
+        "verify_checksum",
+        "extract_artifact",
+        "update_manifest",
+    ]
     assert result["next_steps"][0] == "tts model-activate voice-a"
 
 
@@ -145,16 +152,20 @@ def test_model_install_command_can_activate_model(
         ]
     )
 
-    payload = json.loads(capsys.readouterr().out)
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
     assert payload["installed_model"] == "voice-a"
     assert payload["activated_model"] == "voice-a"
     assert payload["checksum_verified"] is True
     assert payload["files_installed"] == 2
+    assert payload["install_steps"][-1]["step"] == "activate_model"
     assert payload["next_steps"] == [
         "restart the local service if it is already running",
         "tts list-voices",
     ]
     assert load_config(config_path, env={}).tts.default_voice == "voice-a"
+    assert "[model-install] resolve catalog model: completed" in captured.err
+    assert "[model-install] activate model: completed" in captured.err
 
 
 def test_model_install_warns_when_catalog_has_no_checksum(tmp_path: Path) -> None:
@@ -186,6 +197,11 @@ def test_model_install_warns_when_catalog_has_no_checksum(tmp_path: Path) -> Non
 
     assert result["checksum_verified"] is False
     assert result["warning"] == "Catalog entry has no artifact_sha256; use only trusted artifacts."
+    assert result["install_steps"][2] == {
+        "step": "verify_checksum",
+        "status": "skipped",
+        "reason": "catalog entry has no artifact_sha256",
+    }
 
 
 def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path) -> None:
@@ -306,8 +322,18 @@ def test_catalog_list_command_prints_models(
             {
                 "version": 1,
                 "models": [
-                    {"id": "voice-a", "name": "Voice A"},
-                    {"id": "voice-b", "name": "Voice B"},
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "artifact_url": "voice-a.zip",
+                        "artifact_sha256": "a" * 64,
+                    },
+                    {
+                        "id": "voice-b",
+                        "name": "Voice B",
+                        "artifact_url": "voice-b.zip",
+                        "artifact_sha256": "b" * 64,
+                    },
                 ],
             }
         ),
@@ -317,7 +343,69 @@ def test_catalog_list_command_prints_models(
     cli.main(["catalog-list", "--catalog", str(catalog_path)])
 
     payload = json.loads(capsys.readouterr().out)
+    assert payload["catalog"] == {
+        "source": str(catalog_path),
+        "version": 1,
+        "model_count": 2,
+        "installable_count": 2,
+        "checksum_count": 2,
+    }
     assert [model["id"] for model in payload["models"]] == ["voice-a", "voice-b"]
+    assert [summary["id"] for summary in payload["model_summaries"]] == [
+        "voice-a",
+        "voice-b",
+    ]
+    assert payload["model_summaries"][0]["checksum"] == "sha256"
+    assert payload["warnings"] == []
+    assert payload["next_steps"] == [
+        "review model_summaries for installable models and checksum coverage",
+        "tts model-install <model-id> --catalog <catalog> --activate",
+    ]
+
+
+def test_catalog_list_reports_install_readiness_warnings(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "artifact_url": "voice-a.zip",
+                    },
+                    {"id": "voice-b", "name": "Voice B"},
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A Duplicate",
+                        "artifact_url": "voice-a-duplicate.zip",
+                        "artifact_sha256": "a" * 64,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli.main(["catalog-list", "--catalog", str(catalog_path)])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["catalog"]["model_count"] == 3
+    assert payload["catalog"]["installable_count"] == 2
+    assert payload["catalog"]["checksum_count"] == 1
+    assert payload["model_summaries"][0]["installable"] is True
+    assert payload["model_summaries"][0]["checksum"] == "missing"
+    assert payload["model_summaries"][1]["installable"] is False
+    assert payload["warnings"] == [
+        "Model 'voice-a' is missing artifact_sha256; installs cannot verify integrity.",
+        "Model 'voice-b' is missing artifact_url and cannot be installed.",
+        "Model 'voice-b' is missing artifact_sha256; installs cannot verify integrity.",
+        "Duplicate model id 'voice-a' at index 2; install uses the first match.",
+    ]
 
 
 def test_model_install_rejects_zip_traversal_paths(tmp_path: Path) -> None:

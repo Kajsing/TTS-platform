@@ -198,8 +198,9 @@ Example real VITS voice entry:
 
 ## Catalog Format
 
-`tts model-install` reads a catalog JSON file or URL. The catalog root must be an
-object with a `models` list. Each model entry must include at least:
+`tts catalog-list` and `tts model-install` read a catalog JSON file or URL. The
+catalog root must be an object with a `models` list. Each model entry must
+include at least:
 
 - `id`
 - `artifact_url`
@@ -220,6 +221,13 @@ Recommended model fields:
 `artifact_url` may be `http`, `https`, an absolute local path, or a path relative
 to the catalog file. `artifact_sha256` is optional but strongly recommended.
 
+`tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
+
+- `catalog` counts for total, installable, and checksum-covered entries
+- `model_summaries` for quick operator scanning
+- `warnings` for duplicate model ids, missing artifacts, and missing checksums
+- `next_steps` with the suggested install command shape
+
 Install behavior:
 
 - verifies `artifact_sha256` when present
@@ -229,6 +237,8 @@ Install behavior:
 - writes or updates the manifest entry
 - reports installed file count, checksum verification status, and suggested
   next steps
+- prints progress status lines to stderr while preserving structured JSON on
+  stdout
 
 Unsafe zip entries include absolute paths, Windows drive-qualified paths, and
 path traversal using either `/` or `\`.
@@ -274,7 +284,9 @@ tts model-remove sherpa-en-v1
 These model-management commands edit local files and do not call protected
 service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
 `model-install --activate` also updates `config/config.toml` `[tts].default_voice`
-and reports the config path in its JSON output.
+and reports the config path in its JSON output. `model-install` JSON also
+includes `install_steps`, so scripts can inspect which local steps completed
+without parsing stderr progress lines.
 
 ## Long-Text Implications
 

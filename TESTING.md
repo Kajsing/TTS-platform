@@ -36,9 +36,10 @@ backend-realism work, and early v1 model-management helpers:
 - callback-driven fake `sherpa_onnx` runtime coverage for incremental streaming
   and real-runtime cancellation callback behavior
 - chunk-plan generation and synthesis routing
-- model catalog listing, local artifact install, manifest update, safe zip
-  extraction, overwrite refusal, install-and-activate first-run shortcut,
-  default-voice activation, and model removal
+- model catalog listing summaries and warnings, local artifact install, manifest
+  update, safe zip extraction, install progress metadata, overwrite refusal,
+  install-and-activate first-run shortcut, default-voice activation, and model
+  removal
 
 The Chrome extension prototype currently relies on manual verification in Chrome because there is not yet an automated MV3 test harness in the repository.
 

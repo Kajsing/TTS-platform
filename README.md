@@ -113,9 +113,12 @@ Protected commands require `--token` or `TTS_PLATFORM_TOKEN`.
 
 The `catalog-list`, `model-install`, `model-activate`, and `model-remove`
 commands are local model-management helpers and do not require service auth
-tokens. `model-install` downloads or reads a catalog artifact, verifies
+tokens. `catalog-list` reports catalog counts, install readiness, checksum
+coverage, warnings, and next-step guidance while preserving the raw model
+entries in JSON. `model-install` downloads or reads a catalog artifact, verifies
 `artifact_sha256` when present, extracts the zip safely under
-`models/voices/<model-id>`, and updates `models/MANIFEST.json`.
+`models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
+status to stderr, and keeps its structured result on stdout.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 Use `model-install --activate` for the first-run path when the installed model

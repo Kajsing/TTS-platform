@@ -9,8 +9,10 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlparse
 
@@ -118,8 +120,12 @@ def main(argv: list[str] | None = None) -> None:
 
         if args.command == "catalog-list":
             catalog, _ = _load_model_catalog(args.catalog)
-            models = _catalog_models(catalog)
-            _print_json({"models": models})
+            _print_json(
+                _build_catalog_list_payload(
+                    catalog_payload=catalog,
+                    catalog_source=args.catalog,
+                )
+            )
             return
 
         if args.command == "model-install":
@@ -131,6 +137,7 @@ def main(argv: list[str] | None = None) -> None:
                 overwrite=args.overwrite,
                 activate=args.activate,
                 config_path=Path(args.config_path),
+                progress=_emit_model_install_progress,
             )
             _print_json(installed)
             return
@@ -366,6 +373,10 @@ def _print_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _emit_model_install_progress(message: str) -> None:
+    print(f"[model-install] {message}", file=sys.stderr)
+
+
 def _handle_http_error(exc: httpx.HTTPStatusError) -> None:
     try:
         payload = exc.response.json()
@@ -417,6 +428,91 @@ def _catalog_models(catalog_payload: dict[str, object]) -> list[dict[str, object
     return models
 
 
+def _build_catalog_list_payload(
+    *,
+    catalog_payload: dict[str, object],
+    catalog_source: str,
+) -> dict[str, object]:
+    models = _catalog_models(catalog_payload)
+    warnings = _catalog_warnings(models)
+    installable_count = sum(
+        1 for model in models if str(model.get("artifact_url", "")).strip()
+    )
+    checksum_count = sum(
+        1 for model in models if str(model.get("artifact_sha256", "")).strip()
+    )
+    return {
+        "catalog": {
+            "source": catalog_source,
+            "version": catalog_payload.get("version", "unknown"),
+            "model_count": len(models),
+            "installable_count": installable_count,
+            "checksum_count": checksum_count,
+        },
+        "models": models,
+        "model_summaries": [_catalog_model_summary(model) for model in models],
+        "warnings": warnings,
+        "next_steps": _catalog_next_steps(models=models),
+    }
+
+
+def _catalog_model_summary(model: dict[str, object]) -> dict[str, object]:
+    model_id = str(model.get("id", "")).strip()
+    artifact_url = str(model.get("artifact_url", "")).strip()
+    checksum = str(model.get("artifact_sha256", "")).strip()
+    return {
+        "id": model_id,
+        "name": str(model.get("name", model_id)),
+        "language": str(model.get("language", "unknown")),
+        "engine": str(model.get("engine", "sherpa_onnx")),
+        "sample_rate_hz": model.get("sample_rate_hz", 24000),
+        "license": str(model.get("license", "unknown")),
+        "quality_tier": str(model.get("quality_tier", "unknown")),
+        "latency_tier": str(model.get("latency_tier", "unknown")),
+        "installable": bool(artifact_url),
+        "checksum": "sha256" if checksum else "missing",
+    }
+
+
+def _catalog_warnings(models: list[dict[str, object]]) -> list[str]:
+    warnings: list[str] = []
+    seen_ids: set[str] = set()
+    for index, model in enumerate(models):
+        model_id = str(model.get("id", "")).strip()
+        if model_id in seen_ids:
+            warnings.append(
+                f"Duplicate model id '{model_id}' at index {index}; install uses the first match."
+            )
+        seen_ids.add(model_id)
+        if not str(model.get("artifact_url", "")).strip():
+            warnings.append(
+                f"Model '{model_id}' is missing artifact_url and cannot be installed."
+            )
+        if not str(model.get("artifact_sha256", "")).strip():
+            warnings.append(
+                f"Model '{model_id}' is missing artifact_sha256; installs cannot verify integrity."
+            )
+    return warnings
+
+
+def _catalog_next_steps(*, models: list[dict[str, object]]) -> list[str]:
+    if not models:
+        return []
+    installable_models = [
+        str(model.get("id", "")).strip()
+        for model in models
+        if str(model.get("artifact_url", "")).strip()
+    ]
+    if len(installable_models) == 1:
+        model_ref = installable_models[0]
+    else:
+        model_ref = "<model-id>"
+    return [
+        "review model_summaries for installable models and checksum coverage",
+        f"tts model-install {model_ref} --catalog <catalog> --activate",
+    ]
+
+
 def _install_model_from_catalog(
     *,
     catalog_source: str,
@@ -426,17 +522,33 @@ def _install_model_from_catalog(
     overwrite: bool,
     activate: bool = False,
     config_path: Path | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> dict[str, object]:
     catalog_payload, catalog_path = _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
     model = next((candidate for candidate in models if candidate.get("id") == model_id), None)
     if model is None:
         raise SystemExit(f"Model '{model_id}' was not found in catalog.")
+    install_steps: list[dict[str, object]] = []
+    _record_install_step(
+        install_steps,
+        step="resolve_catalog_model",
+        status="completed",
+        progress=progress,
+        detail=model_id,
+    )
 
     artifact_url = str(model.get("artifact_url", "")).strip()
     if not artifact_url:
         raise SystemExit(f"Catalog model '{model_id}' is missing artifact_url.")
     artifact_bytes = _read_artifact_bytes(artifact_url=artifact_url, catalog_path=catalog_path)
+    _record_install_step(
+        install_steps,
+        step="load_artifact",
+        status="completed",
+        progress=progress,
+        bytes=len(artifact_bytes),
+    )
 
     expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
     checksum_verified = False
@@ -447,6 +559,21 @@ def _install_model_from_catalog(
                 f"Checksum mismatch for '{model_id}'. expected={expected_sha} actual={actual_sha}"
             )
         checksum_verified = True
+        _record_install_step(
+            install_steps,
+            step="verify_checksum",
+            status="completed",
+            progress=progress,
+            algorithm="sha256",
+        )
+    else:
+        _record_install_step(
+            install_steps,
+            step="verify_checksum",
+            status="skipped",
+            progress=progress,
+            reason="catalog entry has no artifact_sha256",
+        )
 
     install_dir = models_root / model_id
     if install_dir.exists():
@@ -474,8 +601,22 @@ def _install_model_from_catalog(
         for path in install_dir.rglob("*")
         if path.is_file()
     )
+    _record_install_step(
+        install_steps,
+        step="extract_artifact",
+        status="completed",
+        progress=progress,
+        files_installed=len(installed_files),
+    )
     manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
     _upsert_manifest_entry(manifest_path=manifest_path, entry=manifest_entry)
+    _record_install_step(
+        install_steps,
+        step="update_manifest",
+        status="completed",
+        progress=progress,
+        path=str(manifest_path),
+    )
 
     result: dict[str, object] = {
         "installed_model": model_id,
@@ -483,6 +624,7 @@ def _install_model_from_catalog(
         "manifest_path": str(manifest_path),
         "files_installed": len(installed_files),
         "checksum_verified": checksum_verified,
+        "install_steps": install_steps,
         "next_steps": [
             f"tts model-activate {model_id}",
             "restart the local service if it is already running",
@@ -505,8 +647,42 @@ def _install_model_from_catalog(
             "restart the local service if it is already running",
             "tts list-voices",
         ]
+        _record_install_step(
+            install_steps,
+            step="activate_model",
+            status="completed",
+            progress=progress,
+            path=str(resolved_config_path),
+        )
 
     return result
+
+
+def _record_install_step(
+    steps: list[dict[str, object]],
+    *,
+    step: str,
+    status: str,
+    progress: Callable[[str], None] | None,
+    **fields: object,
+) -> None:
+    record: dict[str, object] = {"step": step, "status": status}
+    record.update(fields)
+    steps.append(record)
+    if progress is not None:
+        progress(_format_install_progress(record))
+
+
+def _format_install_progress(step: dict[str, object]) -> str:
+    label = str(step["step"]).replace("_", " ")
+    status = str(step["status"])
+    details: list[str] = []
+    for key in ("detail", "bytes", "files_installed", "algorithm", "path", "reason"):
+        if key in step:
+            details.append(f"{key}={step[key]}")
+    if details:
+        return f"{label}: {status} ({', '.join(details)})"
+    return f"{label}: {status}"
 
 
 def _read_artifact_bytes(*, artifact_url: str, catalog_path: Path | None) -> bytes:

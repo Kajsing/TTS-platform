@@ -155,6 +155,6 @@ The first long-document slices are now:
 - popup-side `Resume Page` action that re-extracts active-tab text and resumes
   from the latest reader progress.
 
-The first model-management UX slice is now `model-install --activate` with
-install metadata and first-run next steps. Continue with catalog-list clarity
-and install progress output unless a reader-flow bug appears.
+The first model-management UX slices now cover `model-install --activate`,
+catalog-list summary/warning output, and install progress metadata/status lines.
+Continue with Windows-friendly service setup unless a reader-flow bug appears.
