@@ -159,6 +159,8 @@ REQUIRED_TEXT_MARKERS = {
         "--allow-missing-checksum",
         "Catalog model",
         "missing artifact_sha256",
+        "installable_model_ids",
+        "_model_check_catalog_model_ref",
         "extension-allow-origin",
         "_allow_extension_origin",
     ),

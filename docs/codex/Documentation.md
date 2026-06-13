@@ -11,32 +11,23 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: the default `models/catalog.json` now includes the
-  English `vits-piper-en_US-lessac-medium` sherpa-onnx voice with a pinned
-  SHA-256 checksum, `tts model-install` supports official sherpa-onnx tar
-  archives with safe extraction checks, and the Windows local reader bundle now
-  includes the default catalog.
+- Current loop result: `tts model-check` now inspects installable ids from the
+  default catalog and suggests the concrete default English model,
+  `vits-piper-en_US-lessac-medium`, when the configured development stub is not
+  real-backend ready.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py`.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_v1_readiness.py`.
   - Targeted model CLI tests passed with
     `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
-    reported 32 passed.
-  - Targeted bundle regression tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
-    and reported 3 passed.
-  - `py -3 -m tts_service.cli catalog-list` passed and reported one
-    installable/checksummed default catalog entry:
-    `vits-piper-en_US-lessac-medium`.
-  - A live `py -3 -m tts_service.cli model-install
-    vits-piper-en_US-lessac-medium --activate --overwrite` smoke passed,
-    verified the pinned checksum, extracted 359 files, updated local
-    config/manifest, and was then cleaned up with `model-remove` so the
-    committed manifest remains baseline-only.
+    reported 34 passed.
+  - `py -3 -m tts_service.cli model-check` passed and reported
+    `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
+    next step for the current debug default voice.
   - `py -3 scripts\check_model_management_flow.py` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 170 tests.
+  - `py -3 -m pytest -q` passed with 172 tests.
   - `py -3 scripts\release_check.py` passed, including security defaults,
     v1 readiness, local service bootstrap, model-management flow, extension
     checks, extension packaging, Windows bundle packaging/bootstrap, Windows
@@ -185,6 +176,10 @@ This file is the live status log and shared memory for future Codex loops.
   - `tts model-check [model-id]` now also reports default `models/catalog.json`
     availability and uses it to omit redundant `--catalog` guidance when the
     default catalog exists.
+  - `tts model-check` now inspects installable model ids in the default catalog
+    and, when the configured/default voice is still the non-real development
+    stub, suggests the concrete catalog model such as
+    `tts model-install vits-piper-en_US-lessac-medium --activate`.
   - `scripts/check_model_management_flow.py` now verifies catalog-list,
     default `models/catalog.json` discovery, relative-artifact download/install
     from a generated loopback HTTP catalog, activate, model readiness output,
@@ -423,6 +418,11 @@ This file is the live status log and shared memory for future Codex loops.
   installed voice into `models/MANIFEST.json` without the corresponding ignored
   `models/voices/` assets. The committed catalog is the durable source; local
   installs may update the manifest as local machine state.
+- `model-check` should prefer concrete installable catalog guidance over
+  reinstalling the configured development stub when the stub is not real-ready.
+  With one default catalog entry, the operator should see
+  `tts model-install vits-piper-en_US-lessac-medium --activate` as the first
+  useful recovery step.
 - Model-management CLI stdout should remain structured JSON for automation; any
   human progress chatter belongs on stderr.
 - Relative model artifact paths should be resolved from the catalog source that

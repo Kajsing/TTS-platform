@@ -1173,6 +1173,62 @@ def test_model_check_prefers_default_catalog_next_step_when_catalog_exists(
     )
 
 
+def test_model_check_suggests_single_catalog_model_for_default_stub_voice(
+    tmp_path: Path,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "sherpa-en-debug",
+                        "name": "Sherpa English Debug",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+
+    payload = cli._check_model_readiness(
+        model_id=None,
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["catalog"]["exists"] is True
+    assert payload["catalog"]["installable_model_ids"] == ["voice-a"]
+    assert payload["catalog"]["single_installable_model_id"] == "voice-a"
+    assert payload["next_steps"][0] == "tts model-install voice-a --activate"
+
+
+def test_model_check_suggests_selected_catalog_model_when_manifest_missing(
+    tmp_path: Path,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="sherpa-en-debug")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=["sherpa-en-debug"])
+    _write_model_check_catalog(tmp_path, model_ids=["voice-a"])
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["manifest"]["voice_found"] is False
+    assert payload["next_steps"] == ["tts model-install voice-a --activate"]
+
+
 def test_model_check_reports_real_voice_ready_when_assets_and_runtime_exist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1301,6 +1357,29 @@ def _write_real_voice_assets(tmp_path: Path) -> None:
     voice_dir.mkdir(parents=True)
     (voice_dir / "model.onnx").write_text("fake-model", encoding="utf-8")
     (voice_dir / "tokens.txt").write_text("a\nb\nc\n", encoding="utf-8")
+
+
+def _write_model_check_catalog(tmp_path: Path, *, model_ids: list[str]) -> Path:
+    catalog_path = tmp_path / cli.DEFAULT_MODEL_CATALOG_PATH
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": model_id,
+                        "name": model_id,
+                        "artifact_url": f"{model_id}.zip",
+                        "artifact_sha256": "a" * 64,
+                    }
+                    for model_id in model_ids
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return catalog_path
 
 
 def test_model_activate_command_prints_activation_payload(

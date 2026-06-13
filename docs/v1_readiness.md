@@ -48,7 +48,9 @@ for long web-page text.
   `--allow-missing-checksum` reserved for trusted local artifacts. The default
   catalog now includes the English
   `vits-piper-en_US-lessac-medium` sherpa-onnx model, and the installer supports
-  the official `tar.bz2` release archive format.
+  the official `tar.bz2` release archive format. `model-check` now reads the
+  default catalog and suggests the concrete default English model when the
+  configured development stub is not real-backend ready.
 - `python3 scripts/smoke_service.py --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2` verifies the public
   contract against a running service with separate page-scale WebSocket stream

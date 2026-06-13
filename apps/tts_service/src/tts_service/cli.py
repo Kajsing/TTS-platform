@@ -1772,11 +1772,45 @@ def _inspect_runtime_for_model_check(config_status: dict[str, object]) -> dict[s
 
 def _inspect_catalog_for_model_check(repo_root: Path) -> dict[str, object]:
     catalog_path = (repo_root / DEFAULT_MODEL_CATALOG_PATH).resolve()
-    return {
+    status: dict[str, object] = {
         "default_path": DEFAULT_MODEL_CATALOG_PATH,
         "path": str(catalog_path),
         "exists": catalog_path.is_file(),
     }
+    if not catalog_path.is_file():
+        return status
+
+    try:
+        catalog_payload, _ = _load_model_catalog(str(catalog_path))
+        models = _catalog_models(catalog_payload)
+    except SystemExit as exc:
+        status.update(
+            {
+                "valid": False,
+                "model_count": 0,
+                "installable_model_ids": [],
+                "error": str(exc),
+            }
+        )
+        return status
+
+    installable_model_ids = [
+        str(model.get("id", "")).strip()
+        for model in models
+        if str(model.get("id", "")).strip()
+        and str(model.get("artifact_url", "")).strip()
+    ]
+    status.update(
+        {
+            "valid": True,
+            "model_count": len(models),
+            "installable_model_ids": installable_model_ids,
+            "single_installable_model_id": (
+                installable_model_ids[0] if len(installable_model_ids) == 1 else None
+            ),
+        }
+    )
+    return status
 
 
 def _model_check_next_steps(
@@ -1791,14 +1825,31 @@ def _model_check_next_steps(
     steps: list[str] = []
     if config_status.get("exists") is not True:
         steps.append("tts setup-local")
-    catalog_argument = _model_check_catalog_argument(catalog_status)
     if not model_id or manifest_status.get("voice_found") is not True:
-        steps.append(f"tts model-install <model-id>{catalog_argument} --activate")
+        steps.append(
+            _model_check_install_step(
+                model_id=model_id,
+                catalog_status=catalog_status,
+                overwrite=False,
+            )
+        )
         return steps
     if backend_status.get("configured") is not True:
-        steps.append(f"tts model-install {model_id}{catalog_argument} --activate --overwrite")
+        steps.append(
+            _model_check_install_step(
+                model_id=model_id,
+                catalog_status=catalog_status,
+                overwrite=True,
+            )
+        )
     elif backend_status.get("assets_ready") is not True:
-        steps.append(f"tts model-install {model_id}{catalog_argument} --activate --overwrite")
+        steps.append(
+            _model_check_install_step(
+                model_id=model_id,
+                catalog_status=catalog_status,
+                overwrite=True,
+            )
+        )
     if runtime_status.get("sherpa_onnx_installed") is not True:
         steps.append("python -m pip install sherpa-onnx")
     if runtime_status.get("real_mode_enabled") is not True:
@@ -1820,6 +1871,47 @@ def _model_check_catalog_argument(catalog_status: dict[str, object]) -> str:
     if catalog_status.get("exists") is True:
         return ""
     return " --catalog <path-or-url>"
+
+
+def _model_check_install_step(
+    *,
+    model_id: str,
+    catalog_status: dict[str, object],
+    overwrite: bool,
+) -> str:
+    model_ref, refers_to_selected_model = _model_check_catalog_model_ref(
+        model_id=model_id,
+        catalog_status=catalog_status,
+    )
+    overwrite_arg = " --overwrite" if overwrite and refers_to_selected_model else ""
+    return (
+        f"tts model-install {model_ref}"
+        f"{_model_check_catalog_argument(catalog_status)} --activate{overwrite_arg}"
+    )
+
+
+def _model_check_catalog_model_ref(
+    *,
+    model_id: str,
+    catalog_status: dict[str, object],
+) -> tuple[str, bool]:
+    installable_model_ids = [
+        str(candidate)
+        for candidate in catalog_status.get("installable_model_ids", [])
+        if str(candidate).strip()
+    ]
+    if model_id and model_id in installable_model_ids:
+        return model_id, True
+
+    single_installable_model_id = str(
+        catalog_status.get("single_installable_model_id") or ""
+    ).strip()
+    if single_installable_model_id:
+        return single_installable_model_id, False
+
+    if model_id:
+        return model_id, True
+    return "<model-id>", False
 
 
 def _without_private_voice(manifest_status: dict[str, object]) -> dict[str, object]:

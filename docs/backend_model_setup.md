@@ -425,9 +425,13 @@ tts model-check
 voice, manifest presence, whether the voice has a sherpa-onnx backend config,
 which backend asset paths exist, whether `[backend].mode` is non-stub, whether
 `sherpa_onnx` can be imported, whether the default `models/catalog.json`
-exists, and concrete next steps. When the default catalog exists, install
-guidance omits `--catalog`; otherwise it tells the operator to pass
-`--catalog <path-or-url>`. A development stub voice is expected to report
+exists, which installable model ids it contains, and concrete next steps. When
+the default catalog exists, install guidance omits `--catalog`; otherwise it
+tells the operator to pass `--catalog <path-or-url>`. If the configured default
+voice is still the development stub and the default catalog has one installable
+real voice, `model-check` suggests that catalog model, such as
+`tts model-install vits-piper-en_US-lessac-medium --activate`, instead of
+suggesting a stub reinstall. A development stub voice is expected to report
 `ready: false` because it has no real backend asset configuration.
 
 Remove an installed model:

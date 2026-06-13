@@ -297,5 +297,9 @@ The thirty-fifth model-management slice adds a committed default English model
 catalog entry for `vits-piper-en_US-lessac-medium`, supports official
 sherpa-onnx tar archives in `model-install` with safe extraction checks, and
 includes the default catalog in the Windows local reader bundle.
+The thirty-sixth model-management UX slice makes `tts model-check` inspect the
+default catalog contents and suggest a concrete installable catalog model when
+the configured development stub is not real-backend ready, avoiding misleading
+stub reinstall guidance.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -198,7 +198,10 @@ real acoustic output from the local reader.
 `model-check` reports whether the selected or default voice has manifest
 metadata, real backend asset paths, existing local asset files, a non-stub
 backend mode, an importable `sherpa_onnx` runtime, and whether the default
-`models/catalog.json` exists for follow-up install guidance.
+`models/catalog.json` exists for follow-up install guidance. When that default
+catalog contains a single installable model, `model-check` suggests that
+concrete model id instead of asking the operator to install the development
+debug voice.
 Use `model-install --activate` for the first-run path when the installed model
 should immediately become the default voice.
 `model-remove` reports whether the removed model id is still configured as
