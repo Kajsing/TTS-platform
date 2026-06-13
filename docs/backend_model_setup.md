@@ -44,9 +44,11 @@ verify configured/default voice readiness before expecting real acoustic output.
 When the configured default voice is only a development stub and the default
 catalog has one installable real voice, setup guidance starts with the concrete
 `tts model-install vits-piper-en_US-lessac-medium --activate` command and adds
-`python -m pip install sherpa-onnx` when the runtime package is missing. It does
-not print the bearer token; read `config/token.txt` locally when a protected
-client needs it.
+`python -m pip install -e ".[real]"` when both real-runtime packages are
+missing. If only one runtime package is absent, the next steps use the targeted
+`python -m pip install sherpa-onnx` or `python -m pip install numpy` command
+instead. It does not print the bearer token; read `config/token.txt` locally
+when a protected client needs it.
 
 Add a copied Chrome extension origin to the service allow-list with:
 

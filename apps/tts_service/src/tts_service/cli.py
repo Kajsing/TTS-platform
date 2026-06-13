@@ -28,6 +28,7 @@ from .auth import initialize_auth
 from .config import SecurityConfig, load_config
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
+REAL_RUNTIME_INSTALL_STEP = 'python -m pip install -e ".[real]"'
 SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
 NUMPY_INSTALL_STEP = "python -m pip install numpy"
 
@@ -1812,19 +1813,16 @@ def _append_sherpa_onnx_install_step(
     runtime_status: dict[str, object],
     real_output_expected: bool,
 ) -> None:
-    if (
-        real_output_expected
-        and runtime_status.get("real_mode_enabled") is True
-        and runtime_status.get("sherpa_onnx_installed") is not True
-        and SHERPA_ONNX_INSTALL_STEP not in steps
-    ):
+    if not real_output_expected or runtime_status.get("real_mode_enabled") is not True:
+        return
+    sherpa_missing = runtime_status.get("sherpa_onnx_installed") is not True
+    numpy_missing = runtime_status.get("numpy_installed") is not True
+    if sherpa_missing and numpy_missing and REAL_RUNTIME_INSTALL_STEP not in steps:
+        steps.append(REAL_RUNTIME_INSTALL_STEP)
+        return
+    if sherpa_missing and SHERPA_ONNX_INSTALL_STEP not in steps:
         steps.append(SHERPA_ONNX_INSTALL_STEP)
-    if (
-        real_output_expected
-        and runtime_status.get("real_mode_enabled") is True
-        and runtime_status.get("numpy_installed") is not True
-        and NUMPY_INSTALL_STEP not in steps
-    ):
+    if numpy_missing and NUMPY_INSTALL_STEP not in steps:
         steps.append(NUMPY_INSTALL_STEP)
 
 
@@ -2208,10 +2206,11 @@ def _model_check_next_steps(
                 overwrite=True,
             )
         )
-    if runtime_status.get("sherpa_onnx_installed") is not True:
-        steps.append(SHERPA_ONNX_INSTALL_STEP)
-    if runtime_status.get("numpy_installed") is not True:
-        steps.append(NUMPY_INSTALL_STEP)
+    _append_sherpa_onnx_install_step(
+        steps,
+        runtime_status=runtime_status,
+        real_output_expected=True,
+    )
     if runtime_status.get("real_mode_enabled") is not True:
         steps.append("set [backend].mode to auto or real in config/config.toml")
     if not steps:

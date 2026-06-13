@@ -148,9 +148,9 @@ def test_setup_local_preserves_existing_config_and_token(
     }
     assert payload["next_steps"][:4] == [
         "tts model-install <model-id> --catalog <catalog> --activate",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
         "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
     ]
 
 
@@ -191,9 +191,9 @@ def test_setup_local_suggests_single_catalog_model_for_stub_default_voice(
     assert payload["runtime"]["numpy_installed"] is False
     assert payload["next_steps"][:4] == [
         "tts model-install real-english-voice --activate",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
         "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
     ]
 
 
@@ -231,9 +231,9 @@ def test_setup_local_suggests_single_catalog_model_when_manifest_is_missing(
     assert payload["runtime"]["numpy_installed"] is False
     assert payload["next_steps"][:4] == [
         "tts model-install real-english-voice --activate",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
         "tts extension-allow-origin <chrome-extension-origin>",
+        "tts model-check",
     ]
 
 

@@ -110,7 +110,10 @@ for long web-page text.
   `sherpa_onnx` and `numpy` runtime availability before expecting real
   acoustic output.
   When prompted, install the runtime in the active environment with
-  `python -m pip install sherpa-onnx` and `python -m pip install numpy`.
+  `python -m pip install -e ".[real]"` when both runtime packages are missing;
+  targeted single-package guidance (`python -m pip install sherpa-onnx` or
+  `python -m pip install numpy`) is still reported when only one dependency is
+  absent.
 - Run `python3 scripts/demo_real_voice.py --python-executable
   .venv/Scripts/python.exe` to reproduce the real English voice demo in ignored
   `dist/real-demo`; it installs the default catalog model there, starts a

@@ -351,5 +351,8 @@ reader blocks still avoid hidden UI and chrome noise.
 The fifty-first reader-flow reliability slice changes readable-root selection
 from first matching candidate to best scored candidate, improving extraction on
 pages with multiple article/main/content containers.
+The fifty-second first-run UX slice makes runtime next-step guidance prefer the
+committed `.[real]` optional dependency extra when both `sherpa-onnx` and
+`numpy` are missing, while preserving targeted single-package guidance.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

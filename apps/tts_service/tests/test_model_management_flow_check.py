@@ -55,8 +55,7 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
     assert summary["model_list"]["numpy_installed"] is False
     assert summary["model_list"]["next_steps"] == [
         "tts model-install local-flow-voice --activate --overwrite",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
         "tts model-check",
     ]
     assert summary["model_check"]["model_id"] == "local-flow-voice"

@@ -199,6 +199,7 @@ REQUIRED_TEXT_MARKERS = {
         "_list_models",
         "_model_list_default_model",
         "_append_sherpa_onnx_install_step",
+        "REAL_RUNTIME_INSTALL_STEP",
         "SHERPA_ONNX_INSTALL_STEP",
         "NUMPY_INSTALL_STEP",
         "numpy_installed",

@@ -171,8 +171,10 @@ whether `sherpa_onnx` is importable in the active environment. When the
 configured default voice is still the development stub and the default catalog
 has a single installable model, those next steps start with the concrete
 `tts model-install vits-piper-en_US-lessac-medium --activate` command and add
-`python -m pip install sherpa-onnx` and `python -m pip install numpy` when
-runtime packages needed by real async/stream paths are missing.
+`python -m pip install -e ".[real]"` when both runtime packages needed by real
+async/stream paths are missing. If only one runtime package is absent, the
+next steps use the targeted `python -m pip install sherpa-onnx` or
+`python -m pip install numpy` command instead.
 `extension-allow-origin` adds a copied Chrome extension origin to
 `security.allowed_origins` in `config/config.toml`, preserving existing origins
 and rejecting non-`chrome-extension` origins for this onboarding path.

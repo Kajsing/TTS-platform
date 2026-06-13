@@ -1153,8 +1153,7 @@ def test_model_list_suggests_default_catalog_install_when_manifest_missing(
     assert payload["next_steps"] == [
         "tts catalog-list",
         "tts model-install voice-a --activate",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
     ]
 
 
@@ -1193,8 +1192,7 @@ def test_model_list_suggests_catalog_install_for_default_stub_voice(
     assert payload["models"][0]["has_backend_config"] is False
     assert payload["next_steps"] == [
         "tts model-install voice-a --activate",
-        "python -m pip install sherpa-onnx",
-        "python -m pip install numpy",
+        'python -m pip install -e ".[real]"',
         "tts model-check",
     ]
 

@@ -248,6 +248,10 @@ This file is the live status log and shared memory for future Codex loops.
   - readable-root selection now scores all matching article/main/content
     candidates instead of returning the first match, improving long-page capture
     on pages with multiple reader-like containers.
+  - first-run/model readiness next steps now prefer
+    `python -m pip install -e ".[real]"` when both `sherpa-onnx` and `numpy`
+    are missing, while keeping targeted single-package guidance for partial
+    installs.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend
@@ -614,10 +618,10 @@ python3 scripts/package_windows_bundle.py
   local voice must be installed and activated before real acoustic output is the
   normal local run path.
 - The default catalog can now install `vits-piper-en_US-lessac-medium`, but
-  `sherpa_onnx` is still an optional local runtime dependency. `setup-local`,
-  `model-list`, and `model-check` will continue to report
-  `python -m pip install sherpa-onnx` until that package is installed in the
-  active environment.
+  `sherpa_onnx` and `numpy` are still optional local runtime dependencies.
+  `setup-local`, `model-list`, and `model-check` now report
+  `python -m pip install -e ".[real]"` when both are missing, and targeted
+  single-package guidance when only one runtime dependency is absent.
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
   visibility. It now preserves short headings, reports structure counts, and
