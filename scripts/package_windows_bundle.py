@@ -32,6 +32,7 @@ INCLUDED_FILES = (
     "scripts/benchmark.py",
     "scripts/check_extension.py",
     "scripts/check_extension_onboarding.py",
+    "scripts/check_extension_reader_flow.py",
     "scripts/check_local_service_bootstrap.py",
     "scripts/check_model_management_flow.py",
     "scripts/check_security_defaults.py",

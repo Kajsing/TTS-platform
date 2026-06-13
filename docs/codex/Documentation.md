@@ -11,20 +11,20 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows bundle install readiness slice adds a
-  temporary-venv install/start smoke for the extracted bundle. It installs build
-  tooling in the temp venv, installs the bundle package editable with
-  `--no-deps`, runs installed `tts setup-local`, starts installed `tts serve`,
-  runs public-contract smoke, and shuts the service down.
+- Current loop result: The long-page extension reader-flow slice adds a
+  deterministic gate for `Speak Page`, reader progress, page-capture metadata,
+  `Resume Page`, `Next Section`, raw page-text non-persistence, and a generated
+  thousand-word article streamed through the WebSocket service path.
 - Validation status for the current loop:
-  - `py -3 scripts/check_windows_bundle_install.py --stream-text-repeat 1` passed.
-  - `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q` passed with 8 tests.
+  - `py -3 scripts/check_extension_reader_flow.py` passed with a 2,963-word
+    generated article and 145 stream text chunks.
+  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q` passed with 9 tests.
   - Targeted `py -3 -m ruff check ...` passed after line wrapping.
   - `py -3 scripts/check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 136 tests.
+  - `py -3 -m pytest -q` passed with 139 tests.
   - `py -3 scripts/release_check.py` passed, including
-    `windows_bundle_install`.
+    `extension_reader_flow`.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -103,6 +103,9 @@ This file is the live status log and shared memory for future Codex loops.
   - the popup now exposes `Next Section`; background resolves the next heading
     offset from current reader progress, re-extracts the active tab from that
     section index, and starts page playback from there.
+  - `scripts/check_extension_reader_flow.py` now verifies long-page reader
+    wiring and streams a generated thousand-word article through the local
+    service WebSocket contract.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
@@ -209,6 +212,8 @@ This file is the live status log and shared memory for future Codex loops.
     model-management flow smoke checks as deterministic offline readiness gates.
   - `scripts/release_check.py` now runs extension onboarding contract smoke as
     a deterministic local gate before extension packaging.
+  - `scripts/release_check.py` now runs extension reader-flow smoke before
+    extension packaging.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -354,6 +359,7 @@ tts model-activate <model-id>
 tts model-remove <model-id>
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_extension_onboarding.py
+python3 scripts/check_extension_reader_flow.py
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
 python3 scripts/smoke_service.py --token-file config/token.txt
 python3 scripts/smoke_service.py --token-file config/token.txt --stream-text-repeat 200 --min-stream-text-chunks 2

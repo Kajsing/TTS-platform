@@ -156,6 +156,10 @@ def _run_release_checks_with_package_path(
             [python_executable, "scripts/check_extension_onboarding.py"],
         ),
         (
+            "extension_reader_flow",
+            [python_executable, "scripts/check_extension_reader_flow.py"],
+        ),
+        (
             "extension_package",
             [
                 python_executable,

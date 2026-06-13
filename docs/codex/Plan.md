@@ -214,6 +214,9 @@ extension-origin allow-list snippet compatibility, and service health/voice
 discovery without requiring a full Chrome MV3 harness. The fourteenth
 release-hardening slice now adds `scripts/check_windows_bundle_install.py`,
 covering extracted-bundle temporary venv creation, package install, installed
-`tts setup-local`, installed `tts serve`, and public-contract smoke. Continue
-from the readiness audit: either automate another listed manual gate or take the
-next reader-flow/product slice.
+`tts setup-local`, installed `tts serve`, and public-contract smoke. The
+fifteenth release-hardening slice now adds
+`scripts/check_extension_reader_flow.py`, covering long-page reader wiring plus
+generated thousand-word WebSocket stream smoke. Continue from the readiness
+audit: either automate another listed manual gate or take the next
+reader-flow/product slice.

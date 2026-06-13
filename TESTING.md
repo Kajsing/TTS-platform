@@ -136,6 +136,8 @@ remove.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
+It also verifies the long-page reader-flow contract and streams a generated
+thousand-word article through the WebSocket service path.
 If the service is already running, include the public-contract smoke path:
 
 ```bash
@@ -186,6 +188,12 @@ Check the Chrome extension onboarding contract directly with:
 
 ```bash
 python3 scripts/check_extension_onboarding.py
+```
+
+Check the Chrome extension long-page reader-flow contract directly with:
+
+```bash
+python3 scripts/check_extension_reader_flow.py
 ```
 
 CLI example:

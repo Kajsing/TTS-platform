@@ -125,4 +125,14 @@ checks that the extension-origin allow-list snippet is accepted by service
 config, and confirms the health/voice-discovery snapshot shape used by the
 popup.
 
+Run the long-page reader-flow contract check with:
+
+```bash
+python3 scripts/check_extension_reader_flow.py
+```
+
+This verifies the `Speak Page`, reader progress, page-capture metadata,
+`Resume Page`, and `Next Section` wiring, then streams a generated thousand-word
+article through the local WebSocket service path.
+
 For common issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
