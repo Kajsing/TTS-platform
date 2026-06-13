@@ -154,8 +154,9 @@ automated gates from manual live checks and unresolved product choices.
 It starts a temporary first-run service on a loopback port and runs the local
 public-contract smoke against that isolated config/token root.
 It also creates a temporary local model artifact/catalog, verifies
-catalog-list, install, activate, read-only model readiness output, service smoke
-with the installed voice, and remove.
+catalog-list, relative-artifact download over a loopback HTTP catalog, install,
+activate, read-only model readiness output, service smoke with the installed
+voice, and remove.
 It runs the bundled Windows launchers in setup-only mode when Windows launcher
 executables are available, verifying direct first-run setup without choosing a
 permanent service manager. On Windows, the same check also starts the bundled

@@ -20,6 +20,7 @@ def test_model_management_flow_check_installs_activates_smokes_and_removes() -> 
 
     assert summary["model_id"] == "local-flow-voice"
     assert summary["catalog"] == {
+        "source": "local_http",
         "model_count": 1,
         "installable_count": 1,
         "checksum_count": 1,

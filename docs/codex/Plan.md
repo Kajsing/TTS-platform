@@ -260,5 +260,9 @@ catalogs.
 The twenty-fifth model-management slice stages downloaded or copied artifacts
 in a temporary file and verifies/extracts from that file, avoiding a full
 artifact-sized byte string in memory during install.
+The twenty-sixth release-hardening slice extends
+`scripts/check_model_management_flow.py` to serve the generated catalog and
+relative artifact over loopback HTTP, proving the remote-catalog download path
+inside the offline release gate.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -11,23 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The model-management install flow now stages downloaded
-  or copied artifacts in a temporary file before checksum and zip extraction,
-  avoiding a full artifact-sized byte string in memory during install.
+- Current loop result: The model-management release smoke now serves its
+  generated catalog and relative artifact over loopback HTTP, so the offline
+  release gate proves the remote-catalog download/install path without external
+  network access.
 - Validation status for the current loop:
-  - Targeted model-management ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
-  - Targeted model-management tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` with 25
-    tests.
-  - `py -3 scripts\check_model_management_flow.py` passed.
+  - Targeted model-management flow ruff passed with
+    `py -3 -m ruff check scripts\check_model_management_flow.py apps\tts_service\tests\test_model_management_flow_check.py`.
+  - Targeted model-management flow test passed with
+    `py -3 -m pytest apps\tts_service\tests\test_model_management_flow_check.py -q`.
+  - `py -3 scripts\check_model_management_flow.py` passed and reported
+    `catalog.source = local_http`.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 152 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including model-management flow
-    smoke, extension reader-flow smoke, Windows launcher foreground service
-    smoke, and bundle install smoke.
+  - `py -3 scripts\release_check.py` passed, including the strengthened
+    model-management flow smoke, extension reader-flow smoke, Windows launcher
+    foreground service smoke, and bundle install smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -144,9 +145,10 @@ This file is the live status log and shared memory for future Codex loops.
     another voice before service restart.
   - `tts model-check [model-id]` now reports read-only real-backend readiness
     diagnostics for the configured default voice or selected model id.
-  - `scripts/check_model_management_flow.py` now verifies local catalog-list,
-    install, activate, model readiness output, service smoke with the installed
-    voice, and remove using a generated local artifact and temp repo root.
+  - `scripts/check_model_management_flow.py` now verifies catalog-list,
+    relative-artifact download/install from a generated loopback HTTP catalog,
+    activate, model readiness output, service smoke with the installed voice,
+    and remove using a generated local artifact and temp repo root.
 - Windows-friendly first-run setup has started:
   - `tts setup-local` bootstraps local config and token files without requiring
     the service to be running.

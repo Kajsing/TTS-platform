@@ -8,8 +8,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zipfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import httpx
@@ -60,11 +65,16 @@ def check_model_management_flow(
     with tempfile.TemporaryDirectory(prefix="tts-platform-model-flow-") as temp_dir:
         temp_root = Path(temp_dir)
         repo_root = temp_root / "repo"
-        catalog_path = temp_root / "catalog.json"
+        catalog_root = temp_root / "catalog_server"
+        catalog_path = catalog_root / "catalog.json"
         env = _source_env()
         _seed_temp_repo(repo_root)
-        artifact = _write_local_model_artifact(temp_root / "artifacts" / f"{MODEL_ID}.zip")
-        _write_catalog(catalog_path=catalog_path, artifact=artifact)
+        artifact = _write_local_model_artifact(catalog_root / "artifacts" / f"{MODEL_ID}.zip")
+        _write_catalog(
+            catalog_path=catalog_path,
+            artifact=artifact,
+            artifact_url=f"artifacts/{MODEL_ID}.zip",
+        )
 
         setup_payload = _run_json_command(
             [
@@ -82,38 +92,39 @@ def check_model_management_flow(
         if not token_file.is_file():
             raise ModelManagementFlowError("setup-local did not create a token file.")
 
-        catalog_payload = _run_json_command(
-            [
-                python_executable,
-                "-m",
-                "tts_service.cli",
-                "catalog-list",
-                "--catalog",
-                str(catalog_path),
-            ],
-            env=env,
-            timeout_s=command_timeout_s,
-        )
-        install_payload = _run_json_command(
-            [
-                python_executable,
-                "-m",
-                "tts_service.cli",
-                "model-install",
-                MODEL_ID,
-                "--catalog",
-                str(catalog_path),
-                "--models-root",
-                str(repo_root / "models" / "voices"),
-                "--manifest-path",
-                str(repo_root / "models" / "MANIFEST.json"),
-                "--config-path",
-                str(repo_root / "config" / "config.toml"),
-                "--activate",
-            ],
-            env=env,
-            timeout_s=command_timeout_s,
-        )
+        with _serve_catalog_root(catalog_root) as catalog_url:
+            catalog_payload = _run_json_command(
+                [
+                    python_executable,
+                    "-m",
+                    "tts_service.cli",
+                    "catalog-list",
+                    "--catalog",
+                    catalog_url,
+                ],
+                env=env,
+                timeout_s=command_timeout_s,
+            )
+            install_payload = _run_json_command(
+                [
+                    python_executable,
+                    "-m",
+                    "tts_service.cli",
+                    "model-install",
+                    MODEL_ID,
+                    "--catalog",
+                    catalog_url,
+                    "--models-root",
+                    str(repo_root / "models" / "voices"),
+                    "--manifest-path",
+                    str(repo_root / "models" / "MANIFEST.json"),
+                    "--config-path",
+                    str(repo_root / "config" / "config.toml"),
+                    "--activate",
+                ],
+                env=env,
+                timeout_s=command_timeout_s,
+            )
         _assert_installed_repo_state(repo_root=repo_root)
         model_check_payload = _run_json_command(
             [
@@ -217,7 +228,13 @@ def _write_local_model_artifact(artifact_path: Path) -> dict[str, object]:
     }
 
 
-def _write_catalog(*, catalog_path: Path, artifact: dict[str, object]) -> None:
+def _write_catalog(
+    *,
+    catalog_path: Path,
+    artifact: dict[str, object],
+    artifact_url: str | None = None,
+) -> None:
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
     catalog_path.write_text(
         json.dumps(
             {
@@ -232,7 +249,7 @@ def _write_catalog(*, catalog_path: Path, artifact: dict[str, object]) -> None:
                         "license": "test-only",
                         "quality_tier": "development",
                         "latency_tier": "local",
-                        "artifact_url": str(artifact["path"]),
+                        "artifact_url": artifact_url or str(artifact["path"]),
                         "artifact_sha256": artifact["sha256"],
                         "tags": ["local-flow", "test"],
                     }
@@ -243,6 +260,25 @@ def _write_catalog(*, catalog_path: Path, artifact: dict[str, object]) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+@contextmanager
+def _serve_catalog_root(catalog_root: Path) -> Iterator[str]:
+    class QuietHandler(SimpleHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            return
+
+    handler = partial(QuietHandler, directory=str(catalog_root))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = int(server.server_address[1])
+        yield f"http://127.0.0.1:{port}/catalog.json"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def _source_env() -> dict[str, str]:
@@ -416,7 +452,9 @@ def _assert_removed_repo_state(*, repo_root: Path) -> None:
 
 def _summarize_catalog(payload: dict[str, object]) -> dict[str, object]:
     catalog = payload.get("catalog", {})
+    source = str(_dict_get(catalog, "source") or "")
     return {
+        "source": "local_http" if source.startswith("http://127.0.0.1:") else "other",
         "model_count": _dict_get(catalog, "model_count"),
         "installable_count": _dict_get(catalog, "installable_count"),
         "checksum_count": _dict_get(catalog, "checksum_count"),
