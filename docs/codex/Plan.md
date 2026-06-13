@@ -329,5 +329,8 @@ sherpa-onnx` next-step guidance before real local playback.
 The forty-fourth extension-onboarding slice surfaces backend readiness and
 default-voice loading directly in the popup service snapshot and setup
 checklist, with validator coverage for those first-run signals.
+The forty-fifth release-hardening slice makes the extension onboarding smoke
+explicitly assert and report `backend_ready` and `default_voice_loaded` from
+the service snapshot.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

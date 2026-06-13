@@ -245,7 +245,8 @@ This file is the live status log and shared memory for future Codex loops.
     with manifest, asset, and resume wiring.
   - `scripts/check_extension_onboarding.py` now validates the popup onboarding
     surface, config-loadable Chrome extension origin snippet, and service
-    health/voice snapshot used by the popup. It also validates the
+    health/voice snapshot used by the popup, including explicit backend-ready
+    and default-voice-loaded health checks. It also validates the
     `extension-allow-origin` CLI helper against a fresh `setup-local` repo.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.

@@ -270,6 +270,11 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         errors.append("health must expose auth_enabled=true for popup onboarding")
     if not isinstance(health_checks, dict) or health_checks.get("backend_ready") is not True:
         errors.append("health checks must expose backend_ready=true")
+    if (
+        not isinstance(health_checks, dict)
+        or health_checks.get("default_voice_loaded") is not True
+    ):
+        errors.append("health checks must expose default_voice_loaded=true")
     if not isinstance(voice_list, list) or not voice_list:
         errors.append("voices payload must include at least one voice")
     voice_ids = [
@@ -288,6 +293,8 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         "base_url": base_url,
         "health_status": health["status"],
         "auth_enabled": health["auth_enabled"],
+        "backend_ready": health_checks["backend_ready"],
+        "default_voice_loaded": health_checks["default_voice_loaded"],
         "default_voice": default_voice,
         "voice_count": len(voice_ids),
     }
