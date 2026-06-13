@@ -85,9 +85,14 @@ function populateVoiceOptions({ voices, configuredVoice, defaultVoice }) {
   }
 
   fields.voice.value = configuredVoice || "";
-  voiceHint.textContent = voices.length
-    ? `Discovered ${voices.length} voice(s) from the local service.`
-    : "No voices were discovered yet. Check the base URL and local service startup.";
+  if (voices.length) {
+    const defaultText = defaultVoice ? ` Service default: ${defaultVoice}.` : "";
+    voiceHint.textContent =
+      `Discovered ${voices.length} voice(s) from the local service.` + defaultText;
+  } else {
+    voiceHint.textContent =
+      "No voices were discovered yet. Check the base URL and local service startup.";
+  }
 }
 
 document.querySelector("#save-config").addEventListener("click", async () => {
@@ -464,6 +469,8 @@ function formatServiceSnapshot(snapshot) {
     `Reachable: ${snapshot.reachable}`,
     `Message: ${snapshot.message}`,
     `Health: ${snapshot.health?.status ?? "unavailable"}`,
+    `Backend Ready: ${formatReadinessCheck(checks.backend_ready)}`,
+    `Default Voice Loaded: ${formatReadinessCheck(checks.default_voice_loaded)}`,
     `Default Voice: ${snapshot.defaultVoice || "none"}`,
     `Voices Discovered: ${snapshot.voices.length}`,
     `Auth Enabled: ${snapshot.authEnabled}`,
@@ -473,6 +480,7 @@ function formatServiceSnapshot(snapshot) {
 }
 
 function formatOnboardingStatus(snapshot) {
+  const checks = snapshot.health?.checks ?? {};
   const checklist = [
     checklistLine("Service reachable", snapshot.reachable, snapshot.message),
     checklistLine("Token saved", Boolean(fields.token.value.trim()), "Paste config/token.txt"),
@@ -492,12 +500,32 @@ function formatOnboardingStatus(snapshot) {
       `${snapshot.voices.length} voice(s) discovered`
     ),
     checklistLine(
+      "Backend ready",
+      checks.backend_ready === true,
+      formatReadinessCheck(checks.backend_ready)
+    ),
+    checklistLine(
+      "Default voice loaded",
+      checks.default_voice_loaded === true,
+      formatReadinessCheck(checks.default_voice_loaded)
+    ),
+    checklistLine(
       "Health ok",
       snapshot.health?.status === "ok",
       snapshot.health?.status ?? "unavailable"
     ),
   ];
   return checklist.join("\n");
+}
+
+function formatReadinessCheck(value) {
+  if (value === true) {
+    return "true";
+  }
+  if (value === false) {
+    return "false";
+  }
+  return "unknown";
 }
 
 function checklistLine(label, ok, detail) {

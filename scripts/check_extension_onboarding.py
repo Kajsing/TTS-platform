@@ -168,7 +168,10 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
         '"Allow-list command ready"',
         '"Allow-list snippet ready"',
         '"Voice available"',
+        '"Backend ready"',
+        '"Default voice loaded"',
         '"Health ok"',
+        "formatReadinessCheck",
         "populateVoiceOptions({",
     ]
     for fragment in required_fragments:
@@ -181,7 +184,7 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
 
     return {
         "required_element_count": len(required_elements),
-        "checklist_items": 6,
+        "checklist_items": 8,
         "voice_selector": True,
         "copy_command": True,
         "copy_snippet": True,

@@ -19,7 +19,7 @@ def test_extension_onboarding_check_validates_popup_service_and_origin_snippet()
 
     assert summary["popup"] == {
         "required_element_count": 13,
-        "checklist_items": 6,
+        "checklist_items": 8,
         "voice_selector": True,
         "copy_command": True,
         "copy_snippet": True,

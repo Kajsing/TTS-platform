@@ -230,8 +230,11 @@ This file is the live status log and shared memory for future Codex loops.
     voice is only a development stub.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
-    token state, allow-list command/snippet readiness, voice discovery, and
-    health status.
+    token state, allow-list command/snippet readiness, voice discovery, backend
+    readiness, default voice loading, and health status.
+  - the popup service status now calls out backend readiness and default voice
+    loading separately before showing the raw health-check JSON, so first-run
+    model/runtime issues are visible without opening `/v1/health`.
   - the popup now includes a copyable allow-list command generated from the
     current Chrome extension origin, so first-run setup can copy
     `tts extension-allow-origin ...` directly.

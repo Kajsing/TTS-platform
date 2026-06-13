@@ -18,7 +18,8 @@ for long web-page text.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
   copyable `tts extension-allow-origin` first-run helper before checking the
-  health/voice-discovery service snapshot used by the popup.
+  health, backend-readiness, default-voice, and voice-discovery service
+  snapshot used by the popup.
 - `python3 scripts/check_extension_reader_flow.py` verifies long-page reader
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
   `Continue Page`, popup long-page status, state-aware popup controls,

@@ -125,7 +125,8 @@ Recommended extension checks:
 
 - confirm the popup can load service health and voice discovery from the configured base URL
 - confirm the setup checklist reflects service reachability, token state,
-- allow-list command/snippet readiness, voice discovery, and health
+  allow-list command/snippet readiness, voice discovery, backend readiness,
+  default voice loading, and health
 - confirm the allow-list snippet matches the current extension origin
 - verify the popup can copy the exact `tts extension-allow-origin ...` command
 - verify selection playback on a normal web page

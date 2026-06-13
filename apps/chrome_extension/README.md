@@ -29,7 +29,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - show service health and ready-to-copy allow-list command/snippet for the
   extension origin
 - show a setup checklist for service reachability, saved token, allow-list
-  command/snippet, voice discovery, and health
+  command/snippet, voice discovery, backend readiness, default voice loading,
+  and health
 - include `INSTALL.md` and manifest/action icons in local handoff packages
 - recover more deliberately from playback underruns by rebuffering before audio resumes
 - retry offscreen playback startup if the offscreen document has gone stale
@@ -50,7 +51,8 @@ The popup shows the extension origin plus an allow-list command that can be
 copied into the service shell.
 The popup can also refresh service health and voice discovery directly from the local service.
 The setup checklist in the popup summarizes the first-run state after each
-refresh or settings save.
+refresh or settings save, including whether the service backend and default
+voice are ready.
 
 ## Load in Chrome
 
@@ -86,7 +88,8 @@ action.
 2. Load the extension.
 3. Open the popup and confirm that service status loads successfully.
 4. Confirm the setup checklist reports service reachability, saved token,
-   origin snippet readiness, voice discovery, and health.
+   origin snippet readiness, voice discovery, backend readiness, default voice
+   loading, and health.
 5. Confirm that the voice list populates from `/v1/voices`.
 6. Save the token and other settings.
 7. Speak a text selection from a normal web page.
@@ -152,8 +155,8 @@ python3 scripts/check_extension_onboarding.py
 
 This starts a temporary local service, verifies the popup setup controls,
 checks that the extension-origin allow-list snippet is accepted by service
-config, and confirms the health/voice-discovery snapshot shape used by the
-popup.
+config, and confirms the health, backend-readiness, default-voice, and
+voice-discovery snapshot shape used by the popup.
 
 Run the long-page reader-flow contract check with:
 

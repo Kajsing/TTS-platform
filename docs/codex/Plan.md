@@ -326,5 +326,8 @@ model-management flow smoke.
 The forty-third first-run UX slice exposes `sherpa_onnx` runtime status from
 `tts setup-local` and `tts model-list`, adding `python -m pip install
 sherpa-onnx` next-step guidance before real local playback.
+The forty-fourth extension-onboarding slice surfaces backend readiness and
+default-voice loading directly in the popup service snapshot and setup
+checklist, with validator coverage for those first-run signals.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

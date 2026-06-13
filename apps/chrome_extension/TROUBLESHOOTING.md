@@ -7,7 +7,8 @@
 - Confirm the service is listening on a localhost URL that Chrome can reach.
 - Use the popup `Refresh` button and read the `Service Status` panel.
 - Use the popup `Setup Checklist` panel to see whether service reachability,
-  token setup, voice discovery, and health are passing.
+  token setup, voice discovery, backend readiness, default voice loading, and
+  health are passing.
 
 ## Setup checklist shows todo items
 
@@ -20,6 +21,11 @@
 - `Voice available`: run `tts list-voices` or install and activate a voice with
   `tts model-install <model-id> --activate` when the catalog is saved as
   `models/catalog.json`; otherwise pass `--catalog <path-or-url>`.
+- `Backend ready`: confirm the configured backend mode can start locally. For
+  real local playback, install the selected model and the `sherpa_onnx`
+  runtime package.
+- `Default voice loaded`: install and activate a real voice, then restart the
+  service so `/v1/health` can load the configured default voice.
 - `Health ok`: refresh after setup changes or inspect `/v1/health` for the
   degraded check.
 
