@@ -56,6 +56,8 @@ and v1-readiness work:
   extraction source, readable block count, and truncation at the page limit
 - extension-side structure metadata for long pages, including heading/body/list
   block counts, with short headings preserved in captured text
+- popup-side `Next Section` action that re-extracts page text from the next
+  captured heading without storing heading text
 
 ## Repository Layout
 
@@ -219,6 +221,7 @@ The extension currently supports:
   complete or truncated at the configured limit
 - preserving short article headings and showing page-structure counts for long
   page playback
+- jumping to the next captured page section during long page playback
 - local storage of base URL, token, voice, and buffering settings
 - voice discovery and health checks from the local service
 - displaying the extension origin so it can be allow-listed in the local service config

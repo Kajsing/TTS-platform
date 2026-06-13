@@ -65,6 +65,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "tts-extension:resume-page":
         sendResponse(await resumePage());
         return;
+      case "tts-extension:next-section":
+        sendResponse(await nextSection());
+        return;
       case "tts-extension:stop":
         await stopPlayback();
         sendResponse({ ok: true });
@@ -154,10 +157,42 @@ async function resumePage() {
   };
 }
 
-async function getPageCapture(tabId, maxChars) {
+async function nextSection() {
+  const currentState = await getPlaybackState();
+  const nextSectionIndex = resolveNextSectionIndex({
+    progress: currentState.readerProgress,
+    pageCapture: currentState.pageCapture,
+  });
+  if (nextSectionIndex == null) {
+    return { ok: false, message: "No later page section is available." };
+  }
+
+  const tab = await getActiveTab();
+  const config = await getConfig();
+  const capture = await getPageCapture(tab.id, config.maxChars, nextSectionIndex);
+  if (!capture.text) {
+    return { ok: false, message: "No page text found for the next section." };
+  }
+
+  await startPlayback({
+    text: capture.text,
+    source: "page-section",
+    tabId: tab.id,
+    pageCapture: capture.meta,
+  });
+  return {
+    ok: true,
+    message: `Started page playback from section ${nextSectionIndex + 1}.${formatCaptureSuffix(
+      capture.meta
+    )}`,
+  };
+}
+
+async function getPageCapture(tabId, maxChars, startSectionIndex = 0) {
   const response = await chrome.tabs.sendMessage(tabId, {
     type: "tts-extension:get-page-text",
     maxChars,
+    startSectionIndex,
   });
   const text = (response?.text || "").trim();
   return {
@@ -342,6 +377,29 @@ function resolveResumeTextChunkIndex(progress) {
   return Math.min(Math.floor(chunkIndex), Math.floor(chunkCount) - 1);
 }
 
+function resolveNextSectionIndex({ progress, pageCapture }) {
+  const sections = pageCapture?.structure?.sections ?? [];
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return null;
+  }
+  const completedTextChars = Math.max(
+    0,
+    Number(progress?.completed_text_chars ?? progress?.text_char_end ?? 0)
+  );
+  const nextSection = sections.find((section) => {
+    const textCharStart = Number(section?.textCharStart ?? 0);
+    return Number.isFinite(textCharStart) && textCharStart > completedTextChars;
+  });
+  if (!nextSection) {
+    return null;
+  }
+  const sectionIndex = Number(nextSection.index);
+  if (!Number.isFinite(sectionIndex) || sectionIndex < 0) {
+    return null;
+  }
+  return Math.floor(sectionIndex);
+}
+
 function sanitizePageCaptureMeta(meta, fallback) {
   const textChars = sanitizeNumber(meta?.textChars, fallback.textChars, 0);
   const maxChars = sanitizeNumber(meta?.maxChars, fallback.maxChars, 200, 48000);
@@ -362,7 +420,23 @@ function sanitizePageStructureMeta(structure) {
     bodyBlockCount: sanitizeNumber(structure?.bodyBlockCount, 0, 0),
     listItemCount: sanitizeNumber(structure?.listItemCount, 0, 0),
     quoteBlockCount: sanitizeNumber(structure?.quoteBlockCount, 0, 0),
+    startSectionIndex: sanitizeNumber(structure?.startSectionIndex, 0, 0),
+    sections: sanitizePageSections(structure?.sections),
   };
+}
+
+function sanitizePageSections(sections) {
+  if (!Array.isArray(sections)) {
+    return [];
+  }
+  return sections
+    .map((section) => ({
+      index: sanitizeNumber(section?.index, 0, 0),
+      level: sanitizeNumber(section?.level, 0, 0),
+      textCharStart: sanitizeNumber(section?.textCharStart, 0, 0),
+    }))
+    .filter((section) => section.level >= 1 && section.textCharStart >= 0)
+    .slice(0, 64);
 }
 
 function formatCaptureSuffix(capture) {

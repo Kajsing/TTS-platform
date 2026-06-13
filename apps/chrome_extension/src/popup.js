@@ -125,6 +125,10 @@ document.querySelector("#resume-page").addEventListener("click", async () => {
   await runAction("tts-extension:resume-page");
 });
 
+document.querySelector("#next-section").addEventListener("click", async () => {
+  await runAction("tts-extension:next-section");
+});
+
 document.querySelector("#stop-playback").addEventListener("click", async () => {
   await runAction("tts-extension:stop");
 });
@@ -223,7 +227,9 @@ function formatPageStructure(structure) {
   const bodyBlockCount = Number(structure.bodyBlockCount ?? 0);
   const listItemCount = Number(structure.listItemCount ?? 0);
   const quoteBlockCount = Number(structure.quoteBlockCount ?? 0);
+  const startSectionIndex = Number(structure.startSectionIndex ?? 0);
   const details = [
+    startSectionIndex > 0 ? `from section ${startSectionIndex + 1}` : null,
     headingCount > 0 ? `${capturedHeadingCount}/${headingCount} headings` : null,
     bodyBlockCount > 0 ? `${bodyBlockCount} body` : null,
     listItemCount > 0 ? `${listItemCount} list` : null,

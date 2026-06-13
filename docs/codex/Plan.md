@@ -160,6 +160,9 @@ The first long-document slices are now:
 - extension-side page-structure metadata so captured long pages preserve short
   headings and report heading/body/list/quote counts without storing heading
   text.
+- popup-side `Next Section` action that uses heading offsets and section
+  indexes to re-extract active-tab text from a later captured section without
+  storing heading text.
 
 The first model-management UX slices now cover `model-install --activate`,
 catalog-list summary/warning output, and install progress metadata/status lines.

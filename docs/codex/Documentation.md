@@ -11,9 +11,10 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The long-page structure slice preserves short `h1`-`h4`
-  headings during page capture and adds non-text structure metadata for
-  heading/body/list/quote counts in Chrome extension playback state.
+- Current loop result: The section-navigation slice adds a popup `Next Section`
+  action. It uses heading offsets and section indexes from page-capture metadata
+  to re-extract the active tab from a later captured section without storing
+  heading text or raw page text.
 - Validation status for the current loop:
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 118 tests.
@@ -97,6 +98,9 @@ This file is the live status log and shared memory for future Codex loops.
     below the normal body-block text threshold.
   - page playback now stores structure counts for headings, body blocks, list
     items, and quotes without storing heading text or raw page text.
+  - the popup now exposes `Next Section`; background resolves the next heading
+    offset from current reader progress, re-extracts the active tab from that
+    section index, and starts page playback from there.
   - `scripts/check_extension.py` now validates the structural resume wiring even
     when `node` is not installed.
 - V1 model-management UX has started:
@@ -205,7 +209,10 @@ This file is the live status log and shared memory for future Codex loops.
   explain bounded long-page playback without creating a text-storage surface.
 - Extension page-structure diagnostics should preserve useful section signals
   by keeping short headings in captured text and storing counts only in session
-  metadata. Full section navigation still needs a later explicit UX slice.
+  metadata. Rich named reader outlines still need a later explicit UX slice.
+- Extension section navigation should re-extract active-tab text from a section
+  index rather than persisting raw page text. Current navigation is heading
+  offset based; richer named outlines remain future UX work.
 - First-run model setup should prefer one clear local command where possible:
   `tts model-install <id> --catalog <catalog> --activate`.
 - Model-management CLI stdout should remain structured JSON for automation; any
@@ -321,7 +328,7 @@ python3 scripts/package_windows_bundle.py
 - Long page playback now has a larger WebSocket text limit, stream progress
   metadata, a basic popup resume action, and page-capture metadata/truncation
   visibility. It now preserves short headings and reports structure counts, but
-  still lacks explicit section-jump navigation.
+  still lacks a full named reader-mode outline.
 - The Windows bundle still requires manual virtualenv setup, Chrome extension
   loading, and service allow-list configuration after extraction.
 - Persistent Windows auto-start/service-manager installation remains an explicit

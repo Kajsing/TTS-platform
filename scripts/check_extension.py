@@ -104,9 +104,14 @@ def collect_html_assets(path: Path) -> set[Path]:
 
 def verify_extension_wiring() -> None:
     required_fragments = {
-        EXTENSION_ROOT / "src" / "popup.html": ['id="resume-page"', 'id="onboarding-status"'],
+        EXTENSION_ROOT / "src" / "popup.html": [
+            'id="resume-page"',
+            'id="next-section"',
+            'id="onboarding-status"',
+        ],
         EXTENSION_ROOT / "src" / "popup.js": [
             '"tts-extension:resume-page"',
+            '"tts-extension:next-section"',
             "formatOnboardingStatus",
             "formatPageCapture",
             "formatPageStructure",
@@ -114,7 +119,9 @@ def verify_extension_wiring() -> None:
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
+            '"tts-extension:next-section"',
             "pageCapture",
+            "resolveNextSectionIndex",
             "sanitizePageCaptureMeta",
             "sanitizePageStructureMeta",
             "resolveResumeTextChunkIndex",
@@ -126,6 +133,8 @@ def verify_extension_wiring() -> None:
             "minimumBlockLength(blockKind)",
             "createStructureSummary",
             "capturedHeadingCount",
+            "startSectionIndex",
+            "buildCapturedSections",
             "truncated",
             "readableBlocks",
         ],

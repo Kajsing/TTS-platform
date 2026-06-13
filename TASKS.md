@@ -73,6 +73,7 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add richer extension UX for resuming from saved reader progress
 - [x] Add extension page-capture metadata for long-page truncation visibility
 - [x] Add extension page-structure metadata and short heading preservation
+- [x] Add extension next-section navigation for long page playback
 - [x] Add `model-install --activate` first-run shortcut and install guidance output
 - [x] Improve catalog listing and install progress output
 - [x] Add Windows-friendly local first-run setup helper

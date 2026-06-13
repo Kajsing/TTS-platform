@@ -50,17 +50,29 @@ function getSelectedText() {
   return extractReadableText(anchorElement, 1000).text;
 }
 
-function getPageCapture(maxChars = 24000) {
+function getPageCapture(maxChars = 24000, startSectionIndex = 0) {
   const requestedMaxChars = sanitizeMaxChars(maxChars);
+  const requestedStartSectionIndex = sanitizeSectionIndex(startSectionIndex);
   const root = pickReadableRoot();
-  const extracted = extractReadableText(root, requestedMaxChars);
+  const extracted = extractReadableText(root, requestedMaxChars, requestedStartSectionIndex);
   if (extracted.text) {
     return buildCaptureResult(extracted.text, {
       maxChars: requestedMaxChars,
+      startSectionIndex: requestedStartSectionIndex,
       source: extracted.source,
       truncated: extracted.truncated,
       readableBlocks: extracted.readableBlocks,
       structure: extracted.structure,
+    });
+  }
+  if (requestedStartSectionIndex > 0) {
+    return buildCaptureResult("", {
+      maxChars: requestedMaxChars,
+      startSectionIndex: requestedStartSectionIndex,
+      source: extracted.source,
+      truncated: false,
+      readableBlocks: 0,
+      structure: extracted.structure || emptyStructureSummary(),
     });
   }
 
@@ -68,6 +80,7 @@ function getPageCapture(maxChars = 24000) {
   const text = fallbackText.slice(0, requestedMaxChars).trim();
   return buildCaptureResult(text, {
     maxChars: requestedMaxChars,
+    startSectionIndex: requestedStartSectionIndex,
     source: "fallback-body",
     truncated: fallbackText.length > requestedMaxChars,
     readableBlocks: 0,
@@ -104,15 +117,17 @@ function pickReadableRoot() {
   return document.body;
 }
 
-function extractReadableText(root, maxChars) {
+function extractReadableText(root, maxChars, startSectionIndex = 0) {
   if (!root) {
     return emptyCapture("missing-root", maxChars);
   }
 
-  const blocks = [];
+  const blockEntries = [];
   const seen = new Set();
   const structure = createStructureSummary(root);
+  structure.startSectionIndex = startSectionIndex;
   let truncated = false;
+  let currentSectionIndex = -1;
   const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
   for (const element of candidates) {
     if (shouldSkipElement(element)) {
@@ -125,23 +140,40 @@ function extractReadableText(root, maxChars) {
       continue;
     }
 
-    blocks.push(text);
+    if (blockKind === "heading") {
+      currentSectionIndex += 1;
+    }
+    if (currentSectionIndex >= 0 && currentSectionIndex < startSectionIndex) {
+      continue;
+    }
+    if (currentSectionIndex < 0 && startSectionIndex > 0) {
+      continue;
+    }
+
+    blockEntries.push({
+      text,
+      kind: blockKind,
+      sectionIndex: Math.max(currentSectionIndex, 0),
+      level: getHeadingLevel(element),
+    });
     seen.add(text);
     recordCapturedBlock(structure, blockKind);
 
-    if (blocks.join("\n\n").length >= maxChars) {
+    if (joinBlockEntries(blockEntries).length >= maxChars) {
       truncated = true;
       break;
     }
   }
 
-  const joined = blocks.join("\n\n").trim();
+  const joined = joinBlockEntries(blockEntries).trim();
   if (joined) {
+    const text = joined.slice(0, maxChars).trim();
+    structure.sections = buildCapturedSections(blockEntries, maxChars);
     return {
-      text: joined.slice(0, maxChars).trim(),
+      text,
       source: "readable-blocks",
       truncated: truncated || joined.length > maxChars,
-      readableBlocks: blocks.length,
+      readableBlocks: blockEntries.length,
       structure,
     };
   }
@@ -181,6 +213,13 @@ function getBlockKind(element) {
   return "body";
 }
 
+function getHeadingLevel(element) {
+  if (!isHeadingElement(element)) {
+    return null;
+  }
+  return Number(element.tagName.slice(1));
+}
+
 function isHeadingElement(element) {
   return HEADING_TAGS.has(element.tagName);
 }
@@ -209,6 +248,8 @@ function emptyStructureSummary() {
     bodyBlockCount: 0,
     listItemCount: 0,
     quoteBlockCount: 0,
+    startSectionIndex: 0,
+    sections: [],
   };
 }
 
@@ -224,12 +265,40 @@ function recordCapturedBlock(summary, blockKind) {
   }
 }
 
+function joinBlockEntries(blockEntries) {
+  return blockEntries.map((entry) => entry.text).join("\n\n");
+}
+
+function buildCapturedSections(blockEntries, maxChars) {
+  const sections = [];
+  let textCharStart = 0;
+  for (const entry of blockEntries) {
+    if (entry.kind === "heading" && textCharStart < maxChars) {
+      sections.push({
+        index: entry.sectionIndex,
+        level: entry.level,
+        textCharStart,
+      });
+    }
+    textCharStart += entry.text.length + 2;
+  }
+  return sections;
+}
+
 function sanitizeMaxChars(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return 24000;
   }
   return Math.max(200, Math.min(48000, Math.round(parsed)));
+}
+
+function sanitizeSectionIndex(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(parsed));
 }
 
 function emptyCapture(source, maxChars) {
@@ -244,15 +313,18 @@ function emptyCapture(source, maxChars) {
 }
 
 function buildCaptureResult(text, meta) {
+  const structure = meta.structure || emptyStructureSummary();
+  structure.startSectionIndex = meta.startSectionIndex || structure.startSectionIndex || 0;
   return {
     text,
     meta: {
       source: meta.source,
       textChars: text.length,
       maxChars: meta.maxChars,
+      startSectionIndex: meta.startSectionIndex,
       truncated: Boolean(meta.truncated),
       readableBlocks: meta.readableBlocks,
-      structure: meta.structure || emptyStructureSummary(),
+      structure,
     },
   };
 }
@@ -264,6 +336,6 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   }
 
   if (message?.type === "tts-extension:get-page-text") {
-    sendResponse(getPageCapture(message.maxChars));
+    sendResponse(getPageCapture(message.maxChars, message.startSectionIndex));
   }
 });

@@ -31,6 +31,8 @@ backend-realism work, and early v1 model-management helpers:
   readable block counts, extraction source, and truncation status
 - extension page-structure metadata wiring for heading/body/list counts and
   short heading preservation in captured page text
+- extension next-section wiring that re-extracts the active tab from the next
+  heading-backed section without storing heading text
 - stream cancellation and streaming metrics updates
 - cancellation observability for jobs, streams, and synthesis attempts
 - observability snapshots and request ids
@@ -82,6 +84,8 @@ Recommended extension checks:
   when readable text reaches the configured character limit
 - verify short headings are included in page playback and that `Page Capture`
   reports heading/body/list structure counts
+- verify `Next Section` restarts page playback from a later heading-backed
+  section when one is available
 
 Run tests with:
 

@@ -14,6 +14,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   readable block count, extraction source, and truncation at the configured limit
 - preserve short article headings in page playback and show heading/body/list
   structure counts in playback state
+- jump to the next captured page section by re-extracting the active tab from
+  the next heading index
 - store local service settings such as base URL, token, preferred voice, and page-text limits
 - discover available voices from the local service
 - show service health and a ready-to-copy allow-list snippet for the extension origin
@@ -77,7 +79,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
     truncation when the readable page text reaches `Max Page Characters`.
 12. Confirm short article headings are included in page playback and that
     `Page Capture` reports heading/body/list structure counts.
-13. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+13. Use `Next Section` during page playback and confirm it restarts from a later
+    heading-backed section when one is available.
+14. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -91,6 +95,8 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
   raw page text.
 - Page-capture structure metadata stores counts only; it does not store heading
   text or other raw page text.
+- `Next Section` uses heading offsets and section indexes from the latest page
+  capture metadata, then re-extracts page text from the active tab.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 
 ## Validation
