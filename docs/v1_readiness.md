@@ -23,12 +23,13 @@ for long web-page text.
 - `python3 scripts/check_extension_reader_flow.py` verifies long-page reader
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
   `Continue Page`, popup long-page status, state-aware popup controls,
-  previous/next section navigation, truncated-page continuation to the first
-  known uncaptured section, truncated text-offset continuation without storing
-  raw page text, automatic continuation after a truncated segment finishes,
-  filtered fallback capture for flat pages, plus stop/restart recovery and
-  popup reopen-state signals, then streams a generated thousand-word article
-  through the local service WebSocket contract.
+  previous/next section navigation, best-root selection for pages with multiple
+  reader candidates, truncated-page continuation to the first known uncaptured
+  section, truncated text-offset continuation without storing raw page text,
+  automatic continuation after a truncated segment finishes, filtered fallback
+  capture for flat pages, plus stop/restart recovery and popup reopen-state
+  signals, then streams a generated thousand-word article through the local
+  service WebSocket contract.
 - `python3 scripts/check_chrome_extension_smoke.py` validates the extension
   static contract, then uses Chrome or Edge through DevTools Protocol when a
   browser is available. It loads the unpacked MV3 extension, starts an isolated
@@ -133,9 +134,9 @@ for long web-page text.
   `Next Section`, stop/restart behavior, and popup state after reopening in
   actual Chrome if operator comfort evidence is desired. The reader-flow
   contract automates truncated-section continuation, manual and automatic
-  truncated text-offset continuation, filtered fallback capture,
-  stop/recovery wiring, and popup state fields; the Chrome/MV3 smoke automates
-  one real browser path when Chrome or Edge is available.
+  truncated text-offset continuation, best-root selection, filtered fallback
+  capture, stop/recovery wiring, and popup state fields; the Chrome/MV3 smoke
+  automates one real browser path when Chrome or Edge is available.
 
 ## Product Choices
 

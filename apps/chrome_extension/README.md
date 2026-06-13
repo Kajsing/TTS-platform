@@ -113,7 +113,9 @@ action.
 - Browser WebSocket clients cannot set custom `Authorization` headers, so the prototype sends the bearer token in the first `start` event for `WS /v1/tts/stream`.
 - This token flow is intentionally limited to the localhost MVP shape and should be revisited if the browser client becomes more broadly distributed.
 - The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
-- Page text capture now prefers likely article/main content over a raw whole-body dump, but it still uses heuristic extraction rather than a full reader-mode pipeline.
+- Page text capture now scores likely article/main content candidates before
+  falling back to a body snapshot, but it still uses heuristic extraction
+  rather than a full reader-mode pipeline.
 - Page text capture skips hidden and non-reader DOM subtrees such as
   `aria-hidden`, `hidden`, `inert`, navigation, forms, and script/style assets
   in both structured extraction and fallback plain-text extraction.
@@ -169,9 +171,9 @@ python3 scripts/check_extension_reader_flow.py
 
 This verifies the `Speak Page`, reader progress, page-capture metadata,
 `Resume Page`, `Continue Page`, state-aware popup controls, previous/next
-section navigation, truncated-section continuation, manual and automatic
-truncated text-offset continuation, filtered fallback capture, stop/restart
-recovery, and popup reopen-state wiring, then
+section navigation, best-root selection, truncated-section continuation,
+manual and automatic truncated text-offset continuation, filtered fallback
+capture, stop/restart recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
 

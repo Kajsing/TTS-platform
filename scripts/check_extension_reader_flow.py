@@ -245,6 +245,9 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "sanitizeMaxChars",
             "sanitizeTextCharOffset",
             "Math.min(48000",
+            "function scoreReadableRootCandidate(candidate)",
+            "for (const candidate of document.querySelectorAll(selector))",
+            "bestCandidate",
             "startSectionIndex",
             "startTextChar",
             "nextTextCharStart",
@@ -303,6 +306,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "popup_reopen_state": True,
         "raw_page_text_persistence": False,
         "filtered_fallback_capture": True,
+        "best_root_selection": True,
     }
 
 

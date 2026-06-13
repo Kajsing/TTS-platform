@@ -31,6 +31,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "popup_reopen_state": True,
         "raw_page_text_persistence": False,
         "filtered_fallback_capture": True,
+        "best_root_selection": True,
     }
     assert fixture_summary["word_count"] >= 1000
     assert fixture_summary["section_count"] >= 4

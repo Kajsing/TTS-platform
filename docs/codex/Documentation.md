@@ -245,6 +245,9 @@ This file is the live status log and shared memory for future Codex loops.
   - fallback plain-text page capture now uses the same filtered DOM text walk,
     so flat pages without enough reader blocks avoid hidden UI and chrome
     subtrees too.
+  - readable-root selection now scores all matching article/main/content
+    candidates instead of returning the first match, improving long-page capture
+    on pages with multiple reader-like containers.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

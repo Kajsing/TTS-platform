@@ -125,16 +125,32 @@ function getControlSelection(element) {
 }
 
 function pickReadableRoot() {
+  let bestCandidate = null;
+  let bestScore = 0;
   for (const selector of PRIMARY_CONTENT_SELECTORS) {
-    const candidate = document.querySelector(selector);
-    if (!candidate || isElementHidden(candidate)) {
-      continue;
-    }
-    if (normalizeInlineText(candidate.innerText || "").length >= 200) {
-      return candidate;
+    for (const candidate of document.querySelectorAll(selector)) {
+      if (shouldSkipElement(candidate)) {
+        continue;
+      }
+      const score = scoreReadableRootCandidate(candidate);
+      if (score > bestScore) {
+        bestCandidate = candidate;
+        bestScore = score;
+      }
     }
   }
-  return document.body;
+  return bestCandidate || document.body;
+}
+
+function scoreReadableRootCandidate(candidate) {
+  const textLength = extractFallbackText(candidate).length;
+  if (textLength < 200) {
+    return 0;
+  }
+  const blockCount = Array.from(candidate.querySelectorAll(BLOCK_SELECTORS.join(", "))).filter(
+    (element) => !shouldSkipElement(element)
+  ).length;
+  return textLength + blockCount * 50;
 }
 
 function extractReadableText(root, maxChars, startSectionIndex = 0, startTextChar = 0) {

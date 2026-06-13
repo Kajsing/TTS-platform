@@ -348,5 +348,8 @@ hidden UI noise without adding a full reader-mode extractor.
 The fiftieth reader-flow reliability slice routes fallback plain-text capture
 through the same skip/hidden subtree filters, so flat pages without enough
 reader blocks still avoid hidden UI and chrome noise.
+The fifty-first reader-flow reliability slice changes readable-root selection
+from first matching candidate to best scored candidate, improving extraction on
+pages with multiple article/main/content containers.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
