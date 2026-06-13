@@ -45,6 +45,7 @@ def test_windows_launchers_check_orchestrates_available_launchers(
             "base_url": "http://127.0.0.1:7777",
             "default_voice": "sherpa-en-debug",
             "manifest_default_voice": True,
+            "next_steps": ["tts model-check", "tts serve"],
         }
 
     def fake_check_launcher_service(
@@ -184,6 +185,45 @@ def test_run_launcher_command_uses_python_override_and_parses_json(
         python_executable="python-test",
         timeout_s=3.0,
     ) == payload
+
+
+def test_check_launcher_setup_only_exposes_setup_next_steps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    def fake_extract_bundle(*, bundle_path: Path, extract_root: Path) -> None:
+        (extract_root / check_module.BUNDLE_ROOT).mkdir()
+
+    setup_payload = {
+        "config_created": True,
+        "token_created": True,
+        "service": {"base_url": "http://127.0.0.1:7777"},
+        "default_voice": "sherpa-en-debug",
+        "manifest": {"default_voice_in_manifest": True},
+        "next_steps": ["tts model-check", "tts serve"],
+    }
+
+    monkeypatch.setattr(check_module, "_extract_bundle", fake_extract_bundle)
+    monkeypatch.setattr(check_module, "_run_launcher_command", lambda **kwargs: setup_payload)
+    monkeypatch.setattr(
+        check_module.check_windows_bundle_bootstrap,
+        "_assert_setup_payload",
+        lambda **kwargs: None,
+    )
+
+    summary = check_module._check_launcher_setup_only(
+        bundle_path=bundle_path,
+        launcher_name="powershell",
+        command_builder=lambda bundle_root: ["launcher", str(bundle_root), "-SetupOnly"],
+        python_executable="python-test",
+        timeout_s=3.0,
+    )
+
+    assert summary["next_steps"] == ["tts model-check", "tts serve"]
 
 
 def test_check_launcher_service_runs_smoke_and_stops_process(

@@ -222,6 +222,7 @@ def _check_launcher_setup_only(
             payload.get("manifest"),
             "default_voice_in_manifest",
         ),
+        "next_steps": _string_list(payload.get("next_steps")),
     }
 
 
@@ -430,6 +431,12 @@ def _dict_get(value: object, key: str) -> object:
     if isinstance(value, dict):
         return value.get(key)
     return None
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _load_script_module(name: str, path: Path) -> ModuleType:

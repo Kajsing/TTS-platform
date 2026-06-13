@@ -11,21 +11,22 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Windows bundle install check now exposes and
-  validates installed `setup-local` next-step guidance, including
-  `tts model-check`, after the bundled venv/install path.
+- Current loop result: Windows launcher setup-only checks now expose
+  `setup-local` next-step guidance, including `tts model-check`, in launcher
+  summaries.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_windows_bundle_install.py apps\tts_service\tests\test_windows_bundle_install_check.py`.
+    `py -3 -m ruff check scripts\check_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py -q`
-    and reported 3 passed.
+    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`
+    and reported 5 passed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
-  - `py -3 scripts\check_windows_bundle_install.py` passed after sandbox
-    escalation and reported `setup.next_steps` containing `tts model-check`.
+  - `py -3 scripts\check_windows_launchers.py` passed after sandbox
+    escalation and reported setup-only `next_steps` containing
+    `tts model-check` for both PowerShell and CMD launchers.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 162 tests.
+  - `py -3 -m pytest -q` passed with 163 tests.
   - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
     Windows bundle bootstrap/install, and model-management flow checks.
 - Tooling status:
@@ -279,6 +280,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_windows_launchers.py` now extracts a Windows bundle and
     verifies the bundled PowerShell/CMD launchers in setup-only mode when
     Windows launcher executables are available.
+  - Windows launcher setup-only summaries now expose `setup-local` next-step
+    guidance, including `tts model-check`, alongside config/token creation
+    evidence.
   - `scripts/check_windows_launchers.py` now also starts bundled PowerShell/CMD
     launchers as foreground services on reserved loopback ports, runs
     public-contract smoke, and stops the process trees.

@@ -63,7 +63,8 @@ for long web-page text.
 - `python3 scripts/check_windows_launchers.py` extracts a Windows local reader
   bundle and runs the bundled PowerShell/CMD launchers in setup-only mode when
   Windows launcher executables are available, verifying direct first-run
-  config/token creation without starting a long-lived service process. On
+  config/token creation and setup next-step guidance without starting a
+  long-lived service process. On
   Windows, it also starts both launchers as foreground services on reserved
   loopback ports, runs public-contract smoke, and stops the process trees.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
