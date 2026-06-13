@@ -39,6 +39,10 @@ for long web-page text.
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks the embedded extension zip, and runs `setup-local` from the
   extracted source paths.
+- `python3 scripts/check_windows_launchers.py` extracts a Windows local reader
+  bundle and runs the bundled PowerShell/CMD launchers in setup-only mode when
+  Windows launcher executables are available, verifying direct first-run
+  config/token creation without starting a long-lived service process.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   starts the installed `tts serve` entrypoint, runs public-contract smoke, and
@@ -47,8 +51,9 @@ for long web-page text.
 ## Manual Gates
 
 - Run the Windows launcher scripts directly on an operator machine for manual
-  PowerShell/CMD verification. The extracted-bundle venv install plus installed
-  `tts serve` path is automated; direct launcher-script UX remains manual.
+  long-running service verification. The extracted-bundle launcher setup-only
+  path, venv install, and installed `tts serve` path are automated; manually
+  observing the launcher as a foreground service remains manual.
 - Install and activate a real local voice with
   `tts model-install <model-id> --catalog ./models/catalog.json --activate`.
   The local artifact workflow is automated; real acoustic-output readiness
@@ -84,6 +89,7 @@ for long web-page text.
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
-- Direct PowerShell/CMD launcher UX remains manual; the automated gates cover
-  safe extraction, `setup-local`, temporary venv installation, installed
-  `tts serve`, loopback service startup, and stub-backed smoke.
+- Foreground PowerShell/CMD launcher service UX remains manual; the automated
+  gates cover safe extraction, launcher setup-only execution, `setup-local`,
+  temporary venv installation, installed `tts serve`, loopback service startup,
+  and stub-backed smoke.

@@ -39,6 +39,7 @@ INCLUDED_FILES = (
     "scripts/check_v1_readiness.py",
     "scripts/check_windows_bundle_bootstrap.py",
     "scripts/check_windows_bundle_install.py",
+    "scripts/check_windows_launchers.py",
     "scripts/dev_run.py",
     "scripts/package_extension.py",
     "scripts/package_windows_bundle.py",
@@ -172,11 +173,14 @@ manager, scheduled task, or auto-start entry.
 4. Start the local service:
 
    ```powershell
+   .\\scripts\\windows\\run_service.ps1 -SetupOnly
    .\\scripts\\windows\\run_service.ps1
    ```
 
-   The launcher creates `config\\config.toml` and `config\\token.txt` on first
-   run when needed, then starts `tts serve` on the configured loopback address.
+   The optional `-SetupOnly` check creates `config\\config.toml` and
+   `config\\token.txt` without starting the service. Running the launcher
+   without `-SetupOnly` then starts `tts serve` on the configured loopback
+   address.
 
 5. Load the Chrome extension:
 

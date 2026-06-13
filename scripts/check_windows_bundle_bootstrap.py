@@ -23,6 +23,7 @@ README_ARCNAME = f"{BUNDLE_ROOT}/WINDOWS_BUNDLE_README.md"
 README_MARKERS = (
     "py -3 -m venv .venv",
     'python -m pip install -e ".[dev]"',
+    ".\\scripts\\windows\\run_service.ps1 -SetupOnly",
     ".\\scripts\\windows\\run_service.ps1",
     "config\\token.txt",
     "security.allowed_origins",

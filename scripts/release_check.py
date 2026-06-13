@@ -187,6 +187,15 @@ def _run_release_checks_with_package_path(
             ],
         ),
         (
+            "windows_launchers",
+            [
+                python_executable,
+                "scripts/check_windows_launchers.py",
+                "--bundle",
+                str(windows_bundle_out_path),
+            ],
+        ),
+        (
             "windows_bundle_install",
             [
                 python_executable,

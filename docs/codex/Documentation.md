@@ -11,27 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The extension stop/restart recovery slice persists
-  interrupted playback state when popup/background state is restored without an
-  offscreen document, keeps the manual stop fallback truthful, and extends the
-  long-page reader-flow gate with stop/restart recovery plus popup reopen-state
-  signals.
+- Current loop result: The Windows launcher first-run slice adds a setup-only
+  launcher path, fixes a PowerShell parser issue in `run_service.ps1`, lets the
+  release gate use `TTS_PLATFORM_PYTHON` for deterministic launcher execution,
+  and adds `scripts/check_windows_launchers.py` to run bundled PowerShell/CMD
+  launchers far enough to create local config/token files without starting a
+  long-lived service process.
 - Validation status for the current loop:
-  - `py -3 scripts/check_extension_reader_flow.py` passed with a 2,963-word
-    generated article, 145 stream text chunks, `stop_restart_recovery: true`,
-    and `popup_reopen_state: true`.
-  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
-    passed with 3 tests.
-  - Targeted `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py`
-    passed.
-  - `py -3 scripts/check_extension.py` passed; JavaScript syntax checks were
-    skipped because `node` is not installed.
+  - Targeted `py -3 -m ruff check ...` passed for the new launcher checker,
+    release/package/readiness wiring, and related tests.
+  - `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    passed with 9 tests.
   - `py -3 scripts/check_v1_readiness.py` passed.
+  - `py -3 scripts/check_windows_launchers.py` passed; both PowerShell and CMD
+    launchers created config/token files in setup-only mode with no skips.
+  - `py -3 scripts/package_windows_bundle.py --out $env:TEMP\tts-platform-local-reader-check.zip`
+    passed and produced a 66-file bundle.
+  - `py -3 scripts/check_windows_bundle_bootstrap.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 139 tests.
-  - `py -3 scripts/release_check.py` passed, including
-    `extension_reader_flow`, Windows bundle bootstrap, and Windows bundle
-    install checks.
+  - `py -3 -m pytest -q` passed with 142 tests.
+  - `py -3 scripts/release_check.py` passed, including `windows_launchers`
+    with PowerShell and CMD setup-only checks and no skips.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -147,6 +147,9 @@ This file is the live status log and shared memory for future Codex loops.
     loopback hosts.
   - `scripts/windows/run_service.ps1` and `run_service.cmd` provide
     Windows-friendly local launchers for setup fallback plus service start.
+  - `scripts/windows/run_service.ps1 -SetupOnly` now runs first-run setup and
+    exits before service start; `run_service.cmd` delegates that mode to
+    PowerShell.
   - `scripts/package_windows_bundle.py` builds a Windows-friendly local reader
     bundle with service/core source, Windows launchers, config example, docs,
     Chrome extension source, and a validated extension zip.
@@ -215,6 +218,9 @@ This file is the live status log and shared memory for future Codex loops.
     Windows bundle through temporary `.venv` creation, package install,
     installed `tts setup-local`, installed `tts serve`, and public-contract
     smoke.
+  - `scripts/check_windows_launchers.py` now extracts a Windows bundle and
+    verifies the bundled PowerShell/CMD launchers in setup-only mode when
+    Windows launcher executables are available.
   - `scripts/check_local_service_bootstrap.py` now starts a temp first-run
     loopback service and runs public-contract smoke without repo-local config
     or token side effects.

@@ -65,9 +65,11 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/check_v1_readiness.py" in names
     assert "tts-platform/scripts/check_windows_bundle_bootstrap.py" in names
     assert "tts-platform/scripts/check_windows_bundle_install.py" in names
+    assert "tts-platform/scripts/check_windows_launchers.py" in names
     assert "tts-platform/scripts/package_windows_bundle.py" in names
     assert "tts-platform/scripts/release_check.py" in names
     assert "tts-platform/dist/chrome_extension/tts-platform-prototype.zip" in names
+    assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme
 

@@ -2,7 +2,8 @@
 param(
     [string]$HostOverride = "",
     [int]$Port = 0,
-    [switch]$AllowNonLocalHost
+    [switch]$AllowNonLocalHost,
+    [switch]$SetupOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +23,9 @@ $env:PYTHONPATH = ($PythonPathParts -join [System.IO.Path]::PathSeparator)
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $PythonExe = ""
 $PythonPrefixArgs = @()
-if (Test-Path $VenvPython) {
+if ($env:TTS_PLATFORM_PYTHON) {
+    $PythonExe = $env:TTS_PLATFORM_PYTHON
+} elseif (Test-Path $VenvPython) {
     $PythonExe = $VenvPython
 } elseif (Get-Command py -ErrorAction SilentlyContinue) {
     $PythonExe = "py"
@@ -33,14 +36,18 @@ if (Test-Path $VenvPython) {
 
 $ModuleArgs = @("-m", "tts_service.cli")
 
-if (-not (Test-Path $ConfigPath)) {
+if ($SetupOnly -or -not (Test-Path $ConfigPath)) {
     & $PythonExe @PythonPrefixArgs @ModuleArgs "setup-local" "--repo-root" $RepoRoot
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
 }
 
-$ServeArgs = @ModuleArgs + @("serve", "--repo-root", $RepoRoot)
+if ($SetupOnly) {
+    exit 0
+}
+
+$ServeArgs = $ModuleArgs + @("serve", "--repo-root", $RepoRoot)
 if ($HostOverride) {
     $ServeArgs += @("--host", $HostOverride)
 }

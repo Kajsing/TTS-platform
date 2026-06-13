@@ -220,6 +220,9 @@ fifteenth release-hardening slice now adds
 generated thousand-word WebSocket stream smoke. The sixteenth
 release-hardening slice tightens extension stop/restart and popup reopen-state
 recovery by persisting interrupted playback state when the offscreen document is
-gone and extending the reader-flow gate to cover those signals. Continue from
-the readiness audit: either automate another listed manual gate or take the
-next reader-flow/product slice.
+gone and extending the reader-flow gate to cover those signals. The seventeenth
+release-hardening slice adds a setup-only Windows launcher path plus
+`scripts/check_windows_launchers.py`, covering bundled PowerShell/CMD
+first-run setup without choosing a permanent service manager. Continue from the
+readiness audit: either automate another listed manual gate or take the next
+reader-flow/product slice.

@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     "scripts/check_model_management_flow.py",
     "scripts/check_windows_bundle_bootstrap.py",
     "scripts/check_windows_bundle_install.py",
+    "scripts/check_windows_launchers.py",
     "scripts/package_extension.py",
     "scripts/package_windows_bundle.py",
     "scripts/smoke_service.py",
@@ -51,6 +52,7 @@ READINESS_MARKERS = (
     "python3 scripts/check_model_management_flow.py",
     "python3 scripts/package_windows_bundle.py",
     "python3 scripts/check_windows_bundle_bootstrap.py",
+    "python3 scripts/check_windows_launchers.py",
     "python3 scripts/check_windows_bundle_install.py",
     "python3 scripts/release_check.py --live-smoke --token-file config/token.txt",
     "--stream-text-repeat 200 --min-stream-text-chunks 2",
@@ -71,6 +73,7 @@ REQUIRED_TEXT_MARKERS = {
         '"extension_package"',
         '"windows_bundle"',
         '"windows_bundle_bootstrap"',
+        '"windows_launchers"',
         '"windows_bundle_install"',
     ),
     "scripts/check_extension.py": (
@@ -91,6 +94,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/check_model_management_flow.py",
         "scripts/check_windows_bundle_bootstrap.py",
         "scripts/check_windows_bundle_install.py",
+        "scripts/check_windows_launchers.py",
     ),
     "TESTING.md": (
         "v1-readiness",

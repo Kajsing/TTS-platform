@@ -76,9 +76,13 @@ backend-realism work, and early v1 model-management helpers:
 - Windows local reader bundle bootstrap checks that safely extract the bundle,
   verify local token/model artifacts are absent, inspect the embedded extension
   zip, and run `setup-local` from the extracted source paths
+- Windows launcher setup-only checks that run the bundled PowerShell/CMD
+  launchers far enough to create local config/token files without starting a
+  long-lived service process
 - repo-native release check orchestration for ruff, pytest, security-default
   verification, v1-readiness verification, extension validation, extension
-  package build, Windows bundle build, and Windows bundle bootstrap check
+  package build, Windows bundle build, launcher setup checks, and Windows
+  bundle bootstrap/install checks
 - v1-readiness documentation checks that keep automated gates, manual gates,
   product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
@@ -135,6 +139,9 @@ public-contract smoke against that isolated config/token root.
 It also creates a temporary local model artifact/catalog, verifies
 catalog-list, install, activate, service smoke with the installed voice, and
 remove.
+It runs the bundled Windows launchers in setup-only mode when Windows launcher
+executables are available, verifying direct first-run setup without choosing a
+permanent service manager.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet shape.
@@ -174,6 +181,12 @@ Check the built bundle's temporary virtualenv install/start path with:
 
 ```bash
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
+```
+
+Check the built bundle's PowerShell/CMD launcher setup-only path with:
+
+```bash
+python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
 Check the source first-run service bootstrap path directly with:

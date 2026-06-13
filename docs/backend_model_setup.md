@@ -61,10 +61,12 @@ Windows launcher scripts are also available:
 scripts\windows\run_service.cmd
 ```
 
-The launchers set `PYTHONPATH` for the repo-local service/core packages, prefer
-`.venv\Scripts\python.exe` when present, fall back to `py -3`, run
-`setup-local` if `config/config.toml` is missing, and then run `tts serve`.
-They are convenience launchers, not persistent Windows service installers.
+The launchers set `PYTHONPATH` for the repo-local service/core packages, honor
+`TTS_PLATFORM_PYTHON` when set, prefer `.venv\Scripts\python.exe` when present,
+fall back to `py -3`, run `setup-local` when needed, and then run `tts serve`.
+Use `.\scripts\windows\run_service.ps1 -SetupOnly` to create
+`config\config.toml` and `config\token.txt` without starting the service. They
+are convenience launchers, not persistent Windows service installers.
 
 Build a Windows-friendly local reader bundle with:
 
@@ -79,6 +81,8 @@ Chrome extension zip under `dist\chrome_extension\`. It deliberately excludes
 local secrets such as `config\token.txt` and installed model files under
 `models\voices\`. The generated `WINDOWS_BUNDLE_README.md` explains the
 extract, virtualenv, launcher, and extension-loading flow.
+`scripts/check_windows_launchers.py` verifies the bundled PowerShell/CMD
+launchers in setup-only mode when Windows launcher executables are available.
 `scripts/check_windows_bundle_install.py` verifies the extracted bundle in a
 temporary virtual environment by installing the package, running the installed
 `tts setup-local` and `tts serve` entrypoint, and executing public-contract
