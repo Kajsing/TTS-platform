@@ -76,6 +76,11 @@ button.primary {
   border-color: var(--accent);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .panel-header {
   display: flex;
   align-items: center;

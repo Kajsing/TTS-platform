@@ -16,6 +16,13 @@ const originCommand = document.querySelector("#origin-command");
 const originSnippet = document.querySelector("#origin-snippet");
 const voiceHint = document.querySelector("#voice-hint");
 const actionMessage = document.querySelector("#action-message");
+const readerActionButtons = {
+  resumePage: document.querySelector("#resume-page"),
+  continuePage: document.querySelector("#continue-page"),
+  previousSection: document.querySelector("#previous-section"),
+  nextSection: document.querySelector("#next-section"),
+  stopPlayback: document.querySelector("#stop-playback"),
+};
 
 async function loadPopup() {
   const config = await sendMessage({ type: "tts-extension:get-config" });
@@ -33,6 +40,7 @@ async function loadPopup() {
 async function refreshState() {
   const state = await sendMessage({ type: "tts-extension:get-state" });
   statusText.textContent = formatPlaybackState(state);
+  updateReaderActionState(state);
 }
 
 async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
@@ -198,6 +206,156 @@ async function runAction(type) {
 function setActionMessage(message, kind = "info") {
   actionMessage.textContent = message;
   actionMessage.dataset.kind = kind;
+}
+
+function updateReaderActionState(state) {
+  const capabilities = resolveReaderCapabilities(state);
+  setActionButtonState(
+    readerActionButtons.resumePage,
+    capabilities.resumePage,
+    "No resumable page progress is available."
+  );
+  setActionButtonState(
+    readerActionButtons.continuePage,
+    capabilities.continuePage,
+    "No truncated page continuation is available."
+  );
+  setActionButtonState(
+    readerActionButtons.previousSection,
+    capabilities.previousSection,
+    "No previous page section is available."
+  );
+  setActionButtonState(
+    readerActionButtons.nextSection,
+    capabilities.nextSection,
+    "No next page section is available."
+  );
+  setActionButtonState(
+    readerActionButtons.stopPlayback,
+    capabilities.stopPlayback,
+    "No active playback is running."
+  );
+}
+
+function setActionButtonState(button, enabled, unavailableTitle) {
+  button.disabled = !enabled;
+  button.title = enabled ? "" : unavailableTitle;
+  button.dataset.available = String(Boolean(enabled));
+}
+
+function resolveReaderCapabilities(state) {
+  return {
+    resumePage: canResumePage(state.readerProgress),
+    continuePage: canContinuePage(state.pageCapture),
+    previousSection: resolvePreviousSectionIndex(state) != null,
+    nextSection: resolveNextSectionIndex(state) != null,
+    stopPlayback: isActivePlaybackStatus(state.status),
+  };
+}
+
+function canResumePage(progress) {
+  if (!progress) {
+    return false;
+  }
+  const chunkIndex = Number(progress.text_chunk_index);
+  const chunkCount = Number(progress.text_chunk_count);
+  const percent = Number(progress.percent);
+  if (!Number.isFinite(chunkIndex) || !Number.isFinite(chunkCount) || chunkCount <= 0) {
+    return false;
+  }
+  if (Number.isFinite(percent) && percent >= 1) {
+    return false;
+  }
+  return chunkIndex >= 0 && chunkIndex < chunkCount;
+}
+
+function canContinuePage(pageCapture) {
+  if (!pageCapture?.truncated) {
+    return false;
+  }
+  const nextTextCharStart = Number(pageCapture?.structure?.nextTextCharStart);
+  const currentTextCharStart = Number(pageCapture?.structure?.startTextChar ?? 0);
+  if (!Number.isFinite(nextTextCharStart) || nextTextCharStart <= 0) {
+    return false;
+  }
+  return !Number.isFinite(currentTextCharStart) || nextTextCharStart > currentTextCharStart;
+}
+
+function resolveNextSectionIndex(state) {
+  const structure = state.pageCapture?.structure ?? {};
+  const sections = pageSections(structure);
+  const completedTextChars = completedReaderTextChars(state.readerProgress);
+  const nextSection = sections.find((section) => {
+    const textCharStart = Number(section?.textCharStart ?? 0);
+    return Number.isFinite(textCharStart) && textCharStart > completedTextChars;
+  });
+  if (nextSection) {
+    const sectionIndex = Number(nextSection.index);
+    return Number.isFinite(sectionIndex) && sectionIndex >= 0 ? Math.floor(sectionIndex) : null;
+  }
+  return resolveNextUncapturedSectionIndex(state, structure, sections);
+}
+
+function resolvePreviousSectionIndex(state) {
+  const structure = state.pageCapture?.structure ?? {};
+  const sections = pageSections(structure);
+  const currentSectionIndex = resolveCurrentSectionIndex(state, structure, sections);
+  if (currentSectionIndex == null || currentSectionIndex <= 0) {
+    return null;
+  }
+  return currentSectionIndex - 1;
+}
+
+function resolveCurrentSectionIndex(state, structure, sections) {
+  const completedTextChars = completedReaderTextChars(state.readerProgress);
+  const sortedSections = sections
+    .slice()
+    .sort((left, right) => Number(left?.textCharStart ?? 0) - Number(right?.textCharStart ?? 0));
+  let currentSectionIndex = null;
+  for (const section of sortedSections) {
+    const textCharStart = Number(section?.textCharStart ?? 0);
+    const sectionIndex = Number(section?.index);
+    if (
+      Number.isFinite(textCharStart) &&
+      Number.isFinite(sectionIndex) &&
+      textCharStart <= completedTextChars
+    ) {
+      currentSectionIndex = Math.floor(sectionIndex);
+    }
+  }
+  if (currentSectionIndex == null) {
+    const startSectionIndex = Number(structure.startSectionIndex ?? 0);
+    currentSectionIndex = Number.isFinite(startSectionIndex) ? Math.floor(startSectionIndex) : 0;
+  }
+  return currentSectionIndex;
+}
+
+function resolveNextUncapturedSectionIndex(state, structure, sections) {
+  if (!state.pageCapture?.truncated) {
+    return null;
+  }
+  const nextSectionIndex = Number(structure.nextSectionIndex);
+  if (!Number.isFinite(nextSectionIndex) || nextSectionIndex < 0) {
+    return null;
+  }
+  const currentSectionIndex = resolveCurrentSectionIndex(state, structure, sections);
+  if (currentSectionIndex != null && nextSectionIndex <= currentSectionIndex) {
+    return null;
+  }
+  return Math.floor(nextSectionIndex);
+}
+
+function completedReaderTextChars(progress) {
+  const completedTextChars = Number(progress?.completed_text_chars ?? progress?.text_char_end ?? 0);
+  return Number.isFinite(completedTextChars) ? Math.max(0, completedTextChars) : 0;
+}
+
+function pageSections(structure) {
+  return Array.isArray(structure.sections) ? structure.sections : [];
+}
+
+function isActivePlaybackStatus(status) {
+  return new Set(["connecting", "buffering", "streaming", "draining"]).has(status);
 }
 
 function formatPlaybackState(state) {

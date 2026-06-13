@@ -264,6 +264,8 @@ The extension currently supports:
   finishes normally
 - displaying long-page status for segment offsets, automatic continuation, and
   next known section metadata without storing raw page text
+- disabling unavailable resume, continue, section navigation, and stop controls
+  until the latest playback state can support them
 - stopping playback and preserving a truthful interrupted/recovered state when
   the popup is reopened after the offscreen playback document is gone
 - local storage of base URL, token, voice, and buffering settings

@@ -11,10 +11,9 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension popup now shows a dedicated
-  long-page status line for truncated page playback, reporting segment offsets,
-  automatic continuation state, next continuation character, and next known
-  section metadata without storing raw page text.
+- Current loop result: The Chrome extension popup reader controls are now
+  state-aware: resume, continue, previous/next section, and stop buttons are
+  disabled until the latest playback metadata supports them.
 - Validation status for the current loop:
   - Targeted ruff passed with
     `py -3 -m ruff check scripts\check_extension_reader_flow.py apps\tts_service\tests\test_extension_reader_flow_check.py`.
@@ -22,8 +21,8 @@ This file is the live status log and shared memory for future Codex loops.
     `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
     and reported 3 passed.
   - `py -3 scripts\check_extension_reader_flow.py` passed and reported
-    `popup_long_page_status = true`, a 2,963-word generated article, and 145
-    stream text chunks.
+    `popup_state_aware_actions = true`, `popup_long_page_status = true`, a
+    2,963-word generated article, and 145 stream text chunks.
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
     skipped because `node` is not installed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
@@ -124,6 +123,8 @@ This file is the live status log and shared memory for future Codex loops.
   - the popup now displays a `Long Page` status line for truncated page
     segments, showing the current text offset, automatic continuation state,
     next continuation character, and next known section metadata when present.
+  - the popup now disables unavailable resume, continue, previous/next section,
+    and stop controls based on the latest non-text playback metadata.
   - the popup now exposes `Previous Section`; background resolves the previous
     heading-backed section from current reader progress and page-capture
     metadata, re-extracts the active tab from that section index, and starts

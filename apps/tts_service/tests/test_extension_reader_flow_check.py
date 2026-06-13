@@ -24,6 +24,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "resume_and_section_navigation": True,
         "automatic_truncated_text_continuation": True,
         "popup_long_page_status": True,
+        "popup_state_aware_actions": True,
         "truncated_text_continuation": True,
         "truncated_section_continuation": True,
         "stop_restart_recovery": True,
