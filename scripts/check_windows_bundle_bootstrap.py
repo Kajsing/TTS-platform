@@ -23,6 +23,9 @@ README_ARCNAME = f"{BUNDLE_ROOT}/WINDOWS_BUNDLE_README.md"
 README_MARKERS = (
     "py -3 -m venv .venv",
     'python -m pip install -e ".[dev]"',
+    "python -m tts_service.cli setup-local --repo-root .",
+    ".\\.venv\\Scripts\\tts.exe model-check",
+    "tts.exe model-install <model-id> --catalog <catalog> --activate",
     ".\\scripts\\windows\\run_service.ps1 -SetupOnly",
     ".\\scripts\\windows\\run_service.ps1",
     "config\\token.txt",

@@ -121,6 +121,9 @@ def _entry_payload(entry: str) -> str:
             [
                 "py -3 -m venv .venv",
                 'python -m pip install -e ".[dev]"',
+                "python -m tts_service.cli setup-local --repo-root .",
+                ".\\.venv\\Scripts\\tts.exe model-check",
+                "tts.exe model-install <model-id> --catalog <catalog> --activate",
                 ".\\scripts\\windows\\run_service.ps1",
                 "apps\\chrome_extension\\INSTALL.md",
                 "config\\token.txt",

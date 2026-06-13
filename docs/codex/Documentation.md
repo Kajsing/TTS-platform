@@ -11,20 +11,21 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: Windows launcher setup-only checks now expose
-  `setup-local` next-step guidance, including `tts model-check`, in launcher
-  summaries.
+- Current loop result: The generated Windows bundle README now includes an
+  explicit manual `setup-local` command plus `model-check` and real-model
+  install guidance before first Chrome playback. The bundle bootstrap check
+  validates those model-readiness guide markers.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py`.
+    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
   - Targeted tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers_check.py -q`
-    and reported 5 passed.
+    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py -q`
+    and reported 3 passed.
   - `py -3 scripts\check_v1_readiness.py` passed with 37 checked files and 30
     readiness markers.
-  - `py -3 scripts\check_windows_launchers.py` passed after sandbox
-    escalation and reported setup-only `next_steps` containing
-    `tts model-check` for both PowerShell and CMD launchers.
+  - `py -3 scripts\check_windows_bundle_bootstrap.py` passed after sandbox
+    escalation and validated the generated bundle README plus `setup-local`
+    next-step guidance.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 163 tests.
   - `py -3 scripts\release_check.py` passed, including setup-local bootstrap,
@@ -182,6 +183,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/package_windows_bundle.py` builds a Windows-friendly local reader
     bundle with service/core source, Windows launchers, config example, docs,
     Chrome extension source, and a validated extension zip.
+  - The generated Windows bundle README now includes explicit model-readiness
+    handoff guidance: run `model-check`, install and activate a real model
+    from a catalog, then re-check before expecting real acoustic output.
   - The Windows bundle intentionally excludes `config/token.txt` and installed
     model files under `models/voices/`.
   - `scripts/windows/install_local.ps1` and `install_local.cmd` now bootstrap
@@ -263,8 +267,9 @@ This file is the live status log and shared memory for future Codex loops.
     the local release gate.
   - `scripts/check_windows_bundle_bootstrap.py` now safely extracts a Windows
     local reader bundle, verifies the absence of local token/model artifacts,
-    checks the embedded extension zip including install guide/icons, and runs
-    `setup-local` from the extracted source paths.
+    checks first-run/model-readiness guide markers, checks the embedded
+    extension zip including install guide/icons, and runs `setup-local` from
+    the extracted source paths.
   - local service and Windows bundle bootstrap checks now expose and validate
     `setup-local` next-step guidance, including `tts model-check`, in their
     JSON summaries.
@@ -522,11 +527,11 @@ python3 scripts/package_windows_bundle.py
   visibility. It now preserves short headings, reports structure counts, and
   can continue truncated flat pages by text offset manually or automatically
   after a segment finishes, but still lacks a full named reader-mode outline.
-- The Windows bundle still requires manual virtualenv setup, Chrome extension
-  loading, and service allow-list configuration after extraction. The
-  virtualenv install/start path is now covered by an automated temp-venv smoke,
-  and launcher setup-only plus foreground service smoke execution is covered for
-  PowerShell/CMD.
+- The Windows bundle still requires the operator to run the bundled install
+  script, load the Chrome extension, and configure the service allow-list after
+  extraction. The virtualenv install/start path is now covered by an automated
+  temp-venv smoke, and launcher setup-only plus foreground service smoke
+  execution is covered for PowerShell/CMD.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
 - The default Chrome/MV3 smoke is opportunistic so offline release gates remain

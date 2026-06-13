@@ -51,15 +51,16 @@ for long web-page text.
   input.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
-  model manifest, extension source, extension install guide/icons, and
-  validated extension zip.
+  model manifest, model-readiness handoff guidance, extension source,
+  extension install guide/icons, and validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package, and running `setup-local`
   without choosing a persistent service manager.
 - `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
   local reader bundle, verifies that it does not contain local token/model
-  artifacts, checks the embedded extension zip, and runs `setup-local` from the
-  extracted source paths with first-run next-step guidance validation.
+  artifacts, checks first-run/model-readiness guide markers, checks the
+  embedded extension zip, and runs `setup-local` from the extracted source
+  paths with first-run next-step guidance validation.
 - `python3 scripts/check_windows_launchers.py` extracts a Windows local reader
   bundle and runs the bundled PowerShell/CMD launchers in setup-only mode when
   Windows launcher executables are available, verifying direct first-run

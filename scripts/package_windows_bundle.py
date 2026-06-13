@@ -186,9 +186,25 @@ manager, scheduled task, or auto-start entry.
    py -3 -m venv .venv
    .\\.venv\\Scripts\\Activate.ps1
    python -m pip install -e ".[dev]"
+   python -m tts_service.cli setup-local --repo-root .
    ```
 
-4. Start the local service:
+4. Check the configured voice before expecting real acoustic output:
+
+   ```powershell
+   .\\.venv\\Scripts\\tts.exe model-check
+   ```
+
+   The bundled manifest includes the development/debug voice for local service
+   smoke tests. For real local TTS output, install and activate a real model
+   from a catalog, then re-check readiness:
+
+   ```powershell
+   .\\.venv\\Scripts\\tts.exe model-install <model-id> --catalog <catalog> --activate
+   .\\.venv\\Scripts\\tts.exe model-check <model-id>
+   ```
+
+5. Start the local service:
 
    ```powershell
    .\\scripts\\windows\\run_service.ps1 -SetupOnly
@@ -204,7 +220,7 @@ manager, scheduled task, or auto-start entry.
    the foreground service smoke path for the bundled PowerShell/CMD launchers on
    Windows.
 
-5. Load the Chrome extension:
+6. Load the Chrome extension:
 
    - use `apps\\chrome_extension` with Chrome's `Load unpacked`, or
    - extract `dist\\chrome_extension\\tts-platform-prototype.zip` for a packaged
@@ -212,7 +228,7 @@ manager, scheduled task, or auto-start entry.
    - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
      playback checklist.
 
-6. Copy the `Allow-List Command` from the popup, then run it to update
+7. Copy the `Allow-List Command` from the popup, then run it to update
    `security.allowed_origins`:
 
    ```powershell

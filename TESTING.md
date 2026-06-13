@@ -84,13 +84,15 @@ backend-realism work, and early v1 model-management helpers:
   assets
 - Windows local reader bundle packaging that includes the service source,
   Windows launchers, docs, config example, model manifest, extension source,
-  and a validated extension zip while excluding local token/model artifacts
+  model-readiness handoff guidance, and a validated extension zip while
+  excluding local token/model artifacts
 - Windows local install bootstrap script packaging that creates `.venv`,
   installs the local package, and runs `setup-local` without choosing a
   persistent service manager
 - Windows local reader bundle bootstrap checks that safely extract the bundle,
-  verify local token/model artifacts are absent, inspect the embedded extension
-  zip, and run `setup-local` from the extracted source paths
+  verify local token/model artifacts are absent, inspect model-readiness guide
+  markers, inspect the embedded extension zip, and run `setup-local` from the
+  extracted source paths
 - Windows launcher setup-only checks that run the bundled PowerShell/CMD
   launchers far enough to create local config/token files without starting a
   long-lived service process
