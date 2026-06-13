@@ -30,6 +30,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "extension",
         "extension_package",
         "windows_bundle",
+        "windows_bundle_bootstrap",
     ]
     assert summary["package_path"] == str(package_out_path.resolve())
     assert summary["windows_bundle_path"] == str(windows_bundle_out_path.resolve())
@@ -54,6 +55,16 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
                 "python-test",
                 "scripts/package_windows_bundle.py",
                 "--out",
+                str(windows_bundle_out_path.resolve()),
+            ],
+            REPO_ROOT,
+            True,
+        ),
+        (
+            [
+                "python-test",
+                "scripts/check_windows_bundle_bootstrap.py",
+                "--bundle",
                 str(windows_bundle_out_path.resolve()),
             ],
             REPO_ROOT,

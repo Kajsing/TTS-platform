@@ -71,9 +71,12 @@ backend-realism work, and early v1 model-management helpers:
 - Windows local reader bundle packaging that includes the service source,
   Windows launchers, docs, config example, model manifest, extension source,
   and a validated extension zip while excluding local token/model artifacts
+- Windows local reader bundle bootstrap checks that safely extract the bundle,
+  verify local token/model artifacts are absent, inspect the embedded extension
+  zip, and run `setup-local` from the extracted source paths
 - repo-native release check orchestration for ruff, pytest, security-default
   verification, v1-readiness verification, extension validation, extension
-  package build, and Windows bundle build
+  package build, Windows bundle build, and Windows bundle bootstrap check
 - v1-readiness documentation checks that keep automated gates, manual gates,
   product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
@@ -147,6 +150,11 @@ python3 scripts/package_windows_bundle.py
 
 On Windows, use `py -3 scripts/package_windows_bundle.py` when `python3` is
 unavailable.
+Check the built bundle's first-run bootstrap path with:
+
+```bash
+python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
+```
 
 CLI example:
 

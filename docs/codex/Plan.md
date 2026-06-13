@@ -200,5 +200,8 @@ localhost-only while page access remains content-script based. The ninth
 release-hardening slice now adds `docs/v1_readiness.md` and
 `scripts/check_v1_readiness.py`, wiring readiness verification into the release
 gate and Windows bundle so automated gates, manual gates, product choices, and
-known not-yet-automated items stay explicit. Continue from the readiness audit:
-either automate a listed manual gate or take the next reader-flow/product slice.
+known not-yet-automated items stay explicit. The tenth release-hardening slice
+now adds `scripts/check_windows_bundle_bootstrap.py`, wiring safe bundle
+extraction and extracted-source `setup-local` into the release gate. Continue
+from the readiness audit: either automate another listed manual gate or take the
+next reader-flow/product slice.

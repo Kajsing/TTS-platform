@@ -21,10 +21,14 @@ for long web-page text.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
   model manifest, extension source, and validated extension zip.
+- `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
+  local reader bundle, verifies that it does not contain local token/model
+  artifacts, checks the embedded extension zip, and runs `setup-local` from the
+  extracted source paths.
 
 ## Manual Gates
 
-- Extract the Windows local reader bundle, create a virtualenv, install the
+- Create a virtualenv in an extracted Windows local reader bundle, install the
   package, and start the service with `scripts/windows/run_service.ps1` or
   `tts serve`.
 - Install and activate a real local voice with
@@ -56,3 +60,6 @@ for long web-page text.
   to be installed.
 - Real acoustic-output readiness requires a real local model install and live
   service smoke outside the default offline release gate.
+- Full extracted-bundle virtualenv installation and live service startup remain
+  manual; the automated bundle bootstrap gate covers safe extraction and
+  `setup-local`.

@@ -181,6 +181,12 @@ This file is the live status log and shared memory for future Codex loops.
     Windows local reader bundle.
   - `scripts/release_check.py` now runs the v1-readiness verification as part of
     the local release gate.
+  - `scripts/check_windows_bundle_bootstrap.py` now safely extracts a Windows
+    local reader bundle, verifies the absence of local token/model artifacts,
+    checks the embedded extension zip, and runs `setup-local` from the extracted
+    source paths.
+  - `scripts/release_check.py` now runs the Windows bundle bootstrap check after
+    building the bundle.
   - HTTP request logs now keep only low-sensitivity metadata: method, path
     without query string, status, duration, outcome, and request id.
   - Client-provided `X-Request-ID` values are reused only when they are short,
@@ -295,6 +301,7 @@ python3 scripts/release_check.py
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_v1_readiness.py
+python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
 
 First-run setup:
