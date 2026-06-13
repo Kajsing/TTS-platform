@@ -61,6 +61,8 @@
   the readable page text ended.
 - Use `Continue Page` to re-extract the active tab from the next known text
   character offset when the page has no later heading-backed section.
+- If the prior page segment finished normally, the extension should try this
+  continuation automatically before manual action is needed.
 - Increase `Max Page Characters` up to the local service stream limit, then save
   settings and start page playback again.
 - The popup stores capture counts and extraction metadata only; it does not
@@ -85,7 +87,8 @@
   It will be unavailable near the end only when neither signal exists.
 - Pages without semantic `h1` to `h4` headings may not expose usable sections.
 - If the page is truncated but has no later heading-backed section, use
-  `Continue Page` instead.
+  `Continue Page` instead. Normal page playback also tries this automatically
+  when a truncated segment finishes.
 - The actions re-extract the active tab from a section index; if the page
   content changed, the new section position may shift.
 

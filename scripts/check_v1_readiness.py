@@ -89,11 +89,16 @@ REQUIRED_TEXT_MARKERS = {
         "verify_extension_privacy_boundaries",
         "LOCAL_SERVICE_HOST_PERMISSIONS",
         '"tts-extension:continue-page"',
+        "maybeAutoContinuePage",
     ),
     "scripts/check_extension_reader_flow.py": (
         '"tts-extension:continue-page"',
+        "maybeAutoContinuePage",
+        "page-auto-continue",
         "resolveContinueTextCharStart",
+        "resolveContinueStartSectionIndex",
         "nextTextCharStart",
+        '"automatic_truncated_text_continuation"',
         '"truncated_text_continuation"',
     ),
     "scripts/smoke_service.py": (

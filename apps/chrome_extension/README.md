@@ -18,6 +18,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   from a heading index or the first known uncaptured section after truncation
 - continue a truncated page from the next known text character offset when
   no later heading-backed section is available
+- automatically continue from that text offset when a truncated page segment
+  finishes normally
 - stop playback and keep popup state truthful if playback is interrupted while
   the offscreen document is unavailable
 - store local service settings such as base URL, token, preferred voice, and page-text limits
@@ -85,9 +87,11 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
     `Page Capture` reports heading/body/list structure counts.
 13. Use `Previous Section` and `Next Section` during page playback and confirm
     they restart from heading-backed sections when available.
-14. On a truncated long page without later headings, use `Continue Page` and
+14. On a truncated long page without later headings, confirm normal playback
+    starts the next segment automatically after the current segment finishes.
+15. Use `Continue Page` and
     confirm it restarts from the next captured text character offset.
-15. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+16. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -108,6 +112,9 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 - `Continue Page` uses a non-textual character offset from the latest truncated
   page capture metadata, then re-extracts the active tab from that offset. It
   does not persist raw page text.
+- When a page playback segment finishes normally and that metadata still points
+  at later text, the background worker starts the next segment automatically
+  from the same offset.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 - Manifest host permissions are limited to the localhost service origins. The
   declared content script handles page access, and the validation script checks
@@ -144,8 +151,8 @@ python3 scripts/check_extension_reader_flow.py
 
 This verifies the `Speak Page`, reader progress, page-capture metadata,
 `Resume Page`, `Continue Page`, previous/next section navigation,
-truncated-section continuation, truncated text-offset continuation,
-stop/restart recovery, and popup reopen-state wiring, then
+truncated-section continuation, manual and automatic truncated text-offset
+continuation, stop/restart recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
 

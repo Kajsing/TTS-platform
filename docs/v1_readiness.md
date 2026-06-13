@@ -21,8 +21,9 @@ for long web-page text.
   wiring for `Speak Page`, progress, page-capture metadata, `Resume Page`, and
   `Continue Page`, previous/next section navigation, truncated-page
   continuation to the first known uncaptured section, truncated text-offset
-  continuation without storing raw page text, plus stop/restart recovery and
-  popup reopen-state signals, then streams a
+  continuation without storing raw page text, automatic continuation after a
+  truncated segment finishes, plus stop/restart recovery and popup
+  reopen-state signals, then streams a
   generated thousand-word article through the local service WebSocket contract.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated
   first-run repo root, runs `setup-local`, starts the local service on loopback,
@@ -83,8 +84,9 @@ for long web-page text.
   metadata, `Resume Page`, `Continue Page`, `Previous Section`,
   `Next Section`, stop/restart behavior, and popup state after reopening in
   actual Chrome. The reader-flow contract now automates truncated-section
-  continuation, truncated text-offset continuation, stop/recovery wiring, and
-  popup state fields, while actual Chrome playback remains manual.
+  continuation, manual and automatic truncated text-offset continuation,
+  stop/recovery wiring, and popup state fields, while actual Chrome playback
+  remains manual.
 
 ## Product Choices
 

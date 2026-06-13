@@ -84,6 +84,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ...(message.state ?? {}),
         });
         sendResponse({ ok: true });
+        void maybeAutoContinuePage(playbackState);
         return;
       default:
         sendResponse({ ok: false, message: "Unknown extension message." });
@@ -169,10 +170,16 @@ async function continuePage() {
   if (startTextChar == null) {
     return { ok: false, message: "No truncated page continuation is available." };
   }
+  const startSectionIndex = resolveContinueStartSectionIndex(currentState.pageCapture);
 
   const tab = await getActiveTab();
   const config = await getConfig();
-  const capture = await getPageCapture(tab.id, config.maxChars, 0, startTextChar);
+  const capture = await getPageCapture(
+    tab.id,
+    config.maxChars,
+    startSectionIndex,
+    startTextChar
+  );
   if (!capture.text) {
     return { ok: false, message: "No page text found for continuation." };
   }
@@ -189,6 +196,60 @@ async function continuePage() {
       capture.meta
     )}`,
   };
+}
+
+async function maybeAutoContinuePage(state) {
+  if (!shouldAutoContinuePage(state)) {
+    return;
+  }
+
+  const startTextChar = resolveContinueTextCharStart(state.pageCapture);
+  if (startTextChar == null) {
+    return;
+  }
+  const startSectionIndex = resolveContinueStartSectionIndex(state.pageCapture);
+
+  const tabId = Number(state.tabId);
+  if (!Number.isFinite(tabId) || tabId <= 0) {
+    await setPlaybackState({
+      ...state,
+      message: "Playback finished, but automatic page continuation has no source tab.",
+      lastEvent: "auto-continue-unavailable",
+    });
+    return;
+  }
+
+  try {
+    const config = await getConfig();
+    const capture = await getPageCapture(
+      Math.floor(tabId),
+      config.maxChars,
+      startSectionIndex,
+      startTextChar
+    );
+    if (!capture.text) {
+      await setPlaybackState({
+        ...state,
+        message: "Playback finished, but no page text was found for automatic continuation.",
+        lastEvent: "auto-continue-unavailable",
+      });
+      return;
+    }
+
+    await startPlayback({
+      text: capture.text,
+      source: "page-auto-continue",
+      tabId: Math.floor(tabId),
+      pageCapture: capture.meta,
+    });
+  } catch (error) {
+    await setPlaybackState({
+      ...state,
+      message: `Playback finished, but automatic page continuation failed: ${error.message}`,
+      activeStreamId: null,
+      lastEvent: "auto-continue-error",
+    });
+  }
 }
 
 async function previousSection() {
@@ -452,10 +513,43 @@ function resolveContinueTextCharStart(pageCapture) {
     return null;
   }
   const nextTextCharStart = Number(pageCapture?.structure?.nextTextCharStart);
+  const currentTextCharStart = Number(pageCapture?.structure?.startTextChar ?? 0);
   if (!Number.isFinite(nextTextCharStart) || nextTextCharStart <= 0) {
     return null;
   }
+  if (Number.isFinite(currentTextCharStart) && nextTextCharStart <= currentTextCharStart) {
+    return null;
+  }
   return Math.floor(nextTextCharStart);
+}
+
+function resolveContinueStartSectionIndex(pageCapture) {
+  const startSectionIndex = Number(pageCapture?.structure?.startSectionIndex ?? 0);
+  if (!Number.isFinite(startSectionIndex) || startSectionIndex < 0) {
+    return 0;
+  }
+  return Math.floor(startSectionIndex);
+}
+
+function shouldAutoContinuePage(state) {
+  if (state?.status !== "done" || state?.lastEvent !== "done") {
+    return false;
+  }
+  if (!isPagePlaybackSource(state.source)) {
+    return false;
+  }
+  return resolveContinueTextCharStart(state.pageCapture) != null;
+}
+
+function isPagePlaybackSource(source) {
+  return new Set([
+    "page",
+    "page-resume",
+    "page-continue",
+    "page-auto-continue",
+    "page-section",
+    "page-previous-section",
+  ]).has(source);
 }
 
 function resolveNextSectionIndex({ progress, pageCapture }) {

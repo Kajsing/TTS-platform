@@ -61,6 +61,8 @@ and v1-readiness work:
   without storing heading text
 - popup-side continuation for truncated pages without headings, using a
   non-text character offset instead of storing raw page text
+- automatic continuation from that same text offset after a truncated page
+  segment finishes normally
 
 ## Repository Layout
 
@@ -253,6 +255,8 @@ The extension currently supports:
   including the first known uncaptured section after a truncated capture
 - continuing a truncated page from the next known text character offset when
   the page has no later heading-backed section
+- automatically continuing from that text offset when a truncated page segment
+  finishes normally
 - stopping playback and preserving a truthful interrupted/recovered state when
   the popup is reopened after the offscreen playback document is gone
 - local storage of base URL, token, voice, and buffering settings

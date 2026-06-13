@@ -268,5 +268,8 @@ The twenty-seventh reader-flow slice adds popup-side `Continue Page` for
 truncated captures that do not expose a later heading-backed section. It uses a
 non-textual `nextTextCharStart` offset and re-extracts active-tab text without
 storing raw page text.
+The twenty-eighth reader-flow slice adds automatic continuation after a
+truncated page segment finishes normally, using the same `nextTextCharStart`
+metadata and source tab without storing raw page text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
