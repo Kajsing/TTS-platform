@@ -29,10 +29,17 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")
+            archive.writestr("INSTALL.md", "Load unpacked")
+            archive.writestr("icons/icon-16.png", b"icon")
+            archive.writestr("icons/icon-32.png", b"icon")
+            archive.writestr("icons/icon-48.png", b"icon")
+            archive.writestr("icons/icon-128.png", b"icon")
         return {
             "package_path": str(out_path),
-            "file_count": 1,
+            "file_count": 6,
             "manifest_path": "manifest.json",
+            "install_guide_path": "INSTALL.md",
+            "icon_count": 4,
         }
 
     monkeypatch.setattr(
@@ -52,7 +59,7 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
     assert summary["bundle_root"] == "tts-platform"
     assert summary["extension_package"] == {
         "archive_path": "dist/chrome_extension/tts-platform-prototype.zip",
-        "file_count": 1,
+        "file_count": 6,
         "manifest_path": "manifest.json",
     }
     assert summary["setup"]["config_created"] is True
@@ -72,6 +79,11 @@ def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(
     extension_zip_path = tmp_path / "extension.zip"
     with zipfile.ZipFile(extension_zip_path, mode="w") as extension_archive:
         extension_archive.writestr("manifest.json", "{}")
+        extension_archive.writestr("INSTALL.md", "Load unpacked")
+        extension_archive.writestr("icons/icon-16.png", b"icon")
+        extension_archive.writestr("icons/icon-32.png", b"icon")
+        extension_archive.writestr("icons/icon-48.png", b"icon")
+        extension_archive.writestr("icons/icon-128.png", b"icon")
 
     required_entries = [
         "tts-platform/pyproject.toml",
@@ -108,6 +120,7 @@ def _entry_payload(entry: str) -> str:
                 "py -3 -m venv .venv",
                 'python -m pip install -e ".[dev]"',
                 ".\\scripts\\windows\\run_service.ps1",
+                "apps\\chrome_extension\\INSTALL.md",
                 "config\\token.txt",
                 "security.allowed_origins",
                 "persistent Windows service",

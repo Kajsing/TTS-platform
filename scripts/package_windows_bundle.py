@@ -97,15 +97,21 @@ def package_windows_bundle(*, out_path: Path) -> dict[str, object]:
                 _windows_bundle_readme(),
             )
 
+    extension_summary = {
+        "archive_path": EXTENSION_PACKAGE_ARCNAME.removeprefix(f"{BUNDLE_ROOT}/"),
+        "file_count": extension_payload["file_count"],
+        "manifest_path": extension_payload["manifest_path"],
+    }
+    if "install_guide_path" in extension_payload:
+        extension_summary["install_guide_path"] = extension_payload["install_guide_path"]
+    if "icon_count" in extension_payload:
+        extension_summary["icon_count"] = extension_payload["icon_count"]
+
     return {
         "package_path": str(resolved_out_path),
         "bundle_root": BUNDLE_ROOT,
         "file_count": len(bundle_files) + 2,
-        "extension_package": {
-            "archive_path": EXTENSION_PACKAGE_ARCNAME.removeprefix(f"{BUNDLE_ROOT}/"),
-            "file_count": extension_payload["file_count"],
-            "manifest_path": extension_payload["manifest_path"],
-        },
+        "extension_package": extension_summary,
     }
 
 
@@ -202,6 +208,8 @@ manager, scheduled task, or auto-start entry.
    - use `apps\\chrome_extension` with Chrome's `Load unpacked`, or
    - extract `dist\\chrome_extension\\tts-platform-prototype.zip` for a packaged
      local handoff build.
+   - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
+     playback checklist.
 
 6. Copy the extension origin from the popup into `security.allowed_origins` in
    `config\\config.toml`, restart the service, then save the token from

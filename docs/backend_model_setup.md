@@ -80,9 +80,10 @@ py -3 scripts\package_windows_bundle.py
 
 The bundle is written to `dist\windows\tts-platform-local-reader.zip` by
 default. It includes the service source, core source, Windows launchers, config
-example, model manifest, setup docs, Chrome extension source, and a validated
-Chrome extension zip under `dist\chrome_extension\`. It deliberately excludes
-local secrets such as `config\token.txt` and installed model files under
+example, model manifest, setup docs, Chrome extension source, Chrome extension
+install guidance/icons, and a validated Chrome extension zip under
+`dist\chrome_extension\`. It deliberately excludes local secrets such as
+`config\token.txt` and installed model files under
 `models\voices\`. The generated `WINDOWS_BUNDLE_README.md` explains the
 extract, virtualenv, launcher, and extension-loading flow.
 `scripts/check_windows_launchers.py` verifies the bundled PowerShell/CMD

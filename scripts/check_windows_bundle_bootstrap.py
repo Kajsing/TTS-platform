@@ -28,6 +28,16 @@ README_MARKERS = (
     "config\\token.txt",
     "security.allowed_origins",
     "persistent Windows service",
+    "apps\\chrome_extension\\INSTALL.md",
+)
+
+EXTENSION_PACKAGE_MARKERS = (
+    "manifest.json",
+    "INSTALL.md",
+    "icons/icon-16.png",
+    "icons/icon-32.png",
+    "icons/icon-48.png",
+    "icons/icon-128.png",
 )
 
 
@@ -145,9 +155,10 @@ def _inspect_extension_zip(archive: zipfile.ZipFile) -> int:
 
     with zipfile.ZipFile(io.BytesIO(payload)) as extension_archive:
         extension_names = set(extension_archive.namelist())
-        if "manifest.json" not in extension_names:
+        missing = sorted(set(EXTENSION_PACKAGE_MARKERS) - extension_names)
+        if missing:
             raise WindowsBundleBootstrapError(
-                "Embedded extension package is missing manifest.json"
+                "Embedded extension package is missing entries:\n" + "\n".join(missing)
             )
         return len(extension_names)
 

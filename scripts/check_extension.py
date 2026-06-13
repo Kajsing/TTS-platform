@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 
@@ -44,6 +45,8 @@ def main() -> None:
     print("HTML asset references resolved.")
     verify_extension_wiring()
     print("Extension wiring resolved.")
+    verify_extension_install_assets(manifest)
+    print("Extension install assets resolved.")
     verify_extension_privacy_boundaries()
     print("Extension policy resolved.")
 
@@ -76,6 +79,9 @@ def collect_manifest_paths(manifest: dict[str, object]) -> set[Path]:
         popup = action.get("default_popup")
         if isinstance(popup, str):
             paths.add(EXTENSION_ROOT / popup)
+        paths.update(_collect_icon_paths(action.get("default_icon")))
+
+    paths.update(_collect_icon_paths(manifest.get("icons")))
 
     for content_script in manifest.get("content_scripts", []):
         if not isinstance(content_script, dict):
@@ -152,6 +158,18 @@ def verify_manifest_policy(manifest: dict[str, object]) -> None:
         errors,
         isinstance(action, dict) and action.get("default_popup") == "src/popup.html",
         "action.default_popup must be src/popup.html",
+    )
+    expected_icons = {
+        "16": "icons/icon-16.png",
+        "32": "icons/icon-32.png",
+        "48": "icons/icon-48.png",
+        "128": "icons/icon-128.png",
+    }
+    _expect(errors, manifest.get("icons") == expected_icons, "manifest icons must be declared")
+    _expect(
+        errors,
+        isinstance(action, dict) and action.get("default_icon") == expected_icons,
+        "action.default_icon must use the packaged icon set",
     )
 
     content_scripts = manifest.get("content_scripts")
@@ -252,6 +270,51 @@ def verify_extension_wiring() -> None:
         raise SystemExit("Missing extension wiring:\n" + "\n".join(missing))
 
 
+def verify_extension_install_assets(manifest: dict[str, object]) -> None:
+    errors: list[str] = []
+    install_guide = EXTENSION_ROOT / "INSTALL.md"
+    if not install_guide.is_file():
+        errors.append("INSTALL.md must be present for local handoff installs")
+    else:
+        install_text = install_guide.read_text(encoding="utf-8")
+        _require_fragments(
+            errors,
+            "INSTALL.md",
+            install_text,
+            [
+                "Load unpacked",
+                "chrome://extensions",
+                "security.allowed_origins",
+                "config\\token.txt",
+            ],
+        )
+
+    icon_entries = manifest.get("icons") if isinstance(manifest.get("icons"), dict) else {}
+    for size_label, icon_value in icon_entries.items():
+        if not isinstance(size_label, str) or not isinstance(icon_value, str):
+            errors.append("Icon manifest entries must map string sizes to paths")
+            continue
+        expected_size = int(size_label) if size_label.isdecimal() else None
+        icon_path = EXTENSION_ROOT / icon_value
+        if not icon_path.is_file():
+            errors.append(f"Missing icon asset: {icon_path.relative_to(REPO_ROOT)}")
+            continue
+        if icon_path.suffix.lower() != ".png":
+            errors.append(f"Icon asset must be PNG: {icon_path.relative_to(REPO_ROOT)}")
+            continue
+        dimensions = _png_dimensions(icon_path)
+        if dimensions is None:
+            errors.append(f"Icon asset must be a valid PNG: {icon_path.relative_to(REPO_ROOT)}")
+            continue
+        if expected_size is not None and dimensions != (expected_size, expected_size):
+            errors.append(
+                f"Icon asset dimensions must be {expected_size}x{expected_size}: "
+                f"{icon_path.relative_to(REPO_ROOT)}"
+            )
+
+    _raise_if_errors("Extension install asset check failed", errors)
+
+
 def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -> None:
     paths = {
         "content script": extension_root / "src" / "content-script.js",
@@ -340,6 +403,27 @@ def _string_set(value: object) -> set[str]:
     if not isinstance(value, list):
         return set()
     return {item for item in value if isinstance(item, str)}
+
+
+def _collect_icon_paths(value: object) -> set[Path]:
+    if not isinstance(value, dict):
+        return set()
+    return {
+        EXTENSION_ROOT / icon_path
+        for icon_path in value.values()
+        if isinstance(icon_path, str)
+    }
+
+
+def _png_dimensions(path: Path) -> tuple[int, int] | None:
+    with path.open("rb") as handle:
+        header = handle.read(24)
+    if len(header) < 24 or not header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    if header[12:16] != b"IHDR":
+        return None
+    width, height = struct.unpack(">II", header[16:24])
+    return width, height
 
 
 def _reject_fragments(

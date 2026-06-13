@@ -11,28 +11,30 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: The Chrome extension reader flow now automatically
-  continues after a truncated page segment finishes normally, using the
-  existing non-textual `nextTextCharStart` metadata, original
-  `startSectionIndex`, and source tab without storing raw page text.
+- Current loop result: The Chrome extension package now includes local handoff
+  installability assets: `INSTALL.md`, manifest/action PNG icons, validator
+  coverage, package summary output, and Windows bundle bootstrap checks for the
+  embedded extension zip.
 - Validation status for the current loop:
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax checks were
     skipped because `node` is not installed.
-  - `py -3 scripts\check_extension_reader_flow.py` passed and reported
-    `automatic_truncated_text_continuation = true`, `popup_actions = 5`, and a
-    generated 2,963-word article streamed through the local WebSocket service
-    path.
-  - `py -3 scripts\check_v1_readiness.py` passed with 31 checked files and 27
+  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-extension-check.zip`
+    passed and reported `file_count = 17`, `install_guide_path = INSTALL.md`,
+    and `icon_count = 4`.
+  - `py -3 scripts\check_windows_bundle_bootstrap.py` passed and verified the
+    embedded extension package contains the install guide and icon set.
+  - `py -3 scripts\check_v1_readiness.py` passed with 36 checked files and 27
     readiness markers.
-  - Targeted reader-flow/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 8 passed.
+  - Targeted installability tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_check_extension.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 11 passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 152 tests.
+  - `py -3 -m pytest -q` passed with 154 tests.
   - `git diff --check` passed with only CRLF normalization warnings.
-  - `py -3 scripts\release_check.py` passed, including extension reader-flow
-    smoke, extension package validation, Windows bundle packaging, launcher
-    foreground service smoke, and bundle install smoke.
+  - `py -3 scripts\release_check.py` passed, including extension install-asset
+    validation, extension package validation, Windows bundle packaging, bundle
+    bootstrap checks, launcher foreground service smoke, and bundle install
+    smoke.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -196,6 +198,8 @@ This file is the live status log and shared memory for future Codex loops.
     health/voice snapshot used by the popup.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
+  - the Chrome extension package now includes `INSTALL.md` plus manifest/action
+    PNG icons for local Chrome handoff builds.
   - the extension manifest no longer requests `<all_urls>` in
     `host_permissions`; service host permissions are limited to localhost, while
     page access remains in the declared content script.
@@ -203,6 +207,8 @@ This file is the live status log and shared memory for future Codex loops.
     privacy/layering boundaries, including blocking content-script service
     calls, popup/offscreen storage use, broad browser persistence APIs, and
     non-offscreen WebSocket creation.
+  - `scripts/check_extension.py` now validates local installability assets:
+    `INSTALL.md` guidance plus the manifest/action icon set.
 - Release hardening has started:
   - `security.allowed_origins` entries are normalized for harmless trailing
     slashes and must be explicit `http`, `https`, or `chrome-extension` origins.
@@ -241,8 +247,8 @@ This file is the live status log and shared memory for future Codex loops.
     the local release gate.
   - `scripts/check_windows_bundle_bootstrap.py` now safely extracts a Windows
     local reader bundle, verifies the absence of local token/model artifacts,
-    checks the embedded extension zip, and runs `setup-local` from the extracted
-    source paths.
+    checks the embedded extension zip including install guide/icons, and runs
+    `setup-local` from the extracted source paths.
   - `scripts/release_check.py` now runs the Windows bundle bootstrap check after
     building the bundle.
   - `scripts/check_windows_bundle_install.py` now verifies a built/extracted
@@ -372,6 +378,9 @@ This file is the live status log and shared memory for future Codex loops.
   browser-specific behavior remains inside `apps/chrome_extension/`.
 - Extension zip packaging is local handoff/installability only; Chrome Web Store
   signing or publishing is out of scope until explicitly chosen.
+- Chrome extension local installability should be self-contained in the
+  extension zip: manifest at archive root, `INSTALL.md`, and the packaged icon
+  set referenced by the manifest and action.
 - Browser allow-list config should fail closed. Empty `allowed_origins` remains
   the secure default; configured entries must be explicit origins, not wildcards
   or URL paths.
@@ -487,7 +496,7 @@ python3 scripts/package_windows_bundle.py
   PowerShell/CMD.
 - Persistent Windows auto-start/service-manager installation remains an explicit
   later product choice.
-- The browser prototype still depends on manual Chrome loading and manual allow-list setup.
+- The browser prototype still depends on manual Chrome loading and manual allow-list setup, but the extension zip now carries local install guidance and icon assets.
 - There is still no full automated MV3 test harness in the repository.
 - `python3 scripts/check_extension.py` still cannot perform JavaScript syntax checks in this environment because `node` is not installed.
 

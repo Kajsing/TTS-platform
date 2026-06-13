@@ -271,5 +271,8 @@ storing raw page text.
 The twenty-eighth reader-flow slice adds automatic continuation after a
 truncated page segment finishes normally, using the same `nextTextCharStart`
 metadata and source tab without storing raw page text.
+The twenty-ninth extension-installability slice adds a local `INSTALL.md`
+handoff guide and manifest/action PNG icon assets to the Chrome extension
+package, with validator, package, and Windows bundle bootstrap coverage.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

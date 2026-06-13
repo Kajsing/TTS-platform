@@ -13,7 +13,8 @@ for long web-page text.
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
-  boundaries, and JavaScript syntax when `node` is installed.
+  boundaries, local install guidance/icons, and JavaScript syntax when `node`
+  is installed.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
   health/voice-discovery service snapshot used by the popup.
@@ -40,7 +41,8 @@ for long web-page text.
   input.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
-  model manifest, extension source, and validated extension zip.
+  model manifest, extension source, extension install guide/icons, and
+  validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package, and running `setup-local`
   without choosing a persistent service manager.

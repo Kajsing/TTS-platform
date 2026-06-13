@@ -11,6 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_DIR = REPO_ROOT / "scripts"
 EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 DEFAULT_OUT_PATH = REPO_ROOT / "dist" / "chrome_extension" / "tts-platform-prototype.zip"
+ICON_ARCNAMES = (
+    "icons/icon-16.png",
+    "icons/icon-32.png",
+    "icons/icon-48.png",
+    "icons/icon-128.png",
+)
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -43,6 +49,12 @@ def package_extension(*, out_path: Path) -> dict[str, object]:
         "package_path": str(resolved_out_path),
         "file_count": len(files),
         "manifest_path": "manifest.json",
+        "install_guide_path": "INSTALL.md",
+        "icon_count": sum(
+            1
+            for path in files
+            if path.relative_to(EXTENSION_ROOT).as_posix() in ICON_ARCNAMES
+        ),
     }
 
 

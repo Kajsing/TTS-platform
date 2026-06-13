@@ -19,12 +19,19 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert check_calls == [True]
     assert payload["package_path"] == str(out_path.resolve())
     assert payload["manifest_path"] == "manifest.json"
+    assert payload["install_guide_path"] == "INSTALL.md"
+    assert payload["icon_count"] == 4
     assert payload["file_count"] > 0
 
     with zipfile.ZipFile(out_path) as archive:
         names = set(archive.namelist())
 
     assert "manifest.json" in names
+    assert "INSTALL.md" in names
+    assert "icons/icon-16.png" in names
+    assert "icons/icon-32.png" in names
+    assert "icons/icon-48.png" in names
+    assert "icons/icon-128.png" in names
     assert "src/popup.html" in names
     assert "src/popup.js" in names
     assert "offscreen/offscreen.html" in names

@@ -17,7 +17,33 @@ def test_check_extension_accepts_repo_manifest_and_privacy_boundaries() -> None:
     manifest = json.loads((EXTENSION_ROOT / "manifest.json").read_text(encoding="utf-8"))
 
     check_module.verify_manifest_policy(manifest)
+    check_module.verify_extension_install_assets(manifest)
     check_module.verify_extension_privacy_boundaries(EXTENSION_ROOT)
+
+
+def test_check_extension_rejects_missing_icon_declaration() -> None:
+    check_module = _load_check_extension_module()
+    manifest = json.loads((EXTENSION_ROOT / "manifest.json").read_text(encoding="utf-8"))
+    manifest.pop("icons")
+
+    with pytest.raises(SystemExit, match="manifest icons"):
+        check_module.verify_manifest_policy(manifest)
+
+
+def test_check_extension_rejects_invalid_icon_asset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_extension_module()
+    extension_root = tmp_path / "chrome_extension"
+    shutil.copytree(EXTENSION_ROOT, extension_root)
+    monkeypatch.setattr(check_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_module, "EXTENSION_ROOT", extension_root)
+    (extension_root / "icons" / "icon-16.png").write_bytes(b"not-a-png")
+    manifest = json.loads((extension_root / "manifest.json").read_text(encoding="utf-8"))
+
+    with pytest.raises(SystemExit, match="valid PNG"):
+        check_module.verify_extension_install_assets(manifest)
 
 
 def test_check_extension_rejects_broad_host_permissions() -> None:

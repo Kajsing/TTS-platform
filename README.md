@@ -264,6 +264,7 @@ The extension currently supports:
 - displaying the extension origin so it can be allow-listed in the local service config
 - displaying a setup checklist for service reachability, saved token, origin
   snippet readiness, voice discovery, and health
+- packaged local install guidance and extension icons for Chrome handoff builds
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events. The extension manifest keeps service host permissions limited to localhost; page access is handled by the declared content script.
 
@@ -276,3 +277,6 @@ To build a local Chrome extension zip after validation:
 ```bash
 python3 scripts/package_extension.py
 ```
+
+The zip includes `INSTALL.md` plus the extension icon set used by the manifest
+and toolbar action.

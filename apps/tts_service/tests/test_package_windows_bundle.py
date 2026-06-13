@@ -20,10 +20,17 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")
+            archive.writestr("INSTALL.md", "Load unpacked")
+            archive.writestr("icons/icon-16.png", b"icon")
+            archive.writestr("icons/icon-32.png", b"icon")
+            archive.writestr("icons/icon-48.png", b"icon")
+            archive.writestr("icons/icon-128.png", b"icon")
         return {
             "package_path": str(out_path),
-            "file_count": 1,
+            "file_count": 6,
             "manifest_path": "manifest.json",
+            "install_guide_path": "INSTALL.md",
+            "icon_count": 4,
         }
 
     monkeypatch.setattr(
@@ -40,8 +47,10 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert payload["bundle_root"] == "tts-platform"
     assert payload["extension_package"] == {
         "archive_path": "dist/chrome_extension/tts-platform-prototype.zip",
-        "file_count": 1,
+        "file_count": 6,
         "manifest_path": "manifest.json",
+        "install_guide_path": "INSTALL.md",
+        "icon_count": 4,
     }
 
     with zipfile.ZipFile(out_path) as archive:
@@ -55,6 +64,8 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/apps/tts_service/src/tts_service/main.py" in names
     assert "tts-platform/packages/tts_core/src/tts_core/text.py" in names
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
+    assert "tts-platform/apps/chrome_extension/INSTALL.md" in names
+    assert "tts-platform/apps/chrome_extension/icons/icon-128.png" in names
     assert "tts-platform/scripts/windows/install_local.ps1" in names
     assert "tts-platform/scripts/windows/install_local.cmd" in names
     assert "tts-platform/scripts/windows/run_service.ps1" in names
@@ -73,6 +84,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/dist/chrome_extension/tts-platform-prototype.zip" in names
     assert ".\\scripts\\windows\\install_local.ps1" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
+    assert "apps\\chrome_extension\\INSTALL.md" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme
 
