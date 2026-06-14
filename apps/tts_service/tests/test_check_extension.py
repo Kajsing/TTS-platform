@@ -64,6 +64,20 @@ def test_check_extension_rejects_broad_host_permissions() -> None:
         check_module.verify_manifest_policy(manifest)
 
 
+def test_check_extension_rejects_web_accessible_extension_pages() -> None:
+    check_module = _load_check_extension_module()
+    manifest = json.loads((EXTENSION_ROOT / "manifest.json").read_text(encoding="utf-8"))
+    manifest["web_accessible_resources"] = [
+        {
+            "resources": ["offscreen/offscreen.html"],
+            "matches": ["<all_urls>"],
+        }
+    ]
+
+    with pytest.raises(SystemExit, match="web_accessible_resources"):
+        check_module.verify_manifest_policy(manifest)
+
+
 def test_check_extension_rejects_content_script_network_access(tmp_path: Path) -> None:
     check_module = _load_check_extension_module()
     extension_root = tmp_path / "chrome_extension"

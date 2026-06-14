@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
@@ -30,6 +31,8 @@ from .config import SecurityConfig, load_config
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
 DEFAULT_MAX_MODEL_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
+DEFAULT_MAX_MODEL_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
+DEFAULT_MAX_MODEL_ARTIFACT_FILES = 50_000
 MAX_MODEL_ARTIFACT_REDIRECTS = 5
 DEFAULT_SERVICE_TASK_NAME = "TTS Platform Local Reader"
 DEFAULT_SERVICE_LOG_PATH = "logs/tts-service.log"
@@ -1895,7 +1898,9 @@ def _assert_allowed_artifact_url(
         raise SystemExit(f"Model artifact URL must be http or https: {url!r}")
     if parsed.username or parsed.password:
         raise SystemExit("Model artifact URL must not include credentials.")
-    if _is_local_artifact_host(parsed.hostname):
+    if _is_local_artifact_host(
+        parsed.hostname
+    ) or _artifact_host_resolves_to_local_artifact_host(parsed.hostname):
         origin = _remote_origin(url)
         if origin != trusted_private_origin:
             raise SystemExit(
@@ -1930,6 +1935,20 @@ def _is_local_artifact_host(hostname: str | None) -> bool:
         or ip_address.is_multicast
         or ip_address.is_reserved
         or ip_address.is_unspecified
+    )
+
+
+def _artifact_host_resolves_to_local_artifact_host(hostname: str | None) -> bool:
+    if hostname is None:
+        return True
+    try:
+        address_infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+    return any(
+        _is_local_artifact_host(str(sockaddr[0]))
+        for *_, sockaddr in address_infos
+        if sockaddr
     )
 
 
@@ -2055,15 +2074,27 @@ def _extract_tar(*, artifact_path: Path, out_dir: Path) -> None:
 
 def _assert_safe_zip_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
     out_dir_resolved = out_dir.resolve()
+    file_count = 0
+    total_uncompressed_bytes = 0
     for member in archive.infolist():
         _assert_safe_archive_member_path(
             member_name=member.filename,
             out_dir_resolved=out_dir_resolved,
         )
+        if member.is_dir():
+            continue
+        file_count += 1
+        total_uncompressed_bytes += member.file_size
+    _assert_safe_archive_quota(
+        file_count=file_count,
+        total_uncompressed_bytes=total_uncompressed_bytes,
+    )
 
 
 def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None:
     out_dir_resolved = out_dir.resolve()
+    file_count = 0
+    total_uncompressed_bytes = 0
     for member in archive.getmembers():
         _assert_safe_archive_member_path(
             member_name=member.name,
@@ -2073,6 +2104,17 @@ def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None
             raise SystemExit(
                 f"Model artifact contains unsupported tar entry: {member.name!r}"
             )
+        if member.isfile():
+            if member.size < 0:
+                raise SystemExit(
+                    f"Model artifact contains invalid tar entry size: {member.name!r}"
+                )
+            file_count += 1
+            total_uncompressed_bytes += member.size
+    _assert_safe_archive_quota(
+        file_count=file_count,
+        total_uncompressed_bytes=total_uncompressed_bytes,
+    )
 
 
 def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path) -> None:
@@ -2093,6 +2135,19 @@ def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path
     if destination != out_dir_resolved and out_dir_resolved not in destination.parents:
         raise SystemExit(
             f"Model artifact contains unsafe path traversal entry: {member_name!r}"
+        )
+
+
+def _assert_safe_archive_quota(*, file_count: int, total_uncompressed_bytes: int) -> None:
+    if file_count > DEFAULT_MAX_MODEL_ARTIFACT_FILES:
+        raise SystemExit(
+            "Model artifact contains too many files "
+            f"({file_count} > {DEFAULT_MAX_MODEL_ARTIFACT_FILES})."
+        )
+    if total_uncompressed_bytes > DEFAULT_MAX_MODEL_EXTRACTED_BYTES:
+        raise SystemExit(
+            "Model artifact expands beyond the maximum allowed extracted size "
+            f"({DEFAULT_MAX_MODEL_EXTRACTED_BYTES} bytes)."
         )
 
 

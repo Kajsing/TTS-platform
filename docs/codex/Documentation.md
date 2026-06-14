@@ -11,30 +11,42 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: add a pragmatic Windows per-user Task Scheduler
-  service/autostart flow for the local reader server and align the Codex
-  project goal around v1 closeout.
-- Current loop result: `tts service-install --user`, `service-status`,
-  `service-start`, `service-stop`, and `service-remove` now manage a per-user
-  logon task that starts the existing Windows launcher through
-  `run_scheduled_service.ps1` and writes logs to `logs/tts-service.log`.
-  `docs/codex/Prompt.md` now defines the active goal as finishing the v1 local
-  reader: a localhost TTS server, long-page Chrome extension reading, Windows
-  first-run/install polish, safe model management, and a final security-focused
-  pass before v1 is called done.
+- Current loop target: run the final v1 security-focused pass before closeout,
+  using Codex Security workflows and subagents to reduce blind spots across the
+  service, model-management, Chrome extension, Windows packaging, and release
+  gates.
+- Current loop result: the final security pass found and fixed six hardening
+  gaps: protected HTTP routes now enforce auth/origin before body parsing,
+  initial WebSocket stream messages have a timeout, validation errors no longer
+  echo raw Pydantic input, model archives enforce extracted-size and file-count
+  quotas, remote artifact hostnames are DNS-resolved before private-network
+  rejection, and the Chrome extension no longer exposes offscreen pages through
+  `web_accessible_resources`. The scan report is at
+  `C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.html`
+  with markdown source beside it.
 - Validation status for the current loop:
-  - `py -3 -m pytest apps\tts_service\tests\test_cli_service_task.py apps\tts_service\tests\test_windows_service_task_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    passed with 26 tests.
-  - `py -3 scripts\check_windows_service_task.py` passed.
-  - `py -3 scripts\check_v1_readiness.py` passed.
-  - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 242 tests.
-  - `git diff --check` passed.
-  - `py -3 scripts\release_check.py --package-out "$env:TEMP\tts-platform-prototype-release-check.zip" --windows-bundle-out "$env:TEMP\tts-platform-local-reader-release-check.zip"`
-    passed. The Chrome/MV3 smoke remained skip-aware in this branded Chrome
-    environment; bundle bootstrap, launcher foreground service smokes,
-    Task Scheduler contract validation, and installed-bundle service smoke
+  - `py -3 -m pytest apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py -q`
+    passed with 113 tests.
+  - `py -3 -m ruff check apps\tts_service\src\tts_service\main.py apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py scripts\check_extension.py`
+    initially found one import-order issue in the new streaming test; it was
+    fixed.
+  - `py -3 -m ruff check apps\tts_service\src\tts_service\main.py apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py scripts\check_extension.py scripts\check_v1_readiness.py`
+    passed after the import fix.
+  - `py -3 scripts\check_extension.py` passed; JavaScript syntax was skipped
+    because Node.js is not installed on `PATH`.
+  - `py -3 scripts\check_v1_readiness.py` passed with 43 checked files and
+    52 readiness markers.
+  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\validate_report_format.py --report-md C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.md`
+    passed after rewriting `report.md` without a UTF-8 BOM.
+  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\render_report_html.py --template C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\assets\report_template_inlined.html --report-md C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.md --report-html C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.html --title "TTS-platform Codex Security Scan"`
     passed.
+  - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest -q` passed with 250 tests.
+  - `py -3 scripts\release_check.py --package-out "$env:TEMP\tts-platform-prototype-release-check.zip" --windows-bundle-out "$env:TEMP\tts-platform-local-reader-release-check.zip"`
+    passed. The default Chrome/MV3 smoke remained skip-aware because branded
+    Chrome did not register the unpacked extension in this environment; all
+    non-optional release, bundle, launcher, Task Scheduler, install, extension,
+    reader-flow, model-management, and service smoke gates passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -502,6 +514,12 @@ This file is the live status log and shared memory for future Codex loops.
   - the extension offscreen audio scheduler now respects `highWatermarkMs`,
     bounding how far ahead browser audio is scheduled and topping up queued PCM
     chunks as scheduled sources finish.
+  - the final v1 security pass found and fixed six local-reader hardening
+    gaps across protected HTTP request ordering, WebSocket startup timeout,
+    sanitized validation errors, model archive extraction quotas, remote model
+    artifact DNS/private-network checks, and Chrome extension resource
+    exposure. The generated Codex Security report records zero open findings
+    for the current working tree.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -510,11 +528,11 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Enter v1 finish mode: prefer closeout, release validation, install polish,
+- Stay in v1 finish mode: prefer closeout, release validation, install polish,
   and blocker removal over new feature tracks.
-- Next pass: run a final security-focused review before declaring v1 done. Use
-  Codex Security workflows and subagents where they reduce blind spots, but keep
-  fixes small, validated, and reviewable.
+- Next pass: run a final v1 completion audit against `docs/codex/Prompt.md`
+  "Done When" criteria and `docs/v1_readiness.md`, then decide whether v1 can
+  be marked complete or whether only narrow release blockers remain.
 - Do not expand scope unless a v1 blocker requires it.
 
 ## Decisions Made And Why
@@ -644,10 +662,10 @@ This file is the live status log and shared memory for future Codex loops.
   Windows Service, NSSM, or Startup-folder shortcut. This matches the local
   desktop reader shape, avoids admin requirements, and keeps GPU/runtime/user
   environment behavior simpler for v1.
-- The final planned v1 pass should be security-focused. Codex may use Codex
-  Security workflows and subagents for repository-wide or cross-cutting review
-  when that improves coverage, while keeping the main agent responsible for
-  validation, fix selection, and final reporting.
+- The final planned v1 security pass has now been run with Codex Security
+  workflows and subagents. Accepted findings were fixed in this slice rather
+  than left as open report items, so the next loop should audit completion
+  against the v1 done criteria instead of opening another broad feature track.
 - This loop intentionally reordered one v1-enabling model-management slice
   ahead of Phase 7 Milestone 3 because the user restated the product goal as a
   local server plus Chrome reader for long web content; a usable voice install
@@ -784,10 +802,10 @@ python3 scripts/package_windows_bundle.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Continue in v1 finish mode. The next planned pass is the final
-   security-focused review before v1 can be declared done.
-4. Keep any resulting fixes small, validated, and reviewable.
+3. Continue in v1 finish mode. The final security-focused review has been run;
+   next, audit the repo against `docs/codex/Prompt.md` "Done When" criteria
+   and `docs/v1_readiness.md`.
+4. If only narrow blockers remain, fix them in small, validated slices. If no
+   blockers remain, v1 can be marked complete.
 5. Run the milestone validation commands before claiming completion.
-6. Before declaring v1 done, run a final security-focused pass using Codex
-   Security workflows and subagents where they improve coverage.
-7. Update this file again before handing off.
+6. Update this file again before handing off.

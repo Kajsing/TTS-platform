@@ -376,8 +376,9 @@ must stay under the built-in maximum model artifact size of 2 GiB, and when
 `artifact_size_bytes` is present the streamed bytes must also stay at or below
 that catalog declaration. Redirects are followed manually and each target must
 remain an allowed `http` or `https` artifact URL without embedded credentials.
-Local/private network destinations are rejected unless they are the same origin
-as the remote catalog URL the operator explicitly selected.
+Local/private network destinations are rejected by literal host and DNS
+resolution unless they are the same origin as the remote catalog URL the
+operator explicitly selected.
 
 The committed default catalog at `models/catalog.json` starts with the English
 `vits-piper-en_US-lessac-medium` sherpa-onnx voice. It points at the official
@@ -405,13 +406,17 @@ Install behavior:
   extraction so large artifacts do not need to stay resident as one in-memory
   byte string
 - caps remote artifact downloads before and during streaming, validates
-  `Content-Length` when present, and rejects unsafe redirect targets
+  `Content-Length` when present, rejects unsafe redirect targets, and rejects
+  remote artifact hostnames that resolve to local/private network addresses
+  unless they match the explicitly selected remote catalog origin
 - refuses an already-installed model before artifact download/copy unless
   `--overwrite` is set
 - verifies `artifact_sha256` before extraction
 - rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
   for a trusted local artifact
 - rejects unsafe zip or tar entries before extraction
+- rejects archives that exceed the built-in extracted-size or member-count
+  quotas before extraction
 - extracts to a temporary directory first
 - replaces an existing model directory only after extraction succeeds
 - writes or updates the manifest entry
@@ -425,7 +430,9 @@ Install behavior:
 
 Unsafe archive entries include absolute paths, Windows drive-qualified paths,
 and path traversal using either `/` or `\`. Tar symlinks, hard links, devices,
-and other non-file/non-directory entries are rejected.
+and other non-file/non-directory entries are rejected. Archive extraction is
+also preflighted for total uncompressed bytes and file count before
+`extractall` runs.
 
 ## Model CLI Workflow
 
@@ -688,8 +695,9 @@ thread returns.
   without limit.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
-- Remote model artifact downloads are bounded by maximum byte caps and redirect
-  destination checks before checksum verification.
+- Remote model artifact downloads are bounded by maximum byte caps, redirect
+  destination checks, DNS-based private-network rejection, and archive
+  extraction quotas before checksum verification or extraction side effects.
 - Installed model files stay under `models/voices/<voice-id>`.
 - Manifest backend asset paths must stay under the voice `source`; do not use
   absolute paths, `..`, or paths pointing at another model directory.

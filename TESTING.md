@@ -14,9 +14,13 @@ backend-realism work, and early v1 model-management helpers:
 - API error payload shape
 - application bootstrap smoke test
 - bearer-token enforcement
+- protected synthesis/job/auth endpoints rejecting missing tokens before request
+  body validation
 - invalid bearer-format rejection
 - token rotation
 - origin filtering
+- protected synthesis/job/auth endpoints rejecting unapproved browser origins
+  before request body validation
 - security allowed-origin config validation for explicit origins and rejection
   of wildcard, null, path-bearing, and unsupported-scheme entries
 - config example security-default verification for loopback binding, token auth,
@@ -33,6 +37,10 @@ backend-realism work, and early v1 model-management helpers:
 - job result retrieval and retention cleanup
 - WebSocket auth handling
 - WebSocket auth via either bearer headers or the browser-friendly `start` event token field
+- WebSocket stream startup timeout when a client connects but never sends the
+  initial `start` event
+- sanitized HTTP and WebSocket validation errors that omit raw Pydantic input
+  values and captured page text
 - PCM streaming and `done` events
 - WebSocket long-text streaming above the shorter HTTP/job request limit
 - WebSocket reader progress metadata and `start_text_chunk_index` resume anchor
@@ -53,7 +61,8 @@ backend-realism work, and early v1 model-management helpers:
 - extension stop/restart recovery wiring, including persisted interrupted
   state when popup/background state is restored without an offscreen document
 - extension manifest policy checks that keep service host permissions limited
-  to localhost while leaving page access in the content-script declaration
+  to localhost, leave page access in the content-script declaration, and reject
+  `web_accessible_resources` exposure of extension pages
 - extension privacy-boundary checks that block content-script service calls,
   popup/offscreen storage use, broad browser persistence APIs, and non-offscreen
   WebSocket creation
@@ -74,10 +83,12 @@ backend-realism work, and early v1 model-management helpers:
   download size, license/source links, tags, and capability flags; local
   artifact install, manifest update, remote catalog relative-artifact download,
   temporary-file artifact staging before checksum/extraction, safe zip and tar
-  extraction, install progress metadata, pre-download overwrite refusal,
+  extraction with expanded-size and member-count quotas, install progress
+  metadata, pre-download overwrite refusal,
   install result artifact-size metadata, checksum-required-by-default install
-  behavior with an explicit trusted-local override, remote artifact redirect and
-  download-size guards before checksum verification, default `models/catalog.json`
+  behavior with an explicit trusted-local override, remote artifact redirect,
+  DNS private-network, and download-size guards before checksum verification,
+  default `models/catalog.json`
   discovery with friendly missing-file guidance,
   install-and-activate first-run shortcut, offline manifest model listing,
   default-voice activation, read-only real-backend readiness diagnostics with

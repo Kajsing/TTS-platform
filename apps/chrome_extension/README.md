@@ -167,7 +167,8 @@ the manifest and toolbar action.
 - `Resume Page` does not persist raw page text. It re-extracts readable text from the active tab and sends the latest planned text chunk index to the service.
 - Manifest host permissions are limited to the localhost service origins. The
   declared content script handles page access, and the validation script checks
-  that network playback stays in the background/offscreen path.
+  that network playback stays in the background/offscreen path. The manifest
+  does not expose extension pages through `web_accessible_resources`.
 - The saved `Base URL` is runtime-validated in the background worker and must
   be an HTTP localhost origin using `127.0.0.1` or `localhost`; external hosts,
   credentials, paths, query strings, and fragments are rejected before service

@@ -101,6 +101,9 @@ READINESS_MARKERS = (
     "copyable `tts extension-allow-origin`",
     "strict Chrome/MV3 smoke requires Chrome or Edge",
     "V1 Windows autostart uses a per-user Task Scheduler task",
+    "final v1 security-focused pass has been run",
+    "model archive quotas",
+    "remote artifact DNS checks",
 )
 
 REQUIRED_TEXT_MARKERS = {
@@ -144,6 +147,7 @@ REQUIRED_TEXT_MARKERS = {
         "maybeAutoContinuePage",
         "origin-command",
         "buildOriginCliCommand",
+        "web_accessible_resources must not expose extension pages to web pages",
     ),
     "scripts/check_extension_reader_flow.py": (
         '"tts-extension:continue-page"',
@@ -332,6 +336,10 @@ REQUIRED_TEXT_MARKERS = {
         "default_voice_has_backend_config",
         "extension-allow-origin",
         "_allow_extension_origin",
+        "DEFAULT_MAX_MODEL_EXTRACTED_BYTES",
+        "DEFAULT_MAX_MODEL_ARTIFACT_FILES",
+        "_artifact_host_resolves_to_local_artifact_host",
+        "_assert_safe_archive_quota",
     ),
     "scripts/check_windows_launchers.py": (
         "_check_launcher_service",
@@ -367,6 +375,11 @@ REQUIRED_TEXT_MARKERS = {
         "--install-real-runtime",
         "-NoDependencies",
         "--no-dependencies",
+        "WebSocket stream startup timeout",
+        "sanitized HTTP and WebSocket validation errors",
+        "expanded-size and member-count quotas",
+        "DNS private-network",
+        "web_accessible_resources",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",

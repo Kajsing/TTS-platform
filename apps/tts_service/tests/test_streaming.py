@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import tts_service.main as main_module
 from fastapi.testclient import TestClient
 from tts_service.config import AppConfig
 from tts_service.main import create_app
@@ -431,16 +432,44 @@ def test_websocket_stream_rejects_invalid_first_event(tmp_path: Path) -> None:
     assert error_payload["error"]["param"] == "type"
 
 
-def test_websocket_stream_rejects_invalid_payload(tmp_path: Path) -> None:
+def test_websocket_stream_times_out_waiting_for_initial_start_event(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(main_module, "WEBSOCKET_START_TIMEOUT_SECONDS", 0.05)
     client, auth_headers, _ = build_test_bundle(tmp_path)
 
     with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
-        websocket.send_json({"type": "start", "payload": {"voice": "manifest-voice"}})
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["param"] == "type"
+
+
+def test_websocket_stream_rejects_invalid_payload(tmp_path: Path) -> None:
+    client, auth_headers, _ = build_test_bundle(tmp_path)
+    raw_text = "sensitive browser page text"
+
+    with client.websocket_connect("/v1/tts/stream", headers=auth_headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "text": [raw_text],
+                    "voice": "manifest-voice",
+                },
+            }
+        )
         error_payload = websocket.receive_json()
 
     assert error_payload["type"] == "error"
     assert error_payload["error"]["type"] == "invalid_request"
     assert error_payload["error"]["details"]["issues"]
+    assert error_payload["error"]["param"] == "text"
+    serialized_payload = json.dumps(error_payload)
+    assert raw_text not in serialized_payload
+    assert "input" not in serialized_payload
 
 
 def test_websocket_stream_blocks_unapproved_origin(tmp_path: Path) -> None:

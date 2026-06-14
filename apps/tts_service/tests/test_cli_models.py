@@ -376,6 +376,21 @@ def test_model_install_rejects_remote_artifact_redirect_to_loopback(
     assert not (tmp_path / "models" / "MANIFEST.json").exists()
 
 
+def test_model_install_rejects_remote_artifact_hostname_resolving_private(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_getaddrinfo(*args: object, **kwargs: object) -> list[tuple[object, ...]]:
+        return [(None, None, None, "", ("10.0.0.5", 0))]
+
+    monkeypatch.setattr(cli.socket, "getaddrinfo", fake_getaddrinfo)
+
+    with pytest.raises(SystemExit, match="local or private network destination"):
+        cli._assert_allowed_artifact_url(
+            url="https://models.example.test/artifacts/voice-a.zip",
+            trusted_private_origin=None,
+        )
+
+
 def test_model_install_rejects_remote_artifact_stream_over_catalog_size(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1330,6 +1345,120 @@ def test_model_install_rejects_tar_link_entries(tmp_path: Path) -> None:
             overwrite=False,
         )
     assert not (tmp_path / "models" / "voices" / "unsafe-link-voice").exists()
+
+
+def test_model_install_rejects_zip_expanded_size_over_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "DEFAULT_MAX_MODEL_EXTRACTED_BYTES", 16)
+    artifact_path = tmp_path / "oversized.zip"
+    artifact_bytes = _build_zip(artifact_path, files={"model.onnx": "x" * 64})
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "oversized-voice",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="maximum allowed extracted size"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="oversized-voice",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert not (tmp_path / "models" / "voices" / "oversized-voice").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
+def test_model_install_rejects_tar_expanded_size_over_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "DEFAULT_MAX_MODEL_EXTRACTED_BYTES", 16)
+    artifact_path = tmp_path / "oversized.tar.bz2"
+    artifact_bytes = _build_tar_bz2(artifact_path, files={"model.onnx": "x" * 64})
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "oversized-voice",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="maximum allowed extracted size"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="oversized-voice",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert not (tmp_path / "models" / "voices" / "oversized-voice").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
+def test_model_install_rejects_zip_with_too_many_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "DEFAULT_MAX_MODEL_ARTIFACT_FILES", 1)
+    artifact_path = tmp_path / "too-many-files.zip"
+    artifact_bytes = _build_zip(
+        artifact_path,
+        files={"model.onnx": "fake-model", "tokens.txt": "fake-tokens"},
+    )
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "too-many-files-voice",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="too many files"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="too-many-files-voice",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert not (tmp_path / "models" / "voices" / "too-many-files-voice").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
 
 
 def test_model_remove_deletes_files_and_manifest_entry(tmp_path: Path) -> None:

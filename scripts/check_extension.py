@@ -231,18 +231,10 @@ def verify_manifest_policy(manifest: dict[str, object]) -> None:
         "content_scripts must inject only src/content-script.js at document_idle",
     )
 
-    web_accessible_resources = manifest.get("web_accessible_resources")
-    web_resource = (
-        web_accessible_resources[0]
-        if isinstance(web_accessible_resources, list)
-        and len(web_accessible_resources) == 1
-        and isinstance(web_accessible_resources[0], dict)
-        else {}
-    )
     _expect(
         errors,
-        web_resource.get("resources") == ["offscreen/offscreen.html"],
-        "web_accessible_resources must expose only offscreen/offscreen.html",
+        "web_accessible_resources" not in manifest,
+        "web_accessible_resources must not expose extension pages to web pages",
     )
 
     _raise_if_errors("Extension manifest policy failed", errors)

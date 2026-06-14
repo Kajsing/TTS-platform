@@ -189,6 +189,17 @@ def test_tts_endpoint_requires_bearer_token(tmp_path: Path) -> None:
     assert response.json()["error"]["type"] == "unauthorized"
 
 
+def test_tts_endpoint_requires_bearer_token_before_body_validation(
+    tmp_path: Path,
+) -> None:
+    client, _, _ = build_test_bundle(tmp_path)
+
+    response = client.post("/v1/tts", json={"voice": "manifest-voice"})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["type"] == "unauthorized"
+
+
 def test_tts_endpoint_rejects_invalid_bearer_format(tmp_path: Path) -> None:
     client, _, _ = build_test_bundle(tmp_path)
 
@@ -540,6 +551,32 @@ def test_origin_policy_blocks_unapproved_origins(tmp_path: Path) -> None:
             "text": "Hello world",
             "voice": "manifest-voice",
         },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["type"] == "forbidden_origin"
+
+
+def test_origin_policy_blocks_unapproved_origins_before_body_validation(
+    tmp_path: Path,
+) -> None:
+    client, auth_headers, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "security": {
+                "allowed_origins": ["chrome-extension://approved-extension"],
+            }
+        },
+    )
+
+    response = client.post(
+        "/v1/tts",
+        headers={
+            **auth_headers,
+            "Origin": "chrome-extension://other-extension",
+            "Content-Type": "text/plain",
+        },
+        content="not-json",
     )
 
     assert response.status_code == 403

@@ -29,6 +29,7 @@ from .security import (
 from .synthesis import SynthesisCancelledError, SynthesisService
 
 _CLIENT_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,35}$")
+WEBSOCKET_START_TIMEOUT_SECONDS = 10.0
 
 
 def create_app(
@@ -83,20 +84,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def handle_request_validation_error(_, exc: RequestValidationError) -> JSONResponse:
-        issues = []
-        first_param: str | None = None
-        for issue in exc.errors():
-            location = issue.get("loc", ())
-            path = ".".join(str(part) for part in location if part != "body")
-            if first_param is None and path:
-                first_param = path
-            issues.append(
-                {
-                    "param": path or None,
-                    "message": issue.get("msg", "Invalid request body."),
-                    "type": issue.get("type"),
-                }
-            )
+        issues, first_param = _safe_validation_issues(exc.errors())
         api_error = invalid_request(
             "Request body validation failed.",
             param=first_param,
@@ -117,8 +105,19 @@ def _register_middleware(app: FastAPI) -> None:
         response: FastAPIResponse | None = None
         status_code = 500
         try:
+            if _requires_protected_http_access(request):
+                _enforce_protected_request(container, request)
+                request.state.tts_write_access_enforced = True
             response = await call_next(request)
             status_code = response.status_code
+            return response
+        except APIError as exc:
+            status_code = exc.status_code
+            response = JSONResponse(
+                status_code=exc.status_code,
+                content=exc.to_response(),
+                headers=exc.headers,
+            )
             return response
         finally:
             duration_ms = (monotonic() - start_time) * 1000
@@ -249,7 +248,10 @@ def _register_routes(app: FastAPI) -> None:
             return
 
         try:
-            initial_message = await websocket.receive_json()
+            initial_message = await asyncio.wait_for(
+                websocket.receive_json(),
+                timeout=WEBSOCKET_START_TIMEOUT_SECONDS,
+            )
             if initial_message.get("type") != "start":
                 raise invalid_request(
                     "First WebSocket event must be a start event.",
@@ -269,12 +271,24 @@ def _register_routes(app: FastAPI) -> None:
             )
             _validate_start_text_chunk_index(start_text_chunk_index, execution)
         except ValidationError as exc:
+            issues, first_param = _safe_validation_issues(exc.errors())
             api_error = invalid_request(
                 "Request body validation failed.",
-                details={"issues": exc.errors()},
+                param=first_param,
+                details={"issues": issues},
             )
             await websocket.send_json({"type": "error", "error": api_error.to_response()["error"]})
             await websocket.close(code=1003)
+            return
+        except TimeoutError:
+            api_error = invalid_request(
+                "First WebSocket event timed out.",
+                param="type",
+            )
+            await websocket.send_json({"type": "error", "error": api_error.to_response()["error"]})
+            await websocket.close(code=1008)
+            return
+        except WebSocketDisconnect:
             return
         except APIError as exc:
             await websocket.send_json({"type": "error", "error": exc.to_response()["error"]})
@@ -410,12 +424,28 @@ def _register_routes(app: FastAPI) -> None:
 
 
 def _enforce_protected_request(container: object, request: Request) -> None:
+    if getattr(request.state, "tts_write_access_enforced", False):
+        return
     enforce_write_access(
         request,
         auth_state=container.auth,
         origin_policy=container.origin_policy,
         rate_limiter=container.rate_limiter,
     )
+
+
+def _requires_protected_http_access(request: Request) -> bool:
+    path = request.url.path
+    method = request.method.upper()
+    if path == "/v1/tts" and method == "POST":
+        return True
+    if path == "/v1/auth/rotate" and method == "POST":
+        return True
+    if path == "/v1/tts/jobs" and method == "POST":
+        return True
+    if path.startswith("/v1/tts/jobs/") and method in {"GET", "DELETE"}:
+        return True
+    return False
 
 
 def _build_synthesis_service(container: object) -> SynthesisService:
@@ -430,6 +460,26 @@ def _build_synthesis_service(container: object) -> SynthesisService:
         stream_frame_ms=container.config.streaming.audio_frame_ms,
         observability=container.observability,
     )
+
+
+def _safe_validation_issues(
+    raw_issues: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], str | None]:
+    issues: list[dict[str, object]] = []
+    first_param: str | None = None
+    for issue in raw_issues:
+        location = issue.get("loc", ())
+        path = ".".join(str(part) for part in location if part != "body")
+        if first_param is None and path:
+            first_param = path
+        issues.append(
+            {
+                "param": path or None,
+                "message": issue.get("msg", "Invalid request body."),
+                "type": issue.get("type"),
+            }
+        )
+    return issues, first_param
 
 
 def _parse_start_text_chunk_index(raw_value: object) -> int:

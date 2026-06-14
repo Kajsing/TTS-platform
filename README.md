@@ -243,8 +243,10 @@ catalog file or remote catalog URL. `model-install` downloads or reads a
 catalog artifact, verifies `artifact_sha256` by default, resolves relative
 artifacts against the local catalog path or remote catalog URL, stages the
 artifact in a temporary file, caps remote downloads and redirect destinations
-before checksum verification, extracts zip or tar archives safely under
-`models/voices/<model-id>`, refuses an existing model before artifact load
+before checksum verification, rejects private-network artifact hostnames after
+DNS resolution unless they match the explicitly selected remote catalog origin,
+extracts zip or tar archives safely under `models/voices/<model-id>` with
+expanded-size and member-count quotas, refuses an existing model before artifact load
 unless `--overwrite` is set, updates `models/MANIFEST.json`, prints progress
 status to stderr, reports actual artifact bytes plus catalog size-match
 metadata, and keeps its structured result on stdout. Use
@@ -379,7 +381,7 @@ The extension currently supports:
 - packaged local install/troubleshooting guidance and extension icons for Chrome
   handoff builds
 
-The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events. The extension manifest keeps service host permissions limited to localhost; page access is handled by the declared content script.
+The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events. The extension manifest keeps service host permissions limited to localhost, exposes no extension pages through `web_accessible_resources`, and handles page access through the declared content script.
 
 For extension-specific setup and troubleshooting, see
 [README.md](apps/chrome_extension/README.md) and
