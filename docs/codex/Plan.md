@@ -454,5 +454,9 @@ The seventy-fourth reader-flow UX slice adds popup `Focus Page`, a source-tab
 helper that focuses the original page tab from the stored non-textual tab id
 when manual page actions are disabled by the source-tab guard. It does not
 persist page URLs or raw page text.
+The seventy-fifth extension security-hardening slice validates the saved
+extension service `Base URL` at runtime before background fetch/WebSocket use,
+allowing only HTTP localhost origins on `127.0.0.1` or `localhost` and
+rejecting credentials, paths, query strings, fragments, and external hosts.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

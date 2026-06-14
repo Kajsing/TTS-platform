@@ -5,6 +5,9 @@
 - Confirm the local service is running.
 - Confirm the popup `Base URL` matches the service host and port.
 - Confirm the service is listening on a localhost URL that Chrome can reach.
+- Confirm the popup `Base URL` is an HTTP localhost origin such as
+  `http://127.0.0.1:7777` or `http://localhost:7777`; paths, query strings,
+  credentials, and external hosts are rejected when settings are saved.
 - Use the popup `Refresh` button and read the `Service Status` panel.
 - Use the popup `Setup Checklist` panel to see whether service reachability,
   token setup, voice discovery, backend readiness, default voice loading, and

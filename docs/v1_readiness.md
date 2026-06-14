@@ -19,8 +19,9 @@ for long web-page text.
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
-  boundaries, local install/troubleshooting guidance and icons, and JavaScript
-  syntax when `node` is installed.
+  boundaries, runtime localhost-only service URL validation, local
+  install/troubleshooting guidance and icons, and JavaScript syntax when `node`
+  is installed.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
   copyable `tts extension-allow-origin` first-run helper before checking the

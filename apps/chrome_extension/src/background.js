@@ -7,6 +7,9 @@ const DEFAULT_CONFIG = {
   highWatermarkMs: 600,
   maxChars: 24000,
 };
+const ALLOWED_SERVICE_HOSTS = new Set(["127.0.0.1", "localhost"]);
+const BASE_URL_ERROR =
+  "Base URL must be an HTTP localhost origin using 127.0.0.1 or localhost.";
 
 let playbackState = {
   status: "idle",
@@ -47,8 +50,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(await getConfig());
         return;
       case "tts-extension:save-config":
-        await chrome.storage.local.set(sanitizeConfig(message.config ?? {}));
-        sendResponse(await getConfig());
+        try {
+          await chrome.storage.local.set(
+            sanitizeConfig(message.config ?? {}, { rejectInvalidBaseUrl: true })
+          );
+          sendResponse(await getConfig());
+        } catch (error) {
+          sendResponse({ ok: false, message: error.message });
+        }
         return;
       case "tts-extension:get-state":
         sendResponse(await getPlaybackState());
@@ -499,7 +508,7 @@ async function getServiceSnapshot() {
   }
 }
 
-function sanitizeConfig(config) {
+function sanitizeConfig(config, options = {}) {
   const prebufferMs = sanitizeNumber(config.prebufferMs, DEFAULT_CONFIG.prebufferMs, 50);
   const lowWatermarkMs = sanitizeNumber(
     config.lowWatermarkMs,
@@ -513,7 +522,7 @@ function sanitizeConfig(config) {
   const maxChars = sanitizeNumber(config.maxChars, DEFAULT_CONFIG.maxChars, 200, 48000);
 
   return {
-    baseUrl: String(config.baseUrl || DEFAULT_CONFIG.baseUrl).trim() || DEFAULT_CONFIG.baseUrl,
+    baseUrl: sanitizeBaseUrl(config.baseUrl, options),
     token: String(config.token || "").trim(),
     voice: String(config.voice || "").trim(),
     prebufferMs,
@@ -521,6 +530,34 @@ function sanitizeConfig(config) {
     highWatermarkMs,
     maxChars,
   };
+}
+
+function sanitizeBaseUrl(value, { rejectInvalidBaseUrl = false } = {}) {
+  const rawValue = String(value || DEFAULT_CONFIG.baseUrl).trim() || DEFAULT_CONFIG.baseUrl;
+  try {
+    const parsed = new URL(rawValue);
+    if (!isAllowedLocalServiceUrl(parsed)) {
+      throw new Error(BASE_URL_ERROR);
+    }
+    return parsed.origin;
+  } catch (error) {
+    if (rejectInvalidBaseUrl) {
+      throw new Error(error.message || BASE_URL_ERROR);
+    }
+    return DEFAULT_CONFIG.baseUrl;
+  }
+}
+
+function isAllowedLocalServiceUrl(parsed) {
+  return (
+    parsed.protocol === "http:" &&
+    !parsed.username &&
+    !parsed.password &&
+    ALLOWED_SERVICE_HOSTS.has(parsed.hostname.toLowerCase()) &&
+    (parsed.pathname === "" || parsed.pathname === "/") &&
+    parsed.search === "" &&
+    parsed.hash === ""
+  );
 }
 
 function sanitizeNumber(value, fallback, minimum, maximum = Number.POSITIVE_INFINITY) {

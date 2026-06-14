@@ -199,8 +199,12 @@ loadPopup().catch((error) => {
   setActionMessage(error.message, "error");
 });
 
-function sendMessage(message) {
-  return chrome.runtime.sendMessage(message);
+async function sendMessage(message) {
+  const response = await chrome.runtime.sendMessage(message);
+  if (response?.ok === false) {
+    throw new Error(response.message || "Extension action failed.");
+  }
+  return response;
 }
 
 async function runAction(type) {

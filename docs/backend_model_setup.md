@@ -656,6 +656,10 @@ thread returns.
 - Installed model files stay under `models/voices/<voice-id>`.
 - Manifest backend asset paths must stay under the voice `source`; do not use
   absolute paths, `..`, or paths pointing at another model directory.
+- The Chrome extension runtime validates its saved service `Base URL` before
+  background fetch/WebSocket traffic uses it. It must be an HTTP localhost
+  origin using `127.0.0.1` or `localhost`, with no credentials, path, query
+  string, or fragment.
 
 ## Troubleshooting
 

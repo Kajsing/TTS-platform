@@ -11,23 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: make the Chrome reader's source-tab guard actionable
-  from the popup when the operator is on another tab.
-- Current loop result: the popup now includes `Focus Page`, which asks the
-  background worker to focus the original page tab from the stored source tab id
-  when manual page resume/continue/section actions are disabled by the
-  source-tab guard. It does not persist page URLs or raw page text.
+- Current loop target: close the remaining extension hardening item from the
+  local security scan by validating the Chrome extension service `Base URL` at
+  runtime before background network use.
+- Current loop result: the background worker now accepts only HTTP localhost
+  origins on `127.0.0.1` or `localhost` for saved service URLs and rejects
+  external hosts, credentials, paths, query strings, and fragments when
+  settings are saved. Popup messaging now surfaces background `ok: false`
+  errors instead of treating rejected saves as successful.
 - Validation status for the current loop:
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
     remains skip-aware because Node.js is not on `PATH`.
+  - `py -3 -m pytest apps\tts_service\tests\test_check_extension.py -q`
+    passed with 9 tests.
+  - `py -3 scripts\check_extension_onboarding.py` passed.
   - `py -3 scripts\check_extension_reader_flow.py` passed, including
-    `source_tab_guard`, `source_tab_status`, `source_tab_focus_action`, and
     generated long-article WebSocket smoke with 145 stream text chunks.
-  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
-    passed with 3 tests.
+  - `py -3 -m pytest apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_extension_reader_flow_check.py -q`
+    passed with 5 tests.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 229 tests.
+  - `py -3 -m pytest -q` passed with 230 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -471,6 +475,10 @@ This file is the live status log and shared memory for future Codex loops.
   - the popup now exposes `Focus Page`, allowing the operator to return to the
     original source tab from stored page playback metadata without persisting a
     page URL or raw page text.
+  - the extension background worker now validates saved service `Base URL`
+    values as localhost-only HTTP origins before fetch/WebSocket use, and
+    popup messaging surfaces background `ok: false` errors when settings are
+    rejected.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

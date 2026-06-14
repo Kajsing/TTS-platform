@@ -21,6 +21,12 @@ def test_check_extension_accepts_repo_manifest_and_privacy_boundaries() -> None:
     check_module.verify_extension_privacy_boundaries(EXTENSION_ROOT)
 
 
+def test_check_extension_accepts_repo_wiring() -> None:
+    check_module = _load_check_extension_module()
+
+    check_module.verify_extension_wiring()
+
+
 def test_check_extension_rejects_missing_icon_declaration() -> None:
     check_module = _load_check_extension_module()
     manifest = json.loads((EXTENSION_ROOT / "manifest.json").read_text(encoding="utf-8"))

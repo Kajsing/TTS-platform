@@ -159,6 +159,10 @@ the manifest and toolbar action.
 - Manifest host permissions are limited to the localhost service origins. The
   declared content script handles page access, and the validation script checks
   that network playback stays in the background/offscreen path.
+- The saved `Base URL` is runtime-validated in the background worker and must
+  be an HTTP localhost origin using `127.0.0.1` or `localhost`; external hosts,
+  credentials, paths, query strings, and fragments are rejected before service
+  fetch/WebSocket traffic uses the value.
 
 ## Validation
 

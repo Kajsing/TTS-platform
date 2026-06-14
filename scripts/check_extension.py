@@ -280,6 +280,7 @@ def verify_extension_wiring() -> None:
             "Source Tab:",
             "checklistLine",
             "snapshot.originCliCommand",
+            "response?.ok === false",
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
@@ -312,6 +313,10 @@ def verify_extension_wiring() -> None:
             "resolveResumeTextChunkIndex",
             "startTextChunkIndex",
             "buildOriginCliCommand",
+            "sanitizeBaseUrl",
+            "isAllowedLocalServiceUrl",
+            "ALLOWED_SERVICE_HOSTS",
+            "Base URL must be an HTTP localhost origin",
         ],
         EXTENSION_ROOT / "src" / "content-script.js": [
             "getPageCapture",
@@ -469,7 +474,8 @@ def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -
         contents["background"],
         [
             "chrome.storage.local.get(DEFAULT_CONFIG)",
-            "chrome.storage.local.set(sanitizeConfig(",
+            "chrome.storage.local.set(",
+            "sanitizeConfig(message.config ?? {}, { rejectInvalidBaseUrl: true })",
             "chrome.storage.session.set({\n    playbackState: nextState,",
             "pageCapture: capture.meta",
             "sanitizePageCaptureMeta",
