@@ -7,6 +7,8 @@ backend-realism work, and early v1 model-management helpers:
 - voice manifest parsing
 - voice registry behavior
 - text normalization and segmentation
+- bounded sentence-segmentation abbreviation lookbehind for punctuation-heavy
+  long-text inputs
 - `/v1/health`, `/v1/voices`, and `/v1/tts`
 - `sherpa-onnx` development synthesis behavior
 - API error payload shape

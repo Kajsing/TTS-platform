@@ -97,6 +97,7 @@ class SentenceSegmenter:
             return []
 
         abbreviations = self._abbreviations_for(language_hint)
+        max_abbreviation_length = self._max_abbreviation_length(abbreviations)
         segments: list[str] = []
         start = 0
         length = len(working_text)
@@ -104,7 +105,12 @@ class SentenceSegmenter:
         for index, character in enumerate(working_text):
             if character not in ".!?;:":
                 continue
-            if character == "." and self._is_abbreviation(working_text, index, abbreviations):
+            if character == "." and self._is_abbreviation(
+                working_text,
+                index,
+                abbreviations,
+                max_abbreviation_length=max_abbreviation_length,
+            ):
                 continue
             if self._is_decimal_separator(working_text, index):
                 continue
@@ -147,15 +153,26 @@ class SentenceSegmenter:
             return DEFAULT_DA_ABBREVIATIONS
         return DEFAULT_EN_ABBREVIATIONS
 
+    def _max_abbreviation_length(self, abbreviations: set[str]) -> int:
+        return max((len(abbreviation) for abbreviation in abbreviations), default=0)
+
     def _is_abbreviation(
         self,
         text: str,
         period_index: int,
         abbreviations: set[str],
+        *,
+        max_abbreviation_length: int | None = None,
     ) -> bool:
+        if not abbreviations:
+            return False
+        lookbehind_limit = max_abbreviation_length or self._max_abbreviation_length(abbreviations)
+        window_start = max(0, period_index + 1 - lookbehind_limit)
         token_start = period_index
-        while token_start > 0 and not text[token_start - 1].isspace():
+        while token_start > window_start and not text[token_start - 1].isspace():
             token_start -= 1
+        if token_start == window_start and token_start > 0 and not text[token_start - 1].isspace():
+            return False
         token = text[token_start : period_index + 1].lower()
         return token in abbreviations
 

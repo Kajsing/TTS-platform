@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer, TextPipeline
 
 
@@ -17,6 +19,35 @@ def test_sentence_segmenter_avoids_splitting_common_abbreviations() -> None:
     segments = segmenter.segment("Dr. Smith arrived. Hello there.", language_hint="en")
 
     assert segments == ["Dr. Smith arrived.", "Hello there."]
+
+
+def test_sentence_segmenter_handles_multiperiod_abbreviations() -> None:
+    segmenter = SentenceSegmenter()
+
+    segments = segmenter.segment("It is e.g. useful. Done.", language_hint="en")
+
+    assert segments == ["It is e.g. useful.", "Done."]
+
+
+def test_sentence_segmenter_does_not_match_abbreviation_suffix_inside_long_token() -> None:
+    segmenter = SentenceSegmenter()
+
+    segments = segmenter.segment("prefixDr. Next sentence.", language_hint="en")
+
+    assert segments == ["prefixDr.", "Next sentence."]
+
+
+def test_sentence_segmenter_bounds_punctuation_only_abbreviation_lookbehind() -> None:
+    segmenter = SentenceSegmenter()
+    punctuation_text = "." * 12_000
+
+    start = time.perf_counter()
+    segments = segmenter.segment(punctuation_text)
+    elapsed_seconds = time.perf_counter() - start
+
+    assert elapsed_seconds < 0.5
+    assert "".join(segments) == punctuation_text
+    assert all(len(segment) <= segmenter.max_chars_per_segment for segment in segments)
 
 
 def test_text_pipeline_returns_segments_from_normalized_text() -> None:

@@ -11,25 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: fix security scan finding F-004 by bounding async TTS
-  queued/running job backlog and enforcing the existing job lifetime limit.
-- Current loop result: `limits.max_stored_jobs` is now a real total in-memory
-  job retention cap; when queued/running jobs fill it, `POST /v1/tts/jobs`
-  returns `429` instead of retaining more futures/executions. `limits.max_job_seconds`
-  now marks queued/running jobs failed, asks the backend to cancel, and prevents
-  late backend completion from overwriting the terminal failed state.
+- Current loop target: fix security scan finding F-003 by removing quadratic
+  sentence-segmentation behavior on punctuation-only long-text input.
+- Current loop result: abbreviation detection now bounds lookbehind to the
+  longest known abbreviation token, preserving normal and multi-period
+  abbreviation behavior while preventing punctuation-heavy page text from
+  forcing repeated unbounded backward scans.
 - Validation status for the current loop:
-  - Targeted API tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_api.py -q` and reported
-    28 passed.
+  - Targeted text tests passed with
+    `py -3 -m pytest packages\tts_core\tests\test_text.py -q` and reported
+    9 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\jobs.py apps\tts_service\src\tts_service\bootstrap.py apps\tts_service\tests\test_api.py`.
-  - The original F-004 backlog reproducer was rerun against the fixed code:
-    with `max_concurrent_jobs=1` and `max_stored_jobs=2`, six submissions now
-    return `[200, 200, 429, 429, 429, 429]`, and the manager remains at two
-    jobs, futures, and executions.
+    `py -3 -m ruff check packages\tts_core\src\tts_core\text.py packages\tts_core\tests\test_text.py`.
+  - The original F-003 timing pattern was rerun against the fixed code:
+    punctuation-only segmentation for 1k/2k/4k/8k/12k periods now took about
+    0.0007s / 0.0014s / 0.0027s / 0.0056s / 0.0084s instead of the scan's
+    roughly quadratic growth up to 3.66s at 12k.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 222 tests.
+  - `py -3 -m pytest -q` passed with 225 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -453,6 +452,9 @@ This file is the live status log and shared memory for future Codex loops.
   - async jobs now enforce the configured `limits.max_job_seconds` lifetime by
     marking queued/running jobs failed, requesting backend cancellation, and
     preserving that terminal state if backend work finishes late.
+  - sentence segmentation now bounds abbreviation lookbehind to the longest
+    known abbreviation token, removing the quadratic punctuation-only path
+    before backend synthesis.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

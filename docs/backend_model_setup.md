@@ -552,6 +552,10 @@ The current long-text path is therefore:
 - let the service normalize, segment, plan chunks, synthesize, stream, and allow
   cancellation between planned chunks.
 
+Sentence segmentation bounds abbreviation lookbehind to the longest known
+abbreviation token, so punctuation-heavy page text cannot force repeated
+unbounded backward scans before synthesis starts.
+
 `WS /v1/tts/stream` also reports reader progress:
 
 - `started.progress` includes the planned text chunk count, total planned text
