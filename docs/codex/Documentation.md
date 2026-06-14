@@ -11,24 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: fix security scan finding F-003 by removing quadratic
-  sentence-segmentation behavior on punctuation-only long-text input.
-- Current loop result: abbreviation detection now bounds lookbehind to the
-  longest known abbreviation token, preserving normal and multi-period
-  abbreviation behavior while preventing punctuation-heavy page text from
-  forcing repeated unbounded backward scans.
+- Current loop target: fix security scan hardening finding F-006 by bounding
+  remote model artifact download destinations, redirects, and response sizes.
+- Current loop result: `model-install` now caps remote artifact downloads before
+  checksum verification, enforces catalog `artifact_size_bytes` during streaming
+  when present, validates `Content-Length`, follows redirects manually, rejects
+  artifact URLs with credentials, and blocks local/private network destinations
+  unless they are the same origin as the explicitly selected remote catalog.
 - Validation status for the current loop:
-  - Targeted text tests passed with
-    `py -3 -m pytest packages\tts_core\tests\test_text.py -q` and reported
-    9 passed.
+  - Targeted model-flow tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
+    reported 55 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check packages\tts_core\src\tts_core\text.py packages\tts_core\tests\test_text.py`.
-  - The original F-003 timing pattern was rerun against the fixed code:
-    punctuation-only segmentation for 1k/2k/4k/8k/12k periods now took about
-    0.0007s / 0.0014s / 0.0027s / 0.0056s / 0.0084s instead of the scan's
-    roughly quadratic growth up to 3.66s at 12k.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
+  - `py -3 scripts\check_model_management_flow.py` passed, including the
+    loopback remote catalog relative-artifact install path.
+  - The F-006 redirect/size reproducer paths are now covered by regression
+    tests: redirect to loopback from a non-loopback catalog fails before body
+    read, streaming past catalog `artifact_size_bytes` fails, and oversized
+    `Content-Length` fails before streaming.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 225 tests.
+  - `py -3 -m pytest -q` passed with 228 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -455,6 +458,9 @@ This file is the live status log and shared memory for future Codex loops.
   - sentence segmentation now bounds abbreviation lookbehind to the longest
     known abbreviation token, removing the quadratic punctuation-only path
     before backend synthesis.
+  - remote model artifact downloads now enforce a maximum size, catalog
+    `artifact_size_bytes` streaming cap, `Content-Length` validation, manual
+    redirect destination checks, and credential-free HTTP(S) artifact URLs.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

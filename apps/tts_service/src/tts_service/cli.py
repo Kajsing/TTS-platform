@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import importlib.util
+import ipaddress
 import json
 import os
 import re
@@ -13,7 +14,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urljoin, urlparse
@@ -28,6 +29,8 @@ from .auth import initialize_auth
 from .config import SecurityConfig, load_config
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
+DEFAULT_MAX_MODEL_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
+MAX_MODEL_ARTIFACT_REDIRECTS = 5
 REAL_RUNTIME_INSTALL_STEP = 'python -m pip install -e ".[real]"'
 SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
 NUMPY_INSTALL_STEP = "python -m pip install numpy"
@@ -1151,6 +1154,9 @@ def _install_model_from_catalog(
     catalog_artifact_size_bytes = _catalog_artifact_size_bytes(
         model.get("artifact_size_bytes")
     )
+    max_artifact_size_bytes = _resolve_max_artifact_size_bytes(
+        catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+    )
     install_dir = _model_install_dir(models_root=models_root, model_id=model_id)
     if install_dir.exists() and not overwrite:
         raise SystemExit(
@@ -1164,6 +1170,8 @@ def _install_model_from_catalog(
             artifact_url=artifact_url,
             catalog_location=catalog_location,
             destination=Path(temp_dir) / "artifact",
+            catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+            max_artifact_size_bytes=max_artifact_size_bytes,
         )
         _record_install_step(
             install_steps,
@@ -1333,33 +1341,241 @@ def _load_artifact_file(
     artifact_url: str,
     catalog_location: CatalogLocation,
     destination: Path,
+    catalog_artifact_size_bytes: int | None,
+    max_artifact_size_bytes: int,
 ) -> ArtifactFile:
     destination.parent.mkdir(parents=True, exist_ok=True)
     parsed = urlparse(artifact_url)
     if parsed.scheme in {"http", "https"}:
-        _download_artifact_to_file(url=artifact_url, destination=destination)
+        _download_artifact_to_file(
+            url=artifact_url,
+            destination=destination,
+            catalog_location=catalog_location,
+            catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+            max_artifact_size_bytes=max_artifact_size_bytes,
+        )
         return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
     if isinstance(catalog_location, str):
         resolved_url = urljoin(catalog_location, artifact_url)
-        _download_artifact_to_file(url=resolved_url, destination=destination)
+        _download_artifact_to_file(
+            url=resolved_url,
+            destination=destination,
+            catalog_location=catalog_location,
+            catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+            max_artifact_size_bytes=max_artifact_size_bytes,
+        )
         return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
     artifact_path = Path(artifact_url).expanduser()
     if not artifact_path.is_absolute():
         artifact_path = (catalog_location.parent / artifact_path).resolve()
+    _assert_artifact_size_allowed(
+        size_bytes=artifact_path.stat().st_size,
+        catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+        max_artifact_size_bytes=max_artifact_size_bytes,
+    )
     with artifact_path.open("rb") as source, destination.open("wb") as target:
         shutil.copyfileobj(source, target)
     return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
 
-def _download_artifact_to_file(*, url: str, destination: Path) -> None:
-    with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-        with client.stream("GET", url) as response:
-            response.raise_for_status()
-            with destination.open("wb") as artifact_file:
-                for chunk in response.iter_bytes():
-                    artifact_file.write(chunk)
+def _resolve_max_artifact_size_bytes(*, catalog_artifact_size_bytes: int | None) -> int:
+    if (
+        catalog_artifact_size_bytes is not None
+        and catalog_artifact_size_bytes > DEFAULT_MAX_MODEL_ARTIFACT_BYTES
+    ):
+        raise SystemExit(
+            "Catalog artifact_size_bytes exceeds the maximum allowed model artifact "
+            f"size ({DEFAULT_MAX_MODEL_ARTIFACT_BYTES} bytes): "
+            f"{catalog_artifact_size_bytes}"
+        )
+    return DEFAULT_MAX_MODEL_ARTIFACT_BYTES
+
+
+def _download_artifact_to_file(
+    *,
+    url: str,
+    destination: Path,
+    catalog_location: CatalogLocation,
+    catalog_artifact_size_bytes: int | None,
+    max_artifact_size_bytes: int,
+) -> None:
+    trusted_private_origin = (
+        _remote_origin(catalog_location)
+        if isinstance(catalog_location, str)
+        and _is_local_artifact_host(urlparse(catalog_location).hostname)
+        else None
+    )
+    current_url = _assert_allowed_artifact_url(
+        url=url,
+        trusted_private_origin=trusted_private_origin,
+    )
+    redirect_count = 0
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            while True:
+                with client.stream("GET", current_url) as response:
+                    if _is_http_redirect(response):
+                        redirect_count += 1
+                        if redirect_count > MAX_MODEL_ARTIFACT_REDIRECTS:
+                            raise SystemExit(
+                                "Model artifact download exceeded maximum redirect count "
+                                f"({MAX_MODEL_ARTIFACT_REDIRECTS})."
+                            )
+                        redirect_location = response.headers.get("location")
+                        if not redirect_location:
+                            raise SystemExit(
+                                "Model artifact download received a redirect without a "
+                                "Location header."
+                            )
+                        current_url = _assert_allowed_artifact_url(
+                            url=urljoin(current_url, redirect_location),
+                            trusted_private_origin=trusted_private_origin,
+                        )
+                        continue
+
+                    response.raise_for_status()
+                    _assert_response_size_allowed(
+                        headers=response.headers,
+                        catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+                        max_artifact_size_bytes=max_artifact_size_bytes,
+                    )
+                    _write_downloaded_artifact(
+                        chunks=response.iter_bytes(),
+                        destination=destination,
+                        catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+                        max_artifact_size_bytes=max_artifact_size_bytes,
+                    )
+                    return
+    except BaseException:
+        if destination.exists():
+            destination.unlink()
+        raise
+
+
+def _assert_allowed_artifact_url(
+    *,
+    url: str,
+    trusted_private_origin: tuple[str, str, int | None] | None,
+) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise SystemExit(f"Model artifact URL must be http or https: {url!r}")
+    if parsed.username or parsed.password:
+        raise SystemExit("Model artifact URL must not include credentials.")
+    if _is_local_artifact_host(parsed.hostname):
+        origin = _remote_origin(url)
+        if origin != trusted_private_origin:
+            raise SystemExit(
+                "Model artifact URL points at a local or private network destination "
+                f"that is not the selected catalog origin: {url!r}"
+            )
+    return url
+
+
+def _remote_origin(url: str) -> tuple[str, str, int | None]:
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if hostname is None:
+        raise SystemExit(f"URL is missing a host: {url!r}")
+    return (parsed.scheme.lower(), hostname.lower(), parsed.port)
+
+
+def _is_local_artifact_host(hostname: str | None) -> bool:
+    if hostname is None:
+        return True
+    lowered = hostname.strip().lower()
+    if lowered == "localhost" or lowered.endswith(".localhost"):
+        return True
+    try:
+        ip_address = ipaddress.ip_address(lowered)
+    except ValueError:
+        return False
+    return (
+        ip_address.is_loopback
+        or ip_address.is_private
+        or ip_address.is_link_local
+        or ip_address.is_multicast
+        or ip_address.is_reserved
+        or ip_address.is_unspecified
+    )
+
+
+def _is_http_redirect(response: httpx.Response) -> bool:
+    return 300 <= response.status_code < 400
+
+
+def _assert_response_size_allowed(
+    *,
+    headers: httpx.Headers,
+    catalog_artifact_size_bytes: int | None,
+    max_artifact_size_bytes: int,
+) -> None:
+    content_length = _content_length_header(headers)
+    if content_length is None:
+        return
+    _assert_artifact_size_allowed(
+        size_bytes=content_length,
+        catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+        max_artifact_size_bytes=max_artifact_size_bytes,
+    )
+
+
+def _content_length_header(headers: httpx.Headers) -> int | None:
+    raw_content_length = headers.get("content-length")
+    if raw_content_length is None:
+        return None
+    try:
+        content_length = int(raw_content_length)
+    except ValueError as exc:
+        raise SystemExit(
+            f"Model artifact response has invalid Content-Length: {raw_content_length!r}"
+        ) from exc
+    if content_length < 0:
+        raise SystemExit(
+            f"Model artifact response has invalid Content-Length: {raw_content_length!r}"
+        )
+    return content_length
+
+
+def _write_downloaded_artifact(
+    *,
+    chunks: Iterable[bytes],
+    destination: Path,
+    catalog_artifact_size_bytes: int | None,
+    max_artifact_size_bytes: int,
+) -> None:
+    bytes_written = 0
+    with destination.open("wb") as artifact_file:
+        for chunk in chunks:
+            if not chunk:
+                continue
+            bytes_written += len(chunk)
+            _assert_artifact_size_allowed(
+                size_bytes=bytes_written,
+                catalog_artifact_size_bytes=catalog_artifact_size_bytes,
+                max_artifact_size_bytes=max_artifact_size_bytes,
+            )
+            artifact_file.write(chunk)
+
+
+def _assert_artifact_size_allowed(
+    *,
+    size_bytes: int,
+    catalog_artifact_size_bytes: int | None,
+    max_artifact_size_bytes: int,
+) -> None:
+    if size_bytes > max_artifact_size_bytes:
+        raise SystemExit(
+            "Model artifact exceeds the maximum allowed size "
+            f"({max_artifact_size_bytes} bytes)."
+        )
+    if catalog_artifact_size_bytes is not None and size_bytes > catalog_artifact_size_bytes:
+        raise SystemExit(
+            "Model artifact exceeded catalog artifact_size_bytes "
+            f"({catalog_artifact_size_bytes} bytes)."
+        )
 
 
 def _sha256_file(path: Path) -> str:

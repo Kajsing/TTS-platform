@@ -220,9 +220,13 @@ def test_model_install_downloads_relative_artifact_from_remote_catalog(
             *,
             json_payload: dict[str, object] | None = None,
             content: bytes = b"",
+            status_code: int = 200,
+            headers: dict[str, str] | None = None,
         ) -> None:
             self._json_payload = json_payload
             self.content = content
+            self.status_code = status_code
+            self.headers = headers or {}
 
         def raise_for_status(self) -> None:
             return None
@@ -261,7 +265,7 @@ def test_model_install_downloads_relative_artifact_from_remote_catalog(
         def stream(self, method: str, url: str) -> FakeResponse:
             requested_urls.append(url)
             if method == "GET" and url == resolved_artifact_url:
-                assert self.follow_redirects is True
+                assert self.follow_redirects is False
                 return FakeResponse(content=artifact_bytes)
             raise AssertionError(f"Unexpected URL: {url}")
 
@@ -279,6 +283,238 @@ def test_model_install_downloads_relative_artifact_from_remote_catalog(
     assert result["installed_model"] == "voice-a"
     assert result["checksum_verified"] is True
     assert (tmp_path / "models" / "voices" / "voice-a" / "model.onnx").exists()
+
+
+def test_model_install_rejects_remote_artifact_redirect_to_loopback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_url = "https://models.example.test/catalogs/catalog.json"
+    artifact_url = "https://models.example.test/artifacts/voice-a.zip"
+    requested_urls: list[str] = []
+
+    catalog_payload = {
+        "version": 1,
+        "models": [
+            {
+                "id": "voice-a",
+                "artifact_url": artifact_url,
+                "artifact_sha256": "0" * 64,
+            }
+        ],
+    }
+
+    class FakeResponse:
+        def __init__(
+            self,
+            *,
+            json_payload: dict[str, object] | None = None,
+            status_code: int = 200,
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            self._json_payload = json_payload
+            self.status_code = status_code
+            self.headers = headers or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            if self._json_payload is None:
+                raise AssertionError("No JSON payload was configured.")
+            return self._json_payload
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def iter_bytes(self) -> list[bytes]:
+            raise AssertionError("Redirect body should not be consumed.")
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if url == catalog_url:
+                return FakeResponse(json_payload=catalog_payload)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        def stream(self, method: str, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if method == "GET" and url == artifact_url:
+                assert self.follow_redirects is False
+                return FakeResponse(
+                    status_code=302,
+                    headers={"location": "http://127.0.0.1/private.zip"},
+                )
+            raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    with pytest.raises(SystemExit, match="local or private network destination"):
+        cli._install_model_from_catalog(
+            catalog_source=catalog_url,
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert requested_urls == [catalog_url, artifact_url]
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
+def test_model_install_rejects_remote_artifact_stream_over_catalog_size(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_url = "https://models.example.test/catalogs/catalog.json"
+    artifact_url = "https://models.example.test/artifacts/voice-a.zip"
+    requested_urls: list[str] = []
+
+    catalog_payload = {
+        "version": 1,
+        "models": [
+            {
+                "id": "voice-a",
+                "artifact_url": artifact_url,
+                "artifact_sha256": "0" * 64,
+                "artifact_size_bytes": 5,
+            }
+        ],
+    }
+
+    class FakeResponse:
+        def __init__(
+            self,
+            *,
+            json_payload: dict[str, object] | None = None,
+            content_chunks: list[bytes] | None = None,
+        ) -> None:
+            self._json_payload = json_payload
+            self._content_chunks = content_chunks or []
+            self.status_code = 200
+            self.headers: dict[str, str] = {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            if self._json_payload is None:
+                raise AssertionError("No JSON payload was configured.")
+            return self._json_payload
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def iter_bytes(self) -> list[bytes]:
+            return self._content_chunks
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if url == catalog_url:
+                return FakeResponse(json_payload=catalog_payload)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        def stream(self, method: str, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if method == "GET" and url == artifact_url:
+                return FakeResponse(content_chunks=[b"123", b"456"])
+            raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    with pytest.raises(SystemExit, match="exceeded catalog artifact_size_bytes"):
+        cli._install_model_from_catalog(
+            catalog_source=catalog_url,
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert requested_urls == [catalog_url, artifact_url]
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
+def test_download_artifact_rejects_content_length_over_max_before_streaming(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact_url = "https://models.example.test/voice-a.zip"
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-length": "6"}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def iter_bytes(self) -> list[bytes]:
+            raise AssertionError("Oversized response should not be streamed.")
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def stream(self, method: str, url: str) -> FakeResponse:
+            assert method == "GET"
+            assert url == artifact_url
+            return FakeResponse()
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+    destination = tmp_path / "artifact.zip"
+
+    with pytest.raises(SystemExit, match="maximum allowed size"):
+        cli._download_artifact_to_file(
+            url=artifact_url,
+            destination=destination,
+            catalog_location="https://models.example.test/catalog.json",
+            catalog_artifact_size_bytes=None,
+            max_artifact_size_bytes=5,
+        )
+
+    assert not destination.exists()
 
 
 def test_model_install_command_can_activate_model(

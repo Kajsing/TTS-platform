@@ -344,6 +344,13 @@ Artifacts may be zip or tar archives, including `tar.gz`, `tgz`, `tar.bz2`, and
 `tbz2`.
 `artifact_sha256` is required by default for `model-install` so artifacts are
 integrity-checked before extraction.
+Remote artifact downloads are bounded before checksum verification: responses
+must stay under the built-in maximum model artifact size of 2 GiB, and when
+`artifact_size_bytes` is present the streamed bytes must also stay at or below
+that catalog declaration. Redirects are followed manually and each target must
+remain an allowed `http` or `https` artifact URL without embedded credentials.
+Local/private network destinations are rejected unless they are the same origin
+as the remote catalog URL the operator explicitly selected.
 
 The committed default catalog at `models/catalog.json` starts with the English
 `vits-piper-en_US-lessac-medium` sherpa-onnx voice. It points at the official
@@ -370,6 +377,8 @@ Install behavior:
 - downloads or copies the artifact into a temporary file before checksum and
   extraction so large artifacts do not need to stay resident as one in-memory
   byte string
+- caps remote artifact downloads before and during streaming, validates
+  `Content-Length` when present, and rejects unsafe redirect targets
 - refuses an already-installed model before artifact download/copy unless
   `--overwrite` is set
 - verifies `artifact_sha256` before extraction
@@ -639,6 +648,8 @@ thread returns.
   without limit.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
+- Remote model artifact downloads are bounded by maximum byte caps and redirect
+  destination checks before checksum verification.
 - Installed model files stay under `models/voices/<voice-id>`.
 - Manifest backend asset paths must stay under the voice `source`; do not use
   absolute paths, `..`, or paths pointing at another model directory.
