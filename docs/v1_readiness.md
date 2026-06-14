@@ -6,14 +6,14 @@ for long web-page text.
 
 ## Automated Gates
 
-- `python3 scripts/check_v1_completion.py` verifies the pre-final completion
-  audit in `docs/v1_completion_audit.md`, maps `docs/codex/Prompt.md` "Done
-  When" criteria to concrete repository evidence, and reports
-  `can_mark_v1_complete = false` while the final security-focused pass remains
-  pending. Use `--require-complete` after the real final security pass when the
-  gate should fail unless v1 is fully complete.
+- `python3 scripts/check_v1_completion.py` verifies the final completion audit
+  in `docs/v1_completion_audit.md`, maps `docs/codex/Prompt.md` "Done When"
+  criteria to concrete repository evidence, and reports
+  `can_mark_v1_complete = true` after the final security-focused pass is
+  complete. Use `--require-complete` when the gate should fail unless all v1
+  evidence is present.
 - `python3 scripts/release_check.py` runs ruff, pytest, security-default
-  verification, v1-readiness verification, the pre-final v1 completion audit,
+  verification, v1-readiness verification, the final v1 completion audit,
   local service bootstrap smoke, extension validation, extension packaging, and
   Windows bundle packaging. Use
   `--node-executable <path-to-node> --require-js-syntax` when the release gate
@@ -87,9 +87,10 @@ for long web-page text.
   `vits-piper-en_US-lessac-medium` sherpa-onnx model, and the installer supports
   the official `tar.bz2` release archive format. `model-check` now reads the
   default catalog and suggests the concrete default English model when the
-  configured development stub is not real-backend ready. A pre-final security
-  hardening pass also verifies archive extracted-size and member-count quotas
-  plus DNS-based private-network rejection for remote artifact hostnames.
+  configured development stub is not real-backend ready. A final v1 security
+  pass has been run. Final security-focused pass: complete. It verifies model
+  archive quotas, remote artifact DNS checks, checksum-before-fetch behavior,
+  and connected-peer private-network rejection for remote artifact downloads.
 - `tts setup-local` and `tts model-list` expose `sherpa_onnx` runtime status
   plus `numpy` callback dependency status, and include the matching
   `python -m pip install ...` guidance when real local playback is relevant but
@@ -132,13 +133,12 @@ for long web-page text.
   `schtasks.exe`/PowerShell paths, `tts service-status --user` parsing,
   scheduled wrapper forwarding to `run_service.ps1`, and
   `logs\tts-service.log` wiring.
-- A pre-final v1 security hardening pass has been run. Its generated Codex
-  Security report records zero open findings for the current working tree at
-  this point in the project after fixes to protected HTTP pre-body enforcement,
-  WebSocket startup timeout, sanitized validation errors, model archive quotas,
-  remote artifact DNS checks, and extension resource exposure. This does not
-  replace the final security-focused pass that should run after the v1
-  completion audit and any remaining blockers.
+- The final v1 security pass has been run. Final security-focused pass:
+  complete. Its generated Codex Security report records zero open findings for
+  the current working tree after fixes to WebSocket pre-parse frame limits,
+  model archive quotas, remote artifact DNS checks, connected-peer
+  private-network rejection, checksum-before-fetch behavior, and extension
+  resource caps.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   validates installed setup next-step guidance, starts the installed

@@ -26,6 +26,12 @@ const SKIP_SELECTOR =
   "script, style, noscript, template, nav, header, footer, aside, form, button, input, select, textarea, svg, canvas";
 
 const HIDDEN_SUBTREE_SELECTOR = "[hidden], [inert], [aria-hidden='true']";
+const BLOCK_SELECTOR_LIST = BLOCK_SELECTORS.join(", ");
+const MAX_ROOT_CANDIDATE_MATCHES = 64;
+const MAX_READABLE_BLOCK_MATCHES = 2500;
+const MAX_STRUCTURE_HEADING_MATCHES = 1000;
+const MAX_FALLBACK_TEXT_NODES = 6000;
+const MAX_DOM_TRAVERSAL_NODES = 20000;
 
 function getSelectedText() {
   const controlSelection = getControlSelection(document.activeElement);
@@ -86,15 +92,17 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
     });
   }
 
-  const fallbackText = extractFallbackText(document.body);
+  const fallback = extractFallbackText(document.body);
+  const fallbackText = fallback.text;
   const text = fallbackText
     .slice(requestedStartTextChar, requestedStartTextChar + requestedMaxChars)
     .trim();
   const structure = emptyStructureSummary();
   structure.startSectionIndex = requestedStartSectionIndex;
   structure.startTextChar = requestedStartTextChar;
+  structure.traversalLimitReached = fallback.limitReached;
   structure.nextTextCharStart =
-    fallbackText.length > requestedStartTextChar + requestedMaxChars
+    fallback.limitReached || fallbackText.length > requestedStartTextChar + requestedMaxChars
       ? requestedStartTextChar + text.length
       : null;
   return buildCaptureResult(text, {
@@ -102,7 +110,8 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
     startSectionIndex: requestedStartSectionIndex,
     startTextChar: requestedStartTextChar,
     source: "fallback-body",
-    truncated: fallbackText.length > requestedStartTextChar + requestedMaxChars,
+    truncated:
+      fallback.limitReached || fallbackText.length > requestedStartTextChar + requestedMaxChars,
     readableBlocks: 0,
     structure,
   });
@@ -128,7 +137,12 @@ function pickReadableRoot() {
   let bestCandidate = null;
   let bestScore = 0;
   for (const selector of PRIMARY_CONTENT_SELECTORS) {
-    for (const candidate of document.querySelectorAll(selector)) {
+    const selection = collectMatchingElements(
+      document.body || document.documentElement,
+      selector,
+      MAX_ROOT_CANDIDATE_MATCHES
+    );
+    for (const candidate of selection.elements) {
       if (shouldSkipElement(candidate)) {
         continue;
       }
@@ -143,13 +157,15 @@ function pickReadableRoot() {
 }
 
 function scoreReadableRootCandidate(candidate) {
-  const textLength = extractFallbackText(candidate).length;
+  const textLength = extractFallbackText(candidate).text.length;
   if (textLength < 200) {
     return 0;
   }
-  const blockCount = Array.from(candidate.querySelectorAll(BLOCK_SELECTORS.join(", "))).filter(
-    (element) => !shouldSkipElement(element)
-  ).length;
+  const blockCount = collectMatchingElements(
+    candidate,
+    BLOCK_SELECTOR_LIST,
+    MAX_READABLE_BLOCK_MATCHES
+  ).elements.filter((element) => !shouldSkipElement(element)).length;
   return textLength + blockCount * 50;
 }
 
@@ -167,8 +183,16 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
   let captureLimitReached = false;
   let currentSectionIndex = -1;
   let textCharCursor = 0;
-  const candidates = root.querySelectorAll(BLOCK_SELECTORS.join(", "));
-  for (const element of candidates) {
+  const candidateSelection = collectMatchingElements(
+    root,
+    BLOCK_SELECTOR_LIST,
+    MAX_READABLE_BLOCK_MATCHES
+  );
+  if (candidateSelection.limitReached) {
+    truncated = true;
+    structure.traversalLimitReached = true;
+  }
+  for (const element of candidateSelection.elements) {
     if (shouldSkipElement(element)) {
       continue;
     }
@@ -242,14 +266,18 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
       structure,
     };
   }
-  const fallbackText = extractFallbackText(root);
+  const fallback = extractFallbackText(root);
+  const fallbackText = fallback.text;
   const fallbackSlice = fallbackText.slice(startTextChar, startTextChar + maxChars).trim();
+  structure.traversalLimitReached = structure.traversalLimitReached || fallback.limitReached;
   structure.nextTextCharStart =
-    fallbackText.length > startTextChar + maxChars ? startTextChar + fallbackSlice.length : null;
+    fallback.limitReached || fallbackText.length > startTextChar + maxChars
+      ? startTextChar + fallbackSlice.length
+      : null;
   return {
     text: fallbackSlice,
     source: "root-text",
-    truncated: fallbackText.length > startTextChar + maxChars,
+    truncated: fallback.limitReached || fallbackText.length > startTextChar + maxChars,
     readableBlocks: 0,
     structure,
   };
@@ -270,9 +298,11 @@ function isElementHidden(element) {
 
 function extractFallbackText(root) {
   if (!root) {
-    return "";
+    return { text: "", limitReached: false };
   }
   const textParts = [];
+  let visitedTextNodes = 0;
+  let limitReached = false;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
@@ -286,12 +316,20 @@ function extractFallbackText(root) {
     },
   });
   while (walker.nextNode()) {
+    visitedTextNodes += 1;
+    if (visitedTextNodes > MAX_FALLBACK_TEXT_NODES) {
+      limitReached = true;
+      break;
+    }
     const text = normalizeInlineText(walker.currentNode.textContent || "");
     if (text) {
       textParts.push(text);
     }
   }
-  return normalizeInlineText(textParts.join(" "));
+  return {
+    text: normalizeInlineText(textParts.join(" ")),
+    limitReached,
+  };
 }
 
 function normalizeInlineText(text) {
@@ -331,7 +369,13 @@ function createStructureSummary(root) {
   if (!root) {
     return summary;
   }
-  summary.headingCount = Array.from(root.querySelectorAll("h1, h2, h3, h4")).filter(
+  const headingSelection = collectMatchingElements(
+    root,
+    "h1, h2, h3, h4",
+    MAX_STRUCTURE_HEADING_MATCHES
+  );
+  summary.traversalLimitReached = headingSelection.limitReached;
+  summary.headingCount = headingSelection.elements.filter(
     (element) =>
       !shouldSkipElement(element) &&
       normalizeInlineText(element.innerText || element.textContent || "").length >= 3
@@ -351,7 +395,50 @@ function emptyStructureSummary() {
     nextTextCharStart: null,
     nextSectionIndex: null,
     sections: [],
+    traversalLimitReached: false,
   };
+}
+
+function collectMatchingElements(root, selector, maxMatches) {
+  const elements = [];
+  let visited = 0;
+  let limitReached = false;
+
+  function maybeAddElement(element) {
+    if (!element.matches(selector)) {
+      return true;
+    }
+    if (elements.length >= maxMatches) {
+      limitReached = true;
+      return false;
+    }
+    elements.push(element);
+    return true;
+  }
+
+  if (root instanceof Element && !maybeAddElement(root)) {
+    return { elements, limitReached };
+  }
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+    acceptNode(node) {
+      if (shouldSkipElement(node)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  while (walker.nextNode()) {
+    visited += 1;
+    if (visited > MAX_DOM_TRAVERSAL_NODES) {
+      limitReached = true;
+      break;
+    }
+    if (!maybeAddElement(walker.currentNode)) {
+      break;
+    }
+  }
+  return { elements, limitReached };
 }
 
 function recordCapturedBlock(summary, blockKind) {

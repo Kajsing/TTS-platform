@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from contextlib import suppress
 from dataclasses import asdict
@@ -30,6 +31,7 @@ from .synthesis import SynthesisCancelledError, SynthesisService
 
 _CLIENT_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,35}$")
 WEBSOCKET_START_TIMEOUT_SECONDS = 10.0
+WEBSOCKET_START_MESSAGE_OVERHEAD_CHARS = 4096
 
 
 def create_app(
@@ -248,9 +250,9 @@ def _register_routes(app: FastAPI) -> None:
             return
 
         try:
-            initial_message = await asyncio.wait_for(
-                websocket.receive_json(),
-                timeout=WEBSOCKET_START_TIMEOUT_SECONDS,
+            initial_message = await _receive_initial_websocket_message(
+                websocket,
+                max_chars=_websocket_start_message_limit(container),
             )
             if initial_message.get("type") != "start":
                 raise invalid_request(
@@ -459,6 +461,63 @@ def _build_synthesis_service(container: object) -> SynthesisService:
         max_chars_per_stream=container.config.tts.max_chars_per_stream,
         stream_frame_ms=container.config.streaming.audio_frame_ms,
         observability=container.observability,
+    )
+
+
+def _websocket_start_message_limit(container: object) -> int:
+    return (
+        int(container.config.tts.max_chars_per_stream)
+        + WEBSOCKET_START_MESSAGE_OVERHEAD_CHARS
+    )
+
+
+async def _receive_initial_websocket_message(
+    websocket: WebSocket,
+    *,
+    max_chars: int,
+) -> dict[str, object]:
+    message = await asyncio.wait_for(
+        websocket.receive(),
+        timeout=WEBSOCKET_START_TIMEOUT_SECONDS,
+    )
+    if message.get("type") == "websocket.disconnect":
+        raise WebSocketDisconnect(
+            code=int(message.get("code", 1000)),
+            reason=message.get("reason"),
+        )
+
+    raw_text = message.get("text")
+    if raw_text is None:
+        raw_bytes = message.get("bytes")
+        if isinstance(raw_bytes, bytes) and len(raw_bytes) > max_chars:
+            raise _websocket_start_too_large(max_chars=max_chars)
+        raise invalid_request(
+            "First WebSocket event must be JSON text.",
+            param="type",
+        )
+    if len(raw_text) > max_chars:
+        raise _websocket_start_too_large(max_chars=max_chars)
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise invalid_request(
+            "First WebSocket event must be valid JSON.",
+            param="type",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise invalid_request(
+            "First WebSocket event must be a JSON object.",
+            param="type",
+        )
+    return payload
+
+
+def _websocket_start_too_large(*, max_chars: int) -> APIError:
+    return invalid_request(
+        "First WebSocket event is too large.",
+        param="payload",
+        details={"max_start_message_chars": max_chars},
     )
 
 

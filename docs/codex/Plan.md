@@ -508,3 +508,9 @@ security-focused pass. The next planned pass is that final security-focused
 review; after accepted findings are fixed or recorded, update the completion
 audit and run `scripts/check_v1_completion.py --require-complete` before
 calling v1 done.
+The eighty-second finish-mode slice runs that final security-focused pass,
+records `docs/v1_final_security.md`, and closes five accepted candidates:
+WebSocket start-frame resource bounding, remote model artifact checksum/peer
+validation, model archive quota ordering, offscreen audio queue caps, and
+content-script DOM traversal budgets. The final completion audit now reports
+nine ready criteria and `can_mark_v1_complete: true`.

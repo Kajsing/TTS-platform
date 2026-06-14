@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import tarfile
@@ -1598,6 +1599,32 @@ def _install_model_from_catalog(
             "Use --overwrite to replace it."
         )
     manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
+    expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
+    if not expected_sha and not allow_missing_checksum:
+        _record_install_step(
+            install_steps,
+            step="verify_checksum",
+            status="failed",
+            progress=progress,
+            reason="catalog entry has no artifact_sha256",
+        )
+        raise SystemExit(
+            f"Catalog model '{model_id}' is missing artifact_sha256. "
+            "Add artifact_sha256 to the catalog entry or pass "
+            "--allow-missing-checksum for a trusted local artifact."
+        )
+    if (
+        not expected_sha
+        and allow_missing_checksum
+        and _artifact_requires_remote_fetch(
+            artifact_url=artifact_url,
+            catalog_location=catalog_location,
+        )
+    ):
+        raise SystemExit(
+            "--allow-missing-checksum is only allowed for trusted local artifacts. "
+            "Remote model artifacts must provide artifact_sha256."
+        )
 
     with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
         artifact = _load_artifact_file(
@@ -1615,7 +1642,6 @@ def _install_model_from_catalog(
             bytes=artifact.bytes,
         )
 
-        expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
         checksum_verified = False
         if expected_sha:
             actual_sha = _sha256_file(artifact.path)
@@ -1633,19 +1659,6 @@ def _install_model_from_catalog(
                 algorithm="sha256",
             )
         else:
-            if not allow_missing_checksum:
-                _record_install_step(
-                    install_steps,
-                    step="verify_checksum",
-                    status="failed",
-                    progress=progress,
-                    reason="catalog entry has no artifact_sha256",
-                )
-                raise SystemExit(
-                    f"Catalog model '{model_id}' is missing artifact_sha256. "
-                    "Add artifact_sha256 to the catalog entry or pass "
-                    "--allow-missing-checksum for a trusted local artifact."
-                )
             _record_install_step(
                 install_steps,
                 step="verify_checksum",
@@ -1814,6 +1827,17 @@ def _load_artifact_file(
     return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
 
+def _artifact_requires_remote_fetch(
+    *,
+    artifact_url: str,
+    catalog_location: CatalogLocation,
+) -> bool:
+    parsed = urlparse(artifact_url)
+    if parsed.scheme in {"http", "https"}:
+        return True
+    return isinstance(catalog_location, str)
+
+
 def _resolve_max_artifact_size_bytes(*, catalog_artifact_size_bytes: int | None) -> int:
     if (
         catalog_artifact_size_bytes is not None
@@ -1850,6 +1874,11 @@ def _download_artifact_to_file(
         with httpx.Client(timeout=120.0) as client:
             while True:
                 with client.stream("GET", current_url) as response:
+                    _assert_response_peer_allowed(
+                        response=response,
+                        url=current_url,
+                        trusted_private_origin=trusted_private_origin,
+                    )
                     if _is_http_redirect(response):
                         redirect_count += 1
                         if redirect_count > MAX_MODEL_ARTIFACT_REDIRECTS:
@@ -1908,6 +1937,41 @@ def _assert_allowed_artifact_url(
                 f"that is not the selected catalog origin: {url!r}"
             )
     return url
+
+
+def _assert_response_peer_allowed(
+    *,
+    response: httpx.Response,
+    url: str,
+    trusted_private_origin: tuple[str, str, int | None] | None,
+) -> None:
+    peer_host = _response_peer_host(response)
+    if peer_host is None:
+        return
+    if _is_local_artifact_host(peer_host) and _remote_origin(url) != trusted_private_origin:
+        raise SystemExit(
+            "Model artifact URL connected to a local or private network destination "
+            f"that is not the selected catalog origin: {url!r}"
+        )
+
+
+def _response_peer_host(response: httpx.Response) -> str | None:
+    extensions = getattr(response, "extensions", {})
+    if not isinstance(extensions, dict):
+        return None
+    network_stream = extensions.get("network_stream")
+    get_extra_info = getattr(network_stream, "get_extra_info", None)
+    if not callable(get_extra_info):
+        return None
+    try:
+        server_addr = get_extra_info("server_addr")
+    except Exception:
+        return None
+    if isinstance(server_addr, (tuple, list)) and server_addr:
+        return str(server_addr[0])
+    if isinstance(server_addr, str):
+        return server_addr
+    return None
 
 
 def _remote_origin(url: str) -> tuple[str, str, int | None]:
@@ -2053,6 +2117,7 @@ def _extract_model_artifact(*, artifact_path: Path, out_dir: Path) -> None:
 
 def _extract_zip(*, artifact_path: Path, out_dir: Path) -> None:
     try:
+        _assert_zip_member_count_hint(artifact_path)
         with zipfile.ZipFile(artifact_path) as archive:
             _assert_safe_zip_members(archive=archive, out_dir=out_dir)
             archive.extractall(out_dir)
@@ -2063,13 +2128,30 @@ def _extract_zip(*, artifact_path: Path, out_dir: Path) -> None:
 def _extract_tar(*, artifact_path: Path, out_dir: Path) -> None:
     try:
         with tarfile.open(artifact_path) as archive:
-            _assert_safe_tar_members(archive=archive, out_dir=out_dir)
-            try:
-                archive.extractall(out_dir, filter="data")
-            except TypeError:
-                archive.extractall(out_dir)
+            _extract_safe_tar_members(archive=archive, out_dir=out_dir)
     except tarfile.TarError as exc:
         raise SystemExit(f"Model artifact is not a valid tar file: {exc}") from exc
+
+
+def _assert_zip_member_count_hint(artifact_path: Path) -> None:
+    max_scan_bytes = (1 << 16) + 22
+    file_size = artifact_path.stat().st_size
+    with artifact_path.open("rb") as artifact_file:
+        artifact_file.seek(max(0, file_size - max_scan_bytes))
+        tail = artifact_file.read()
+
+    eocd_index = tail.rfind(b"PK\x05\x06")
+    if eocd_index < 0:
+        return
+    if len(tail) - eocd_index < 22:
+        return
+
+    total_entries = struct.unpack_from("<H", tail, eocd_index + 10)[0]
+    if total_entries == 0xFFFF or total_entries > DEFAULT_MAX_MODEL_ARTIFACT_FILES:
+        raise SystemExit(
+            "Model artifact contains too many files "
+            f"({total_entries} > {DEFAULT_MAX_MODEL_ARTIFACT_FILES})."
+        )
 
 
 def _assert_safe_zip_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None:
@@ -2091,11 +2173,11 @@ def _assert_safe_zip_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None
     )
 
 
-def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None:
+def _extract_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None:
     out_dir_resolved = out_dir.resolve()
     file_count = 0
     total_uncompressed_bytes = 0
-    for member in archive.getmembers():
+    for member in archive:
         _assert_safe_archive_member_path(
             member_name=member.name,
             out_dir_resolved=out_dir_resolved,
@@ -2104,6 +2186,13 @@ def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None
             raise SystemExit(
                 f"Model artifact contains unsupported tar entry: {member.name!r}"
             )
+        destination = _archive_member_destination(
+            member_name=member.name,
+            out_dir_resolved=out_dir_resolved,
+        )
+        if member.isdir():
+            destination.mkdir(parents=True, exist_ok=True)
+            continue
         if member.isfile():
             if member.size < 0:
                 raise SystemExit(
@@ -2111,13 +2200,26 @@ def _assert_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None
                 )
             file_count += 1
             total_uncompressed_bytes += member.size
-    _assert_safe_archive_quota(
-        file_count=file_count,
-        total_uncompressed_bytes=total_uncompressed_bytes,
-    )
+            _assert_safe_archive_quota(
+                file_count=file_count,
+                total_uncompressed_bytes=total_uncompressed_bytes,
+            )
+            source = archive.extractfile(member)
+            if source is None:
+                raise SystemExit(
+                    f"Model artifact contains unreadable tar file entry: {member.name!r}"
+                )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with destination.open("wb") as target:
+                    shutil.copyfileobj(source, target)
+            finally:
+                source.close()
 
 
 def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path) -> None:
+    if not member_name or member_name in {".", "/"}:
+        raise SystemExit(f"Model artifact contains unsafe empty path entry: {member_name!r}")
     posix_member_path = PurePosixPath(member_name)
     windows_member_path = PureWindowsPath(member_name)
     if (
@@ -2136,6 +2238,12 @@ def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path
         raise SystemExit(
             f"Model artifact contains unsafe path traversal entry: {member_name!r}"
         )
+
+
+def _archive_member_destination(*, member_name: str, out_dir_resolved: Path) -> Path:
+    posix_member_path = PurePosixPath(member_name)
+    member_path = Path(*posix_member_path.parts)
+    return (out_dir_resolved / member_path).resolve()
 
 
 def _assert_safe_archive_quota(*, file_count: int, total_uncompressed_bytes: int) -> None:

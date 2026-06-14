@@ -28,6 +28,7 @@ INCLUDED_FILES = (
     "docs/codex/Plan.md",
     "docs/codex/Prompt.md",
     "docs/v1_completion_audit.md",
+    "docs/v1_final_security.md",
     "docs/v1_readiness.md",
     "models/catalog.json",
     "models/MANIFEST.json",

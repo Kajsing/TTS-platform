@@ -217,6 +217,42 @@ def test_websocket_stream_accepts_auth_token_in_start_event(tmp_path: Path) -> N
         assert started["job_id"]
 
 
+def test_websocket_stream_rejects_oversized_start_event_before_auth(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(main_module, "WEBSOCKET_START_MESSAGE_OVERHEAD_CHARS", 16)
+    client, _, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "tts": {
+                "default_voice": "manifest-voice",
+                "max_chars_per_request": 80,
+                "max_chars_per_stream": 120,
+            }
+        },
+    )
+
+    raw_start_event = json.dumps(
+        {
+            "type": "start",
+            "payload": {
+                "text": "Oversized pre-auth stream frame. " * 8,
+                "voice": "manifest-voice",
+            },
+        }
+    )
+
+    with client.websocket_connect("/v1/tts/stream") as websocket:
+        websocket.send_text(raw_start_event)
+        error_payload = websocket.receive_json()
+
+    assert error_payload["type"] == "error"
+    assert error_payload["error"]["type"] == "invalid_request"
+    assert error_payload["error"]["param"] == "payload"
+    assert error_payload["error"]["details"]["max_start_message_chars"] == 136
+
+
 def test_websocket_stream_accepts_text_above_http_request_limit(tmp_path: Path) -> None:
     client, auth_headers, _ = build_test_bundle(
         tmp_path,

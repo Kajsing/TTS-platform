@@ -391,6 +391,101 @@ def test_model_install_rejects_remote_artifact_hostname_resolving_private(
         )
 
 
+def test_model_install_rejects_remote_artifact_connected_private_peer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_url = "https://models.example.test/catalogs/catalog.json"
+    artifact_url = "https://models.example.test/artifacts/voice-a.zip"
+    requested_urls: list[str] = []
+
+    catalog_payload = {
+        "version": 1,
+        "models": [
+            {
+                "id": "voice-a",
+                "artifact_url": artifact_url,
+                "artifact_sha256": "0" * 64,
+            }
+        ],
+    }
+
+    class FakeNetworkStream:
+        def get_extra_info(self, name: str) -> tuple[str, int] | None:
+            if name == "server_addr":
+                return ("10.0.0.5", 443)
+            return None
+
+    class FakeResponse:
+        def __init__(
+            self,
+            *,
+            json_payload: dict[str, object] | None = None,
+            extensions: dict[str, object] | None = None,
+        ) -> None:
+            self._json_payload = json_payload
+            self.status_code = 200
+            self.headers: dict[str, str] = {}
+            self.extensions = extensions or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            if self._json_payload is None:
+                raise AssertionError("No JSON payload was configured.")
+            return self._json_payload
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def iter_bytes(self) -> list[bytes]:
+            raise AssertionError("Private peer response body should not be consumed.")
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if url == catalog_url:
+                return FakeResponse(json_payload=catalog_payload)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        def stream(self, method: str, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            if method == "GET" and url == artifact_url:
+                return FakeResponse(
+                    extensions={"network_stream": FakeNetworkStream()},
+                )
+            raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    with pytest.raises(SystemExit, match="connected to a local or private"):
+        cli._install_model_from_catalog(
+            catalog_source=catalog_url,
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert requested_urls == [catalog_url, artifact_url]
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
 def test_model_install_rejects_remote_artifact_stream_over_catalog_size(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -683,6 +778,119 @@ def test_model_install_requires_checksum_by_default(tmp_path: Path) -> None:
             manifest_path=tmp_path / "models" / "MANIFEST.json",
             overwrite=False,
         )
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+
+
+def test_model_install_rejects_missing_remote_checksum_before_artifact_fetch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_url = "https://models.example.test/catalog.json"
+    artifact_url = "https://models.example.test/voice-a.zip"
+    requested_urls: list[str] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": artifact_url,
+                    }
+                ],
+            }
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            return FakeResponse()
+
+        def stream(self, method: str, url: str) -> object:
+            raise AssertionError(f"Artifact fetch should not start: {method} {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    with pytest.raises(SystemExit, match="missing artifact_sha256"):
+        cli._install_model_from_catalog(
+            catalog_source=catalog_url,
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert requested_urls == [catalog_url]
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+
+
+def test_model_install_rejects_missing_remote_checksum_even_with_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_url = "https://models.example.test/catalog.json"
+    artifact_url = "https://models.example.test/voice-a.zip"
+    requested_urls: list[str] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": artifact_url,
+                    }
+                ],
+            }
+
+    class FakeClient:
+        def __init__(self, *, timeout: float, follow_redirects: bool = False) -> None:
+            self.timeout = timeout
+            self.follow_redirects = follow_redirects
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            requested_urls.append(url)
+            return FakeResponse()
+
+        def stream(self, method: str, url: str) -> object:
+            raise AssertionError(f"Artifact fetch should not start: {method} {url}")
+
+    monkeypatch.setattr(cli.httpx, "Client", FakeClient)
+
+    with pytest.raises(SystemExit, match="only allowed for trusted local artifacts"):
+        cli._install_model_from_catalog(
+            catalog_source=catalog_url,
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+            allow_missing_checksum=True,
+        )
+
+    assert requested_urls == [catalog_url]
     assert not (tmp_path / "models" / "voices" / "voice-a").exists()
 
 
@@ -1459,6 +1667,71 @@ def test_model_install_rejects_zip_with_too_many_files(
 
     assert not (tmp_path / "models" / "voices" / "too-many-files-voice").exists()
     assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
+def test_model_extract_rejects_zip_file_count_hint_before_metadata_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli, "DEFAULT_MAX_MODEL_ARTIFACT_FILES", 1)
+    artifact_path = tmp_path / "too-many-files.zip"
+    _build_zip(
+        artifact_path,
+        files={"model.onnx": "fake-model", "tokens.txt": "fake-tokens"},
+    )
+
+    def fail_zipfile(*args: object, **kwargs: object) -> object:
+        raise AssertionError("ZipFile metadata should not be loaded after count hint fails.")
+
+    monkeypatch.setattr(cli.zipfile, "ZipFile", fail_zipfile)
+
+    with pytest.raises(SystemExit, match="too many files"):
+        cli._extract_zip(artifact_path=artifact_path, out_dir=tmp_path / "out")
+
+
+def test_model_install_streams_tar_members_without_getmembers_or_extractall(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact_path = tmp_path / "voice-a.tar.bz2"
+    artifact_bytes = _build_tar_bz2(
+        artifact_path,
+        files={"model.onnx": "fake-model", "tokens.txt": "fake-tokens"},
+    )
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fail_tar_metadata(*args: object, **kwargs: object) -> object:
+        raise AssertionError("Tar metadata should be streamed, not materialized.")
+
+    monkeypatch.setattr(cli.tarfile.TarFile, "getmembers", fail_tar_metadata)
+    monkeypatch.setattr(cli.tarfile.TarFile, "extractall", fail_tar_metadata)
+
+    result = cli._install_model_from_catalog(
+        catalog_source=str(catalog_path),
+        model_id="voice-a",
+        models_root=tmp_path / "models" / "voices",
+        manifest_path=tmp_path / "models" / "MANIFEST.json",
+        overwrite=False,
+    )
+
+    assert result["installed_model"] == "voice-a"
+    assert (tmp_path / "models" / "voices" / "voice-a" / "model.onnx").exists()
+    assert (tmp_path / "models" / "voices" / "voice-a" / "tokens.txt").exists()
 
 
 def test_model_remove_deletes_files_and_manifest_entry(tmp_path: Path) -> None:

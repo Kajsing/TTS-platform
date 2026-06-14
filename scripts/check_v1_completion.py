@@ -11,11 +11,11 @@ READINESS_SCRIPT_PATH = "scripts/check_v1_readiness.py"
 
 AUDIT_MARKERS = (
     "# V1 Completion Audit",
-    "Status: pre-final audit.",
-    "Final security-focused pass: pending",
+    "Status: v1 complete.",
+    "Final security-focused pass: complete",
     "Can mark v1 complete",
+    "## Final Security Evidence",
     "## Done When Evidence",
-    "## Remaining Gates Before V1 Complete",
 )
 
 DONE_WHEN_EVIDENCE = (
@@ -77,9 +77,11 @@ DONE_WHEN_EVIDENCE = (
         "id": 6,
         "name": "final_security_review",
         "audit_marker": "final security-focused review",
-        "pending": True,
         "evidence": (
-            ("docs/v1_completion_audit.md", "Final security-focused pass: pending"),
+            ("docs/v1_final_security.md", "Open reportable findings: 0"),
+            ("docs/v1_final_security.md", "CAND-SERVICE-API-001"),
+            ("docs/v1_final_security.md", "CAND-MODEL-CORE-001"),
+            ("docs/v1_final_security.md", "CE-COV009-DOM-EXTRACTION-DOS-001"),
         ),
     },
     {
@@ -126,7 +128,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="Fail while the final security-focused pass is still pending.",
+        help="Fail unless all v1 completion criteria are proven by current evidence.",
     )
     args = parser.parse_args(argv)
 
@@ -152,7 +154,6 @@ def check_v1_completion(
 
     readiness_summary = _run_readiness_check(repo_root=repo_root, errors=errors)
     criteria = []
-    final_security_pending = False
     for criterion in DONE_WHEN_EVIDENCE:
         evidence_errors = _check_criterion_evidence(
             repo_root=repo_root,
@@ -160,9 +161,6 @@ def check_v1_completion(
             criterion=criterion,
         )
         status = "ready"
-        if criterion.get("pending"):
-            status = "pending_final_security"
-            final_security_pending = True
         if evidence_errors:
             status = "missing_evidence"
             errors.extend(evidence_errors)
@@ -174,10 +172,8 @@ def check_v1_completion(
             }
         )
 
-    if require_complete and final_security_pending:
-        errors.append(
-            "Final security-focused pass is still pending; run it before marking v1 complete."
-        )
+    if require_complete and any(criterion["status"] != "ready" for criterion in criteria):
+        errors.append("V1 completion requires every criterion to be ready.")
 
     if errors:
         raise V1CompletionError("V1 completion check failed:\n" + "\n".join(errors))
@@ -189,8 +185,8 @@ def check_v1_completion(
         "criteria_pending_final_security": sum(
             1 for criterion in criteria if criterion["status"] == "pending_final_security"
         ),
-        "final_security_pending": final_security_pending,
-        "can_mark_v1_complete": not final_security_pending,
+        "final_security_pending": False,
+        "can_mark_v1_complete": True,
         "readiness": readiness_summary,
     }
 

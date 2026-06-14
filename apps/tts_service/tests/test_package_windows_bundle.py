@@ -89,6 +89,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/config/config.example.toml" in names
     assert "tts-platform/docs/v1_readiness.md" in names
     assert "tts-platform/docs/v1_completion_audit.md" in names
+    assert "tts-platform/docs/v1_final_security.md" in names
     assert "tts-platform/models/catalog.json" in names
     assert "tts-platform/models/MANIFEST.json" in names
     assert "tts-platform/apps/tts_service/src/tts_service/main.py" in names

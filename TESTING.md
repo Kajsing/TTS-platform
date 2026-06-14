@@ -131,15 +131,15 @@ backend-realism work, and early v1 model-management helpers:
 - Windows bundle install checks that use the bundled install script when
   available before starting the installed `tts serve` entrypoint
 - repo-native release check orchestration for ruff, pytest, security-default
-  verification, v1-readiness verification, pre-final v1 completion audit,
+  verification, v1-readiness verification, final v1 completion audit,
   extension validation, extension package build, Windows bundle build, launcher
   setup/service-smoke checks, and Windows bundle bootstrap/install checks
 - v1-readiness documentation checks that keep automated gates, manual gates,
   product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
 - v1 completion audit coverage that maps `docs/codex/Prompt.md` done-when
-  criteria to evidence and keeps the final security-focused pass pending until
-  the completion blockers are closed
+  criteria to evidence and verifies that the final security-focused pass is
+  complete before v1 is marked complete
 - live smoke support for separate long WebSocket stream text, minimum stream
   text-chunk assertions, and release-check redaction of inline smoke text
 - optional Chrome/MV3 browser smoke harness coverage that loads the extension
@@ -202,6 +202,10 @@ python3 scripts/release_check.py --node-executable <path-to-node> --require-js-s
 On Windows, use `py -3 scripts/release_check.py` when `python3` is unavailable.
 The release gate also verifies `docs/v1_readiness.md`, which separates
 automated gates from manual live checks and unresolved product choices.
+It also runs `python3 scripts/check_v1_completion.py`; use
+`python3 scripts/check_v1_completion.py --require-complete` directly when you
+want the final v1 completion gate by itself. The final security-focused pass is
+recorded in `docs/v1_final_security.md` with `Open reportable findings: 0`.
 It starts a temporary first-run service on a loopback port and runs the local
 public-contract smoke against that isolated config/token root.
 It also creates a temporary local model artifact/catalog, verifies
@@ -438,6 +442,7 @@ python3 scripts/package_extension.py
 python3 scripts/package_extension.py --node-executable <path-to-node> --require-js-syntax
 python3 scripts/package_windows_bundle.py
 python3 scripts/package_windows_bundle.py --node-executable <path-to-node> --require-js-syntax
+python3 scripts/check_v1_completion.py --require-complete
 node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js

@@ -695,9 +695,11 @@ thread returns.
   without limit.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
-- Remote model artifact downloads are bounded by maximum byte caps, redirect
-  destination checks, DNS-based private-network rejection, and archive
-  extraction quotas before checksum verification or extraction side effects.
+- Remote model artifact downloads are bounded by checksum-before-fetch
+  requirements, maximum byte caps, redirect destination checks, DNS-based
+  private-network rejection, connected-peer private-network rejection when
+  transport peer details are available, and archive extraction quotas before
+  extraction side effects.
 - Installed model files stay under `models/voices/<voice-id>`.
 - Manifest backend asset paths must stay under the voice `source`; do not use
   absolute paths, `..`, or paths pointing at another model directory.

@@ -14,6 +14,7 @@ REQUIRED_FILES = (
     "models/MANIFEST.json",
     "docs/backend_model_setup.md",
     "docs/v1_completion_audit.md",
+    "docs/v1_final_security.md",
     "docs/v1_readiness.md",
     "scripts/release_check.py",
     "scripts/check_security_defaults.py",
@@ -104,10 +105,11 @@ READINESS_MARKERS = (
     "copyable `tts extension-allow-origin`",
     "strict Chrome/MV3 smoke requires Chrome or Edge",
     "V1 Windows autostart uses a per-user Task Scheduler task",
-    "pre-final v1 security hardening pass has been run",
-    "final security-focused pass that should run after the v1",
+    "final v1 security pass has been run",
+    "Final security-focused pass: complete",
     "model archive quotas",
     "remote artifact DNS checks",
+    "connected-peer private-network rejection",
 )
 
 REQUIRED_TEXT_MARKERS = {
@@ -231,6 +233,7 @@ REQUIRED_TEXT_MARKERS = {
     ),
     "scripts/package_windows_bundle.py": (
         "docs/v1_completion_audit.md",
+        "docs/v1_final_security.md",
         "docs/v1_readiness.md",
         "models/catalog.json",
         "apps\\\\chrome_extension\\\\INSTALL.md",
@@ -363,18 +366,28 @@ REQUIRED_TEXT_MARKERS = {
     ),
     "scripts/check_v1_completion.py": (
         "DONE_WHEN_EVIDENCE",
-        "Final security-focused pass is still pending",
+        "Final security-focused pass: complete",
         "can_mark_v1_complete",
         "check_v1_readiness",
         "--require-complete",
     ),
     "docs/v1_completion_audit.md": (
         "# V1 Completion Audit",
-        "Status: pre-final audit.",
-        "Final security-focused pass: pending",
+        "Status: v1 complete.",
+        "Final security-focused pass: complete",
         "Can mark v1 complete",
+        "Final Security Evidence",
         "Done When Evidence",
-        "Remaining Gates Before V1 Complete",
+    ),
+    "docs/v1_final_security.md": (
+        "# V1 Final Security Pass",
+        "Open reportable findings: 0",
+        "CAND-SERVICE-API-001",
+        "CAND-MODEL-CORE-001",
+        "CAND-MODEL-CORE-002",
+        "CE-COV009-AUDIO-QUEUE-DOS-001",
+        "CE-COV009-DOM-EXTRACTION-DOS-001",
+        "report.html",
     ),
     "TESTING.md": (
         "v1-readiness",

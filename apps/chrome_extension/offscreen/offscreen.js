@@ -1,11 +1,16 @@
 let audioContext = null;
 let websocket = null;
 let queuedChunks = [];
+let queuedAudioBytes = 0;
 let activeSources = new Set();
 let scheduledUntilTime = 0;
 let latestMark = null;
 let completeWhenDrained = null;
 let needsPrebuffer = true;
+
+const MAX_QUEUED_AUDIO_BYTES = 64 * 1024 * 1024;
+const MAX_QUEUED_AUDIO_CHUNKS = 4096;
+const MAX_QUEUED_AUDIO_MS = 10 * 60 * 1000;
 
 let playbackState = {
   status: "idle",
@@ -63,6 +68,7 @@ async function startStream(config) {
 
   await ensureAudioContext();
   queuedChunks = [];
+  queuedAudioBytes = 0;
   activeSources = new Set();
   scheduledUntilTime = audioContext.currentTime;
   latestMark = null;
@@ -206,11 +212,16 @@ async function handleBinaryChunk(arrayBuffer, config) {
       1,
       Math.round((float32.length / playbackState.sampleRateHz) * 1000)
     );
+  if (!canQueueAudioChunk(float32, durationMs)) {
+    await failPlaybackBufferLimit();
+    return;
+  }
 
   queuedChunks.push({
     float32,
     durationMs,
   });
+  queuedAudioBytes += float32.byteLength;
 
   const bufferedMs = estimateBufferedMs();
   await setState({
@@ -261,6 +272,7 @@ async function flushQueue(config) {
     estimateScheduledMs() < config.highWatermarkMs
   ) {
     const chunk = queuedChunks.shift();
+    queuedAudioBytes = Math.max(0, queuedAudioBytes - chunk.float32.byteLength);
     const buffer = audioContext.createBuffer(
       playbackState.channels,
       chunk.float32.length,
@@ -318,6 +330,7 @@ function finalizeIfDrained() {
 async function stopStream({ notifyServer }) {
   completeWhenDrained = null;
   queuedChunks = [];
+  queuedAudioBytes = 0;
   latestMark = null;
   needsPrebuffer = true;
   if (notifyServer && websocket && websocket.readyState === WebSocket.OPEN) {
@@ -350,6 +363,38 @@ async function stopAudioSources() {
   activeSources.clear();
 }
 
+function canQueueAudioChunk(float32, durationMs) {
+  if (queuedChunks.length >= MAX_QUEUED_AUDIO_CHUNKS) {
+    return false;
+  }
+  if (queuedAudioBytes + float32.byteLength > MAX_QUEUED_AUDIO_BYTES) {
+    return false;
+  }
+  if (estimateQueuedMs() + durationMs > MAX_QUEUED_AUDIO_MS) {
+    return false;
+  }
+  return true;
+}
+
+async function failPlaybackBufferLimit() {
+  completeWhenDrained = null;
+  queuedChunks = [];
+  queuedAudioBytes = 0;
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    websocket.send(JSON.stringify({ type: "cancel" }));
+    websocket.close();
+  }
+  websocket = null;
+  await stopAudioSources();
+  await setState({
+    status: "error",
+    message: "Playback buffer exceeded safety limit",
+    activeStreamId: null,
+    bufferedMs: 0,
+    lastEvent: "buffer-limit",
+  });
+}
+
 async function ensureAudioContext() {
   if (!audioContext) {
     audioContext = new AudioContext({
@@ -362,11 +407,11 @@ async function ensureAudioContext() {
 }
 
 function estimateBufferedMs() {
-  const queuedDurationMs = queuedChunks.reduce(
-    (total, chunk) => total + chunk.durationMs,
-    0
-  );
-  return Math.round(queuedDurationMs + estimateScheduledMs());
+  return Math.round(estimateQueuedMs() + estimateScheduledMs());
+}
+
+function estimateQueuedMs() {
+  return queuedChunks.reduce((total, chunk) => total + chunk.durationMs, 0);
 }
 
 function estimateScheduledMs() {

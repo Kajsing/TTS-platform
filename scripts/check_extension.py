@@ -331,8 +331,19 @@ def verify_extension_wiring() -> None:
             "buildCapturedSections",
             "truncated",
             "readableBlocks",
+            "MAX_READABLE_BLOCK_MATCHES",
+            "MAX_FALLBACK_TEXT_NODES",
+            "MAX_DOM_TRAVERSAL_NODES",
+            "collectMatchingElements",
+            "traversalLimitReached",
         ],
-        EXTENSION_ROOT / "offscreen" / "offscreen.js": ["start_text_chunk_index"],
+        EXTENSION_ROOT / "offscreen" / "offscreen.js": [
+            "start_text_chunk_index",
+            "MAX_QUEUED_AUDIO_BYTES",
+            "MAX_QUEUED_AUDIO_CHUNKS",
+            "MAX_QUEUED_AUDIO_MS",
+            "failPlaybackBufferLimit",
+        ],
     }
     missing: list[str] = []
     for path, fragments in required_fragments.items():
@@ -493,6 +504,8 @@ def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -
             "auth_token: config.token",
             "payload: {\n          text: config.text,",
             "estimateScheduledMs() < config.highWatermarkMs",
+            "canQueueAudioChunk(float32, durationMs)",
+            'lastEvent: "buffer-limit"',
             "void flushQueue(config)",
             'type: "tts-extension:playback-state"',
         ],

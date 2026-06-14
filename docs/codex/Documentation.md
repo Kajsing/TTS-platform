@@ -11,49 +11,36 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: run the v1 completion audit against
-  `docs/codex/Prompt.md` "Done When" criteria without consuming the real final
-  security-focused pass.
-- Current loop result: `docs/v1_completion_audit.md` and
-  `scripts/check_v1_completion.py` now map the nine `Done When` criteria to
-  concrete repository evidence. The audit reports eight criteria ready for
-  final validation and one criterion pending: the real final security-focused
-  pass. The script deliberately returns `can_mark_v1_complete: false` until
-  that final security pass is run and accepted findings are fixed or recorded.
+- Current loop target: finish v1 by running the final security-focused pass,
+  fixing accepted findings, updating completion evidence, and validating the
+  release gate.
+- Current loop result: the final security-focused pass is complete. The scan
+  `a1645b6_20260614T200121` produced 0 open reportable findings after five
+  accepted candidates were fixed in the working tree. `docs/v1_final_security.md`
+  records the stable repository summary, and `docs/v1_completion_audit.md` now
+  reports all nine `Done When` criteria ready with
+  `can_mark_v1_complete: true`.
 - Validation status for the current loop:
-  - `py -3 scripts\check_v1_completion.py` passed and reported 8 ready
-    criteria, 1 pending final-security criterion, and
-    `can_mark_v1_complete: false`.
-  - `py -3 scripts\check_v1_readiness.py` passed with 45 checked files and
-    54 readiness markers.
-  - `py -3 -m pytest apps\tts_service\tests\test_v1_completion_check.py apps\tts_service\tests\test_v1_readiness_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py -q`
-    passed with 12 tests.
-  - `py -3 -m ruff check scripts\check_v1_completion.py scripts\check_v1_readiness.py scripts\release_check.py apps\tts_service\tests\test_v1_completion_check.py apps\tts_service\tests\test_v1_readiness_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py`
+  - `py -3 scripts\check_v1_completion.py --require-complete` passed and
+    reported 9 ready criteria, 0 pending final-security criteria, and
+    `can_mark_v1_complete: true`.
+  - `py -3 scripts\check_v1_readiness.py` passed with 46 checked files and
+    55 readiness markers.
+  - `py -3 -m pytest apps\tts_service\tests\test_v1_completion_check.py apps\tts_service\tests\test_v1_readiness_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
+    passed with 5 tests.
+  - `py -3 -m ruff check scripts\check_v1_completion.py scripts\check_v1_readiness.py scripts\package_windows_bundle.py apps\tts_service\tests\test_v1_completion_check.py apps\tts_service\tests\test_package_windows_bundle.py`
     passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 252 tests.
-  - `py -3 scripts\release_check.py --package-out "$env:TEMP\tts-platform-prototype-release-check.zip" --windows-bundle-out "$env:TEMP\tts-platform-local-reader-release-check.zip"`
-    passed and now includes `v1_completion` in the release gate sequence. The
-    default Chrome/MV3 smoke remained skip-aware because branded Chrome did not
-    register the unpacked extension in this environment; all non-optional
-    release, bundle, launcher, Task Scheduler, install, extension,
-    reader-flow, model-management, completion, readiness, and service smoke
-    gates passed.
-  - Previous pre-final hardening validation from the prior loop remains:
-  - `py -3 -m pytest apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py -q`
-    passed with 113 tests.
-  - `py -3 -m ruff check apps\tts_service\src\tts_service\main.py apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py scripts\check_extension.py`
-    initially found one import-order issue in the new streaming test; it was
-    fixed.
-  - `py -3 -m ruff check apps\tts_service\src\tts_service\main.py apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_api.py apps\tts_service\tests\test_streaming.py apps\tts_service\tests\test_cli_models.py apps\tts_service\tests\test_check_extension.py scripts\check_extension.py scripts\check_v1_readiness.py`
-    passed after the import fix.
-  - `py -3 scripts\check_extension.py` passed; JavaScript syntax was skipped
-    because Node.js is not installed on `PATH`.
-  - `py -3 scripts\check_v1_readiness.py` passed with 43 checked files and
-    52 readiness markers.
-  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\validate_report_format.py --report-md C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.md`
-    passed after rewriting `report.md` without a UTF-8 BOM.
-  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\render_report_html.py --template C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\assets\report_template_inlined.html --report-md C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.md --report-html C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.html --title "TTS-platform Codex Security Scan"`
+  - `py -3 -m pytest -q` passed with 258 tests.
+  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax --package-out "$env:TEMP\tts-platform-prototype-release-check.zip" --windows-bundle-out "$env:TEMP\tts-platform-local-reader-release-check.zip"`
+    passed. The default Chrome/MV3 smoke remained skip-aware because branded
+    Chrome did not register the unpacked extension in this environment; all
+    non-optional release, bundle, launcher, Task Scheduler, install,
+    extension, reader-flow, model-management, completion, readiness, strict JS
+    syntax, and service smoke gates passed.
+  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\validate_report_format.py --report-md C:\tmp\codex-security-scans\TTS-platform\a1645b6_20260614T200121\report.md`
+    passed.
+  - `py -3 C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\scripts\render_report_html.py --template C:\Users\ckajs\.codex\plugins\cache\openai-curated\codex-security\c6ea566d\assets\report_template_inlined.html --report-md C:\tmp\codex-security-scans\TTS-platform\a1645b6_20260614T200121\report.md --report-html C:\tmp\codex-security-scans\TTS-platform\a1645b6_20260614T200121\report.html --title "TTS-platform Codex Security Scan"`
     passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
@@ -530,9 +517,9 @@ This file is the live status log and shared memory for future Codex loops.
     for the current working tree at this point in the project.
   - `docs/v1_completion_audit.md` now maps the `docs/codex/Prompt.md`
     `Done When` criteria to authoritative repo evidence, and
-    `scripts/check_v1_completion.py` verifies that pre-final state. The audit
-    shows eight criteria ready for final validation and keeps final security as
-    the one pending completion gate.
+    `scripts/check_v1_completion.py --require-complete` verifies the final v1
+    state. The audit shows all nine criteria ready and
+    `can_mark_v1_complete: true`.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -541,13 +528,15 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Stay in v1 finish mode: prefer closeout, release validation, install polish,
-  and blocker removal over new feature tracks.
-- Next pass: run the real final security-focused pass. If it finds accepted
-  findings, fix or explicitly record them, then rerun
-  `scripts/check_v1_completion.py --require-complete` only after the final
-  security gate is represented as complete.
-- Do not expand scope unless a v1 blocker requires it.
+- V1 is complete at the repo/test-contract level. Prefer release packaging,
+  real-machine smoke, or post-v1 polish over new core feature tracks unless the
+  user asks for a new milestone.
+- If the service is intentionally exposed beyond loopback in a future milestone,
+  run a new scoped security pass for origin, token, rate-limit, and WebSocket
+  controls under that changed deployment model.
+- If third-party remote catalogs become a supported end-user feature instead of
+  an operator-controlled escape hatch, add signed catalog or pinned-host policy
+  work before treating that channel as trusted.
 
 ## Decisions Made And Why
 
@@ -669,21 +658,20 @@ This file is the live status log and shared memory for future Codex loops.
   Codex runs now default to committing and pushing the completed slice. Codex
   should still stop before pushing when validation fails, credentials are
   missing, branch/remote state is unsafe, or the user explicitly says not to.
-- The project is now in v1 finish mode. Future Codex loops should close the
-  remaining install, release, and validation gaps rather than opening new
-  feature tracks.
+- The project has reached v1 completion at the repo/test-contract level.
+  Future Codex loops should treat release packaging, real-machine smoke, and
+  post-v1 polish as follow-up work rather than blockers for the current goal.
 - For v1 autostart, prefer a per-user Windows Task Scheduler task over a true
   Windows Service, NSSM, or Startup-folder shortcut. This matches the local
   desktop reader shape, avoids admin requirements, and keeps GPU/runtime/user
   environment behavior simpler for v1.
-- A pre-final security hardening pass was run with Codex Security workflows and
-  subagents. Accepted findings were fixed in this slice rather than left as
-  open report items. This does not replace the final planned security pass; the
-  true final security review should run after the completion audit and any
-  remaining v1 blockers.
-- The v1 completion audit is now repo-native. It intentionally keeps
-  `can_mark_v1_complete` false while final security is pending, so future loops
-  cannot accidentally mark the goal complete from readiness markers alone.
+- The final security-focused pass was run with Codex Security workflows and
+  subagents. Accepted findings were fixed in the working tree rather than left
+  as open report items, and the final report records 0 open reportable
+  findings.
+- The v1 completion audit is now repo-native and final. It reports
+  `can_mark_v1_complete: true` only because the final security evidence in
+  `docs/v1_final_security.md` is present.
 - This loop intentionally reordered one v1-enabling model-management slice
   ahead of Phase 7 Milestone 3 because the user restated the product goal as a
   local server plus Chrome reader for long web content; a usable voice install
@@ -820,12 +808,11 @@ python3 scripts/package_windows_bundle.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Continue in v1 finish mode. The completion audit is in place and shows only
-   final security pending.
-4. Run the real final security-focused pass. If it finds accepted findings, fix
-   or explicitly record them in small, validated slices.
-5. Once final security is complete, update `docs/v1_completion_audit.md` and
-   run `scripts/check_v1_completion.py --require-complete` before marking v1
-   complete.
-6. Run the milestone validation commands before claiming completion.
-7. Update this file again before handing off.
+3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
+4. For follow-up work, prefer release packaging, real-machine smoke, or post-v1
+   polish over reopening the completed v1 scope.
+5. If a future milestone changes deployment exposure, model catalog trust, or
+   extension distribution, update the threat model and rerun a scoped security
+   pass before relying on the old v1 security evidence.
+6. Run the relevant validation commands before handing off and update this file
+   again with the new status.
