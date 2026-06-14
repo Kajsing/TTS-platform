@@ -200,6 +200,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/check_chrome_extension_smoke.py",
         "scripts/check_extension_onboarding.py",
         "scripts/check_extension_reader_flow.py",
+        "scripts\\\\check_chrome_extension_smoke.py",
         "scripts/check_local_service_bootstrap.py",
         "scripts/check_model_management_flow.py",
         "scripts/check_windows_bundle_bootstrap.py",
@@ -218,6 +219,9 @@ REQUIRED_TEXT_MARKERS = {
         ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install -e \".[real]\"",
         "demo_real_voice.py",
         "--install-real-runtime",
+        "--require-browser",
+        "--browser-executable <path-to-browser>",
+        "Chrome for Testing or Chromium",
         "extension-allow-origin",
     ),
     "scripts/package_extension.py": (

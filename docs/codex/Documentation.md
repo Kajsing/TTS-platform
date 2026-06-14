@@ -11,18 +11,19 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: make strict Chrome/MV3 browser evidence available from
-  the release-check workflow without breaking the skip-aware default gate.
-- Current loop result: `scripts/release_check.py` now forwards
-  `--require-browser`, `--browser-executable`, and `--headed` to
-  `scripts/check_chrome_extension_smoke.py`, so strict browser evidence can be
-  requested through the same release-check entry point.
+- Current loop target: improve Windows bundle handoff by documenting the
+  bundle-compatible extension validation commands after first-run setup.
+- Current loop result: the generated `WINDOWS_BUNDLE_README.md` now includes an
+  optional local validation step for `scripts\check_extension.py` and strict
+  Chrome/MV3 smoke evidence with
+  `--require-browser --browser-executable <path-to-browser>` from inside the
+  extracted bundle.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\release_check.py scripts\check_v1_readiness.py apps\tts_service\tests\test_release_check.py`.
-  - Targeted release/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 8 passed.
+    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_windows_bundle.py`.
+  - Targeted bundle/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 5 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 42 readiness
     markers across 40 checked files.
   - `py -3 -m ruff check .` passed.
@@ -36,12 +37,9 @@ This file is the live status log and shared memory for future Codex loops.
     `real_runtime_installed: false`, confirming base dependencies are now part
     of first-run bootstrap while `.[real]` remains opt-in unless
     `--install-real-runtime` is requested.
-  - The actual `--real-voice-demo` gate was not invoked during default
-    validation because it can install runtime dependencies and download a real
-    model artifact; mocked release-check coverage verifies command wiring.
-  - Strict `--require-browser` Chrome/MV3 release-check behavior was covered by
-    mocked command-wiring tests; the default release gate still uses the
-    skip-aware browser smoke unless strict browser flags are passed.
+  - The new extracted-bundle extension validation commands were verified
+    through the generated Windows bundle README markers in package and bootstrap
+    tests; strict Chrome/MV3 execution still requires a compatible browser.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -423,6 +421,10 @@ This file is the live status log and shared memory for future Codex loops.
     `python -m pip install -e ".[real]"` command before real playback
     readiness checks instead of listing duplicate single-package installs as
     the primary path.
+  - The generated `WINDOWS_BUNDLE_README.md` now also includes direct
+    bundle-compatible extension validation commands, including strict
+    Chrome/MV3 smoke with `--require-browser` and `--browser-executable`, so
+    extracted-bundle users do not need to infer repo-only release-check flows.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.

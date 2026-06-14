@@ -36,6 +36,10 @@ README_MARKERS = (
     "persistent Windows service",
     "apps\\chrome_extension\\INSTALL.md",
     "apps\\chrome_extension\\TROUBLESHOOTING.md",
+    "scripts\\check_chrome_extension_smoke.py",
+    "--require-browser",
+    "--browser-executable <path-to-browser>",
+    "Chrome for Testing or Chromium",
 )
 
 EXTENSION_PACKAGE_MARKERS = (

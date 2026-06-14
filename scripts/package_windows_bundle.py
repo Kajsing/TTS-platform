@@ -306,6 +306,20 @@ manager, scheduled task, or auto-start entry.
    Restart the service, then save the token from `config\\token.txt` in the
    popup.
 
+9. Optional local validation after setup:
+
+   ```powershell
+   .\\.venv\\Scripts\\python.exe scripts\\check_extension.py
+   .\\.venv\\Scripts\\python.exe scripts\\check_chrome_extension_smoke.py `
+     --require-browser `
+     --browser-executable <path-to-browser>
+   ```
+
+   Use Chrome for Testing or Chromium when the installed browser ignores
+   command-line unpacked extension loading. The Chrome/MV3 smoke starts a
+   temporary loopback service and test page; keep the normal foreground service
+   launcher separate for day-to-day reading.
+
 ## Notes
 
 - Real acoustic output still requires installing and activating a local model.

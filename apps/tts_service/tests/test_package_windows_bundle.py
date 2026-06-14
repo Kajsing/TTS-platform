@@ -134,6 +134,11 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "apps\\chrome_extension\\INSTALL.md" in readme
     assert "apps\\chrome_extension\\TROUBLESHOOTING.md" in readme
+    assert "scripts\\check_extension.py" in readme
+    assert "scripts\\check_chrome_extension_smoke.py" in readme
+    assert "--require-browser" in readme
+    assert "--browser-executable <path-to-browser>" in readme
+    assert "Chrome for Testing or Chromium" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme
     assert "scripts\\windows\\install_local.ps1" in install_guide

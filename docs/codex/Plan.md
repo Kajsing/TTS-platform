@@ -415,5 +415,10 @@ The sixty-seventh extension-flow hardening slice adds release-check pass-through
 flags for strict Chrome/MV3 browser smoke evidence: `--require-browser`,
 `--browser-executable`, and `--headed`, while preserving skip-aware default
 browser smoke behavior.
+The sixty-eighth Windows bundle handoff slice adds direct extension validation
+commands to the generated `WINDOWS_BUNDLE_README.md`, including
+`scripts\check_extension.py` and strict Chrome/MV3 smoke guidance with
+`--require-browser --browser-executable <path-to-browser>` that works from the
+extracted bundle without implying the repo-only release-check flow.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -76,8 +76,9 @@ for long web-page text.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
   model manifest, default model catalog, model-readiness handoff guidance,
-  extension source, extension install/troubleshooting guides, icons, and a
-  validated extension zip.
+  extension source, extension install/troubleshooting guides, icons, direct
+  extension validation commands for extracted-bundle operators, and a validated
+  extension zip.
   Pass `--node-executable <path-to-node> --require-js-syntax` to package scripts
   when standalone package builds must fail instead of skipping extension
   JavaScript syntax validation.
