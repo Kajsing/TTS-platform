@@ -11,22 +11,22 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: make real acoustic-output evidence available from the
-  release-check workflow without making the default offline gate heavyweight.
-- Current loop result: `scripts/release_check.py` now accepts
-  `--real-voice-demo` to run `scripts/demo_real_voice.py` as an explicit
-  opt-in release gate, and `--install-real-runtime` passes through the demo's
-  optional `.[real]` runtime bootstrap.
+- Current loop target: make strict Chrome/MV3 browser evidence available from
+  the release-check workflow without breaking the skip-aware default gate.
+- Current loop result: `scripts/release_check.py` now forwards
+  `--require-browser`, `--browser-executable`, and `--headed` to
+  `scripts/check_chrome_extension_smoke.py`, so strict browser evidence can be
+  requested through the same release-check entry point.
 - Validation status for the current loop:
   - Targeted ruff passed with
     `py -3 -m ruff check scripts\release_check.py scripts\check_v1_readiness.py apps\tts_service\tests\test_release_check.py`.
   - Targeted release/readiness tests passed with
     `py -3 -m pytest apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 7 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed and reported 41 readiness
+    and reported 8 passed.
+  - `py -3 scripts\check_v1_readiness.py` passed and reported 42 readiness
     markers across 40 checked files.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 195 tests.
+  - `py -3 -m pytest -q` passed with 196 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
@@ -39,6 +39,9 @@ This file is the live status log and shared memory for future Codex loops.
   - The actual `--real-voice-demo` gate was not invoked during default
     validation because it can install runtime dependencies and download a real
     model artifact; mocked release-check coverage verifies command wiring.
+  - Strict `--require-browser` Chrome/MV3 release-check behavior was covered by
+    mocked command-wiring tests; the default release gate still uses the
+    skip-aware browser smoke unless strict browser flags are passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -313,6 +316,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_chrome_extension_smoke.py` now provides an optional real
     Chrome/Edge MV3 smoke for page capture and playback startup evidence, and
     it uses `extension-allow-origin` for service allow-list setup.
+  - `scripts/release_check.py --require-browser` now forwards strict Chrome/MV3
+    browser-smoke requirements into that same smoke script, with
+    `--browser-executable` and `--headed` pass-through support.
   - the extension manifest no longer requests `<all_urls>` in
     `host_permissions`; service host permissions are limited to localhost, while
     page access remains in the declared content script.
@@ -579,6 +585,7 @@ python3 -m ruff check .
 python3 scripts/release_check.py
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/release_check.py --real-voice-demo --install-real-runtime
+python3 scripts/release_check.py --require-browser --browser-executable <path-to-browser>
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_v1_readiness.py
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
@@ -675,7 +682,8 @@ python3 scripts/package_windows_bundle.py
 - The default Chrome/MV3 smoke is opportunistic so offline release gates remain
   usable across machines. Use
   `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
-  when strict local browser evidence is required. Branded Chrome 137+ may ignore
+  or `python3 scripts/release_check.py --require-browser --headed` when strict
+  local browser evidence is required. Branded Chrome 137+ may ignore
   command-line unpacked extension loading; for strict automated evidence, pass
   Chrome for Testing or Chromium with `--browser-executable`.
 - In this Windows session, Chrome discovery succeeded, but the installed branded

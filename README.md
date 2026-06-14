@@ -366,6 +366,7 @@ Chrome for Testing, Chromium, or Edge build is available:
 
 ```bash
 python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
+python3 scripts/release_check.py --require-browser --headed
 ```
 
 If the installed browser ignores command-line unpacked extension loading, pass a
@@ -373,4 +374,5 @@ compatible browser explicitly:
 
 ```bash
 python3 scripts/check_chrome_extension_smoke.py --require-browser --browser-executable <path-to-browser>
+python3 scripts/release_check.py --require-browser --browser-executable <path-to-browser>
 ```

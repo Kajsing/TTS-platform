@@ -29,6 +29,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--stream-text-file", default=None)
     parser.add_argument("--stream-text-repeat", type=int, default=1)
     parser.add_argument("--min-stream-text-chunks", type=int, default=1)
+    parser.add_argument("--browser-executable", default=None)
+    parser.add_argument("--require-browser", action="store_true")
+    parser.add_argument("--headed", action="store_true")
     parser.add_argument("--node-executable", default=None)
     parser.add_argument(
         "--require-js-syntax",
@@ -72,6 +75,9 @@ def main(argv: list[str] | None = None) -> None:
             stream_text_file=args.stream_text_file,
             stream_text_repeat=args.stream_text_repeat,
             min_stream_text_chunks=args.min_stream_text_chunks,
+            browser_executable=args.browser_executable,
+            require_browser=args.require_browser,
+            headed=args.headed,
             node_executable=args.node_executable,
             require_js_syntax=args.require_js_syntax,
             real_voice_demo=args.real_voice_demo,
@@ -104,6 +110,9 @@ def run_release_checks(
     stream_text_file: str | None = None,
     stream_text_repeat: int = 1,
     min_stream_text_chunks: int = 1,
+    browser_executable: str | None = None,
+    require_browser: bool = False,
+    headed: bool = False,
     node_executable: str | None = None,
     require_js_syntax: bool = False,
     real_voice_demo: bool = False,
@@ -126,6 +135,9 @@ def run_release_checks(
             stream_text_file=stream_text_file,
             stream_text_repeat=stream_text_repeat,
             min_stream_text_chunks=min_stream_text_chunks,
+            browser_executable=browser_executable,
+            require_browser=require_browser,
+            headed=headed,
             node_executable=node_executable,
             require_js_syntax=require_js_syntax,
             real_voice_demo=real_voice_demo,
@@ -159,6 +171,9 @@ def run_release_checks(
             stream_text_file=stream_text_file,
             stream_text_repeat=stream_text_repeat,
             min_stream_text_chunks=min_stream_text_chunks,
+            browser_executable=browser_executable,
+            require_browser=require_browser,
+            headed=headed,
             node_executable=node_executable,
             require_js_syntax=require_js_syntax,
             real_voice_demo=real_voice_demo,
@@ -183,6 +198,9 @@ def _run_release_checks_with_package_path(
     stream_text_file: str | None,
     stream_text_repeat: int,
     min_stream_text_chunks: int,
+    browser_executable: str | None,
+    require_browser: bool,
+    headed: bool,
     node_executable: str | None,
     require_js_syntax: bool,
     real_voice_demo: bool,
@@ -228,7 +246,12 @@ def _run_release_checks_with_package_path(
         ),
         (
             "chrome_extension_smoke",
-            [python_executable, "scripts/check_chrome_extension_smoke.py"],
+            _build_chrome_extension_smoke_command(
+                python_executable=python_executable,
+                browser_executable=browser_executable,
+                require_browser=require_browser,
+                headed=headed,
+            ),
         ),
         (
             "extension_package",
@@ -397,6 +420,28 @@ def _build_package_windows_bundle_command(
             require_js_syntax=require_js_syntax,
         ),
     ]
+
+
+def _build_chrome_extension_smoke_command(
+    *,
+    python_executable: str,
+    browser_executable: str | None,
+    require_browser: bool,
+    headed: bool,
+) -> list[str]:
+    command = [python_executable, "scripts/check_chrome_extension_smoke.py"]
+    if browser_executable:
+        command.extend(
+            [
+                "--browser-executable",
+                str(Path(browser_executable).expanduser().resolve()),
+            ]
+        )
+    if require_browser:
+        command.append("--require-browser")
+    if headed:
+        command.append("--headed")
+    return command
 
 
 def _build_live_smoke_command(

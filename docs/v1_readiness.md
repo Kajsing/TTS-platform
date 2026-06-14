@@ -153,8 +153,9 @@ for long web-page text.
   discovery. The static
   popup/origin/service-snapshot contract is automated, and
   `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
-  can provide strict local Chrome/MV3 browser smoke evidence on a machine with
-  a compatible Chrome, Chrome for Testing, Chromium, or Edge build.
+  or `python3 scripts/release_check.py --require-browser --headed` can provide
+  strict local Chrome/MV3 browser smoke evidence on a machine with a compatible
+  Chrome, Chrome for Testing, Chromium, or Edge build.
 - On a long article page, verify `Speak Page`, progress display, truncation
   metadata, `Resume Page`, `Continue Page`, `Previous Section`,
   `Next Section`, stop/restart behavior, and popup state after reopening in
@@ -179,12 +180,13 @@ for long web-page text.
 - strict Chrome/MV3 smoke requires Chrome or Edge to be installed and able to
   load the unpacked MV3 extension from automation. The default release gate can
   skip the browser smoke when the local browser environment cannot run it; run
-  `python3 scripts/check_chrome_extension_smoke.py --require-browser` when a
-  real browser must be present. Branded Chrome 137+ may ignore
-  `--load-extension`; for strict automated evidence, pass Chrome for Testing or
-  Chromium with `--browser-executable`. Missing extension-registration skips
-  include observed profile-extension ids to separate unloaded unpacked
-  extensions from generic CDP startup failures.
+  `python3 scripts/check_chrome_extension_smoke.py --require-browser` or
+  `python3 scripts/release_check.py --require-browser` when a real browser must
+  be present. Branded Chrome 137+ may ignore `--load-extension`; for strict
+  automated evidence, pass Chrome for Testing or Chromium with
+  `--browser-executable`. Missing extension-registration skips include
+  observed profile-extension ids to separate unloaded unpacked extensions from
+  generic CDP startup failures.
 - JavaScript syntax validation in `scripts/check_extension.py` runs when
   `node` is available on `PATH`, or when `--node-executable`/`TTS_PLATFORM_NODE`
   points at Node.js. Use `--require-js-syntax` when missing Node.js should fail

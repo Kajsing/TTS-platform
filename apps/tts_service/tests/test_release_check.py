@@ -195,6 +195,42 @@ def test_release_check_can_include_optional_real_voice_demo(
     assert summary["checks"][-1]["command"] == calls[-1]
 
 
+def test_release_check_can_require_chrome_browser_smoke(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[list[str]] = []
+    browser_path = tmp_path / "chrome.exe"
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert cwd == REPO_ROOT
+        assert check is True
+        calls.append(command)
+
+    browser_path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=tmp_path / "windows.zip",
+        browser_executable=str(browser_path),
+        require_browser=True,
+        headed=True,
+    )
+
+    assert calls[9] == [
+        "python-test",
+        "scripts/check_chrome_extension_smoke.py",
+        "--browser-executable",
+        str(browser_path.resolve()),
+        "--require-browser",
+        "--headed",
+    ]
+    assert summary["checks"][9]["command"] == calls[9]
+
+
 def test_release_check_can_require_extension_js_syntax(
     tmp_path: Path,
     monkeypatch,

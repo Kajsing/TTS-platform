@@ -411,5 +411,9 @@ The sixty-sixth real-audio release-hardening slice adds
 `scripts/demo_real_voice.py` from the release-check flow and can pass through
 `--install-real-runtime` without making the default offline release gate
 download model/runtime artifacts.
+The sixty-seventh extension-flow hardening slice adds release-check pass-through
+flags for strict Chrome/MV3 browser smoke evidence: `--require-browser`,
+`--browser-executable`, and `--headed`, while preserving skip-aware default
+browser smoke behavior.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
