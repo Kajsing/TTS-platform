@@ -80,7 +80,8 @@ Windows launcher scripts are also available:
 
 Use `.\scripts\windows\install_local.ps1 -InstallRealRuntime` when this machine
 should install the optional `.[real]` runtime dependencies into `.venv` during
-the same bootstrap.
+the same bootstrap. Use `-NoDependencies` only for an already provisioned
+environment.
 
 ```cmd
 scripts\windows\run_service.cmd
@@ -94,9 +95,11 @@ Use `.\scripts\windows\run_service.ps1 -SetupOnly` to create
 are convenience launchers, not persistent Windows service installers.
 Use `.\scripts\windows\install_local.ps1` first when the extracted bundle needs
 a local `.venv`; it creates the virtual environment, installs the local package,
-runs `setup-local`, and emits a JSON summary for automation. Add
-`-InstallRealRuntime` when the bootstrap should also install the optional
-`.[real]` runtime dependencies before `setup-local`.
+runs `setup-local`, and emits a JSON summary for automation. By default it
+installs the package's base dependencies in `.venv`; add `-InstallRealRuntime`
+when the bootstrap should also install the optional `.[real]` runtime
+dependencies before `setup-local`, or `-NoDependencies` only for an already
+provisioned environment.
 
 Build a Windows-friendly local reader bundle with:
 

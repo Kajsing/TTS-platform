@@ -336,6 +336,7 @@ def verify_extension_install_assets(manifest: dict[str, object]) -> None:
                 "chrome://extensions",
                 "scripts\\windows\\install_local.ps1",
                 "-InstallRealRuntime",
+                "-NoDependencies",
                 "scripts\\windows\\run_service.ps1",
                 "tts setup-local",
                 "tts extension-allow-origin <copied-origin>",

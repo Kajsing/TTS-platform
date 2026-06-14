@@ -13,11 +13,12 @@ It is not Chrome Web Store signed.
      .\scripts\windows\install_local.ps1
      ```
 
-     This creates `.venv`, installs the local package, and runs first-run
-     `tts setup-local`. Use
+     This creates `.venv`, installs the local package with its base
+     dependencies, and runs first-run `tts setup-local`. Use
      `.\scripts\windows\install_local.ps1 -InstallRealRuntime` when this
      machine should also install the optional `.[real]` runtime dependencies in
-     the same `.venv`.
+     the same `.venv`. Use `-NoDependencies` only for an already provisioned
+     environment.
 
    - From an already installed development checkout, run:
 

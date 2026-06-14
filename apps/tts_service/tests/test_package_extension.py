@@ -43,6 +43,7 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert "offscreen/offscreen.js" in names
     assert "scripts\\windows\\install_local.ps1" in install_guide
     assert "-InstallRealRuntime" in install_guide
+    assert "-NoDependencies" in install_guide
     assert "scripts\\windows\\run_service.ps1" in install_guide
     assert "tts setup-local" in install_guide
     assert "tts extension-allow-origin <copied-origin>" in install_guide

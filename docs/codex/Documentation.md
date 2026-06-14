@@ -11,18 +11,21 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `scripts/windows/install_local.ps1` now supports
-  `-InstallRealRuntime`, an explicit opt-in first-run path that installs the
-  optional `.[real]` runtime dependencies into the bundle `.venv` before
-  `setup-local`. `scripts/check_windows_bundle_install.py` now exposes the
-  matching `--install-real-runtime` validation knob while the default release
-  gate keeps runtime downloads opt-in.
+- Current loop result: `scripts/windows/install_local.ps1` now installs base
+  package dependencies by default for extracted Windows bundles, reports
+  `dependencies_installed`, and keeps `-NoDependencies` as an explicit
+  pre-provisioned-environment escape hatch. It also supports
+  `-InstallRealRuntime`, an opt-in first-run path that installs the optional
+  `.[real]` runtime dependencies into the bundle `.venv` before `setup-local`.
+  `scripts/check_windows_bundle_install.py` exposes the matching
+  `--no-dependencies` and `--install-real-runtime` validation knobs while the
+  default release gate keeps real-runtime downloads opt-in.
 - Validation status for the current loop:
   - Targeted ruff passed with
     `py -3 -m ruff check scripts\check_windows_bundle_install.py scripts\package_windows_bundle.py scripts\check_extension.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py`.
   - Targeted installer/bundle/readiness tests passed with
     `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 12 passed.
+    and reported 13 passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed.
@@ -31,15 +34,17 @@ This file is the live status log and shared memory for future Codex loops.
   - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip`
     passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 192 tests.
+  - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest -q` passed with 193 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
     extension checks, extension packaging, Windows bundle
     packaging/bootstrap/install, and Windows launcher smoke. The default
-    Windows bundle install gate reported `real_runtime_installed: false`,
-    confirming that `.[real]` remains opt-in unless `--install-real-runtime` is
-    requested.
+    Windows bundle install gate reported `dependencies_installed: true` and
+    `real_runtime_installed: false`, confirming base dependencies are now part
+    of first-run bootstrap while `.[real]` remains opt-in unless
+    `--install-real-runtime` is requested.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -230,6 +235,10 @@ This file is the live status log and shared memory for future Codex loops.
     extracted bundle install the optional `.[real]` runtime dependencies into
     the same `.venv` during first-run bootstrap, while the default installer
     path remains lightweight and release-friendly.
+  - `scripts/windows/install_local.ps1` now installs the package's base
+    dependencies by default for extracted bundles, reports
+    `dependencies_installed`, and keeps `-NoDependencies` as an explicit escape
+    hatch for already provisioned environments.
   - `tts setup-local` next-step guidance now includes `tts model-check` so
     operators can verify configured/default voice readiness before expecting
     real acoustic output.

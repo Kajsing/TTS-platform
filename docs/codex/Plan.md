@@ -373,5 +373,9 @@ The fifty-seventh Windows first-run UX slice adds
 `scripts/check_windows_bundle_install.py --install-real-runtime`, keeping real
 runtime dependency installation opt-in while making the extracted-bundle
 bootstrap capable of installing `.[real]` in the same `.venv`.
+The fifty-eighth Windows first-run hardening slice makes the extracted-bundle
+installer install the package's base dependencies by default, adds
+`-NoDependencies`/`--no-dependencies` only for already provisioned environments,
+and reports `dependencies_installed` in the installer/check summaries.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -43,7 +43,9 @@ def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
         venv_python: Path,
         bundle_root: Path,
         timeout_s: float,
+        install_dependencies: bool,
     ) -> None:
+        assert install_dependencies is True
         calls.append("install")
 
     def fake_run_json_command(
@@ -119,6 +121,7 @@ def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
         "created": True,
         "system_site_packages": True,
         "build_tooling_installed": True,
+        "dependencies_installed": True,
         "editable_install": True,
         "real_runtime_installed": False,
         "installer_script": False,
@@ -161,14 +164,17 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
         bundle_root: Path,
         timeout_s: float,
         install_real_runtime: bool,
+        install_dependencies: bool,
     ) -> dict[str, object]:
         calls.append("installer")
         assert python_executable == "python-test"
         assert timeout_s == 180.0
         assert install_real_runtime is False
+        assert install_dependencies is True
         return {
             "venv_created": True,
             "build_tooling_installed": True,
+            "dependencies_installed": True,
             "editable_install": True,
             "real_runtime_installed": False,
             "setup": {
@@ -235,6 +241,7 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
 
     assert calls == ["extract", "installer", "health", "smoke", "terminate"]
     assert summary["venv"]["installer_script"] is True
+    assert summary["venv"]["dependencies_installed"] is True
     assert summary["venv"]["real_runtime_installed"] is False
     assert summary["setup"]["token_created"] is True
     assert (
@@ -294,6 +301,7 @@ def test_windows_bundle_install_check_passes_real_runtime_request_to_installer(
         bundle_root=bundle_root,
         timeout_s=42.0,
         install_real_runtime=True,
+        install_dependencies=True,
     )
 
     assert payload == {"ok": True}
@@ -306,6 +314,46 @@ def test_windows_bundle_install_check_passes_real_runtime_request_to_installer(
             "-File",
             str(installer_path),
             "-InstallRealRuntime",
+        ]
+    ]
+
+
+def test_windows_bundle_install_check_can_skip_dependency_install_for_provisioned_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    bundle_root = tmp_path / "tts-platform"
+    installer_path = bundle_root / "scripts" / "windows" / "install_local.ps1"
+    installer_path.parent.mkdir(parents=True)
+    installer_path.write_text("", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(check_module, "_find_powershell_executable", lambda: "powershell-test")
+    monkeypatch.setattr(
+        check_module,
+        "_run_json_command",
+        lambda command, **_kwargs: commands.append(command) or {"ok": True},
+    )
+
+    payload = check_module._run_windows_install_script(
+        python_executable="python-test",
+        bundle_root=bundle_root,
+        timeout_s=42.0,
+        install_real_runtime=False,
+        install_dependencies=False,
+    )
+
+    assert payload == {"ok": True}
+    assert commands == [
+        [
+            "powershell-test",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(installer_path),
+            "-NoDependencies",
         ]
     ]
 

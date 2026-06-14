@@ -76,10 +76,11 @@ for long web-page text.
   model manifest, default model catalog, model-readiness handoff guidance,
   extension source, extension install guide/icons, and validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
-  creating `.venv`, installing the local package, and running `setup-local`
-  without choosing a persistent service manager. `-InstallRealRuntime` is an
-  explicit opt-in path for installing the optional `.[real]` runtime
-  dependencies into that `.venv` during the same bootstrap.
+  creating `.venv`, installing the local package plus its base dependencies,
+  and running `setup-local` without choosing a persistent service manager.
+  `-InstallRealRuntime` is an explicit opt-in path for installing the optional
+  `.[real]` runtime dependencies into that `.venv` during the same bootstrap;
+  `-NoDependencies` is reserved for already provisioned environments.
 - `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks first-run/model-readiness guide markers, checks the
@@ -97,9 +98,10 @@ for long web-page text.
   validates installed setup next-step guidance, starts the installed
   `tts serve` entrypoint, runs public-contract smoke, and shuts the service
   down. When the bundled install script is present, the check uses it for the
-  venv/package/setup stage. `--install-real-runtime` exercises the optional
-  `.[real]` install path only when a test machine should take that heavier
-  dependency step.
+  venv/package/setup stage and expects base dependencies to be installed by
+  default. `--install-real-runtime` exercises the optional `.[real]` install
+  path only when a test machine should take that heavier dependency step;
+  `--no-dependencies` is reserved for pre-provisioned test environments.
 
 ## Manual Gates
 

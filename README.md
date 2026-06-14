@@ -134,7 +134,7 @@ paths, run `tts setup-local` when needed, and then start `tts serve`:
 
 Use `.\scripts\windows\install_local.ps1 -InstallRealRuntime` when this machine
 should install the optional `.[real]` runtime dependencies during the same
-bootstrap.
+bootstrap. Use `-NoDependencies` only for an already provisioned environment.
 
 or double-click/run:
 
@@ -186,9 +186,11 @@ and rejecting non-`chrome-extension` origins for this onboarding path.
 loopback hosts by default, and uses the configured host, port, and log level.
 The Windows launchers in `scripts/windows/` are a convenience packaging step for
 local runs. `install_local.ps1` creates `.venv`, installs the local package, and
-runs `setup-local`; add `-InstallRealRuntime` to install `.[real]` in that
-`.venv` during bootstrap. `run_service.ps1` starts the foreground localhost
-service. They do not install a persistent Windows service.
+runs `setup-local`; by default it installs the package's base dependencies in
+`.venv`. Add `-InstallRealRuntime` to install `.[real]` during bootstrap, or
+use `-NoDependencies` only when dependencies are already provisioned.
+`run_service.ps1` starts the foreground localhost service. They do not install a
+persistent Windows service.
 
 To build a Windows-friendly local reader bundle with the service source,
 launchers, config example, docs, and a validated Chrome extension zip:

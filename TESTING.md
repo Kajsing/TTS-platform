@@ -236,7 +236,8 @@ After extracting a bundle, bootstrap the local virtual environment with:
 
 Use `.\scripts\windows\install_local.ps1 -InstallRealRuntime` when the extracted
 bundle should install the optional `.[real]` runtime dependencies during the
-same bootstrap.
+same bootstrap. Use `-NoDependencies` only for an already provisioned
+environment.
 
 Check the built bundle's first-run bootstrap path with:
 
@@ -252,7 +253,8 @@ python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platfo
 
 Use `--install-real-runtime` on this check only when the test machine should
 exercise the optional `.[real]` install path; the default gate keeps that
-download-heavy path opt-in.
+download-heavy path opt-in. Use `--no-dependencies` only when checking a
+pre-provisioned environment that should skip base dependency installation.
 
 Check the built bundle's PowerShell/CMD launcher setup and foreground service
 smoke paths with:

@@ -42,6 +42,14 @@ def main(argv: list[str] | None = None) -> None:
             "runtime dependencies before setup."
         ),
     )
+    parser.add_argument(
+        "--no-dependencies",
+        action="store_true",
+        help=(
+            "Ask the extracted Windows installer to skip dependency installation. "
+            "Use only for pre-provisioned test environments."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -53,6 +61,7 @@ def main(argv: list[str] | None = None) -> None:
                 command_timeout_s=args.command_timeout_s,
                 stream_text_repeat=args.stream_text_repeat,
                 install_real_runtime=args.install_real_runtime,
+                install_dependencies=not args.no_dependencies,
             )
         else:
             with tempfile.TemporaryDirectory(prefix="tts-platform-bundle-install-") as temp_dir:
@@ -65,6 +74,7 @@ def main(argv: list[str] | None = None) -> None:
                     command_timeout_s=args.command_timeout_s,
                     stream_text_repeat=args.stream_text_repeat,
                     install_real_runtime=args.install_real_runtime,
+                    install_dependencies=not args.no_dependencies,
                 )
     except WindowsBundleInstallError as exc:
         raise SystemExit(str(exc)) from exc
@@ -80,6 +90,7 @@ def check_windows_bundle_install(
     command_timeout_s: float = DEFAULT_COMMAND_TIMEOUT_S,
     stream_text_repeat: int = 2,
     install_real_runtime: bool = False,
+    install_dependencies: bool = True,
 ) -> dict[str, object]:
     if stream_text_repeat <= 0:
         raise WindowsBundleInstallError("--stream-text-repeat must be positive.")
@@ -98,6 +109,7 @@ def check_windows_bundle_install(
             bundle_root=bundle_root,
             timeout_s=command_timeout_s,
             install_real_runtime=install_real_runtime,
+            install_dependencies=install_dependencies,
         )
         if installer_payload is None:
             _create_venv(
@@ -117,6 +129,7 @@ def check_windows_bundle_install(
                 venv_python=venv_python,
                 bundle_root=bundle_root,
                 timeout_s=command_timeout_s,
+                install_dependencies=install_dependencies,
             )
             if install_real_runtime:
                 _install_real_runtime(
@@ -202,6 +215,11 @@ def check_windows_bundle_install(
                 "build_tooling_installed",
                 fallback=True,
             ),
+            "dependencies_installed": _installer_bool(
+                installer_payload,
+                "dependencies_installed",
+                fallback=install_dependencies,
+            ),
             "editable_install": True,
             "real_runtime_installed": _installer_bool(
                 installer_payload,
@@ -246,6 +264,7 @@ def _run_windows_install_script(
     bundle_root: Path,
     timeout_s: float,
     install_real_runtime: bool,
+    install_dependencies: bool,
 ) -> dict[str, object] | None:
     installer_path = bundle_root / "scripts" / "windows" / "install_local.ps1"
     if not installer_path.is_file():
@@ -267,6 +286,8 @@ def _run_windows_install_script(
     ]
     if install_real_runtime:
         command.append("-InstallRealRuntime")
+    if not install_dependencies:
+        command.append("-NoDependencies")
     return _run_json_command(
         command,
         cwd=bundle_root,
@@ -289,18 +310,25 @@ def _create_venv(*, python_executable: str, venv_dir: Path, timeout_s: float) ->
     )
 
 
-def _install_bundle_package(*, venv_python: Path, bundle_root: Path, timeout_s: float) -> None:
+def _install_bundle_package(
+    *,
+    venv_python: Path,
+    bundle_root: Path,
+    timeout_s: float,
+    install_dependencies: bool,
+) -> None:
+    command = [
+        str(venv_python),
+        "-m",
+        "pip",
+        "install",
+        "--no-build-isolation",
+    ]
+    if not install_dependencies:
+        command.append("--no-deps")
+    command.extend(["-e", "."])
     _run_command(
-        [
-            str(venv_python),
-            "-m",
-            "pip",
-            "install",
-            "--no-build-isolation",
-            "--no-deps",
-            "-e",
-            ".",
-        ],
+        command,
         cwd=bundle_root,
         timeout_s=timeout_s,
         env=_venv_env(bundle_root / ".venv"),

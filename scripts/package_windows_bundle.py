@@ -179,8 +179,10 @@ manager, scheduled task, or auto-start entry.
    .\\scripts\\windows\\install_local.ps1
    ```
 
-   The installer creates `.venv`, installs the local package, and runs
-   `tts setup-local`. Use `install_local.cmd` when launching from `cmd.exe`.
+   The installer creates `.venv`, installs the local package with its base
+   dependencies, and runs `tts setup-local`. Use `install_local.cmd` when
+   launching from `cmd.exe`. Use `-NoDependencies` only when the environment is
+   already provisioned and dependency installation should be skipped.
    Add `-InstallRealRuntime` when this machine should install the optional
    `.[real]` runtime dependencies during bootstrap:
 

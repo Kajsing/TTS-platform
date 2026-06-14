@@ -3,6 +3,7 @@ param(
     [string]$PythonExecutable = "",
     [switch]$SkipSetup,
     [switch]$NoBuildTooling,
+    [switch]$NoDependencies,
     [switch]$InstallRealRuntime
 )
 
@@ -98,9 +99,14 @@ if (-not $NoBuildTooling) {
         -RedirectStdoutToError
 }
 
+$PackageInstallArgs = @("-m", "pip", "install", "--no-build-isolation")
+if ($NoDependencies) {
+    $PackageInstallArgs += "--no-deps"
+}
+$PackageInstallArgs += @("-e", $RepoRoot)
 Invoke-CheckedCommand `
     -FilePath $VenvPython `
-    -Arguments @("-m", "pip", "install", "--no-build-isolation", "--no-deps", "-e", $RepoRoot) `
+    -Arguments $PackageInstallArgs `
     -RedirectStdoutToError
 
 if ($InstallRealRuntime) {
@@ -124,6 +130,7 @@ if (-not $SkipSetup) {
     venv_created = $CreatedVenv
     venv_python = $VenvPython
     build_tooling_installed = -not $NoBuildTooling
+    dependencies_installed = -not $NoDependencies
     editable_install = $true
     real_runtime_installed = [bool]$InstallRealRuntime
     setup = $SetupPayload
