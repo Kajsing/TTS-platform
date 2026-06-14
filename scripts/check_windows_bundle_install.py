@@ -32,6 +32,23 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="check_windows_bundle_install")
     parser.add_argument("--bundle", default=None)
     parser.add_argument("--python-executable", default=sys.executable)
+    parser.add_argument(
+        "--node-executable",
+        default=None,
+        help=(
+            "Optional Node.js executable for temporary bundle packaging. Also "
+            "used by the optional local-reader check unless "
+            "--local-reader-node-executable is set."
+        ),
+    )
+    parser.add_argument(
+        "--require-js-syntax",
+        action="store_true",
+        help=(
+            "Fail temporary bundle packaging if extension JavaScript syntax "
+            "checks cannot run. Also applies to the optional local-reader check."
+        ),
+    )
     parser.add_argument("--startup-timeout-s", type=float, default=DEFAULT_STARTUP_TIMEOUT_S)
     parser.add_argument("--command-timeout-s", type=float, default=DEFAULT_COMMAND_TIMEOUT_S)
     parser.add_argument(
@@ -50,6 +67,34 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     parser.add_argument(
+        "--local-reader-node-executable",
+        default=None,
+        help=(
+            "Optional Node.js executable to pass to the bundled local-reader "
+            "check for extension JavaScript syntax validation."
+        ),
+    )
+    parser.add_argument(
+        "--local-reader-require-js-syntax",
+        action="store_true",
+        help="Fail the optional local-reader check if JavaScript syntax parsing cannot run.",
+    )
+    parser.add_argument(
+        "--local-reader-browser-executable",
+        default=None,
+        help="Optional browser executable to pass to the bundled Chrome/MV3 smoke.",
+    )
+    parser.add_argument(
+        "--local-reader-require-browser",
+        action="store_true",
+        help="Fail the optional local-reader check if Chrome/MV3 smoke cannot run.",
+    )
+    parser.add_argument(
+        "--local-reader-headed",
+        action="store_true",
+        help="Run the optional local-reader Chrome/MV3 smoke in headed browser mode.",
+    )
+    parser.add_argument(
         "--install-real-runtime",
         action="store_true",
         help=(
@@ -66,6 +111,12 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     args = parser.parse_args(argv)
+    local_reader_node_executable = (
+        args.local_reader_node_executable or args.node_executable
+    )
+    local_reader_require_js_syntax = (
+        args.local_reader_require_js_syntax or args.require_js_syntax
+    )
 
     try:
         if args.bundle:
@@ -77,13 +128,22 @@ def main(argv: list[str] | None = None) -> None:
                 local_reader_timeout_s=args.local_reader_timeout_s,
                 stream_text_repeat=args.stream_text_repeat,
                 run_local_reader_check=args.run_local_reader_check,
+                local_reader_node_executable=local_reader_node_executable,
+                local_reader_require_js_syntax=local_reader_require_js_syntax,
+                local_reader_browser_executable=args.local_reader_browser_executable,
+                local_reader_require_browser=args.local_reader_require_browser,
+                local_reader_headed=args.local_reader_headed,
                 install_real_runtime=args.install_real_runtime,
                 install_dependencies=not args.no_dependencies,
             )
         else:
             with tempfile.TemporaryDirectory(prefix="tts-platform-bundle-install-") as temp_dir:
                 bundle_path = Path(temp_dir) / "tts-platform-local-reader.zip"
-                package_windows_bundle.package_windows_bundle(out_path=bundle_path)
+                package_windows_bundle.package_windows_bundle(
+                    out_path=bundle_path,
+                    node_executable=args.node_executable,
+                    require_js_syntax=args.require_js_syntax,
+                )
                 summary = check_windows_bundle_install(
                     bundle_path=bundle_path,
                     python_executable=args.python_executable,
@@ -92,6 +152,11 @@ def main(argv: list[str] | None = None) -> None:
                     local_reader_timeout_s=args.local_reader_timeout_s,
                     stream_text_repeat=args.stream_text_repeat,
                     run_local_reader_check=args.run_local_reader_check,
+                    local_reader_node_executable=local_reader_node_executable,
+                    local_reader_require_js_syntax=local_reader_require_js_syntax,
+                    local_reader_browser_executable=args.local_reader_browser_executable,
+                    local_reader_require_browser=args.local_reader_require_browser,
+                    local_reader_headed=args.local_reader_headed,
                     install_real_runtime=args.install_real_runtime,
                     install_dependencies=not args.no_dependencies,
                 )
@@ -110,6 +175,11 @@ def check_windows_bundle_install(
     local_reader_timeout_s: float = DEFAULT_LOCAL_READER_TIMEOUT_S,
     stream_text_repeat: int = 2,
     run_local_reader_check: bool = False,
+    local_reader_node_executable: str | None = None,
+    local_reader_require_js_syntax: bool = False,
+    local_reader_browser_executable: str | None = None,
+    local_reader_require_browser: bool = False,
+    local_reader_headed: bool = False,
     install_real_runtime: bool = False,
     install_dependencies: bool = True,
 ) -> dict[str, object]:
@@ -234,6 +304,11 @@ def check_windows_bundle_install(
                 venv_python=venv_python,
                 bundle_root=bundle_root,
                 timeout_s=local_reader_timeout_s,
+                node_executable=local_reader_node_executable,
+                require_js_syntax=local_reader_require_js_syntax,
+                browser_executable=local_reader_browser_executable,
+                require_browser=local_reader_require_browser,
+                headed=local_reader_headed,
             )
 
     return {
@@ -486,19 +561,45 @@ def _run_local_reader_check(
     venv_python: Path,
     bundle_root: Path,
     timeout_s: float,
+    node_executable: str | None,
+    require_js_syntax: bool,
+    browser_executable: str | None,
+    require_browser: bool,
+    headed: bool,
 ) -> dict[str, object]:
     script_path = bundle_root / "scripts" / "check_local_reader_bundle.py"
     if not script_path.is_file():
         raise WindowsBundleInstallError(
             f"Local reader bundle check is missing: {script_path}"
         )
+    command = [
+        str(venv_python),
+        "scripts/check_local_reader_bundle.py",
+        "--python-executable",
+        str(venv_python),
+    ]
+    if node_executable:
+        command.extend(
+            [
+                "--node-executable",
+                str(Path(node_executable).expanduser().resolve()),
+            ]
+        )
+    if require_js_syntax:
+        command.append("--require-js-syntax")
+    if browser_executable:
+        command.extend(
+            [
+                "--browser-executable",
+                str(Path(browser_executable).expanduser().resolve()),
+            ]
+        )
+    if require_browser:
+        command.append("--require-browser")
+    if headed:
+        command.append("--headed")
     return _run_json_command(
-        [
-            str(venv_python),
-            "scripts/check_local_reader_bundle.py",
-            "--python-executable",
-            str(venv_python),
-        ],
+        command,
         cwd=bundle_root,
         timeout_s=timeout_s,
         env=_venv_env(bundle_root / ".venv"),

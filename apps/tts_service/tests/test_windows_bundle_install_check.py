@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -329,10 +330,20 @@ def test_windows_bundle_install_check_can_run_local_reader_bundle_gate(
         venv_python: Path,
         bundle_root: Path,
         timeout_s: float,
+        node_executable: str | None,
+        require_js_syntax: bool,
+        browser_executable: str | None,
+        require_browser: bool,
+        headed: bool,
     ) -> dict[str, object]:
         calls.append("local-reader")
         assert venv_python == bundle_root / ".venv" / "Scripts" / "python.exe"
         assert timeout_s == 123.0
+        assert node_executable is None
+        assert require_js_syntax is False
+        assert browser_executable is None
+        assert require_browser is False
+        assert headed is False
         return {
             "checks": [
                 {"name": "local_service_bootstrap"},
@@ -378,6 +389,126 @@ def test_windows_bundle_install_check_can_run_local_reader_bundle_gate(
         "performed": True,
         "checks": ["local_service_bootstrap", "chrome_extension_smoke"],
     }
+
+
+def test_windows_bundle_install_check_forwards_local_reader_strict_flags(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    bundle_root = tmp_path / "tts-platform"
+    script_path = bundle_root / "scripts" / "check_local_reader_bundle.py"
+    script_path.parent.mkdir(parents=True)
+    script_path.write_text("", encoding="utf-8")
+    venv_python = bundle_root / ".venv" / "Scripts" / "python.exe"
+    node_path = tmp_path / "node.exe"
+    browser_path = tmp_path / "chrome.exe"
+    node_path.write_text("", encoding="utf-8")
+    browser_path.write_text("", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def fake_run_json_command(
+        command: list[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        commands.append(command)
+        assert cwd == bundle_root
+        assert timeout_s == 42.0
+        assert env is not None
+        return {"checks": []}
+
+    monkeypatch.setattr(check_module, "_run_json_command", fake_run_json_command)
+
+    payload = check_module._run_local_reader_check(
+        venv_python=venv_python,
+        bundle_root=bundle_root,
+        timeout_s=42.0,
+        node_executable=str(node_path),
+        require_js_syntax=True,
+        browser_executable=str(browser_path),
+        require_browser=True,
+        headed=True,
+    )
+
+    assert payload == {"checks": []}
+    assert commands == [
+        [
+            str(venv_python),
+            "scripts/check_local_reader_bundle.py",
+            "--python-executable",
+            str(venv_python),
+            "--node-executable",
+            str(node_path.resolve()),
+            "--require-js-syntax",
+            "--browser-executable",
+            str(browser_path.resolve()),
+            "--require-browser",
+            "--headed",
+        ]
+    ]
+
+
+def test_windows_bundle_install_main_passes_node_flags_to_package_and_reader(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    check_module = _load_check_module()
+    node_path = tmp_path / "node.exe"
+    node_path.write_text("", encoding="utf-8")
+    package_calls: list[dict[str, object]] = []
+    install_calls: list[dict[str, object]] = []
+
+    def fake_package_windows_bundle(
+        *,
+        out_path: Path,
+        node_executable: str | None = None,
+        require_js_syntax: bool = False,
+    ) -> dict[str, object]:
+        out_path.write_text("placeholder", encoding="utf-8")
+        package_calls.append(
+            {
+                "out_path": out_path,
+                "node_executable": node_executable,
+                "require_js_syntax": require_js_syntax,
+            }
+        )
+        return {"package_path": str(out_path)}
+
+    def fake_check_windows_bundle_install(**kwargs: object) -> dict[str, object]:
+        install_calls.append(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        check_module.package_windows_bundle,
+        "package_windows_bundle",
+        fake_package_windows_bundle,
+    )
+    monkeypatch.setattr(
+        check_module,
+        "check_windows_bundle_install",
+        fake_check_windows_bundle_install,
+    )
+
+    check_module.main(
+        [
+            "--node-executable",
+            str(node_path),
+            "--require-js-syntax",
+            "--run-local-reader-check",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"ok": True}
+    assert package_calls[0]["node_executable"] == str(node_path)
+    assert package_calls[0]["require_js_syntax"] is True
+    assert install_calls[0]["local_reader_node_executable"] == str(node_path)
+    assert install_calls[0]["local_reader_require_js_syntax"] is True
+    assert install_calls[0]["run_local_reader_check"] is True
 
 
 def test_windows_bundle_install_check_rejects_invalid_stream_repeat(tmp_path: Path) -> None:

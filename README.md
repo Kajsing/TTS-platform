@@ -208,7 +208,10 @@ first Chrome playback, and `scripts\check_local_reader_bundle.py` for
 bundle-compatible service/model/extension validation after extraction. From the
 repo, `scripts/check_windows_bundle_install.py --run-local-reader-check` can
 also run that local-reader validation after the temporary extracted-bundle
-install and installed `tts serve` smoke pass.
+install and installed `tts serve` smoke pass, with `--local-reader-*` flags for
+strict nested JavaScript and browser checks. When that install check builds a
+temporary bundle itself, `--node-executable` and `--require-js-syntax` make the
+bundle package step strict too.
 
 The `catalog-list`, `model-list`, `model-install`, `model-activate`,
 `model-check`, and `model-remove` commands are local model-management helpers

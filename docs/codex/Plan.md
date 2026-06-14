@@ -427,5 +427,12 @@ The sixty-ninth Windows bundle hardening slice adds
 gate that runs the bundled local-reader validation with the installed `.venv`
 Python after the extracted-bundle install path, installed `tts serve`, and
 public-contract smoke have passed.
+The seventieth Windows bundle hardening slice adds strict local-reader
+pass-through flags to `scripts/check_windows_bundle_install.py`, so the nested
+bundle-compatible check can require Node-backed extension JavaScript syntax
+validation and strict Chrome/MV3 browser evidence when a compatible local
+environment is available. The same slice also lets no-`--bundle` install checks
+pass `--node-executable` and `--require-js-syntax` into the temporary bundle
+package build and inherit those settings for the nested local-reader check.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

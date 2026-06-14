@@ -12,22 +12,27 @@ This file is the live status log and shared memory for future Codex loops.
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
 - Current loop target: connect extracted Windows bundle install validation to
-  the bundle-compatible local-reader validation path without making the default
-  release gate heavier.
+  the bundle-compatible local-reader validation path, including strict
+  JavaScript/browser pass-through options, without making the default release
+  gate heavier.
 - Current loop result: `scripts/check_windows_bundle_install.py` now supports
   `--run-local-reader-check`, which runs bundled
   `scripts/check_local_reader_bundle.py` with the installed `.venv` Python after
   extracted-bundle install, installed `tts serve`, and public-contract smoke
   have passed. `scripts/check_local_reader_bundle.py` now captures child check
   stdout/stderr and relays it to stderr, keeping its own stdout as one JSON
-  summary so higher-level gates can parse it reliably.
+  summary so higher-level gates can parse it reliably. The install check also
+  accepts `--node-executable` and `--require-js-syntax` for no-`--bundle`
+  temporary package builds, inherits those settings for the nested
+  local-reader check, and exposes `--local-reader-*` overrides for strict
+  nested JavaScript and Chrome/MV3 browser evidence.
 - Validation status for the current loop:
   - Targeted ruff passed with
     `py -3 -m ruff check scripts\check_local_reader_bundle.py scripts\check_windows_bundle_install.py scripts\check_v1_readiness.py apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_windows_bundle_install_check.py`.
   - Targeted bundle/readiness tests passed with
     `py -3 -m pytest apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 13 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed and reported 43 readiness
+    and reported 15 passed.
+  - `py -3 scripts\check_v1_readiness.py` passed and reported 45 readiness
     markers across 41 checked files.
   - `py -3 scripts\check_local_reader_bundle.py` passed in default skip-aware
     mode and now emits a single JSON summary on stdout while relaying child
@@ -38,8 +43,11 @@ This file is the live status log and shared memory for future Codex loops.
     covered `local_service_bootstrap`, `model_management_flow`, `extension`,
     `extension_onboarding`, `extension_reader_flow`, and
     `chrome_extension_smoke`.
+  - `py -3 scripts\check_windows_bundle_install.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax --run-local-reader-check --local-reader-timeout-s 600`
+    passed, including strict JavaScript syntax validation during the temporary
+    bundle package build and the nested local-reader check.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 202 tests.
+  - `py -3 -m pytest -q` passed with 204 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
@@ -446,6 +454,10 @@ This file is the live status log and shared memory for future Codex loops.
     runs that bundled local-reader validation with the installed `.venv` Python
     after extracted-bundle install, installed `tts serve`, and public-contract
     smoke have passed.
+  - `scripts/check_windows_bundle_install.py` now accepts
+    `--node-executable`/`--require-js-syntax` for temporary no-`--bundle`
+    package builds and forwards inherited or explicit `--local-reader-*`
+    strict JavaScript/browser flags into the nested local-reader validation.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.
@@ -616,6 +628,7 @@ python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-plat
 python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip --run-local-reader-check
+python3 scripts/check_windows_bundle_install.py --node-executable <path-to-node> --require-js-syntax --run-local-reader-check
 ```
 
 First-run setup:

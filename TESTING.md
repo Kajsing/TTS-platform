@@ -269,8 +269,16 @@ exercise the optional `.[real]` install path; the default gate keeps that
 download-heavy path opt-in. Use `--run-local-reader-check` when the same
 extracted-bundle install should also prove service bootstrap, model-management,
 extension onboarding, reader-flow, and skip-aware Chrome/MV3 validation with
-the installed `.venv` Python. Use `--no-dependencies` only when checking a
-pre-provisioned environment that should skip base dependency installation.
+the installed `.venv` Python. When the check builds a temporary bundle itself,
+add `--node-executable <path-to-node>` plus `--require-js-syntax` to make the
+bundle package step strict; those flags are also inherited by the nested
+local-reader check. Add `--local-reader-node-executable <path-to-node>` plus
+`--local-reader-require-js-syntax` when only that nested check should require
+extension JavaScript syntax parsing, and
+`--local-reader-browser-executable <path-to-browser>` plus
+`--local-reader-require-browser` when strict Chrome/MV3 browser evidence is
+required. Use `--no-dependencies` only when checking a pre-provisioned
+environment that should skip base dependency installation.
 
 Check the built bundle's PowerShell/CMD launcher setup and foreground service
 smoke paths with:

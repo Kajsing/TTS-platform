@@ -127,7 +127,13 @@ the check uses it for the venv/package/setup stage. Add
 `--run-local-reader-check` when the same extracted-bundle install should also
 run the bundled service bootstrap, model-management, extension onboarding,
 reader-flow, and skip-aware Chrome/MV3 validation with the installed `.venv`
-Python.
+Python. The install check can pass strict nested validation flags through as
+`--local-reader-node-executable`, `--local-reader-require-js-syntax`,
+`--local-reader-browser-executable`, `--local-reader-require-browser`, and
+`--local-reader-headed`. When the install check builds its own temporary bundle
+instead of receiving `--bundle`, `--node-executable` and `--require-js-syntax`
+make that package step strict and are inherited by the nested local-reader
+check unless the local-reader-specific Node flags are set.
 
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice

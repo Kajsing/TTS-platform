@@ -110,8 +110,13 @@ for long web-page text.
   path only when a test machine should take that heavier dependency step;
   `--run-local-reader-check` then runs the bundled local-reader validation
   with the installed `.venv` Python after the installed service smoke has
-  passed; `--no-dependencies` is reserved for pre-provisioned test
-  environments.
+  passed. Strict nested validation can pass through
+  `--local-reader-node-executable`, `--local-reader-require-js-syntax`,
+  `--local-reader-browser-executable`, `--local-reader-require-browser`, and
+  `--local-reader-headed`. When the check builds its own temporary bundle,
+  `--node-executable` and `--require-js-syntax` make packaging strict and are
+  inherited by the nested local-reader check; `--no-dependencies` is reserved
+  for pre-provisioned test environments.
 
 ## Manual Gates
 
