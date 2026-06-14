@@ -101,7 +101,8 @@ READINESS_MARKERS = (
     "copyable `tts extension-allow-origin`",
     "strict Chrome/MV3 smoke requires Chrome or Edge",
     "V1 Windows autostart uses a per-user Task Scheduler task",
-    "final v1 security-focused pass has been run",
+    "pre-final v1 security hardening pass has been run",
+    "final security-focused pass that should run after the v1",
     "model archive quotas",
     "remote artifact DNS checks",
 )

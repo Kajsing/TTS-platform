@@ -490,11 +490,13 @@ The seventy-ninth Windows finish-mode slice adds a per-user Windows Task
 Scheduler service/autostart flow for `tts serve`, with
 `service-install --user`, status/start/stop/remove commands, local logging,
 tests, docs, and release/readiness wiring.
-The eightieth release-hardening slice runs the final v1 security-focused pass
-and fixes accepted findings across protected HTTP pre-body access enforcement,
-WebSocket initial-message timeout, sanitized validation errors, model archive
-extraction quotas, remote artifact DNS/private-network validation, and Chrome
-extension resource exposure. The generated Codex Security report records zero
-open findings for the current working tree.
+The eightieth release-hardening slice runs a pre-final v1 security hardening
+pass and fixes accepted findings across protected HTTP pre-body access
+enforcement, WebSocket initial-message timeout, sanitized validation errors,
+model archive extraction quotas, remote artifact DNS/private-network
+validation, and Chrome extension resource exposure. The generated Codex
+Security report records zero open findings for the current working tree at this
+point in the project.
 The next planned pass is a v1 completion audit against `docs/codex/Prompt.md`
-and `docs/v1_readiness.md` before calling v1 done.
+and `docs/v1_readiness.md`. After any remaining blockers are fixed, run the
+real final security-focused pass before calling v1 done.

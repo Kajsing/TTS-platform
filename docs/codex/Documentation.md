@@ -11,17 +11,19 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: run the final v1 security-focused pass before closeout,
+- Current loop target: run a pre-final v1 security hardening pass before closeout,
   using Codex Security workflows and subagents to reduce blind spots across the
   service, model-management, Chrome extension, Windows packaging, and release
   gates.
-- Current loop result: the final security pass found and fixed six hardening
+- Current loop result: the pre-final security hardening pass found and fixed six
   gaps: protected HTTP routes now enforce auth/origin before body parsing,
   initial WebSocket stream messages have a timeout, validation errors no longer
   echo raw Pydantic input, model archives enforce extracted-size and file-count
   quotas, remote artifact hostnames are DNS-resolved before private-network
   rejection, and the Chrome extension no longer exposes offscreen pages through
-  `web_accessible_resources`. The scan report is at
+  `web_accessible_resources`. This pass is useful hardening, but it does not
+  replace the final security-focused review that should run after the v1
+  completion audit and any remaining blockers. The scan report is at
   `C:\tmp\codex-security-scans\TTS-platform\a892c0a_20260614T191508\report.html`
   with markdown source beside it.
 - Validation status for the current loop:
@@ -514,12 +516,12 @@ This file is the live status log and shared memory for future Codex loops.
   - the extension offscreen audio scheduler now respects `highWatermarkMs`,
     bounding how far ahead browser audio is scheduled and topping up queued PCM
     chunks as scheduled sources finish.
-  - the final v1 security pass found and fixed six local-reader hardening
+  - a pre-final v1 security hardening pass found and fixed six local-reader
     gaps across protected HTTP request ordering, WebSocket startup timeout,
     sanitized validation errors, model archive extraction quotas, remote model
     artifact DNS/private-network checks, and Chrome extension resource
     exposure. The generated Codex Security report records zero open findings
-    for the current working tree.
+    for the current working tree at this point in the project.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
@@ -530,9 +532,10 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Stay in v1 finish mode: prefer closeout, release validation, install polish,
   and blocker removal over new feature tracks.
-- Next pass: run a final v1 completion audit against `docs/codex/Prompt.md`
-  "Done When" criteria and `docs/v1_readiness.md`, then decide whether v1 can
-  be marked complete or whether only narrow release blockers remain.
+- Next pass: run a v1 completion audit against `docs/codex/Prompt.md`
+  "Done When" criteria and `docs/v1_readiness.md`, then fix any narrow release
+  blockers. Once that audit says no blockers remain, run the real final
+  security-focused pass before marking v1 complete.
 - Do not expand scope unless a v1 blocker requires it.
 
 ## Decisions Made And Why
@@ -662,10 +665,11 @@ This file is the live status log and shared memory for future Codex loops.
   Windows Service, NSSM, or Startup-folder shortcut. This matches the local
   desktop reader shape, avoids admin requirements, and keeps GPU/runtime/user
   environment behavior simpler for v1.
-- The final planned v1 security pass has now been run with Codex Security
-  workflows and subagents. Accepted findings were fixed in this slice rather
-  than left as open report items, so the next loop should audit completion
-  against the v1 done criteria instead of opening another broad feature track.
+- A pre-final security hardening pass was run with Codex Security workflows and
+  subagents. Accepted findings were fixed in this slice rather than left as
+  open report items. This does not replace the final planned security pass; the
+  true final security review should run after the completion audit and any
+  remaining v1 blockers.
 - This loop intentionally reordered one v1-enabling model-management slice
   ahead of Phase 7 Milestone 3 because the user restated the product goal as a
   local server plus Chrome reader for long web content; a usable voice install
@@ -802,10 +806,11 @@ python3 scripts/package_windows_bundle.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Continue in v1 finish mode. The final security-focused review has been run;
-   next, audit the repo against `docs/codex/Prompt.md` "Done When" criteria
-   and `docs/v1_readiness.md`.
+3. Continue in v1 finish mode. A pre-final security hardening pass has been
+   run; next, audit the repo against `docs/codex/Prompt.md` "Done When"
+   criteria and `docs/v1_readiness.md`.
 4. If only narrow blockers remain, fix them in small, validated slices. If no
-   blockers remain, v1 can be marked complete.
+   blockers remain, run the real final security-focused pass before marking v1
+   complete.
 5. Run the milestone validation commands before claiming completion.
 6. Update this file again before handing off.

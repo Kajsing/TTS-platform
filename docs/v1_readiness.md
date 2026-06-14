@@ -80,9 +80,9 @@ for long web-page text.
   `vits-piper-en_US-lessac-medium` sherpa-onnx model, and the installer supports
   the official `tar.bz2` release archive format. `model-check` now reads the
   default catalog and suggests the concrete default English model when the
-  configured development stub is not real-backend ready. The final security
-  pass also verifies archive extracted-size and member-count quotas plus
-  DNS-based private-network rejection for remote artifact hostnames.
+  configured development stub is not real-backend ready. A pre-final security
+  hardening pass also verifies archive extracted-size and member-count quotas
+  plus DNS-based private-network rejection for remote artifact hostnames.
 - `tts setup-local` and `tts model-list` expose `sherpa_onnx` runtime status
   plus `numpy` callback dependency status, and include the matching
   `python -m pip install ...` guidance when real local playback is relevant but
@@ -125,11 +125,13 @@ for long web-page text.
   `schtasks.exe`/PowerShell paths, `tts service-status --user` parsing,
   scheduled wrapper forwarding to `run_service.ps1`, and
   `logs\tts-service.log` wiring.
-- The final v1 security-focused pass has been run. Its generated Codex
-  Security report records zero open findings for the current working tree after
-  fixes to protected HTTP pre-body enforcement, WebSocket startup timeout,
-  sanitized validation errors, model archive quotas, remote artifact DNS checks,
-  and extension resource exposure.
+- A pre-final v1 security hardening pass has been run. Its generated Codex
+  Security report records zero open findings for the current working tree at
+  this point in the project after fixes to protected HTTP pre-body enforcement,
+  WebSocket startup timeout, sanitized validation errors, model archive quotas,
+  remote artifact DNS checks, and extension resource exposure. This does not
+  replace the final security-focused pass that should run after the v1
+  completion audit and any remaining blockers.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   validates installed setup next-step guidance, starts the installed
