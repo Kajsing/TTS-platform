@@ -131,12 +131,15 @@ backend-realism work, and early v1 model-management helpers:
 - Windows bundle install checks that use the bundled install script when
   available before starting the installed `tts serve` entrypoint
 - repo-native release check orchestration for ruff, pytest, security-default
-  verification, v1-readiness verification, extension validation, extension
-  package build, Windows bundle build, launcher setup/service-smoke checks, and
-  Windows bundle bootstrap/install checks
+  verification, v1-readiness verification, pre-final v1 completion audit,
+  extension validation, extension package build, Windows bundle build, launcher
+  setup/service-smoke checks, and Windows bundle bootstrap/install checks
 - v1-readiness documentation checks that keep automated gates, manual gates,
   product choices, and known not-yet-automated items explicit
 - release-check redaction for inline live-smoke bearer tokens in JSON summaries
+- v1 completion audit coverage that maps `docs/codex/Prompt.md` done-when
+  criteria to evidence and keeps the final security-focused pass pending until
+  the completion blockers are closed
 - live smoke support for separate long WebSocket stream text, minimum stream
   text-chunk assertions, and release-check redaction of inline smoke text
 - optional Chrome/MV3 browser smoke harness coverage that loads the extension

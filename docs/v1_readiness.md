@@ -6,9 +6,16 @@ for long web-page text.
 
 ## Automated Gates
 
+- `python3 scripts/check_v1_completion.py` verifies the pre-final completion
+  audit in `docs/v1_completion_audit.md`, maps `docs/codex/Prompt.md` "Done
+  When" criteria to concrete repository evidence, and reports
+  `can_mark_v1_complete = false` while the final security-focused pass remains
+  pending. Use `--require-complete` after the real final security pass when the
+  gate should fail unless v1 is fully complete.
 - `python3 scripts/release_check.py` runs ruff, pytest, security-default
-  verification, local service bootstrap smoke, extension validation, extension
-  packaging, and Windows bundle packaging. Use
+  verification, v1-readiness verification, the pre-final v1 completion audit,
+  local service bootstrap smoke, extension validation, extension packaging, and
+  Windows bundle packaging. Use
   `--node-executable <path-to-node> --require-js-syntax` when the release gate
   must fail instead of skipping extension JavaScript syntax checks. Use
   `--windows-bundle-local-reader-check` when the same release gate should also

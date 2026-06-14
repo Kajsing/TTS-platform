@@ -500,3 +500,11 @@ point in the project.
 The next planned pass is a v1 completion audit against `docs/codex/Prompt.md`
 and `docs/v1_readiness.md`. After any remaining blockers are fixed, run the
 real final security-focused pass before calling v1 done.
+The eighty-first finish-mode slice adds `docs/v1_completion_audit.md` and
+`scripts/check_v1_completion.py`, mapping every `docs/codex/Prompt.md`
+`Done When` criterion to concrete repo evidence. The audit reports eight
+criteria ready for final validation and one pending criterion: the real final
+security-focused pass. The next planned pass is that final security-focused
+review; after accepted findings are fixed or recorded, update the completion
+audit and run `scripts/check_v1_completion.py --require-complete` before
+calling v1 done.

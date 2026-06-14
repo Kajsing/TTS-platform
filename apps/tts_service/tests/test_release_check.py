@@ -27,6 +27,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "pytest",
         "security_defaults",
         "v1_readiness",
+        "v1_completion",
         "local_service_bootstrap",
         "model_management_flow",
         "extension",
@@ -47,6 +48,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         (["python-test", "-m", "pytest", "-q"], REPO_ROOT, True),
         (["python-test", "scripts/check_security_defaults.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_v1_readiness.py"], REPO_ROOT, True),
+        (["python-test", "scripts/check_v1_completion.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_local_service_bootstrap.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_model_management_flow.py"], REPO_ROOT, True),
         (["python-test", "scripts/check_extension.py"], REPO_ROOT, True),
@@ -226,7 +228,8 @@ def test_release_check_can_require_chrome_browser_smoke(
         headed=True,
     )
 
-    assert calls[9] == [
+    chrome_smoke_index = _check_index(summary, "chrome_extension_smoke")
+    assert calls[chrome_smoke_index] == [
         "python-test",
         "scripts/check_chrome_extension_smoke.py",
         "--browser-executable",
@@ -234,7 +237,7 @@ def test_release_check_can_require_chrome_browser_smoke(
         "--require-browser",
         "--headed",
     ]
-    assert summary["checks"][9]["command"] == calls[9]
+    assert summary["checks"][chrome_smoke_index]["command"] == calls[chrome_smoke_index]
 
 
 def test_release_check_can_require_extension_js_syntax(
@@ -266,7 +269,10 @@ def test_release_check_can_require_extension_js_syntax(
         require_js_syntax=True,
     )
 
-    extension_call = calls[6]
+    extension_index = _check_index(summary, "extension")
+    extension_package_index = _check_index(summary, "extension_package")
+    windows_bundle_index = _check_index(summary, "windows_bundle")
+    extension_call = calls[extension_index]
     assert extension_call[0] == [
         "python-test",
         "scripts/check_extension.py",
@@ -276,7 +282,7 @@ def test_release_check_can_require_extension_js_syntax(
     ]
     assert extension_call[1] is not None
     assert extension_call[1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert calls[10][0] == [
+    assert calls[extension_package_index][0] == [
         "python-test",
         "scripts/package_extension.py",
         "--out",
@@ -285,9 +291,11 @@ def test_release_check_can_require_extension_js_syntax(
         str(node_path.resolve()),
         "--require-js-syntax",
     ]
-    assert calls[10][1] is not None
-    assert calls[10][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert calls[11][0] == [
+    assert calls[extension_package_index][1] is not None
+    assert calls[extension_package_index][1]["TTS_PLATFORM_NODE"] == str(
+        node_path.resolve()
+    )
+    assert calls[windows_bundle_index][0] == [
         "python-test",
         "scripts/package_windows_bundle.py",
         "--out",
@@ -296,11 +304,15 @@ def test_release_check_can_require_extension_js_syntax(
         str(node_path.resolve()),
         "--require-js-syntax",
     ]
-    assert calls[11][1] is not None
-    assert calls[11][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert summary["checks"][6]["command"] == extension_call[0]
-    assert summary["checks"][10]["command"] == calls[10][0]
-    assert summary["checks"][11]["command"] == calls[11][0]
+    assert calls[windows_bundle_index][1] is not None
+    assert calls[windows_bundle_index][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert summary["checks"][extension_index]["command"] == extension_call[0]
+    assert summary["checks"][extension_package_index]["command"] == calls[
+        extension_package_index
+    ][0]
+    assert summary["checks"][windows_bundle_index]["command"] == calls[
+        windows_bundle_index
+    ][0]
 
 
 def test_release_check_can_include_installed_bundle_local_reader_gate(
@@ -357,11 +369,13 @@ def test_release_check_can_include_installed_bundle_local_reader_gate(
         "--local-reader-require-browser",
         "--local-reader-headed",
     ]
-    assert calls[15][0] == expected_command
-    assert calls[15][1] is not None
-    assert calls[15][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert summary["checks"][15]["name"] == "windows_bundle_install"
-    assert summary["checks"][15]["command"] == expected_command
+    windows_bundle_install_index = _check_index(summary, "windows_bundle_install")
+    assert calls[windows_bundle_install_index][0] == expected_command
+    assert calls[windows_bundle_install_index][1] is not None
+    assert calls[windows_bundle_install_index][1]["TTS_PLATFORM_NODE"] == str(
+        node_path.resolve()
+    )
+    assert summary["checks"][windows_bundle_install_index]["command"] == expected_command
 
 
 def test_release_check_redacts_inline_live_smoke_token(
@@ -412,3 +426,9 @@ def _load_release_check_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _check_index(summary: dict[str, object], name: str) -> int:
+    checks = summary["checks"]
+    assert isinstance(checks, list)
+    return [check["name"] for check in checks].index(name)

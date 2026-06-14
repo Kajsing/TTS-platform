@@ -294,14 +294,19 @@ python3 scripts/release_check.py
 ```
 
 It runs ruff, pytest, security-default verification, v1-readiness verification,
-local service bootstrap smoke, local model-management flow smoke, extension
-validation, extension onboarding contract smoke, long-page reader-flow smoke,
-skip-aware Chrome/MV3 browser smoke, and extension zip packaging with a
-temporary package output. It also builds, bootstrap-checks, launcher
+the pre-final v1 completion audit, local service bootstrap smoke, local
+model-management flow smoke, extension validation, extension onboarding
+contract smoke, long-page reader-flow smoke, skip-aware Chrome/MV3 browser
+smoke, and extension zip packaging with a temporary package output. It also
+builds, bootstrap-checks, launcher
 setup/service-smoke checks, and temporary-venv install-checks the Windows local
 reader bundle with a temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
+Use `python3 scripts/check_v1_completion.py` for the pre-final completion audit
+that maps the v1 done criteria to concrete repository evidence. It deliberately
+reports `can_mark_v1_complete: false` until the real final security-focused
+pass is complete.
 
 To make the release gate also prove the bundled local-reader validation after
 the extracted Windows bundle install path, add:
