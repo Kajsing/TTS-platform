@@ -54,7 +54,9 @@
 
 ## Resume Page does not continue where expected
 
-- Confirm the active tab is the same page you were listening to.
+- Confirm the active tab is the same tab you were listening to. Manual page
+  resume, continue, and section actions refuse to use stored page progress from
+  another active tab.
 - Resume re-extracts readable page text and uses the last planned text chunk
   index; if the page content changed, the resumed position may shift.
 - Resume intentionally repeats the latest known text chunk instead of skipping
@@ -96,6 +98,8 @@
   progress, or a known uncaptured section index from a truncated page capture.
   It will be unavailable near the end only when neither signal exists.
 - Pages without semantic `h1` to `h4` headings may not expose usable sections.
+- Switch back to the original page tab before using section navigation from
+  stored page progress.
 - If the page is truncated but has no later heading-backed section, use
   `Continue Page` instead. Normal page playback also tries this automatically
   when a truncated segment finishes.

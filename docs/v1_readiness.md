@@ -36,6 +36,10 @@ for long web-page text.
   capture for flat pages, plus stop/restart recovery and popup reopen-state
   signals, then streams a generated thousand-word article through the local
   service WebSocket contract.
+- Manual page resume, continue, previous-section, and next-section actions now
+  require that the active tab matches the original source tab for the stored
+  page playback state, preventing old reader progress from being applied to a
+  different active tab.
 - `python3 scripts/check_chrome_extension_smoke.py` validates the extension
   static contract, then uses Chrome or Edge through DevTools Protocol when a
   browser is available. It loads the unpacked MV3 extension, discovers the

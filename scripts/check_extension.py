@@ -288,6 +288,8 @@ def verify_extension_wiring() -> None:
             "resolvePreviousSectionIndex",
             "resolveNextSectionIndex",
             "resolveNextUncapturedSectionIndex",
+            "validateActiveSourceTab",
+            "Switch back to the original page tab before using this page action.",
             "sanitizePageCaptureMeta",
             "sanitizePageStructureMeta",
             "resolveResumeTextChunkIndex",

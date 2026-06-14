@@ -440,5 +440,10 @@ top-level release gate that runs the extracted Windows bundle install smoke and
 then the bundled local-reader validation with the installed `.venv` Python.
 The release gate forwards its strict Node/Chrome smoke flags into that nested
 bundle check only when the opt-in gate is enabled.
+The seventy-second reader-flow reliability slice adds same-tab guards for
+manual page resume, continue, previous-section, and next-section actions, so
+stored reader progress cannot be accidentally applied to a different active
+tab. The guard uses the existing non-textual source tab id in session playback
+state and does not persist page URLs or raw page text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

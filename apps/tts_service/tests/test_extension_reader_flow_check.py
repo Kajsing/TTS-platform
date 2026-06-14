@@ -29,6 +29,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "truncated_section_continuation": True,
         "stop_restart_recovery": True,
         "popup_reopen_state": True,
+        "source_tab_guard": True,
         "raw_page_text_persistence": False,
         "filtered_fallback_capture": True,
         "best_root_selection": True,

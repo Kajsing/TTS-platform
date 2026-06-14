@@ -143,6 +143,10 @@ async function resumePage() {
   }
 
   const tab = await getActiveTab();
+  const tabMismatchMessage = validateActiveSourceTab(currentState, tab);
+  if (tabMismatchMessage) {
+    return { ok: false, message: tabMismatchMessage };
+  }
   const config = await getConfig();
   const capture = await getPageCapture(tab.id, config.maxChars);
   if (!capture.text) {
@@ -173,6 +177,10 @@ async function continuePage() {
   const startSectionIndex = resolveContinueStartSectionIndex(currentState.pageCapture);
 
   const tab = await getActiveTab();
+  const tabMismatchMessage = validateActiveSourceTab(currentState, tab);
+  if (tabMismatchMessage) {
+    return { ok: false, message: tabMismatchMessage };
+  }
   const config = await getConfig();
   const capture = await getPageCapture(
     tab.id,
@@ -263,6 +271,10 @@ async function previousSection() {
   }
 
   const tab = await getActiveTab();
+  const tabMismatchMessage = validateActiveSourceTab(currentState, tab);
+  if (tabMismatchMessage) {
+    return { ok: false, message: tabMismatchMessage };
+  }
   const config = await getConfig();
   const capture = await getPageCapture(tab.id, config.maxChars, previousSectionIndex);
   if (!capture.text) {
@@ -294,6 +306,10 @@ async function nextSection() {
   }
 
   const tab = await getActiveTab();
+  const tabMismatchMessage = validateActiveSourceTab(currentState, tab);
+  if (tabMismatchMessage) {
+    return { ok: false, message: tabMismatchMessage };
+  }
   const config = await getConfig();
   const capture = await getPageCapture(tab.id, config.maxChars, nextSectionIndex);
   if (!capture.text) {
@@ -551,6 +567,17 @@ function isPagePlaybackSource(source) {
     "page-section",
     "page-previous-section",
   ]).has(source);
+}
+
+function validateActiveSourceTab(state, activeTab) {
+  const sourceTabId = Number(state?.tabId);
+  if (!Number.isFinite(sourceTabId) || sourceTabId <= 0) {
+    return "No original page tab is available for this page action.";
+  }
+  if (activeTab?.id !== Math.floor(sourceTabId)) {
+    return "Switch back to the original page tab before using this page action.";
+  }
+  return "";
 }
 
 function resolveNextSectionIndex({ progress, pageCapture }) {

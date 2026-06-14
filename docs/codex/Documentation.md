@@ -11,25 +11,24 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: harden the top-level release gate so it can also prove
-  the installed Windows bundle's bundled local-reader validation path.
-- Current loop result: `scripts/release_check.py` now accepts
-  `--windows-bundle-local-reader-check` and, when enabled, runs
-  `scripts/check_windows_bundle_install.py --run-local-reader-check` after the
-  extracted Windows bundle install and installed service smoke pass. Top-level
-  strict Node/Chrome flags are forwarded to that nested bundle validation.
+- Current loop target: improve Chrome reader-flow reliability by guarding
+  manual page resume/continue/section actions against accidental cross-tab
+  reuse of stored page progress.
+- Current loop result: the extension background now checks that the active tab
+  matches the original source tab before manual `Resume Page`, `Continue Page`,
+  `Previous Section`, or `Next Section` re-extracts page text. The guard uses
+  the existing source tab id and does not persist page URLs or raw page text.
 - Validation status for the current loop:
-  - Targeted release-check orchestration tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_release_check.py -q`
-    and reported 7 passed.
+  - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
+    remains skip-aware because Node.js is not on `PATH`.
+  - `py -3 scripts\check_extension_reader_flow.py` passed, including the new
+    `source_tab_guard` contract marker and generated long-article WebSocket
+    smoke with 145 stream text chunks.
+  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
+    passed with 3 tests.
   - `py -3 scripts\check_v1_readiness.py` passed.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 229 tests.
-  - `py -3 scripts\release_check.py --windows-bundle-local-reader-check`
-    passed end-to-end, including the extracted Windows bundle install smoke and
-    nested local-reader validation with the installed `.venv` Python. The
-    default Chrome/MV3 browser smoke remained skip-aware in this branded Chrome
-    environment.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -464,6 +463,10 @@ This file is the live status log and shared memory for future Codex loops.
   - the top-level release gate can now opt into installed-bundle local-reader
     validation with `--windows-bundle-local-reader-check`, forwarding strict
     Node/Chrome smoke flags to the nested bundle check.
+  - manual Chrome reader page actions now guard against applying stored page
+    progress to a different active tab; operators must switch back to the
+    original page tab before using `Resume Page`, `Continue Page`, `Previous
+    Section`, or `Next Section`.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
