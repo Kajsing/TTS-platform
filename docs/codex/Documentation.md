@@ -11,34 +11,35 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `scripts/check_chrome_extension_smoke.py` now discovers
-  the unpacked extension id from the temporary Chrome profile, opens the
-  extension popup as the CDP execution context, and targets the generated
-  article tab by exact URL instead of depending on eager MV3 service-worker
-  startup. When installed branded Chrome does not register the unpacked
-  extension from `--load-extension`, the skip/strict failure now points at the
-  Chrome 137+ command-line limitation and `--browser-executable` with Chrome
-  for Testing or Chromium.
+- Current loop result: `scripts/windows/install_local.ps1` now supports
+  `-InstallRealRuntime`, an explicit opt-in first-run path that installs the
+  optional `.[real]` runtime dependencies into the bundle `.venv` before
+  `setup-local`. `scripts/check_windows_bundle_install.py` now exposes the
+  matching `--install-real-runtime` validation knob while the default release
+  gate keeps runtime downloads opt-in.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_chrome_extension_smoke.py apps\tts_service\tests\test_chrome_extension_smoke_check.py scripts\check_v1_readiness.py`.
-  - Targeted Chrome-smoke/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_chrome_extension_smoke_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    `py -3 -m ruff check scripts\check_windows_bundle_install.py scripts\package_windows_bundle.py scripts\check_extension.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py`.
+  - Targeted installer/bundle/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_v1_readiness_check.py -q`
     and reported 12 passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
-  - `py -3 scripts\check_chrome_extension_smoke.py` returned a skip-aware JSON
-    result explaining that installed branded Chrome did not register the
-    unpacked extension from `--load-extension`, with Chrome for
-    Testing/Chromium guidance for strict automated evidence.
+  - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+    passed.
+  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip`
+    passed.
+  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip`
+    passed.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 191 tests.
+  - `py -3 -m pytest -q` passed with 192 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
     extension checks, extension packaging, Windows bundle
-    packaging/bootstrap/install, and Windows launcher smoke. The optional
-    Chrome/MV3 browser smoke remained skip-aware in this environment because
-    installed branded Chrome did not register the unpacked extension.
+    packaging/bootstrap/install, and Windows launcher smoke. The default
+    Windows bundle install gate reported `real_runtime_installed: false`,
+    confirming that `.[real]` remains opt-in unless `--install-real-runtime` is
+    requested.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -225,6 +226,10 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/windows/install_local.ps1` and `install_local.cmd` now bootstrap
     an extracted bundle by creating `.venv`, installing the local package, and
     running `setup-local` without choosing a persistent service manager.
+  - `scripts/windows/install_local.ps1 -InstallRealRuntime` now lets an
+    extracted bundle install the optional `.[real]` runtime dependencies into
+    the same `.venv` during first-run bootstrap, while the default installer
+    path remains lightweight and release-friendly.
   - `tts setup-local` next-step guidance now includes `tts model-check` so
     operators can verify configured/default voice readiness before expecting
     real acoustic output.

@@ -234,6 +234,10 @@ After extracting a bundle, bootstrap the local virtual environment with:
 .\scripts\windows\install_local.ps1
 ```
 
+Use `.\scripts\windows\install_local.ps1 -InstallRealRuntime` when the extracted
+bundle should install the optional `.[real]` runtime dependencies during the
+same bootstrap.
+
 Check the built bundle's first-run bootstrap path with:
 
 ```bash
@@ -245,6 +249,10 @@ Check the built bundle's temporary virtualenv install/start path with:
 ```bash
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
 ```
+
+Use `--install-real-runtime` on this check only when the test machine should
+exercise the optional `.[real]` install path; the default gate keeps that
+download-heavy path opt-in.
 
 Check the built bundle's PowerShell/CMD launcher setup and foreground service
 smoke paths with:

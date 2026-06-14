@@ -120,6 +120,7 @@ def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
         "system_site_packages": True,
         "build_tooling_installed": True,
         "editable_install": True,
+        "real_runtime_installed": False,
         "installer_script": False,
         "entrypoint": ".venv\\Scripts\\tts.exe",
     }
@@ -159,14 +160,17 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
         python_executable: str,
         bundle_root: Path,
         timeout_s: float,
+        install_real_runtime: bool,
     ) -> dict[str, object]:
         calls.append("installer")
         assert python_executable == "python-test"
         assert timeout_s == 180.0
+        assert install_real_runtime is False
         return {
             "venv_created": True,
             "build_tooling_installed": True,
             "editable_install": True,
+            "real_runtime_installed": False,
             "setup": {
                 "config_created": True,
                 "token_created": True,
@@ -231,6 +235,7 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
 
     assert calls == ["extract", "installer", "health", "smoke", "terminate"]
     assert summary["venv"]["installer_script"] is True
+    assert summary["venv"]["real_runtime_installed"] is False
     assert summary["setup"]["token_created"] is True
     assert (
         summary["setup"]["catalog_single_installable_model"]
@@ -254,6 +259,55 @@ def test_windows_bundle_install_check_rejects_invalid_stream_repeat(tmp_path: Pa
             python_executable="python-test",
             stream_text_repeat=0,
         )
+
+
+def test_windows_bundle_install_check_passes_real_runtime_request_to_installer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    bundle_root = tmp_path / "tts-platform"
+    installer_path = bundle_root / "scripts" / "windows" / "install_local.ps1"
+    installer_path.parent.mkdir(parents=True)
+    installer_path.write_text("", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def fake_run_json_command(
+        command: list[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        commands.append(command)
+        assert cwd == bundle_root
+        assert timeout_s == 42.0
+        assert env is not None
+        assert env["TTS_PLATFORM_PYTHON"] == "python-test"
+        return {"ok": True}
+
+    monkeypatch.setattr(check_module, "_find_powershell_executable", lambda: "powershell-test")
+    monkeypatch.setattr(check_module, "_run_json_command", fake_run_json_command)
+
+    payload = check_module._run_windows_install_script(
+        python_executable="python-test",
+        bundle_root=bundle_root,
+        timeout_s=42.0,
+        install_real_runtime=True,
+    )
+
+    assert payload == {"ok": True}
+    assert commands == [
+        [
+            "powershell-test",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(installer_path),
+            "-InstallRealRuntime",
+        ]
+    ]
 
 
 def _load_check_module():

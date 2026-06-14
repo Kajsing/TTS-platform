@@ -2,7 +2,8 @@
 param(
     [string]$PythonExecutable = "",
     [switch]$SkipSetup,
-    [switch]$NoBuildTooling
+    [switch]$NoBuildTooling,
+    [switch]$InstallRealRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -102,6 +103,13 @@ Invoke-CheckedCommand `
     -Arguments @("-m", "pip", "install", "--no-build-isolation", "--no-deps", "-e", $RepoRoot) `
     -RedirectStdoutToError
 
+if ($InstallRealRuntime) {
+    Invoke-CheckedCommand `
+        -FilePath $VenvPython `
+        -Arguments @("-m", "pip", "install", "--no-build-isolation", "-e", "$RepoRoot[real]") `
+        -RedirectStdoutToError
+}
+
 $SetupPayload = $null
 if (-not $SkipSetup) {
     $SetupOutput = & $VenvPython -m tts_service.cli setup-local --repo-root $RepoRoot
@@ -117,5 +125,6 @@ if (-not $SkipSetup) {
     venv_python = $VenvPython
     build_tooling_installed = -not $NoBuildTooling
     editable_install = $true
+    real_runtime_installed = [bool]$InstallRealRuntime
     setup = $SetupPayload
 } | ConvertTo-Json -Depth 8

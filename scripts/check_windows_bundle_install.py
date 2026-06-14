@@ -34,6 +34,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--startup-timeout-s", type=float, default=DEFAULT_STARTUP_TIMEOUT_S)
     parser.add_argument("--command-timeout-s", type=float, default=DEFAULT_COMMAND_TIMEOUT_S)
     parser.add_argument("--stream-text-repeat", type=int, default=2)
+    parser.add_argument(
+        "--install-real-runtime",
+        action="store_true",
+        help=(
+            "Ask the extracted Windows installer to install the optional .[real] "
+            "runtime dependencies before setup."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -44,6 +52,7 @@ def main(argv: list[str] | None = None) -> None:
                 startup_timeout_s=args.startup_timeout_s,
                 command_timeout_s=args.command_timeout_s,
                 stream_text_repeat=args.stream_text_repeat,
+                install_real_runtime=args.install_real_runtime,
             )
         else:
             with tempfile.TemporaryDirectory(prefix="tts-platform-bundle-install-") as temp_dir:
@@ -55,6 +64,7 @@ def main(argv: list[str] | None = None) -> None:
                     startup_timeout_s=args.startup_timeout_s,
                     command_timeout_s=args.command_timeout_s,
                     stream_text_repeat=args.stream_text_repeat,
+                    install_real_runtime=args.install_real_runtime,
                 )
     except WindowsBundleInstallError as exc:
         raise SystemExit(str(exc)) from exc
@@ -69,6 +79,7 @@ def check_windows_bundle_install(
     startup_timeout_s: float = DEFAULT_STARTUP_TIMEOUT_S,
     command_timeout_s: float = DEFAULT_COMMAND_TIMEOUT_S,
     stream_text_repeat: int = 2,
+    install_real_runtime: bool = False,
 ) -> dict[str, object]:
     if stream_text_repeat <= 0:
         raise WindowsBundleInstallError("--stream-text-repeat must be positive.")
@@ -86,6 +97,7 @@ def check_windows_bundle_install(
             python_executable=python_executable,
             bundle_root=bundle_root,
             timeout_s=command_timeout_s,
+            install_real_runtime=install_real_runtime,
         )
         if installer_payload is None:
             _create_venv(
@@ -106,6 +118,12 @@ def check_windows_bundle_install(
                 bundle_root=bundle_root,
                 timeout_s=command_timeout_s,
             )
+            if install_real_runtime:
+                _install_real_runtime(
+                    venv_python=venv_python,
+                    bundle_root=bundle_root,
+                    timeout_s=command_timeout_s,
+                )
         if not tts_entrypoint.is_file():
             raise WindowsBundleInstallError(
                 f"Installed tts entrypoint is missing: {tts_entrypoint}"
@@ -185,6 +203,11 @@ def check_windows_bundle_install(
                 fallback=True,
             ),
             "editable_install": True,
+            "real_runtime_installed": _installer_bool(
+                installer_payload,
+                "real_runtime_installed",
+                fallback=install_real_runtime,
+            ),
             "installer_script": installer_payload is not None,
             "entrypoint": _display_venv_path(tts_entrypoint),
         },
@@ -222,6 +245,7 @@ def _run_windows_install_script(
     python_executable: str,
     bundle_root: Path,
     timeout_s: float,
+    install_real_runtime: bool,
 ) -> dict[str, object] | None:
     installer_path = bundle_root / "scripts" / "windows" / "install_local.ps1"
     if not installer_path.is_file():
@@ -233,15 +257,18 @@ def _run_windows_install_script(
     env = dict(os.environ)
     env["TTS_PLATFORM_PYTHON"] = python_executable
     env["PYTHONUNBUFFERED"] = "1"
+    command = [
+        powershell_executable,
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(installer_path),
+    ]
+    if install_real_runtime:
+        command.append("-InstallRealRuntime")
     return _run_json_command(
-        [
-            powershell_executable,
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(installer_path),
-        ],
+        command,
         cwd=bundle_root,
         timeout_s=timeout_s,
         env=env,
@@ -273,6 +300,23 @@ def _install_bundle_package(*, venv_python: Path, bundle_root: Path, timeout_s: 
             "--no-deps",
             "-e",
             ".",
+        ],
+        cwd=bundle_root,
+        timeout_s=timeout_s,
+        env=_venv_env(bundle_root / ".venv"),
+    )
+
+
+def _install_real_runtime(*, venv_python: Path, bundle_root: Path, timeout_s: float) -> None:
+    _run_command(
+        [
+            str(venv_python),
+            "-m",
+            "pip",
+            "install",
+            "--no-build-isolation",
+            "-e",
+            ".[real]",
         ],
         cwd=bundle_root,
         timeout_s=timeout_s,

@@ -21,9 +21,12 @@ def test_windows_install_launcher_bootstraps_venv_package_and_setup() -> None:
     script = launcher.read_text(encoding="utf-8")
 
     assert "TTS_PLATFORM_PYTHON" in script
+    assert "InstallRealRuntime" in script
     assert '"venv", "--system-site-packages"' in script
     assert '"pip", "install"' in script
     assert '"--no-build-isolation", "--no-deps", "-e", $RepoRoot' in script
+    assert '"--no-build-isolation", "-e", "$RepoRoot[real]"' in script
+    assert "real_runtime_installed" in script
     assert "tts_service.cli setup-local" in script
     assert "ConvertTo-Json" in script
 

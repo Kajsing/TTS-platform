@@ -64,6 +64,7 @@ READINESS_MARKERS = (
     "python3 scripts/check_model_management_flow.py",
     "python3 scripts/package_windows_bundle.py",
     "scripts/windows/install_local.ps1",
+    "-InstallRealRuntime",
     "python3 scripts/check_windows_bundle_bootstrap.py",
     "python3 scripts/check_windows_launchers.py",
     "python3 scripts/check_windows_bundle_install.py",
@@ -152,6 +153,11 @@ REQUIRED_TEXT_MARKERS = {
         "--stream-text-repeat",
         "--min-stream-text-chunks",
     ),
+    "scripts/windows/install_local.ps1": (
+        "InstallRealRuntime",
+        "$RepoRoot[real]",
+        "real_runtime_installed",
+    ),
     "scripts/demo_real_voice.py": (
         "dist",
         "real-demo",
@@ -184,6 +190,7 @@ REQUIRED_TEXT_MARKERS = {
         "scripts/demo_real_voice.py",
         "scripts/windows/install_local.ps1",
         "scripts/windows/install_local.cmd",
+        "-InstallRealRuntime",
         'pip install -e ".[real]"',
         "should put the `model-install` command above first",
         ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install sherpa-onnx",
@@ -193,6 +200,9 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_windows_bundle_install.py": (
         "_run_windows_install_script",
         '"installer_script"',
+        "--install-real-runtime",
+        "-InstallRealRuntime",
+        '"real_runtime_installed"',
         "catalog_single_installable_model",
         "Installed setup-local did not put the default catalog install step first",
     ),
@@ -248,6 +258,8 @@ REQUIRED_TEXT_MARKERS = {
         "numpy",
         "demo_real_voice.py",
         ".[real]",
+        "-InstallRealRuntime",
+        "--install-real-runtime",
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",

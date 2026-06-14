@@ -77,7 +77,9 @@ for long web-page text.
   extension source, extension install guide/icons, and validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package, and running `setup-local`
-  without choosing a persistent service manager.
+  without choosing a persistent service manager. `-InstallRealRuntime` is an
+  explicit opt-in path for installing the optional `.[real]` runtime
+  dependencies into that `.venv` during the same bootstrap.
 - `python3 scripts/check_windows_bundle_bootstrap.py` safely extracts a Windows
   local reader bundle, verifies that it does not contain local token/model
   artifacts, checks first-run/model-readiness guide markers, checks the
@@ -95,7 +97,9 @@ for long web-page text.
   validates installed setup next-step guidance, starts the installed
   `tts serve` entrypoint, runs public-contract smoke, and shuts the service
   down. When the bundled install script is present, the check uses it for the
-  venv/package/setup stage.
+  venv/package/setup stage. `--install-real-runtime` exercises the optional
+  `.[real]` install path only when a test machine should take that heavier
+  dependency step.
 
 ## Manual Gates
 
@@ -119,7 +123,9 @@ for long web-page text.
   `python -m pip install -e ".[real]"` when both runtime packages are missing;
   targeted single-package guidance (`python -m pip install sherpa-onnx` or
   `python -m pip install numpy`) is still reported when only one dependency is
-  absent.
+  absent. In extracted Windows bundles, the operator can also run
+  `.\scripts\windows\install_local.ps1 -InstallRealRuntime` during first-run
+  bootstrap.
 - Run `python3 scripts/demo_real_voice.py --python-executable
   .venv/Scripts/python.exe` to reproduce the real English voice demo in ignored
   `dist/real-demo`; it installs the default catalog model there, starts a
@@ -137,7 +143,7 @@ for long web-page text.
   popup/origin/service-snapshot contract is automated, and
   `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
   can provide strict local Chrome/MV3 browser smoke evidence on a machine with
-  Chrome or Edge installed.
+  a compatible Chrome, Chrome for Testing, Chromium, or Edge build.
 - On a long article page, verify `Speak Page`, progress display, truncation
   metadata, `Resume Page`, `Continue Page`, `Previous Section`,
   `Next Section`, stop/restart behavior, and popup state after reopening in
@@ -145,7 +151,7 @@ for long web-page text.
   contract automates truncated-section continuation, manual and automatic
   truncated text-offset continuation, best-root selection, filtered fallback
   capture, stop/recovery wiring, and popup state fields; the Chrome/MV3 smoke
-  automates one real browser path when Chrome or Edge is available.
+  automates one real browser path when a compatible browser build is available.
 
 ## Product Choices
 

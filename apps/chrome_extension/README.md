@@ -42,6 +42,9 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 1. Run `scripts\windows\install_local.ps1` from an extracted bundle, or
    `tts setup-local` / `scripts\windows\run_service.ps1 -SetupOnly` from an
    already installed checkout.
+   Use `scripts\windows\install_local.ps1 -InstallRealRuntime` when that
+   extracted bundle should also install `.[real]` runtime dependencies into
+   `.venv`.
 2. Ensure the service token is available.
 3. Copy the extension origin from the popup.
 4. Run `tts extension-allow-origin <copied-origin>`.

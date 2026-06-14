@@ -368,5 +368,10 @@ The fifty-sixth extension-flow hardening slice makes the Chrome/MV3 smoke
 discover the unpacked extension id from the temporary Chrome profile and execute
 from the extension popup CDP context, avoiding a false dependency on eager MV3
 service-worker startup before page playback is exercised.
+The fifty-seventh Windows first-run UX slice adds
+`scripts/windows/install_local.ps1 -InstallRealRuntime` plus
+`scripts/check_windows_bundle_install.py --install-real-runtime`, keeping real
+runtime dependency installation opt-in while making the extracted-bundle
+bootstrap capable of installing `.[real]` in the same `.venv`.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

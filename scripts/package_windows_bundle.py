@@ -181,6 +181,12 @@ manager, scheduled task, or auto-start entry.
 
    The installer creates `.venv`, installs the local package, and runs
    `tts setup-local`. Use `install_local.cmd` when launching from `cmd.exe`.
+   Add `-InstallRealRuntime` when this machine should install the optional
+   `.[real]` runtime dependencies during bootstrap:
+
+   ```powershell
+   .\\scripts\\windows\\install_local.ps1 -InstallRealRuntime
+   ```
 
    The equivalent manual commands are:
 
