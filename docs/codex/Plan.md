@@ -434,5 +434,11 @@ validation and strict Chrome/MV3 browser evidence when a compatible local
 environment is available. The same slice also lets no-`--bundle` install checks
 pass `--node-executable` and `--require-js-syntax` into the temporary bundle
 package build and inherit those settings for the nested local-reader check.
+The seventy-first release-hardening slice adds
+`scripts/release_check.py --windows-bundle-local-reader-check`, an opt-in
+top-level release gate that runs the extracted Windows bundle install smoke and
+then the bundled local-reader validation with the installed `.venv` Python.
+The release gate forwards its strict Node/Chrome smoke flags into that nested
+bundle check only when the opt-in gate is enabled.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

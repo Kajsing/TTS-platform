@@ -288,6 +288,18 @@ extension JavaScript syntax parsing, and
 required. Use `--no-dependencies` only when checking a pre-provisioned
 environment that should skip base dependency installation.
 
+The same installed-bundle local-reader validation can be reached through the
+top-level release gate:
+
+```bash
+python3 scripts/release_check.py --windows-bundle-local-reader-check
+```
+
+When this opt-in release check is enabled, the top-level
+`--node-executable`/`--require-js-syntax` and
+`--browser-executable`/`--require-browser`/`--headed` flags are forwarded to
+the nested local-reader validation.
+
 Check the built bundle's PowerShell/CMD launcher setup and foreground service
 smoke paths with:
 

@@ -297,6 +297,67 @@ def test_release_check_can_require_extension_js_syntax(
     assert summary["checks"][11]["command"] == calls[11][0]
 
 
+def test_release_check_can_include_installed_bundle_local_reader_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+    node_path = tmp_path / "node.exe"
+    browser_path = tmp_path / "chrome.exe"
+    node_path.write_text("", encoding="utf-8")
+    browser_path.write_text("", encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        check: bool,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        assert cwd == REPO_ROOT
+        assert check is True
+        calls.append((command, env))
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+    windows_bundle_out_path = tmp_path / "windows.zip"
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=windows_bundle_out_path,
+        node_executable=str(node_path),
+        require_js_syntax=True,
+        browser_executable=str(browser_path),
+        require_browser=True,
+        headed=True,
+        windows_bundle_local_reader_check=True,
+        windows_bundle_local_reader_timeout_s=321.0,
+    )
+
+    expected_command = [
+        "python-test",
+        "scripts/check_windows_bundle_install.py",
+        "--bundle",
+        str(windows_bundle_out_path.resolve()),
+        "--run-local-reader-check",
+        "--local-reader-timeout-s",
+        "321.0",
+        "--local-reader-node-executable",
+        str(node_path.resolve()),
+        "--local-reader-require-js-syntax",
+        "--local-reader-browser-executable",
+        str(browser_path.resolve()),
+        "--local-reader-require-browser",
+        "--local-reader-headed",
+    ]
+    assert calls[14][0] == expected_command
+    assert calls[14][1] is not None
+    assert calls[14][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert summary["checks"][14]["name"] == "windows_bundle_install"
+    assert summary["checks"][14]["command"] == expected_command
+
+
 def test_release_check_redacts_inline_live_smoke_token(
     tmp_path: Path,
     monkeypatch,

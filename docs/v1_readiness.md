@@ -10,7 +10,11 @@ for long web-page text.
   verification, local service bootstrap smoke, extension validation, extension
   packaging, and Windows bundle packaging. Use
   `--node-executable <path-to-node> --require-js-syntax` when the release gate
-  must fail instead of skipping extension JavaScript syntax checks.
+  must fail instead of skipping extension JavaScript syntax checks. Use
+  `--windows-bundle-local-reader-check` when the same release gate should also
+  run the bundled local-reader validation after the extracted Windows bundle
+  install and installed service smoke pass; top-level Node and Chrome smoke
+  strictness flags are forwarded to that nested check.
 - `python3 scripts/check_security_defaults.py` verifies fail-closed local
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,

@@ -286,6 +286,17 @@ reader bundle with a temporary output path.
 See [`docs/v1_readiness.md`](docs/v1_readiness.md) for the current split
 between automated gates, manual gates, and explicit product choices.
 
+To make the release gate also prove the bundled local-reader validation after
+the extracted Windows bundle install path, add:
+
+```bash
+python3 scripts/release_check.py --windows-bundle-local-reader-check
+```
+
+`--node-executable`, `--require-js-syntax`, `--browser-executable`,
+`--require-browser`, and `--headed` are forwarded to that nested bundle check
+when this opt-in gate is enabled.
+
 With the service already running, add the live public-contract smoke:
 
 ```bash

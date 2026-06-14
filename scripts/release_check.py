@@ -56,6 +56,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--real-voice-demo-root", default=None)
     parser.add_argument("--real-voice-demo-out", default=None)
+    parser.add_argument(
+        "--windows-bundle-local-reader-check",
+        action="store_true",
+        help=(
+            "Also run the bundled local-reader validation after the extracted "
+            "Windows bundle install and installed service smoke pass."
+        ),
+    )
+    parser.add_argument(
+        "--windows-bundle-local-reader-timeout-s",
+        type=float,
+        default=None,
+        help="Optional timeout for the bundled local-reader validation command.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -88,6 +102,10 @@ def main(argv: list[str] | None = None) -> None:
             real_voice_demo_out=(
                 Path(args.real_voice_demo_out) if args.real_voice_demo_out else None
             ),
+            windows_bundle_local_reader_check=args.windows_bundle_local_reader_check,
+            windows_bundle_local_reader_timeout_s=(
+                args.windows_bundle_local_reader_timeout_s
+            ),
         )
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
@@ -119,6 +137,8 @@ def run_release_checks(
     install_real_runtime: bool = False,
     real_voice_demo_root: Path | None = None,
     real_voice_demo_out: Path | None = None,
+    windows_bundle_local_reader_check: bool = False,
+    windows_bundle_local_reader_timeout_s: float | None = None,
 ) -> dict[str, object]:
     if package_out_path is not None and windows_bundle_out_path is not None:
         return _run_release_checks_with_package_path(
@@ -144,6 +164,10 @@ def run_release_checks(
             install_real_runtime=install_real_runtime,
             real_voice_demo_root=real_voice_demo_root,
             real_voice_demo_out=real_voice_demo_out,
+            windows_bundle_local_reader_check=windows_bundle_local_reader_check,
+            windows_bundle_local_reader_timeout_s=(
+                windows_bundle_local_reader_timeout_s
+            ),
         )
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-release-") as temp_dir:
@@ -180,6 +204,10 @@ def run_release_checks(
             install_real_runtime=install_real_runtime,
             real_voice_demo_root=real_voice_demo_root,
             real_voice_demo_out=real_voice_demo_out,
+            windows_bundle_local_reader_check=windows_bundle_local_reader_check,
+            windows_bundle_local_reader_timeout_s=(
+                windows_bundle_local_reader_timeout_s
+            ),
         )
 
 
@@ -207,6 +235,8 @@ def _run_release_checks_with_package_path(
     install_real_runtime: bool,
     real_voice_demo_root: Path | None,
     real_voice_demo_out: Path | None,
+    windows_bundle_local_reader_check: bool,
+    windows_bundle_local_reader_timeout_s: float | None,
 ) -> dict[str, object]:
     child_env = _build_release_env(node_executable=node_executable)
     checks = [
@@ -291,12 +321,17 @@ def _run_release_checks_with_package_path(
         ),
         (
             "windows_bundle_install",
-            [
-                python_executable,
-                "scripts/check_windows_bundle_install.py",
-                "--bundle",
-                str(windows_bundle_out_path),
-            ],
+            _build_windows_bundle_install_command(
+                python_executable=python_executable,
+                bundle_path=windows_bundle_out_path,
+                run_local_reader_check=windows_bundle_local_reader_check,
+                local_reader_timeout_s=windows_bundle_local_reader_timeout_s,
+                node_executable=node_executable,
+                require_js_syntax=require_js_syntax,
+                browser_executable=browser_executable,
+                require_browser=require_browser,
+                headed=headed,
+            ),
         ),
     ]
     if live_smoke:
@@ -420,6 +455,53 @@ def _build_package_windows_bundle_command(
             require_js_syntax=require_js_syntax,
         ),
     ]
+
+
+def _build_windows_bundle_install_command(
+    *,
+    python_executable: str,
+    bundle_path: Path,
+    run_local_reader_check: bool,
+    local_reader_timeout_s: float | None,
+    node_executable: str | None,
+    require_js_syntax: bool,
+    browser_executable: str | None,
+    require_browser: bool,
+    headed: bool,
+) -> list[str]:
+    command = [
+        python_executable,
+        "scripts/check_windows_bundle_install.py",
+        "--bundle",
+        str(bundle_path),
+    ]
+    if not run_local_reader_check:
+        return command
+
+    command.append("--run-local-reader-check")
+    if local_reader_timeout_s is not None:
+        command.extend(["--local-reader-timeout-s", str(local_reader_timeout_s)])
+    if node_executable:
+        command.extend(
+            [
+                "--local-reader-node-executable",
+                str(Path(node_executable).expanduser().resolve()),
+            ]
+        )
+    if require_js_syntax:
+        command.append("--local-reader-require-js-syntax")
+    if browser_executable:
+        command.extend(
+            [
+                "--local-reader-browser-executable",
+                str(Path(browser_executable).expanduser().resolve()),
+            ]
+        )
+    if require_browser:
+        command.append("--local-reader-require-browser")
+    if headed:
+        command.append("--local-reader-headed")
+    return command
 
 
 def _build_chrome_extension_smoke_command(
