@@ -78,6 +78,9 @@ for long web-page text.
   model manifest, default model catalog, model-readiness handoff guidance,
   extension source, extension install/troubleshooting guides, icons, and a
   validated extension zip.
+  Pass `--node-executable <path-to-node> --require-js-syntax` to package scripts
+  when standalone package builds must fail instead of skipping extension
+  JavaScript syntax validation.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package plus its base dependencies,
   and running `setup-local` without choosing a persistent service manager.

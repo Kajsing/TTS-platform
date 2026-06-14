@@ -27,15 +27,34 @@ import check_extension  # noqa: E402
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="package_extension")
     parser.add_argument("--out", default=str(DEFAULT_OUT_PATH))
+    parser.add_argument("--node-executable", default=None)
+    parser.add_argument(
+        "--require-js-syntax",
+        action="store_true",
+        help="Fail extension validation when JavaScript syntax checks cannot run.",
+    )
     args = parser.parse_args(argv)
 
-    payload = package_extension(out_path=Path(args.out))
+    payload = package_extension(
+        out_path=Path(args.out),
+        node_executable=args.node_executable,
+        require_js_syntax=args.require_js_syntax,
+    )
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
-def package_extension(*, out_path: Path) -> dict[str, object]:
+def package_extension(
+    *,
+    out_path: Path,
+    node_executable: str | None = None,
+    require_js_syntax: bool = False,
+) -> dict[str, object]:
+    extension_check_args = _extension_check_args(
+        node_executable=node_executable,
+        require_js_syntax=require_js_syntax,
+    )
     with redirect_stdout(sys.stderr):
-        check_extension.main([])
+        check_extension.main(extension_check_args)
     resolved_out_path = out_path.expanduser().resolve()
     files = _collect_extension_files()
     resolved_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,12 +70,28 @@ def package_extension(*, out_path: Path) -> dict[str, object]:
         "manifest_path": "manifest.json",
         "install_guide_path": "INSTALL.md",
         "troubleshooting_path": "TROUBLESHOOTING.md",
+        "js_syntax_required": require_js_syntax,
         "icon_count": sum(
             1
             for path in files
             if path.relative_to(EXTENSION_ROOT).as_posix() in ICON_ARCNAMES
         ),
     }
+
+
+def _extension_check_args(
+    *,
+    node_executable: str | None,
+    require_js_syntax: bool,
+) -> list[str]:
+    args: list[str] = []
+    if node_executable:
+        args.extend(
+            ["--node-executable", str(Path(node_executable).expanduser().resolve())]
+        )
+    if require_js_syntax:
+        args.append("--require-js-syntax")
+    return args
 
 
 def _collect_extension_files() -> list[Path]:

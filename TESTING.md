@@ -228,6 +228,7 @@ Build the Windows local reader bundle directly with:
 
 ```bash
 python3 scripts/package_windows_bundle.py
+python3 scripts/package_windows_bundle.py --node-executable <path-to-node> --require-js-syntax
 ```
 
 On Windows, use `py -3 scripts/package_windows_bundle.py` when `python3` is
@@ -355,7 +356,9 @@ python3 scripts/check_extension.py --require-js-syntax
 python3 scripts/check_extension.py --node-executable <path-to-node> --require-js-syntax
 python3 scripts/check_chrome_extension_smoke.py
 python3 scripts/package_extension.py
+python3 scripts/package_extension.py --node-executable <path-to-node> --require-js-syntax
 python3 scripts/package_windows_bundle.py
+python3 scripts/package_windows_bundle.py --node-executable <path-to-node> --require-js-syntax
 node --check apps/chrome_extension/src/background.js
 node --check apps/chrome_extension/src/popup.js
 node --check apps/chrome_extension/offscreen/offscreen.js
@@ -364,3 +367,6 @@ node --check apps/chrome_extension/offscreen/offscreen.js
 On Windows, run the Python check as `py -3 scripts/check_extension.py` when
 `python3` is unavailable. `scripts/check_extension.py` also honors
 `TTS_PLATFORM_NODE=<path-to-node>` when Node.js is installed outside `PATH`.
+The extension and Windows bundle package scripts accept the same
+`--node-executable` and `--require-js-syntax` options for strict standalone
+packaging.

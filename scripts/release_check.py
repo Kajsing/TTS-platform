@@ -190,21 +190,21 @@ def _run_release_checks_with_package_path(
         ),
         (
             "extension_package",
-            [
-                python_executable,
-                "scripts/package_extension.py",
-                "--out",
-                str(package_out_path),
-            ],
+            _build_package_extension_command(
+                python_executable=python_executable,
+                out_path=package_out_path,
+                node_executable=node_executable,
+                require_js_syntax=require_js_syntax,
+            ),
         ),
         (
             "windows_bundle",
-            [
-                python_executable,
-                "scripts/package_windows_bundle.py",
-                "--out",
-                str(windows_bundle_out_path),
-            ],
+            _build_package_windows_bundle_command(
+                python_executable=python_executable,
+                out_path=windows_bundle_out_path,
+                node_executable=node_executable,
+                require_js_syntax=require_js_syntax,
+            ),
         ),
         (
             "windows_bundle_bootstrap",
@@ -283,11 +283,66 @@ def _build_extension_check_command(
     require_js_syntax: bool,
 ) -> list[str]:
     command = [python_executable, "scripts/check_extension.py"]
-    if node_executable:
-        command.extend(["--node-executable", str(Path(node_executable).expanduser().resolve())])
-    if require_js_syntax:
-        command.append("--require-js-syntax")
+    command.extend(
+        _extension_js_args(
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
+        )
+    )
     return command
+
+
+def _extension_js_args(
+    *,
+    node_executable: str | None,
+    require_js_syntax: bool,
+) -> list[str]:
+    args: list[str] = []
+    if node_executable:
+        args.extend(
+            ["--node-executable", str(Path(node_executable).expanduser().resolve())]
+        )
+    if require_js_syntax:
+        args.append("--require-js-syntax")
+    return args
+
+
+def _build_package_extension_command(
+    *,
+    python_executable: str,
+    out_path: Path,
+    node_executable: str | None,
+    require_js_syntax: bool,
+) -> list[str]:
+    return [
+        python_executable,
+        "scripts/package_extension.py",
+        "--out",
+        str(out_path),
+        *_extension_js_args(
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
+        ),
+    ]
+
+
+def _build_package_windows_bundle_command(
+    *,
+    python_executable: str,
+    out_path: Path,
+    node_executable: str | None,
+    require_js_syntax: bool,
+) -> list[str]:
+    return [
+        python_executable,
+        "scripts/package_windows_bundle.py",
+        "--out",
+        str(out_path),
+        *_extension_js_args(
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
+        ),
+    ]
 
 
 def _build_live_smoke_command(

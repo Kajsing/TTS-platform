@@ -25,6 +25,7 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert payload["manifest_path"] == "manifest.json"
     assert payload["install_guide_path"] == "INSTALL.md"
     assert payload["troubleshooting_path"] == "TROUBLESHOOTING.md"
+    assert payload["js_syntax_required"] is False
     assert payload["icon_count"] == 4
     assert payload["file_count"] > 0
 
@@ -57,6 +58,32 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert "Continue Page" in troubleshooting
     assert all(not name.startswith("/") for name in names)
     assert all("\\" not in name for name in names)
+
+
+def test_package_extension_forwards_strict_js_options(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    package_module = _load_package_module()
+    check_calls: list[list[str]] = []
+    node_path = tmp_path / "node.exe"
+    node_path.write_text("fake", encoding="utf-8")
+    monkeypatch.setattr(
+        package_module.check_extension,
+        "main",
+        lambda argv=None: check_calls.append(list(argv or [])),
+    )
+
+    payload = package_module.package_extension(
+        out_path=tmp_path / "extension.zip",
+        node_executable=str(node_path),
+        require_js_syntax=True,
+    )
+
+    assert check_calls == [
+        ["--node-executable", str(node_path.resolve()), "--require-js-syntax"]
+    ]
+    assert payload["js_syntax_required"] is True
 
 
 def _load_package_module():

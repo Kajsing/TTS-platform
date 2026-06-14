@@ -197,6 +197,7 @@ launchers, config example, docs, and a validated Chrome extension zip:
 
 ```bash
 python3 scripts/package_windows_bundle.py
+python3 scripts/package_windows_bundle.py --node-executable <path-to-node> --require-js-syntax
 ```
 
 The bundle is written to `dist/windows/tts-platform-local-reader.zip` by
@@ -348,6 +349,7 @@ To build a local Chrome extension zip after validation:
 
 ```bash
 python3 scripts/package_extension.py
+python3 scripts/package_extension.py --node-executable <path-to-node> --require-js-syntax
 ```
 
 The zip includes `INSTALL.md`, `TROUBLESHOOTING.md`, and the extension icon set

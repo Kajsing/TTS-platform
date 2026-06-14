@@ -25,7 +25,14 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
         PACKAGE_SCRIPT_PATH,
     )
 
-    def fake_package_extension(*, out_path: Path) -> dict[str, object]:
+    def fake_package_extension(
+        *,
+        out_path: Path,
+        node_executable: str | None = None,
+        require_js_syntax: bool = False,
+    ) -> dict[str, object]:
+        assert node_executable is None
+        assert require_js_syntax is False
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")

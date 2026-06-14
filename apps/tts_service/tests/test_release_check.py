@@ -193,8 +193,31 @@ def test_release_check_can_require_extension_js_syntax(
     ]
     assert extension_call[1] is not None
     assert extension_call[1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert calls[10][0] == [
+        "python-test",
+        "scripts/package_extension.py",
+        "--out",
+        str((tmp_path / "extension.zip").resolve()),
+        "--node-executable",
+        str(node_path.resolve()),
+        "--require-js-syntax",
+    ]
+    assert calls[10][1] is not None
     assert calls[10][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert calls[11][0] == [
+        "python-test",
+        "scripts/package_windows_bundle.py",
+        "--out",
+        str((tmp_path / "windows.zip").resolve()),
+        "--node-executable",
+        str(node_path.resolve()),
+        "--require-js-syntax",
+    ]
+    assert calls[11][1] is not None
+    assert calls[11][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
     assert summary["checks"][6]["command"] == extension_call[0]
+    assert summary["checks"][10]["command"] == calls[10][0]
+    assert summary["checks"][11]["command"] == calls[11][0]
 
 
 def test_release_check_redacts_inline_live_smoke_token(

@@ -11,34 +11,33 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: continue the Chrome extension installability track by
-  making the local troubleshooting guide a validated handoff asset alongside
-  `INSTALL.md` and the packaged icon set.
-- Current loop result: `scripts/check_extension.py` now requires
-  `apps/chrome_extension/TROUBLESHOOTING.md` and validates key local setup,
-  backend readiness, long-page playback, and section navigation troubleshooting
-  sections. `scripts/package_extension.py` reports `troubleshooting_path`, and
-  `scripts/package_windows_bundle.py` propagates that metadata in the embedded
-  extension package summary.
+- Current loop target: continue release hardening for Chrome extension
+  packaging by making standalone package commands strict-capable for JavaScript
+  syntax validation.
+- Current loop result: `scripts/package_extension.py` and
+  `scripts/package_windows_bundle.py` now accept `--node-executable` and
+  `--require-js-syntax`, passing those options into extension validation before
+  writing local handoff zips. `scripts/release_check.py` now propagates the
+  same flags into both package commands when strict extension syntax validation
+  is requested.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_extension.py scripts\package_extension.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
-  - Targeted extension/bundle package tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 6 passed.
+    `py -3 -m ruff check scripts\package_extension.py scripts\package_windows_bundle.py scripts\release_check.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
+  - Targeted extension/release package tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 11 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
     markers across 40 checked files.
   - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed.
-  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip`
-    passed and reported `troubleshooting_path: TROUBLESHOOTING.md`.
-  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip`
-    passed and propagated the extension `troubleshooting_path` metadata.
-  - `py -3 scripts\check_windows_bundle_bootstrap.py --bundle $env:TEMP\tts-platform-test-windows.zip`
-    passed and verified the embedded extension troubleshooting guide.
+  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+    passed and reported `js_syntax_required: true`.
+  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+    passed and propagated `js_syntax_required: true` into the extension
+    package summary.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 193 tests.
-  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+  - `py -3 -m pytest -q` passed with 194 tests.
+  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax --package-out $env:TEMP\tts-platform-release-extension.zip --windows-bundle-out $env:TEMP\tts-platform-release-windows.zip`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
     extension checks, extension packaging, Windows bundle
@@ -285,6 +284,9 @@ This file is the live status log and shared memory for future Codex loops.
     `--require-js-syntax`, propagating the Node path into package/bundle child
     checks so full release gates can require extension JavaScript syntax
     parsing.
+  - `scripts/package_extension.py` and `scripts/package_windows_bundle.py` now
+    accept the same `--node-executable` and `--require-js-syntax` options for
+    strict standalone local package builds.
 - Chrome extension onboarding has started:
   - the popup now includes a setup checklist for service reachability, saved
     token state, allow-list command/snippet readiness, voice discovery, backend

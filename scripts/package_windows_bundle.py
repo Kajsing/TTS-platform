@@ -72,20 +72,39 @@ EXCLUDED_PARTS = {
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="package_windows_bundle")
     parser.add_argument("--out", default=str(DEFAULT_OUT_PATH))
+    parser.add_argument("--node-executable", default=None)
+    parser.add_argument(
+        "--require-js-syntax",
+        action="store_true",
+        help="Fail extension validation when JavaScript syntax checks cannot run.",
+    )
     args = parser.parse_args(argv)
 
-    payload = package_windows_bundle(out_path=Path(args.out))
+    payload = package_windows_bundle(
+        out_path=Path(args.out),
+        node_executable=args.node_executable,
+        require_js_syntax=args.require_js_syntax,
+    )
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
-def package_windows_bundle(*, out_path: Path) -> dict[str, object]:
+def package_windows_bundle(
+    *,
+    out_path: Path,
+    node_executable: str | None = None,
+    require_js_syntax: bool = False,
+) -> dict[str, object]:
     resolved_out_path = out_path.expanduser().resolve()
     bundle_files = _collect_bundle_files()
     resolved_out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-extension-") as temp_dir:
         extension_zip_path = Path(temp_dir) / "tts-platform-prototype.zip"
-        extension_payload = extension_packager.package_extension(out_path=extension_zip_path)
+        extension_payload = extension_packager.package_extension(
+            out_path=extension_zip_path,
+            node_executable=node_executable,
+            require_js_syntax=require_js_syntax,
+        )
 
         with zipfile.ZipFile(
             resolved_out_path,
@@ -113,6 +132,10 @@ def package_windows_bundle(*, out_path: Path) -> dict[str, object]:
         ]
     if "icon_count" in extension_payload:
         extension_summary["icon_count"] = extension_payload["icon_count"]
+    if "js_syntax_required" in extension_payload:
+        extension_summary["js_syntax_required"] = extension_payload[
+            "js_syntax_required"
+        ]
 
     return {
         "package_path": str(resolved_out_path),

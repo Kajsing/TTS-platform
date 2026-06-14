@@ -71,6 +71,7 @@ Build a zip with the extension manifest at the archive root:
 
 ```bash
 python3 scripts/package_extension.py
+python3 scripts/package_extension.py --node-executable <path-to-node> --require-js-syntax
 ```
 
 The package script runs `scripts/check_extension.py` first and writes the zip to

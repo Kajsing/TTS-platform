@@ -392,5 +392,9 @@ The sixty-second extension-installability slice makes `TROUBLESHOOTING.md` an
 explicit Chrome extension handoff asset: `check_extension.py` validates key
 troubleshooting sections, `package_extension.py` reports it in the package
 summary, and the Windows bundle propagates that metadata.
+The sixty-third release-hardening slice propagates `--node-executable` and
+`--require-js-syntax` into standalone extension and Windows bundle packaging,
+so local package builds can require extension JavaScript syntax validation
+without relying on a separate release-check invocation.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

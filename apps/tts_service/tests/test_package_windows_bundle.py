@@ -13,10 +13,21 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     monkeypatch,
 ) -> None:
     package_module = _load_package_module()
-    extension_calls: list[Path] = []
+    extension_calls: list[dict[str, object]] = []
 
-    def fake_package_extension(*, out_path: Path) -> dict[str, object]:
-        extension_calls.append(out_path)
+    def fake_package_extension(
+        *,
+        out_path: Path,
+        node_executable: str | None = None,
+        require_js_syntax: bool = False,
+    ) -> dict[str, object]:
+        extension_calls.append(
+            {
+                "out_path": out_path,
+                "node_executable": node_executable,
+                "require_js_syntax": require_js_syntax,
+            }
+        )
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")
@@ -33,6 +44,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
             "install_guide_path": "INSTALL.md",
             "troubleshooting_path": "TROUBLESHOOTING.md",
             "icon_count": 4,
+            "js_syntax_required": require_js_syntax,
         }
 
     monkeypatch.setattr(
@@ -42,9 +54,20 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     )
 
     out_path = tmp_path / "tts-platform-local-reader.zip"
-    payload = package_module.package_windows_bundle(out_path=out_path)
+    node_path = tmp_path / "node.exe"
+    node_path.write_text("fake", encoding="utf-8")
+
+    payload = package_module.package_windows_bundle(
+        out_path=out_path,
+        node_executable=str(node_path),
+        require_js_syntax=True,
+    )
 
     assert len(extension_calls) == 1
+    assert isinstance(extension_calls[0]["out_path"], Path)
+    assert extension_calls[0]["out_path"].name == "tts-platform-prototype.zip"
+    assert extension_calls[0]["node_executable"] == str(node_path)
+    assert extension_calls[0]["require_js_syntax"] is True
     assert payload["package_path"] == str(out_path.resolve())
     assert payload["bundle_root"] == "tts-platform"
     assert payload["extension_package"] == {
@@ -54,6 +77,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
         "install_guide_path": "INSTALL.md",
         "troubleshooting_path": "TROUBLESHOOTING.md",
         "icon_count": 4,
+        "js_syntax_required": True,
     }
 
     with zipfile.ZipFile(out_path) as archive:
