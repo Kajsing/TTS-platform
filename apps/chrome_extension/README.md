@@ -24,6 +24,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
   previous-section, or next-section actions reuse stored page progress
 - show whether the original page tab is active in playback state and disable
   manual page actions when the stored page progress belongs to another tab
+- focus the original page tab from the popup when stored page progress belongs
+  to another active tab
 - disable unavailable resume, continue, section navigation, and stop controls
   based on the latest playback state
 - stop playback and keep popup state truthful if playback is interrupted while
@@ -117,7 +119,8 @@ the manifest and toolbar action.
     confirm it restarts from the next captured text character offset.
 16. Switch to another tab and confirm manual resume/continue/section actions
     ask you to return to the original page tab.
-17. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+17. Use `Focus Page` and confirm Chrome returns to the original page tab.
+18. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
 
 ## Notes
 
@@ -147,7 +150,8 @@ the manifest and toolbar action.
   require that the active tab is the same tab that started the stored page
   playback state, so old progress is not accidentally applied to another tab.
   The popup shows this source-tab status and disables those manual page actions
-  while another tab is active.
+  while another tab is active. `Focus Page` uses the stored source tab id to
+  return Chrome to that page without persisting the page URL.
 - When a page playback segment finishes normally and that metadata still points
   at later text, the background worker starts the next segment automatically
   from the same offset.
@@ -188,11 +192,11 @@ python3 scripts/check_extension_reader_flow.py
 ```
 
 This verifies the `Speak Page`, reader progress, page-capture metadata,
-`Resume Page`, `Continue Page`, state-aware popup controls, same-tab guards and
-source-tab status for manual page actions, previous/next section navigation,
-best-root selection, truncated-section continuation, manual and automatic
-truncated text-offset continuation, filtered fallback capture, stop/restart
-recovery, and popup reopen-state wiring, then
+`Resume Page`, `Continue Page`, `Focus Page`, state-aware popup controls,
+same-tab guards and source-tab status for manual page actions, previous/next
+section navigation, best-root selection, truncated-section continuation,
+manual and automatic truncated text-offset continuation, filtered fallback
+capture, stop/restart recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
 

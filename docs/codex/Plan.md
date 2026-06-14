@@ -450,5 +450,9 @@ background `get-state` responses and uses it in the popup to disable manual
 page resume/continue/section actions while another tab is active. The popup now
 shows a `Source Tab` playback-state line without storing page URLs or raw page
 text.
+The seventy-fourth reader-flow UX slice adds popup `Focus Page`, a source-tab
+helper that focuses the original page tab from the stored non-textual tab id
+when manual page actions are disabled by the source-tab guard. It does not
+persist page URLs or raw page text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -59,6 +59,7 @@
   another active tab.
 - Check `Source Tab` in the popup `Playback State`; it reports whether the
   original page tab is active and explains disabled manual page actions.
+- Use `Focus Page` to return Chrome to the original tab when it is still open.
 - Resume re-extracts readable page text and uses the last planned text chunk
   index; if the page content changed, the resumed position may shift.
 - Resume intentionally repeats the latest known text chunk instead of skipping
@@ -104,6 +105,7 @@
   stored page progress.
 - The popup disables section navigation when the active tab does not match the
   stored page-progress source tab.
+- Use `Focus Page` when the popup says the original page tab is not active.
 - If the page is truncated but has no later heading-backed section, use
   `Continue Page` instead. Normal page playback also tries this automatically
   when a truncated segment finishes.

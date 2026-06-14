@@ -19,6 +19,7 @@ const actionMessage = document.querySelector("#action-message");
 const readerActionButtons = {
   resumePage: document.querySelector("#resume-page"),
   continuePage: document.querySelector("#continue-page"),
+  focusSourceTab: document.querySelector("#focus-source-tab"),
   previousSection: document.querySelector("#previous-section"),
   nextSection: document.querySelector("#next-section"),
   stopPlayback: document.querySelector("#stop-playback"),
@@ -144,6 +145,10 @@ document.querySelector("#continue-page").addEventListener("click", async () => {
   await runAction("tts-extension:continue-page");
 });
 
+document.querySelector("#focus-source-tab").addEventListener("click", async () => {
+  await runAction("tts-extension:focus-source-tab");
+});
+
 document.querySelector("#previous-section").addEventListener("click", async () => {
   await runAction("tts-extension:previous-section");
 });
@@ -253,6 +258,11 @@ function updateReaderActionState(state) {
     )
   );
   setActionButtonState(
+    readerActionButtons.focusSourceTab,
+    capabilities.focusSourceTab,
+    focusSourceTabUnavailableTitle(state)
+  );
+  setActionButtonState(
     readerActionButtons.stopPlayback,
     capabilities.stopPlayback,
     "No active playback is running."
@@ -275,6 +285,7 @@ function resolveReaderBaseCapabilities(state) {
     continuePage: canContinuePage(state.pageCapture),
     previousSection: resolvePreviousSectionIndex(state) != null,
     nextSection: resolveNextSectionIndex(state) != null,
+    focusSourceTab: canFocusSourceTab(state),
     stopPlayback: isActivePlaybackStatus(state.status),
   };
 }
@@ -287,6 +298,7 @@ function applySourceTabGuard(capabilities, state) {
     continuePage: capabilities.continuePage && sourceTabReady,
     previousSection: capabilities.previousSection && sourceTabReady,
     nextSection: capabilities.nextSection && sourceTabReady,
+    focusSourceTab: capabilities.focusSourceTab,
   };
 }
 
@@ -295,6 +307,22 @@ function pageActionUnavailableTitle(state, baseCapability, fallbackTitle) {
     return state.sourceTabMessage || "Switch back to the original page tab.";
   }
   return fallbackTitle;
+}
+
+function focusSourceTabUnavailableTitle(state) {
+  const sourceTabId = Number(state.tabId);
+  if (!Number.isFinite(sourceTabId) || sourceTabId <= 0) {
+    return "No original page tab is available.";
+  }
+  if (state.sourceTabActive === true) {
+    return "Original page tab is already active.";
+  }
+  return "No original page tab needs focus.";
+}
+
+function canFocusSourceTab(state) {
+  const sourceTabId = Number(state.tabId);
+  return Number.isFinite(sourceTabId) && sourceTabId > 0 && state.sourceTabActive === false;
 }
 
 function canResumePage(progress) {

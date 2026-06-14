@@ -74,6 +74,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "tts-extension:next-section":
         sendResponse(await nextSection());
         return;
+      case "tts-extension:focus-source-tab":
+        sendResponse(await focusSourceTab());
+        return;
       case "tts-extension:stop":
         await stopPlayback();
         sendResponse({ ok: true });
@@ -328,6 +331,28 @@ async function nextSection() {
       capture.meta
     )}`,
   };
+}
+
+async function focusSourceTab() {
+  const currentState = await getPlaybackState();
+  const sourceTabId = Number(currentState?.tabId);
+  if (!Number.isFinite(sourceTabId) || sourceTabId <= 0) {
+    return { ok: false, message: "No original page tab is available." };
+  }
+
+  try {
+    const tab = await chrome.tabs.get(Math.floor(sourceTabId));
+    await chrome.tabs.update(tab.id, { active: true });
+    if (Number.isFinite(tab.windowId)) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+    return { ok: true, message: "Focused original page tab." };
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Original page tab is no longer available: ${error.message}`,
+    };
+  }
 }
 
 async function getPageCapture(tabId, maxChars, startSectionIndex = 0, startTextChar = 0) {

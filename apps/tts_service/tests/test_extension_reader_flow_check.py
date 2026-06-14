@@ -19,7 +19,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
 
     assert contract == {
         "checked_files": 5,
-        "popup_actions": 5,
+        "popup_actions": 6,
         "page_capture_metadata": True,
         "resume_and_section_navigation": True,
         "automatic_truncated_text_continuation": True,
@@ -31,6 +31,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "popup_reopen_state": True,
         "source_tab_guard": True,
         "source_tab_status": True,
+        "source_tab_focus_action": True,
         "raw_page_text_persistence": False,
         "filtered_fallback_capture": True,
         "best_root_selection": True,

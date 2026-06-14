@@ -11,18 +11,18 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: make the Chrome reader's source-tab guard visible in the
-  popup before the operator clicks a manual page action.
-- Current loop result: background `get-state` responses now add non-persisted
-  `sourceTabActive` and `sourceTabMessage` fields for page playback state, and
-  the popup uses them to show a `Source Tab` playback-state line and disable
-  manual page resume/continue/section actions while another tab is active.
+- Current loop target: make the Chrome reader's source-tab guard actionable
+  from the popup when the operator is on another tab.
+- Current loop result: the popup now includes `Focus Page`, which asks the
+  background worker to focus the original page tab from the stored source tab id
+  when manual page resume/continue/section actions are disabled by the
+  source-tab guard. It does not persist page URLs or raw page text.
 - Validation status for the current loop:
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
     remains skip-aware because Node.js is not on `PATH`.
   - `py -3 scripts\check_extension_reader_flow.py` passed, including
-    `source_tab_guard`, `source_tab_status`, and generated long-article
-    WebSocket smoke with 145 stream text chunks.
+    `source_tab_guard`, `source_tab_status`, `source_tab_focus_action`, and
+    generated long-article WebSocket smoke with 145 stream text chunks.
   - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
     passed with 3 tests.
   - `py -3 scripts\check_v1_readiness.py` passed.
@@ -468,6 +468,9 @@ This file is the live status log and shared memory for future Codex loops.
     Section`, or `Next Section`.
   - the popup now exposes source-tab status for stored page playback and
     disables manual page actions when another tab is active.
+  - the popup now exposes `Focus Page`, allowing the operator to return to the
+    original source tab from stored page playback metadata without persisting a
+    page URL or raw page text.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`
