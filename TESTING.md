@@ -261,11 +261,15 @@ Check the built bundle's temporary virtualenv install/start path with:
 
 ```bash
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
+python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip --run-local-reader-check
 ```
 
 Use `--install-real-runtime` on this check only when the test machine should
 exercise the optional `.[real]` install path; the default gate keeps that
-download-heavy path opt-in. Use `--no-dependencies` only when checking a
+download-heavy path opt-in. Use `--run-local-reader-check` when the same
+extracted-bundle install should also prove service bootstrap, model-management,
+extension onboarding, reader-flow, and skip-aware Chrome/MV3 validation with
+the installed `.venv` Python. Use `--no-dependencies` only when checking a
 pre-provisioned environment that should skip base dependency installation.
 
 Check the built bundle's PowerShell/CMD launcher setup and foreground service

@@ -422,5 +422,10 @@ reader flow, skip-aware Chrome/MV3 smoke, and optional real-voice evidence. The
 generated `WINDOWS_BUNDLE_README.md` now points extracted-bundle operators at
 that script and direct strict Chrome/MV3 smoke commands without implying the
 repo-only release-check flow.
+The sixty-ninth Windows bundle hardening slice adds
+`scripts/check_windows_bundle_install.py --run-local-reader-check`, an opt-in
+gate that runs the bundled local-reader validation with the installed `.venv`
+Python after the extracted-bundle install path, installed `tts serve`, and
+public-contract smoke have passed.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

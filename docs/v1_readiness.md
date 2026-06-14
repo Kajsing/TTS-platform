@@ -108,7 +108,10 @@ for long web-page text.
   venv/package/setup stage and expects base dependencies to be installed by
   default. `--install-real-runtime` exercises the optional `.[real]` install
   path only when a test machine should take that heavier dependency step;
-  `--no-dependencies` is reserved for pre-provisioned test environments.
+  `--run-local-reader-check` then runs the bundled local-reader validation
+  with the installed `.venv` Python after the installed service smoke has
+  passed; `--no-dependencies` is reserved for pre-provisioned test
+  environments.
 
 ## Manual Gates
 

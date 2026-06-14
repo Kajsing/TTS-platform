@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -17,10 +18,15 @@ def test_local_reader_bundle_check_runs_bundle_compatible_commands(
         cwd: Path,
         check: bool,
         env: dict[str, str] | None = None,
-    ) -> None:
+        capture_output: bool = False,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         assert cwd == REPO_ROOT
         assert check is True
+        assert capture_output is True
+        assert text is True
         calls.append((command, env))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(check_module.subprocess, "run", fake_run)
 
@@ -62,8 +68,11 @@ def test_local_reader_bundle_check_forwards_strict_extension_flags(
         cwd: Path,
         check: bool,
         env: dict[str, str] | None = None,
-    ) -> None:
+        capture_output: bool = False,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         calls.append((command, env))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(check_module.subprocess, "run", fake_run)
 
@@ -112,8 +121,11 @@ def test_local_reader_bundle_check_can_include_real_voice_demo(
         cwd: Path,
         check: bool,
         env: dict[str, str] | None = None,
-    ) -> None:
+        capture_output: bool = False,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(check_module.subprocess, "run", fake_run)
 
@@ -137,6 +149,39 @@ def test_local_reader_bundle_check_can_include_real_voice_demo(
         "--out",
         str(demo_out.resolve()),
     ]
+
+
+def test_local_reader_bundle_check_keeps_stdout_json_ready(
+    monkeypatch,
+    capsys,
+) -> None:
+    check_module = _load_check_module()
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        check: bool,
+        env: dict[str, str] | None = None,
+        capture_output: bool = False,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"child": true}\n',
+            stderr="child warning\n",
+        )
+
+    monkeypatch.setattr(check_module.subprocess, "run", fake_run)
+
+    check_module.check_local_reader_bundle(python_executable="python-test")
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "[local-reader-bundle-check:local_service_bootstrap:stdout]" in captured.err
+    assert '{"child": true}' in captured.err
+    assert "child warning" in captured.err
 
 
 def _load_check_module():

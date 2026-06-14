@@ -123,11 +123,46 @@ def check_local_reader_bundle(
     env = _build_env(node_executable=node_executable)
     completed: list[dict[str, object]] = []
     for name, command in checks:
-        print(f"[local-reader-bundle-check] {name}", file=sys.stderr)
-        subprocess.run(command, cwd=REPO_ROOT, check=True, env=env)
+        _run_check_command(name=name, command=command, env=env)
         completed.append({"name": name, "command": command})
 
     return {"checks": completed}
+
+
+def _run_check_command(
+    *,
+    name: str,
+    command: list[str],
+    env: dict[str, str] | None,
+) -> None:
+    print(f"[local-reader-bundle-check] {name}", file=sys.stderr)
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            check=True,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        _relay_captured_output(name=name, stdout=exc.stdout, stderr=exc.stderr)
+        raise
+    _relay_captured_output(name=name, stdout=completed.stdout, stderr=completed.stderr)
+
+
+def _relay_captured_output(
+    *,
+    name: str,
+    stdout: str | None,
+    stderr: str | None,
+) -> None:
+    if stdout:
+        print(f"[local-reader-bundle-check:{name}:stdout]", file=sys.stderr)
+        print(stdout.rstrip(), file=sys.stderr)
+    if stderr:
+        print(f"[local-reader-bundle-check:{name}:stderr]", file=sys.stderr)
+        print(stderr.rstrip(), file=sys.stderr)
 
 
 def _build_env(*, node_executable: str | None) -> dict[str, str] | None:

@@ -255,6 +255,131 @@ def test_windows_bundle_install_check_uses_installer_script_when_available(
     assert summary["service"]["job_status"] == "completed"
 
 
+def test_windows_bundle_install_check_can_run_local_reader_bundle_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    check_module = _load_check_module()
+    calls: list[str] = []
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    def fake_extract_bundle(*, bundle_path: Path, extract_root: Path) -> None:
+        calls.append("extract")
+        bundle_root = extract_root / "tts-platform"
+        (bundle_root / ".venv" / "Scripts").mkdir(parents=True)
+        (bundle_root / ".venv" / "Scripts" / "tts.exe").write_text("", encoding="utf-8")
+        (bundle_root / ".venv" / "Scripts" / "python.exe").write_text("", encoding="utf-8")
+        (bundle_root / "config").mkdir()
+        (bundle_root / "config" / "token.txt").write_text("token", encoding="utf-8")
+
+    def fake_run_windows_install_script(
+        *,
+        python_executable: str,
+        bundle_root: Path,
+        timeout_s: float,
+        install_real_runtime: bool,
+        install_dependencies: bool,
+    ) -> dict[str, object]:
+        calls.append("installer")
+        return {
+            "venv_created": True,
+            "build_tooling_installed": True,
+            "dependencies_installed": True,
+            "editable_install": True,
+            "real_runtime_installed": False,
+            "setup": {
+                "config_created": True,
+                "token_created": True,
+                "token_file": str(bundle_root / "config" / "token.txt"),
+                "default_voice": "sherpa-en-debug",
+                "manifest": {"default_voice_in_manifest": True},
+                "catalog": {
+                    "exists": True,
+                    "single_installable_model_id": "vits-piper-en_US-lessac-medium",
+                },
+                "next_steps": [
+                    "tts model-install vits-piper-en_US-lessac-medium --activate",
+                    "tts model-check",
+                    "tts serve",
+                ],
+            },
+        }
+
+    def fake_run_json_command(
+        command: list[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        calls.append("smoke")
+        assert "scripts/smoke_service.py" in command
+        return {
+            "health": {"status": "ok"},
+            "voice": "sherpa-en-debug",
+            "voices": {"count": 1},
+            "http": {"bytes": 10},
+            "stream": {"frames": 2},
+            "job": {"status": "completed"},
+        }
+
+    def fake_run_local_reader_check(
+        *,
+        venv_python: Path,
+        bundle_root: Path,
+        timeout_s: float,
+    ) -> dict[str, object]:
+        calls.append("local-reader")
+        assert venv_python == bundle_root / ".venv" / "Scripts" / "python.exe"
+        assert timeout_s == 123.0
+        return {
+            "checks": [
+                {"name": "local_service_bootstrap"},
+                {"name": "chrome_extension_smoke"},
+            ]
+        }
+
+    class FakeProcess:
+        def poll(self) -> None:
+            return None
+
+        def terminate(self) -> None:
+            calls.append("terminate")
+
+        def communicate(self, timeout: float) -> tuple[str, str]:
+            return "", ""
+
+    monkeypatch.setattr(check_module, "_extract_bundle", fake_extract_bundle)
+    monkeypatch.setattr(
+        check_module,
+        "_run_windows_install_script",
+        fake_run_windows_install_script,
+    )
+    monkeypatch.setattr(check_module, "_run_json_command", fake_run_json_command)
+    monkeypatch.setattr(
+        check_module,
+        "_run_local_reader_check",
+        fake_run_local_reader_check,
+    )
+    monkeypatch.setattr(check_module, "_wait_for_health", lambda **kwargs: calls.append("health"))
+    monkeypatch.setattr(check_module, "_reserve_loopback_port", lambda: 7778)
+    monkeypatch.setattr(check_module.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
+
+    summary = check_module.check_windows_bundle_install(
+        bundle_path=bundle_path,
+        python_executable="python-test",
+        local_reader_timeout_s=123.0,
+        run_local_reader_check=True,
+    )
+
+    assert calls == ["extract", "installer", "health", "smoke", "terminate", "local-reader"]
+    assert summary["local_reader_check"] == {
+        "performed": True,
+        "checks": ["local_service_bootstrap", "chrome_extension_smoke"],
+    }
+
+
 def test_windows_bundle_install_check_rejects_invalid_stream_repeat(tmp_path: Path) -> None:
     check_module = _load_check_module()
     bundle_path = tmp_path / "bundle.zip"
@@ -265,6 +390,21 @@ def test_windows_bundle_install_check_rejects_invalid_stream_repeat(tmp_path: Pa
             bundle_path=bundle_path,
             python_executable="python-test",
             stream_text_repeat=0,
+        )
+
+
+def test_windows_bundle_install_check_rejects_invalid_local_reader_timeout(
+    tmp_path: Path,
+) -> None:
+    check_module = _load_check_module()
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    with pytest.raises(check_module.WindowsBundleInstallError, match="local-reader-timeout"):
+        check_module.check_windows_bundle_install(
+            bundle_path=bundle_path,
+            python_executable="python-test",
+            local_reader_timeout_s=0,
         )
 
 

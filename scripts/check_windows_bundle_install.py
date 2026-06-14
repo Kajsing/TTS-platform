@@ -21,6 +21,7 @@ SCRIPT_DIR = REPO_ROOT / "scripts"
 BUNDLE_ROOT = "tts-platform"
 DEFAULT_STARTUP_TIMEOUT_S = 30.0
 DEFAULT_COMMAND_TIMEOUT_S = 180.0
+DEFAULT_LOCAL_READER_TIMEOUT_S = 300.0
 
 
 class WindowsBundleInstallError(RuntimeError):
@@ -33,7 +34,21 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--python-executable", default=sys.executable)
     parser.add_argument("--startup-timeout-s", type=float, default=DEFAULT_STARTUP_TIMEOUT_S)
     parser.add_argument("--command-timeout-s", type=float, default=DEFAULT_COMMAND_TIMEOUT_S)
+    parser.add_argument(
+        "--local-reader-timeout-s",
+        type=float,
+        default=DEFAULT_LOCAL_READER_TIMEOUT_S,
+        help="Timeout for the optional local-reader bundle validation command.",
+    )
     parser.add_argument("--stream-text-repeat", type=int, default=2)
+    parser.add_argument(
+        "--run-local-reader-check",
+        action="store_true",
+        help=(
+            "After the installed service smoke passes, run the bundled "
+            "scripts/check_local_reader_bundle.py with the installed venv Python."
+        ),
+    )
     parser.add_argument(
         "--install-real-runtime",
         action="store_true",
@@ -59,7 +74,9 @@ def main(argv: list[str] | None = None) -> None:
                 python_executable=args.python_executable,
                 startup_timeout_s=args.startup_timeout_s,
                 command_timeout_s=args.command_timeout_s,
+                local_reader_timeout_s=args.local_reader_timeout_s,
                 stream_text_repeat=args.stream_text_repeat,
+                run_local_reader_check=args.run_local_reader_check,
                 install_real_runtime=args.install_real_runtime,
                 install_dependencies=not args.no_dependencies,
             )
@@ -72,7 +89,9 @@ def main(argv: list[str] | None = None) -> None:
                     python_executable=args.python_executable,
                     startup_timeout_s=args.startup_timeout_s,
                     command_timeout_s=args.command_timeout_s,
+                    local_reader_timeout_s=args.local_reader_timeout_s,
                     stream_text_repeat=args.stream_text_repeat,
+                    run_local_reader_check=args.run_local_reader_check,
                     install_real_runtime=args.install_real_runtime,
                     install_dependencies=not args.no_dependencies,
                 )
@@ -88,12 +107,16 @@ def check_windows_bundle_install(
     python_executable: str,
     startup_timeout_s: float = DEFAULT_STARTUP_TIMEOUT_S,
     command_timeout_s: float = DEFAULT_COMMAND_TIMEOUT_S,
+    local_reader_timeout_s: float = DEFAULT_LOCAL_READER_TIMEOUT_S,
     stream_text_repeat: int = 2,
+    run_local_reader_check: bool = False,
     install_real_runtime: bool = False,
     install_dependencies: bool = True,
 ) -> dict[str, object]:
     if stream_text_repeat <= 0:
         raise WindowsBundleInstallError("--stream-text-repeat must be positive.")
+    if local_reader_timeout_s <= 0:
+        raise WindowsBundleInstallError("--local-reader-timeout-s must be positive.")
 
     resolved_bundle_path = bundle_path.expanduser().resolve()
     if not resolved_bundle_path.is_file():
@@ -205,6 +228,14 @@ def check_windows_bundle_install(
         finally:
             _stop_process(service_process)
 
+        local_reader_payload = None
+        if run_local_reader_check:
+            local_reader_payload = _run_local_reader_check(
+                venv_python=venv_python,
+                bundle_root=bundle_root,
+                timeout_s=local_reader_timeout_s,
+            )
+
     return {
         "bundle_path": str(resolved_bundle_path),
         "venv": {
@@ -244,6 +275,7 @@ def check_windows_bundle_install(
             "next_steps": _string_list(setup_payload.get("next_steps")),
         },
         "service": _summarize_smoke(smoke_payload),
+        "local_reader_check": _summarize_local_reader_check(local_reader_payload),
     }
 
 
@@ -449,6 +481,30 @@ def _run_json_command(
     return payload
 
 
+def _run_local_reader_check(
+    *,
+    venv_python: Path,
+    bundle_root: Path,
+    timeout_s: float,
+) -> dict[str, object]:
+    script_path = bundle_root / "scripts" / "check_local_reader_bundle.py"
+    if not script_path.is_file():
+        raise WindowsBundleInstallError(
+            f"Local reader bundle check is missing: {script_path}"
+        )
+    return _run_json_command(
+        [
+            str(venv_python),
+            "scripts/check_local_reader_bundle.py",
+            "--python-executable",
+            str(venv_python),
+        ],
+        cwd=bundle_root,
+        timeout_s=timeout_s,
+        env=_venv_env(bundle_root / ".venv"),
+    )
+
+
 def _reserve_loopback_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -529,6 +585,24 @@ def _summarize_smoke(payload: dict[str, object]) -> dict[str, object]:
         "http_bytes": _dict_get(payload.get("http", {}), "bytes"),
         "stream_frames": _dict_get(stream, "frames"),
         "job_status": _dict_get(payload.get("job", {}), "status"),
+    }
+
+
+def _summarize_local_reader_check(
+    payload: dict[str, object] | None,
+) -> dict[str, object]:
+    if payload is None:
+        return {"performed": False}
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return {"performed": True, "checks": []}
+    return {
+        "performed": True,
+        "checks": [
+            check.get("name")
+            for check in checks
+            if isinstance(check, dict) and isinstance(check.get("name"), str)
+        ],
     }
 
 

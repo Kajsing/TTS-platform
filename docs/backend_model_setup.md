@@ -123,7 +123,11 @@ stopping the process trees.
 temporary virtual environment by installing the package, running the installed
 `tts setup-local` and `tts serve` entrypoint, and executing public-contract
 smoke against the started service. When the bundled install script is present,
-the check uses it for the venv/package/setup stage.
+the check uses it for the venv/package/setup stage. Add
+`--run-local-reader-check` when the same extracted-bundle install should also
+run the bundled service bootstrap, model-management, extension onboarding,
+reader-flow, and skip-aware Chrome/MV3 validation with the installed `.venv`
+Python.
 
 The voice registry is loaded from `models/MANIFEST.json`. If the manifest has no
 voices or is absent, the backend can expose the development stub voice

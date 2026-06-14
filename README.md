@@ -205,7 +205,10 @@ default. It is a local source handoff package, not a persistent service-manager
 installer. Its generated `WINDOWS_BUNDLE_README.md` includes the local
 `.venv` install path plus `model-check` and real-model install guidance before
 first Chrome playback, and `scripts\check_local_reader_bundle.py` for
-bundle-compatible service/model/extension validation after extraction.
+bundle-compatible service/model/extension validation after extraction. From the
+repo, `scripts/check_windows_bundle_install.py --run-local-reader-check` can
+also run that local-reader validation after the temporary extracted-bundle
+install and installed `tts serve` smoke pass.
 
 The `catalog-list`, `model-list`, `model-install`, `model-activate`,
 `model-check`, and `model-remove` commands are local model-management helpers
