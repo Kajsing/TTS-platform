@@ -91,6 +91,7 @@ def build_application_state(
         observability=observability,
         completed_job_ttl_seconds=config.limits.completed_job_ttl_seconds,
         max_stored_jobs=config.limits.max_stored_jobs,
+        max_job_seconds=config.limits.max_job_seconds,
     )
     streaming_metrics = StreamingMetrics()
     backend_ready = True

@@ -769,6 +769,111 @@ def test_tts_jobs_can_cancel_a_queued_job(tmp_path: Path, monkeypatch) -> None:
     assert cancel_response.json()["status"] == "cancelled"
 
 
+def test_tts_jobs_reject_when_running_and_queued_backlog_is_full(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client, auth_headers, app = build_test_bundle(
+        tmp_path,
+        config_data={
+            "limits": {
+                "max_concurrent_jobs": 1,
+                "max_stored_jobs": 2,
+                "requests_per_minute": 20,
+            }
+        },
+    )
+    original_synthesize = app.state.container.backend.synthesize
+
+    def delayed_synthesize(self, request):
+        time.sleep(0.2)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", delayed_synthesize)
+
+    first_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "First job", "voice": "manifest-voice"},
+    )
+    second_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Second job", "voice": "manifest-voice"},
+    )
+    third_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Third job", "voice": "manifest-voice"},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert third_response.status_code == 429
+    assert third_response.json()["error"]["type"] == "rate_limited"
+    assert third_response.json()["error"]["message"] == "Job queue is full."
+    assert third_response.json()["error"]["details"] == {
+        "max_stored_jobs": 2,
+        "active_jobs": 2,
+    }
+    assert len(app.state.container.job_manager._jobs) == 2
+    assert len(app.state.container.job_manager._futures) == 2
+    assert len(app.state.container.job_manager._executions) == 2
+
+
+def test_tts_jobs_mark_long_running_job_failed_after_timeout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client, auth_headers, app = build_test_bundle(
+        tmp_path,
+        config_data={
+            "limits": {
+                "max_concurrent_jobs": 1,
+                "requests_per_minute": 100,
+            }
+        },
+    )
+    app.state.container.job_manager.max_job_seconds = 0.05
+    original_synthesize = app.state.container.backend.synthesize
+
+    def delayed_synthesize(self, request):
+        time.sleep(0.2)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(app.state.container.backend), "synthesize", delayed_synthesize)
+
+    create_response = client.post(
+        "/v1/tts/jobs",
+        headers=auth_headers,
+        json={"text": "Slow job", "voice": "manifest-voice"},
+    )
+    assert create_response.status_code == 200
+    job_id = create_response.json()["job_id"]
+
+    status_payload = {}
+    for _ in range(30):
+        status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] == "failed":
+            break
+        time.sleep(0.02)
+
+    assert status_payload["status"] == "failed"
+    assert status_payload["error_message"] == "Job exceeded max_job_seconds."
+    assert status_payload["result_available"] is False
+
+    time.sleep(0.2)
+    status_response = client.get(f"/v1/tts/jobs/{job_id}", headers=auth_headers)
+    result_response = client.get(f"/v1/tts/jobs/{job_id}/result", headers=auth_headers)
+
+    assert status_response.json()["status"] == "failed"
+    assert status_response.json()["result_available"] is False
+    assert result_response.status_code == 409
+    assert result_response.json()["error"]["details"]["status"] == "failed"
+
+
 def test_tts_jobs_cancel_running_job_is_terminal_when_backend_cancel_is_best_effort(
     tmp_path: Path,
     monkeypatch,

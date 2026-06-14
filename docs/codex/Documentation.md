@@ -11,25 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: fix security scan finding F-002 by containing manifest
-  backend asset paths to each voice's `models/voices/<model-id>` source
-  directory during install, readiness checks, and real runtime loading.
-- Current loop result: catalog backend paths are validated before artifact load
-  and manifest writes, `model-check` reports poisoned manifest paths as invalid
-  instead of ready, and the sherpa-onnx runtime resolver rejects absolute,
-  traversal, or sibling-model asset paths before native runtime import.
+- Current loop target: fix security scan finding F-004 by bounding async TTS
+  queued/running job backlog and enforcing the existing job lifetime limit.
+- Current loop result: `limits.max_stored_jobs` is now a real total in-memory
+  job retention cap; when queued/running jobs fill it, `POST /v1/tts/jobs`
+  returns `429` instead of retaining more futures/executions. `limits.max_job_seconds`
+  now marks queued/running jobs failed, asks the backend to cancel, and prevents
+  late backend completion from overwriting the terminal failed state.
 - Validation status for the current loop:
-  - Targeted model/backend tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py packages\tts_core\tests\test_sherpa_onnx_backend.py -q`
-    and reported 65 passed.
+  - Targeted API tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_api.py -q` and reported
+    28 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py packages\tts_core\src\tts_core\backends\sherpa_onnx.py apps\tts_service\tests\test_cli_models.py packages\tts_core\tests\test_sherpa_onnx_backend.py`.
-  - The original F-002 backend-path reproducer was rerun against the fixed
-    code: catalog manifest build rejects `models/../secret.onnx`, model-check
-    reports backend `valid: false` / `assets_ready: false`, and the outside
-    file is no longer accepted as an existing backend asset.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\jobs.py apps\tts_service\src\tts_service\bootstrap.py apps\tts_service\tests\test_api.py`.
+  - The original F-004 backlog reproducer was rerun against the fixed code:
+    with `max_concurrent_jobs=1` and `max_stored_jobs=2`, six submissions now
+    return `[200, 200, 429, 429, 429, 429]`, and the manager remains at two
+    jobs, futures, and executions.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 220 tests.
+  - `py -3 -m pytest -q` passed with 222 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -447,6 +447,12 @@ This file is the live status log and shared memory for future Codex loops.
   - Client-provided `X-Request-ID` values are reused only when they are short,
     simple identifiers and are not bearer-shaped or equal to the current auth
     token; unsafe values are replaced with server-generated ids.
+  - async job submissions now enforce the configured in-memory job retention
+    cap against queued/running work, returning `429` when the backlog is full
+    instead of retaining unbounded futures/executions.
+  - async jobs now enforce the configured `limits.max_job_seconds` lifetime by
+    marking queued/running jobs failed, requesting backend cancellation, and
+    preserving that terminal state if backend work finishes late.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

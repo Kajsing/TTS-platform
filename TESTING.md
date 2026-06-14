@@ -24,6 +24,10 @@ backend-realism work, and early v1 model-management helpers:
 - rate limiting
 - job creation, status polling, and queued-job cancellation
 - running-job cancellation that remains terminal even when backend interruption is best-effort
+- async job backlog rejection when queued/running work reaches the configured
+  in-memory job cap
+- async job timeout handling that marks overlong jobs failed and keeps late
+  backend completion from overwriting that terminal state
 - job result retrieval and retention cleanup
 - WebSocket auth handling
 - WebSocket auth via either bearer headers or the browser-friendly `start` event token field

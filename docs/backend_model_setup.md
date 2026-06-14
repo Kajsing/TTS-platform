@@ -535,6 +535,16 @@ The service keeps separate text limits for short requests and streamed reading:
 The split keeps synchronous WAV and async job requests bounded while allowing
 the browser reader to send page-scale text to the streaming path.
 
+Async jobs are also bounded by the `[limits]` section:
+
+- `limits.max_stored_jobs` is the total in-memory job retention cap. When
+  queued/running jobs already fill that cap, new `POST /v1/tts/jobs` requests
+  are rejected with `429` instead of growing the executor backlog.
+- `limits.max_job_seconds` marks a queued or running job `failed` after the
+  configured lifetime and asks the backend to cancel the job. Hard interruption
+  inside backend work remains best-effort, but a timed-out worker cannot later
+  overwrite the terminal failed job state with `completed`.
+
 The current long-text path is therefore:
 
 - capture bounded readable page text in the extension,
@@ -593,6 +603,8 @@ Cancellation is terminal and observable at the service-contract level:
 
 - queued jobs become `cancelled`;
 - running jobs stay `cancelled` even if backend generation finishes later;
+- timed-out jobs become `failed` and cannot later be overwritten by late backend
+  completion;
 - chunk-planned synthesis checks cancellation between planned chunks;
 - real-runtime generation receives a cancellation callback when the installed
   `sherpa_onnx` package supports generation callbacks;
@@ -618,6 +630,9 @@ thread returns.
 - Client-provided `X-Request-ID` values are only reused when they are short,
   simple identifiers. Unsafe values, bearer-shaped values, and values equal to
   the current auth token are replaced with a server-generated id.
+- Async job submissions are bounded by configured in-memory retention and
+  timeout limits so authenticated local clients cannot grow queued/running work
+  without limit.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
 - Installed model files stay under `models/voices/<voice-id>`.
