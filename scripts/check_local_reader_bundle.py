@@ -106,6 +106,10 @@ def check_local_reader_bundle(
                 headed=headed,
             ),
         ),
+        (
+            "windows_service_task",
+            [python_executable, "scripts/check_windows_service_task.py"],
+        ),
     ]
     if real_voice_demo:
         checks.append(

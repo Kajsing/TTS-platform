@@ -116,8 +116,10 @@ def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(
         "tts-platform/models/MANIFEST.json",
         "tts-platform/docs/v1_readiness.md",
         "tts-platform/scripts/check_local_reader_bundle.py",
+        "tts-platform/scripts/check_windows_service_task.py",
         "tts-platform/scripts/windows/run_service.ps1",
         "tts-platform/scripts/windows/run_service.cmd",
+        "tts-platform/scripts/windows/run_scheduled_service.ps1",
         "tts-platform/WINDOWS_BUNDLE_README.md",
     ]
     with zipfile.ZipFile(bundle_path, mode="w") as archive:
@@ -149,14 +151,25 @@ def _entry_payload(entry: str) -> str:
                 ".\\.venv\\Scripts\\tts.exe model-check",
                 ".\\.venv\\Scripts\\tts.exe catalog-list",
                 ".\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx",
+                ".\\.venv\\Scripts\\python.exe -m pip install -e \".[real]\"",
                 "tts.exe model-install vits-piper-en_US-lessac-medium --activate",
                 "tts.exe model-install <model-id> --catalog <catalog> --activate",
+                ".\\scripts\\windows\\run_service.ps1 -SetupOnly",
                 ".\\scripts\\windows\\run_service.ps1",
                 "apps\\chrome_extension\\INSTALL.md",
                 "apps\\chrome_extension\\TROUBLESHOOTING.md",
+                "scripts\\check_local_reader_bundle.py",
+                "scripts\\check_windows_service_task.py",
+                "scripts\\check_chrome_extension_smoke.py",
+                "--require-browser",
+                "--browser-executable <path-to-browser>",
+                "Chrome for Testing or Chromium",
                 "config\\token.txt",
                 "security.allowed_origins",
-                "persistent Windows service",
+                "per-user autostart",
+                "Task Scheduler",
+                "tts.exe service-install --user",
+                "logs\\tts-service.log",
             ]
         )
     return "placeholder"

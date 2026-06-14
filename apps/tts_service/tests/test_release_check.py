@@ -37,6 +37,7 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
         "windows_bundle",
         "windows_bundle_bootstrap",
         "windows_launchers",
+        "windows_service_task",
         "windows_bundle_install",
     ]
     assert summary["package_path"] == str(package_out_path.resolve())
@@ -89,6 +90,11 @@ def test_release_check_runs_local_release_gate_commands(tmp_path: Path, monkeypa
                 "--bundle",
                 str(windows_bundle_out_path.resolve()),
             ],
+            REPO_ROOT,
+            True,
+        ),
+        (
+            ["python-test", "scripts/check_windows_service_task.py"],
             REPO_ROOT,
             True,
         ),
@@ -351,11 +357,11 @@ def test_release_check_can_include_installed_bundle_local_reader_gate(
         "--local-reader-require-browser",
         "--local-reader-headed",
     ]
-    assert calls[14][0] == expected_command
-    assert calls[14][1] is not None
-    assert calls[14][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert summary["checks"][14]["name"] == "windows_bundle_install"
-    assert summary["checks"][14]["command"] == expected_command
+    assert calls[15][0] == expected_command
+    assert calls[15][1] is not None
+    assert calls[15][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert summary["checks"][15]["name"] == "windows_bundle_install"
+    assert summary["checks"][15]["command"] == expected_command
 
 
 def test_release_check_redacts_inline_live_smoke_token(

@@ -154,6 +154,11 @@ tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"
 tts job-status <job-id> --token "$TTS_PLATFORM_TOKEN"
 tts setup-local
 tts serve
+tts service-install --user
+tts service-status --user
+tts service-start --user
+tts service-stop --user
+tts service-remove --user
 tts extension-allow-origin chrome-extension://abcdefghijklmnopabcdefghijklmnop
 tts catalog-list
 tts model-list
@@ -184,13 +189,21 @@ next steps use the targeted `python -m pip install sherpa-onnx` or
 and rejecting non-`chrome-extension` origins for this onboarding path.
 `serve` starts the local service from `config/config.toml`, binds only to
 loopback hosts by default, and uses the configured host, port, and log level.
+`service-install --user` registers the local service as a per-user Windows Task
+Scheduler logon task. It runs `setup-local`, uses the trusted Windows
+Task Scheduler tools, starts the existing `scripts/windows/run_service.ps1`
+launcher through `scripts/windows/run_scheduled_service.ps1`, and writes
+startup logs to `logs/tts-service.log`. Use `service-status --user`,
+`service-start --user`, `service-stop --user`, and `service-remove --user` to
+inspect or control that task.
 The Windows launchers in `scripts/windows/` are a convenience packaging step for
 local runs. `install_local.ps1` creates `.venv`, installs the local package, and
 runs `setup-local`; by default it installs the package's base dependencies in
 `.venv`. Add `-InstallRealRuntime` to install `.[real]` during bootstrap, or
 use `-NoDependencies` only when dependencies are already provisioned.
-`run_service.ps1` starts the foreground localhost service. They do not install a
-persistent Windows service.
+`run_service.ps1` starts the foreground localhost service. The v1 autostart path
+uses a per-user scheduled task rather than a machine-wide Windows Service or
+external service manager.
 
 To build a Windows-friendly local reader bundle with the service source,
 launchers, config example, docs, and a validated Chrome extension zip:
@@ -202,10 +215,12 @@ python3 scripts/package_windows_bundle.py --node-executable <path-to-node> --req
 
 The bundle is written to `dist/windows/tts-platform-local-reader.zip` by
 default. It is a local source handoff package, not a persistent service-manager
-installer. Its generated `WINDOWS_BUNDLE_README.md` includes the local
+installer. Its generated `WINDOWS_BUNDLE_README.md` includes the optional
+per-user Task Scheduler commands, the local
 `.venv` install path plus `model-check` and real-model install guidance before
-first Chrome playback, and `scripts\check_local_reader_bundle.py` for
-bundle-compatible service/model/extension validation after extraction. From the
+first Chrome playback, `scripts\check_local_reader_bundle.py`, and
+`scripts\check_windows_service_task.py` for bundle-compatible validation after
+extraction. From the
 repo, `scripts/check_windows_bundle_install.py --run-local-reader-check` can
 also run that local-reader validation after the temporary extracted-bundle
 install and installed `tts serve` smoke pass, with `--local-reader-*` flags for

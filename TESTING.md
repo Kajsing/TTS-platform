@@ -91,6 +91,9 @@ backend-realism work, and early v1 model-management helpers:
 - Windows launcher structure, including repo-local `PYTHONPATH`, module CLI
   invocation, setup fallback, and trusted system PowerShell delegation from the
   CMD launcher
+- Windows per-user Task Scheduler service/autostart command construction,
+  status parsing, idempotent removal, scheduled wrapper logging, and release
+  validation without creating a real scheduled task during tests
 - Chrome extension popup setup-checklist, manifest-policy, and privacy-boundary
   wiring through the lightweight extension validator
 - Chrome extension zip packaging with manifest at the archive root and
@@ -199,6 +202,10 @@ runs public-contract smoke, and stops the launcher process trees.
 It verifies the bundled Windows install script path when present by using it to
 create `.venv`, install the local package, and run catalog-aware `setup-local`
 before the installed foreground service smoke.
+It verifies the optional per-user Windows Task Scheduler autostart contract by
+checking `tts service-install --user` command construction, `service-status`
+parsing, the scheduled PowerShell wrapper, and `logs\tts-service.log` wiring
+without creating a real scheduled task.
 It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet plus CLI helper behavior.
@@ -308,6 +315,13 @@ smoke paths with:
 
 ```bash
 python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip
+```
+
+Check the Windows Task Scheduler autostart contract without creating a task
+with:
+
+```bash
+python3 scripts/check_windows_service_task.py
 ```
 
 Check the source first-run service bootstrap path directly with:

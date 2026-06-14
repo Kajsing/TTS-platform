@@ -43,6 +43,7 @@ INCLUDED_FILES = (
     "scripts/check_windows_bundle_bootstrap.py",
     "scripts/check_windows_bundle_install.py",
     "scripts/check_windows_launchers.py",
+    "scripts/check_windows_service_task.py",
     "scripts/demo_real_voice.py",
     "scripts/dev_run.py",
     "scripts/package_extension.py",
@@ -53,6 +54,7 @@ INCLUDED_FILES = (
     "scripts/windows/install_local.ps1",
     "scripts/windows/run_service.cmd",
     "scripts/windows/run_service.ps1",
+    "scripts/windows/run_scheduled_service.ps1",
 )
 
 INCLUDED_DIRS = (
@@ -194,8 +196,9 @@ def _windows_bundle_readme() -> str:
     return """# TTS Platform Local Reader Bundle
 
 This bundle is a Windows-friendly local source package for the TTS service and
-Chrome extension prototype. It does not install a persistent Windows service
-manager, scheduled task, or auto-start entry.
+Chrome extension prototype. It does not install an auto-start entry by default.
+For v1 per-user autostart, use the optional Task Scheduler commands below; they
+do not install a machine-wide Windows Service or external service manager.
 
 ## First Run
 
@@ -286,6 +289,22 @@ manager, scheduled task, or auto-start entry.
    the foreground service smoke path for the bundled PowerShell/CMD launchers on
    Windows.
 
+   To install the same local service as a per-user login task:
+
+   ```powershell
+   .\\.venv\\Scripts\\tts.exe service-install --user
+   .\\.venv\\Scripts\\tts.exe service-status --user
+   .\\.venv\\Scripts\\tts.exe service-start --user
+   ```
+
+   The scheduled task writes startup output to `logs\\tts-service.log`. Remove
+   it with:
+
+   ```powershell
+   .\\.venv\\Scripts\\tts.exe service-stop --user
+   .\\.venv\\Scripts\\tts.exe service-remove --user
+   ```
+
 7. Load the Chrome extension:
 
    - use `apps\\chrome_extension` with Chrome's `Load unpacked`, or
@@ -311,6 +330,7 @@ manager, scheduled task, or auto-start entry.
 
    ```powershell
    .\\.venv\\Scripts\\python.exe scripts\\check_local_reader_bundle.py
+   .\\.venv\\Scripts\\python.exe scripts\\check_windows_service_task.py
    .\\.venv\\Scripts\\python.exe scripts\\check_local_reader_bundle.py `
      --require-browser `
      --browser-executable <path-to-browser>

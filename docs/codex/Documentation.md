@@ -11,22 +11,30 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: bound offscreen browser audio scheduling for long stream
-  playback.
-- Current loop result: the offscreen scheduler now uses `highWatermarkMs` to
-  limit how far ahead browser audio is scheduled and tops up queued PCM chunks
-  as scheduled sources finish.
+- Current loop target: add a pragmatic Windows per-user Task Scheduler
+  service/autostart flow for the local reader server and align the Codex
+  project goal around v1 closeout.
+- Current loop result: `tts service-install --user`, `service-status`,
+  `service-start`, `service-stop`, and `service-remove` now manage a per-user
+  logon task that starts the existing Windows launcher through
+  `run_scheduled_service.ps1` and writes logs to `logs/tts-service.log`.
+  `docs/codex/Prompt.md` now defines the active goal as finishing the v1 local
+  reader: a localhost TTS server, long-page Chrome extension reading, Windows
+  first-run/install polish, safe model management, and a final security-focused
+  pass before v1 is called done.
 - Validation status for the current loop:
-  - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
-    remains skip-aware because Node.js is not on `PATH`.
-  - `py -3 scripts\check_extension_reader_flow.py` passed, streaming a
-    generated 2,963-word article through 145 planned text chunks.
-  - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`
-    passed with 12 tests.
-  - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest apps\tts_service\tests\test_cli_service_task.py apps\tts_service\tests\test_windows_service_task_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    passed with 26 tests.
+  - `py -3 scripts\check_windows_service_task.py` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
+  - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest -q` passed with 242 tests.
   - `git diff --check` passed.
-  - `py -3 -m pytest -q` passed with 234 tests.
+  - `py -3 scripts\release_check.py --package-out "$env:TEMP\tts-platform-prototype-release-check.zip" --windows-bundle-out "$env:TEMP\tts-platform-local-reader-release-check.zip"`
+    passed. The Chrome/MV3 smoke remained skip-aware in this branded Chrome
+    environment; bundle bootstrap, launcher foreground service smokes,
+    Task Scheduler contract validation, and installed-bundle service smoke
+    passed.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -226,6 +234,17 @@ This file is the live status log and shared memory for future Codex loops.
     dependencies by default for extracted bundles, reports
     `dependencies_installed`, and keeps `-NoDependencies` as an explicit escape
     hatch for already provisioned environments.
+  - `tts service-install --user` now registers the local service as a per-user
+    Windows Task Scheduler logon task after running `setup-local`.
+  - `tts service-status --user`, `service-start --user`,
+    `service-stop --user`, and `service-remove --user` now inspect and control
+    that task through `schtasks.exe`.
+  - `scripts/windows/run_scheduled_service.ps1` wraps the existing foreground
+    `run_service.ps1` launcher and appends startup output to
+    `logs/tts-service.log`.
+  - `scripts/check_windows_service_task.py` verifies the Task Scheduler
+    command shape, status parsing, scheduled wrapper, and log wiring without
+    creating a real scheduled task.
   - `tts setup-local` next-step guidance now includes `tts model-check` so
     operators can verify configured/default voice readiness before expecting
     real acoustic output.
@@ -493,12 +512,9 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Enter v1 finish mode: prefer closeout, release validation, install polish,
   and blocker removal over new feature tracks.
-- Next implementation pass: add a pragmatic Windows per-user Task Scheduler
-  service/autostart flow for the local reader server.
-- After the remaining closeout/install work, run one final security-focused
-  pass before declaring v1 done. Use Codex Security workflows and subagents
-  where they reduce blind spots, but keep fixes small, validated, and
-  reviewable.
+- Next pass: run a final security-focused review before declaring v1 done. Use
+  Codex Security workflows and subagents where they reduce blind spots, but keep
+  fixes small, validated, and reviewable.
 - Do not expand scope unless a v1 blocker requires it.
 
 ## Decisions Made And Why
@@ -745,8 +761,9 @@ python3 scripts/package_windows_bundle.py
   extraction. The virtualenv install/start path is now covered by an automated
   temp-venv smoke, and launcher setup-only plus foreground service smoke
   execution is covered for PowerShell/CMD.
-- Persistent Windows auto-start/service-manager installation remains an explicit
-  later product choice.
+- V1 Windows autostart now uses a per-user Task Scheduler task. A machine-wide
+  Windows Service, NSSM, pywin32, or Startup-folder mechanism remains out of
+  scope without a new explicit product decision.
 - The default Chrome/MV3 smoke is opportunistic so offline release gates remain
   usable across machines. Use
   `python3 scripts/check_chrome_extension_smoke.py --require-browser --headed`
@@ -767,9 +784,9 @@ python3 scripts/package_windows_bundle.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Continue in v1 finish mode. The next planned slice is the Windows per-user
-   Task Scheduler service/autostart flow for `tts serve`.
-4. Keep the next diff narrowly scoped to that milestone.
+3. Continue in v1 finish mode. The next planned pass is the final
+   security-focused review before v1 can be declared done.
+4. Keep any resulting fixes small, validated, and reviewable.
 5. Run the milestone validation commands before claiming completion.
 6. Before declaring v1 done, run a final security-focused pass using Codex
    Security workflows and subagents where they improve coverage.

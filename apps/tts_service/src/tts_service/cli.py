@@ -31,6 +31,9 @@ from .config import SecurityConfig, load_config
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
 DEFAULT_MAX_MODEL_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
 MAX_MODEL_ARTIFACT_REDIRECTS = 5
+DEFAULT_SERVICE_TASK_NAME = "TTS Platform Local Reader"
+DEFAULT_SERVICE_LOG_PATH = "logs/tts-service.log"
+SCHEDULED_SERVICE_SCRIPT_PATH = "scripts/windows/run_scheduled_service.ps1"
 REAL_RUNTIME_INSTALL_STEP = 'python -m pip install -e ".[real]"'
 SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
 NUMPY_INSTALL_STEP = "python -m pip install numpy"
@@ -161,6 +164,36 @@ def main(argv: list[str] | None = None) -> None:
                 port=args.port,
                 allow_non_local_host=args.allow_non_local_host,
             )
+            return
+
+        if args.command == "service-install":
+            _print_json(
+                _install_service_task(
+                    repo_root=Path(args.repo_root),
+                    task_name=args.task_name,
+                    log_path=Path(args.log_path),
+                    host=args.host,
+                    port=args.port,
+                    allow_non_local_host=args.allow_non_local_host,
+                    skip_setup=args.skip_setup,
+                )
+            )
+            return
+
+        if args.command == "service-status":
+            _print_json(_service_task_status(task_name=args.task_name))
+            return
+
+        if args.command == "service-start":
+            _print_json(_run_service_task(task_name=args.task_name))
+            return
+
+        if args.command == "service-stop":
+            _print_json(_stop_service_task(task_name=args.task_name))
+            return
+
+        if args.command == "service-remove":
+            _print_json(_remove_service_task(task_name=args.task_name))
             return
 
         if args.command == "extension-allow-origin":
@@ -299,6 +332,40 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow binding outside localhost. The default run path only allows loopback hosts.",
     )
+
+    service_install_parser = subparsers.add_parser("service-install")
+    service_install_parser.add_argument(
+        "--user",
+        action="store_true",
+        help=(
+            "Install the v1 per-user Windows Task Scheduler task. "
+            "This is the only supported scope."
+        ),
+    )
+    service_install_parser.add_argument("--repo-root", default=".")
+    service_install_parser.add_argument("--task-name", default=DEFAULT_SERVICE_TASK_NAME)
+    service_install_parser.add_argument("--log-path", default=DEFAULT_SERVICE_LOG_PATH)
+    service_install_parser.add_argument("--host", default=None)
+    service_install_parser.add_argument("--port", type=int, default=None)
+    service_install_parser.add_argument(
+        "--allow-non-local-host",
+        action="store_true",
+        help="Pass --allow-non-local-host to the scheduled service launcher.",
+    )
+    service_install_parser.add_argument(
+        "--skip-setup",
+        action="store_true",
+        help="Do not run setup-local before registering the scheduled task.",
+    )
+
+    for service_command in ("service-status", "service-start", "service-stop", "service-remove"):
+        service_parser = subparsers.add_parser(service_command)
+        service_parser.add_argument(
+            "--user",
+            action="store_true",
+            help="Use the v1 per-user Windows Task Scheduler task scope.",
+        )
+        service_parser.add_argument("--task-name", default=DEFAULT_SERVICE_TASK_NAME)
 
     extension_allow_parser = subparsers.add_parser("extension-allow-origin")
     extension_allow_parser.add_argument("origin")
@@ -868,6 +935,370 @@ def _serve_local(
         log_level=config.server.log_level,
         reload=False,
     )
+
+
+def _install_service_task(
+    *,
+    repo_root: Path,
+    task_name: str,
+    log_path: Path,
+    host: str | None = None,
+    port: int | None = None,
+    allow_non_local_host: bool = False,
+    skip_setup: bool = False,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    scheduler_executable: str | None = None,
+    powershell_executable: str | None = None,
+) -> dict[str, object]:
+    resolved_repo_root = repo_root.expanduser().resolve()
+    resolved_log_path = _resolve_under_root(resolved_repo_root, log_path)
+    resolved_script_path = (
+        resolved_repo_root / SCHEDULED_SERVICE_SCRIPT_PATH
+    ).resolve()
+    if not resolved_script_path.is_file():
+        raise SystemExit(f"Scheduled service launcher does not exist: {resolved_script_path}")
+
+    setup_payload: dict[str, object] | None = None
+    if not skip_setup:
+        setup_payload = _setup_local(
+            repo_root=resolved_repo_root,
+            config_path=Path("config/config.toml"),
+            example_config_path=Path("config/config.example.toml"),
+            manifest_path=Path("models/MANIFEST.json"),
+        )
+
+    normalized_task_name = _normalize_service_task_name(task_name)
+    action = _build_service_task_action(
+        repo_root=resolved_repo_root,
+        script_path=resolved_script_path,
+        log_path=resolved_log_path,
+        host=host,
+        port=port,
+        allow_non_local_host=allow_non_local_host,
+        powershell_executable=powershell_executable,
+        runner=runner,
+    )
+    command = [
+        _task_scheduler_executable(
+            runner=runner,
+            scheduler_executable=scheduler_executable,
+        ),
+        "/Create",
+        "/TN",
+        normalized_task_name,
+        "/SC",
+        "ONLOGON",
+        "/RL",
+        "LIMITED",
+        "/TR",
+        action,
+        "/F",
+    ]
+    completed = _run_task_scheduler_command(command, runner=runner)
+    return {
+        "scope": "user",
+        "task_name": normalized_task_name,
+        "installed": True,
+        "repo_root": str(resolved_repo_root),
+        "launcher": str(resolved_script_path),
+        "log_path": str(resolved_log_path),
+        "run_at": "user-logon",
+        "action": action,
+        "setup": setup_payload,
+        "scheduler": _task_scheduler_result_payload(completed),
+        "next_steps": [
+            "tts service-status --user",
+            "tts service-start --user",
+            "restart Windows or sign out/in to verify logon autostart",
+            "inspect logs/tts-service.log if startup fails",
+        ],
+    }
+
+
+def _service_task_status(
+    *,
+    task_name: str,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    scheduler_executable: str | None = None,
+) -> dict[str, object]:
+    normalized_task_name = _normalize_service_task_name(task_name)
+    command = [
+        _task_scheduler_executable(
+            runner=runner,
+            scheduler_executable=scheduler_executable,
+        ),
+        "/Query",
+        "/TN",
+        normalized_task_name,
+        "/FO",
+        "LIST",
+        "/V",
+    ]
+    completed = _run_task_scheduler_command(command, runner=runner, check=False)
+    if completed.returncode != 0:
+        if _task_scheduler_missing_task(completed):
+            return {
+                "scope": "user",
+                "task_name": normalized_task_name,
+                "installed": False,
+                "status": "not_installed",
+                "next_steps": ["tts service-install --user"],
+            }
+        _raise_task_scheduler_error(command=command, completed=completed)
+
+    details = _parse_task_scheduler_list_output(completed.stdout)
+    return {
+        "scope": "user",
+        "task_name": normalized_task_name,
+        "installed": True,
+        "status": details.get("Status") or details.get("Scheduled Task State"),
+        "last_run_time": details.get("Last Run Time"),
+        "last_result": details.get("Last Result"),
+        "next_run_time": details.get("Next Run Time"),
+        "task_to_run": details.get("Task To Run"),
+        "details": details,
+    }
+
+
+def _run_service_task(
+    *,
+    task_name: str,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    scheduler_executable: str | None = None,
+) -> dict[str, object]:
+    return _control_service_task(
+        task_name=task_name,
+        action="start",
+        scheduler_args=["/Run"],
+        runner=runner,
+        scheduler_executable=scheduler_executable,
+    )
+
+
+def _stop_service_task(
+    *,
+    task_name: str,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    scheduler_executable: str | None = None,
+) -> dict[str, object]:
+    return _control_service_task(
+        task_name=task_name,
+        action="stop",
+        scheduler_args=["/End"],
+        runner=runner,
+        scheduler_executable=scheduler_executable,
+    )
+
+
+def _remove_service_task(
+    *,
+    task_name: str,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    scheduler_executable: str | None = None,
+) -> dict[str, object]:
+    normalized_task_name = _normalize_service_task_name(task_name)
+    command = [
+        _task_scheduler_executable(
+            runner=runner,
+            scheduler_executable=scheduler_executable,
+        ),
+        "/Delete",
+        "/TN",
+        normalized_task_name,
+        "/F",
+    ]
+    completed = _run_task_scheduler_command(command, runner=runner, check=False)
+    if completed.returncode != 0:
+        if _task_scheduler_missing_task(completed):
+            return {
+                "scope": "user",
+                "task_name": normalized_task_name,
+                "removed": False,
+                "installed": False,
+                "status": "not_installed",
+            }
+        _raise_task_scheduler_error(command=command, completed=completed)
+    return {
+        "scope": "user",
+        "task_name": normalized_task_name,
+        "removed": True,
+        "installed": False,
+        "scheduler": _task_scheduler_result_payload(completed),
+    }
+
+
+def _control_service_task(
+    *,
+    task_name: str,
+    action: str,
+    scheduler_args: list[str],
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None,
+    scheduler_executable: str | None,
+) -> dict[str, object]:
+    normalized_task_name = _normalize_service_task_name(task_name)
+    command = [
+        _task_scheduler_executable(
+            runner=runner,
+            scheduler_executable=scheduler_executable,
+        ),
+        *scheduler_args,
+        "/TN",
+        normalized_task_name,
+    ]
+    completed = _run_task_scheduler_command(command, runner=runner)
+    return {
+        "scope": "user",
+        "task_name": normalized_task_name,
+        "action": action,
+        "ok": True,
+        "scheduler": _task_scheduler_result_payload(completed),
+    }
+
+
+def _build_service_task_action(
+    *,
+    repo_root: Path,
+    script_path: Path,
+    log_path: Path,
+    host: str | None,
+    port: int | None,
+    allow_non_local_host: bool,
+    powershell_executable: str | None = None,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+) -> str:
+    if port is not None and port <= 0:
+        raise SystemExit("service task port must be positive")
+
+    command = [
+        powershell_executable
+        or _trusted_windows_executable(
+            "System32/WindowsPowerShell/v1.0/powershell.exe",
+            runner=runner,
+        ),
+        "-NoProfile",
+        "-WindowStyle",
+        "Hidden",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+        "-LogPath",
+        str(log_path),
+    ]
+    if host:
+        command.extend(["-HostOverride", host])
+    if port is not None:
+        command.extend(["-Port", str(port)])
+    if allow_non_local_host:
+        command.append("-AllowNonLocalHost")
+    return subprocess.list2cmdline(command)
+
+
+def _normalize_service_task_name(task_name: str) -> str:
+    normalized = task_name.strip()
+    if not normalized:
+        raise SystemExit("Task name must not be empty.")
+    if any(character in normalized for character in "\r\n"):
+        raise SystemExit("Task name must be a single line.")
+    return normalized
+
+
+def _task_scheduler_executable(
+    *,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None,
+    scheduler_executable: str | None,
+) -> str:
+    return scheduler_executable or _trusted_windows_executable(
+        "System32/schtasks.exe",
+        runner=runner,
+    )
+
+
+def _trusted_windows_executable(
+    relative_path: str,
+    *,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None,
+) -> str:
+    system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+    executable = system_root.joinpath(*PurePosixPath(relative_path).parts)
+    if runner is not None:
+        return str(executable)
+    if os.name != "nt":
+        raise SystemExit("Windows Task Scheduler service commands require Windows.")
+    if not executable.is_file():
+        raise SystemExit(f"Trusted Windows executable not found: {executable}")
+    return str(executable)
+
+
+def _run_task_scheduler_command(
+    command: list[str],
+    *,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    completed = (
+        runner(command)
+        if runner is not None
+        else subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    )
+    if check and completed.returncode != 0:
+        _raise_task_scheduler_error(command=command, completed=completed)
+    return completed
+
+
+def _raise_task_scheduler_error(
+    *,
+    command: list[str],
+    completed: subprocess.CompletedProcess[str],
+) -> None:
+    stderr = (completed.stderr or "").strip()
+    stdout = (completed.stdout or "").strip()
+    detail = stderr or stdout or f"exit code {completed.returncode}"
+    raise SystemExit(
+        "Windows Task Scheduler command failed: "
+        + " ".join(command[:2])
+        + f" ({detail})"
+    )
+
+
+def _task_scheduler_missing_task(completed: subprocess.CompletedProcess[str]) -> bool:
+    output = f"{completed.stdout}\n{completed.stderr}".lower()
+    return (
+        "cannot find the file specified" in output
+        or "the system cannot find" in output
+        or "does not exist" in output
+        or "cannot find the task" in output
+    )
+
+
+def _task_scheduler_result_payload(
+    completed: subprocess.CompletedProcess[str],
+) -> dict[str, object]:
+    payload: dict[str, object] = {"returncode": completed.returncode}
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+    if stdout:
+        payload["stdout"] = stdout
+    if stderr:
+        payload["stderr"] = stderr
+    return payload
+
+
+def _parse_task_scheduler_list_output(output: str) -> dict[str, str]:
+    details: dict[str, str] = {}
+    for raw_line in output.splitlines():
+        if ":" not in raw_line:
+            continue
+        key, value = raw_line.split(":", 1)
+        key = key.strip()
+        if key:
+            details[key] = value.strip()
+    return details
 
 
 def _is_loopback_host(host: str) -> bool:

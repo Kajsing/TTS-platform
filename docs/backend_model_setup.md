@@ -95,7 +95,8 @@ The CMD launchers delegate to the trusted
 performing bare `powershell.exe` lookup in the current directory or `PATH`.
 Use `.\scripts\windows\run_service.ps1 -SetupOnly` to create
 `config\config.toml` and `config\token.txt` without starting the service. They
-are convenience launchers, not persistent Windows service installers.
+are convenience launchers; the v1 persistent autostart path is the per-user
+Task Scheduler command below, not a machine-wide Windows Service.
 Use `.\scripts\windows\install_local.ps1` first when the extracted bundle needs
 a local `.venv`; it creates the virtual environment, installs the local package,
 runs `setup-local`, and emits a JSON summary for automation. By default it
@@ -103,6 +104,24 @@ installs the package's base dependencies in `.venv`; add `-InstallRealRuntime`
 when the bootstrap should also install the optional `.[real]` runtime
 dependencies before `setup-local`, or `-NoDependencies` only for an already
 provisioned environment.
+
+After the local package is installed, optional per-user autostart is available
+through Windows Task Scheduler:
+
+```powershell
+.\.venv\Scripts\tts.exe service-install --user
+.\.venv\Scripts\tts.exe service-status --user
+.\.venv\Scripts\tts.exe service-start --user
+```
+
+The scheduled task starts `scripts\windows\run_scheduled_service.ps1`, which
+wraps `run_service.ps1` and appends startup output to
+`logs\tts-service.log`. Remove it with:
+
+```powershell
+.\.venv\Scripts\tts.exe service-stop --user
+.\.venv\Scripts\tts.exe service-remove --user
+```
 
 Build a Windows-friendly local reader bundle with:
 
@@ -122,6 +141,9 @@ extract, virtualenv, launcher, and extension-loading flow.
 launchers in setup-only mode and, on Windows, starts them as foreground
 services on reserved loopback ports before running public-contract smoke and
 stopping the process trees.
+`scripts/check_windows_service_task.py` verifies the Task Scheduler command
+shape, status parsing, scheduled wrapper, and log wiring without creating a
+real scheduled task.
 `scripts/check_windows_bundle_install.py` verifies the extracted bundle in a
 temporary virtual environment by installing the package, running the installed
 `tts setup-local` and `tts serve` entrypoint, and executing public-contract
@@ -713,6 +735,7 @@ python3 -m pytest -q
 python3 -m ruff check .
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_chrome_extension_smoke.py
+python3 scripts/check_windows_service_task.py
 ```
 
 Windows PowerShell fallback:

@@ -51,6 +51,18 @@ def test_windows_cmd_launcher_delegates_to_powershell_launcher() -> None:
     assert "%*" in script
 
 
+def test_windows_scheduled_service_launcher_wraps_foreground_launcher_with_logging() -> None:
+    launcher = REPO_ROOT / "scripts" / "windows" / "run_scheduled_service.ps1"
+    script = launcher.read_text(encoding="utf-8")
+
+    assert "logs\\tts-service.log" in script
+    assert "run_service.ps1" in script
+    assert "*>> $LogPath" in script
+    assert "Starting TTS Platform local reader service." in script
+    assert "-HostOverride" in script
+    assert "-AllowNonLocalHost" in script
+
+
 def test_windows_install_cmd_launcher_delegates_to_powershell_installer() -> None:
     launcher = REPO_ROOT / "scripts" / "windows" / "install_local.cmd"
     script = launcher.read_text(encoding="utf-8")

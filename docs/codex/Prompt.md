@@ -15,16 +15,21 @@ When older summaries disagree with later phase notes, preserve the later phase n
 
 ## Project Goal
 
-Build and finish an offline-first local text-to-speech platform with:
+Build and finish an offline-first local text-to-speech platform for long-form
+web reading on Windows. The v1 product goal is:
 
-- a stable localhost HTTP API
-- protected async job flows
-- protected WebSocket streaming
-- a public-contract CLI
-- a browser prototype that stays isolated in `apps/chrome_extension/`
-- a backend architecture that can use real `sherpa-onnx` inference without changing public API contracts
+- a local server that runs a TTS pipeline over stable localhost HTTP and
+  WebSocket contracts
+- a Chrome extension that can capture and read long web pages containing
+  thousands of words
+- robust first-run, install, service/autostart, and model-management flows
+- offline-first operation once models are installed
+- security defaults suitable for a localhost reader that talks to a browser
 
-The current long-horizon objective is to finish Phase 7 by making the real backend path, chunk-planned execution, streaming behavior, cancellation semantics, and operator documentation complete and truthful.
+The current long-horizon objective is to finish v1, not to keep expanding the
+platform. Prefer closeout work: release validation, Windows install polish,
+operator documentation, model-flow safety, extension installability, and a
+final security-focused pass before calling v1 done.
 
 ## Non-Goals
 
@@ -35,9 +40,11 @@ The current initiative does not include:
 - moving browser-specific logic into the localhost service
 - distributed job execution or persistent job storage
 - cloud-first deployment work
-- installer or packaging automation for end users
 - a major Chrome extension UX redesign
 - full reader-mode extraction, advanced SSML parity, or speculative prosody features that the current backend cannot support
+- a machine-wide Windows Service, NSSM, pywin32 service, or Startup-folder
+  autostart mechanism unless the user makes a new explicit product decision
+- uploading local model artifacts or generated model files to GitHub
 
 ## Hard Constraints
 
@@ -56,31 +63,51 @@ The current initiative does not include:
 
 ## Required Deliverables
 
-The project must preserve the already-built platform surface and complete the remaining Phase 7 work:
+The project must preserve the already-built platform surface and complete the
+v1 local-reader flow:
 
 - keep sync, job, and streaming synthesis available through the existing localhost service contracts
 - keep the manifest as the primary voice registry source
 - keep backend readiness and startup errors truthful in health and startup behavior
-- improve chunk-plan heuristics beyond simple sentence grouping and pause hints
-- move streaming closer to true incremental backend generation instead of only planned-chunk synthesis plus PCM frame slicing
-- tighten and document cancellation semantics for queued jobs, running jobs, active streams, and in-flight backend work
-- document model asset layout, manifest conventions, backend modes, and setup expectations clearly enough for humans and Codex
+- keep chunk planning, long-text streaming, resume/continue behavior, and
+  cancellation semantics explicit, tested, and documented
+- make Windows first-run and per-user service/autostart setup reviewable,
+  removable, and validated without requiring machine-wide privileges
+- make model download/install/activate/remove flows safe, documented, and
+  checksum-aware
+- keep the Chrome extension installable, localhost-bound, and able to read long
+  pages through chunked streaming
+- document model asset layout, manifest conventions, backend modes, setup
+  expectations, and release validation clearly enough for humans and Codex
 - keep benchmark coverage for HTTP, streaming, and async job flows
+- run a final security-focused pass before declaring v1 complete; use Codex
+  Security workflows and subagents when they improve repository-wide or
+  cross-cutting coverage
 
 ## Done When
 
 The current initiative is done only when all of the following are true:
 
-1. The remaining open Phase 7 items from `TASKS.md` are complete.
-2. Real `sherpa-onnx` inference powers the intended sync, async, and streaming paths without breaking public contracts.
-3. Chunk planning remains a first-class domain concept and its heuristics are no longer limited to the initial simple pass.
-4. Streaming is no longer only "synthesize a full planned chunk and slice PCM frames" unless that limitation is explicitly retained, tested, and recorded as unfinished work in `Documentation.md`.
-5. Cancellation behavior is explicit, tested, and documented for queued jobs, running jobs, and active streams.
-6. Model/setup/backend documentation is updated to match the actual repo behavior.
-7. Relevant automated validation passes:
+1. The local server can run the intended TTS pipeline through the stable
+   localhost HTTP and WebSocket contracts.
+2. Long page reading through the Chrome extension is covered by structural and
+   service-level smoke checks.
+3. Model management covers catalog listing, download/install, activation,
+   checks, removal, checksum behavior, and safe archive handling.
+4. Windows first-run, bundle install, launchers, and per-user Task Scheduler
+   service/autostart contracts are documented and tested.
+5. Security defaults for localhost binding, token auth, origin validation,
+   model archive extraction, extension base URL handling, and release packaging
+   are verified.
+6. A final security-focused review has been run and any accepted findings are
+   fixed or explicitly recorded as follow-up work.
+7. Documentation is updated to match the actual repo behavior.
+8. Relevant automated validation passes:
    - `python3 -m pytest -q`
    - `python3 -m ruff check .`
-8. Repo-level definition of done from `AGENTS.md` is satisfied:
+   - `python3 scripts/release_check.py`
+   - `python3 scripts/check_v1_readiness.py`
+9. Repo-level definition of done from `AGENTS.md` is satisfied:
    - code is implemented and understandable
    - relevant tests exist and pass
    - public contracts are explicit
@@ -94,15 +121,21 @@ Expected local workflow:
 1. Create a virtual environment and install `.[dev]`.
 2. Copy `config/config.example.toml` to `config/config.toml`.
 3. Ensure the token file and manifest-backed voice setup exist locally.
-4. Start the service with `python3 scripts/dev_run.py`.
+4. Start the service with `python3 scripts/dev_run.py`, `tts serve`, or the
+   Windows launcher scripts.
 5. Smoke-test the public contract with commands such as:
    - `tts health`
    - `tts list-voices`
+   - `tts catalog-list`
+   - `tts model-install vits-piper-en_US-lessac-medium --activate`
    - `tts save "Hello world" --out out.wav --token "$TTS_PLATFORM_TOKEN"`
    - `tts stream "Hello world" --out stream.wav --token "$TTS_PLATFORM_TOKEN"`
    - `python3 scripts/benchmark.py --mode http --token "$TTS_PLATFORM_TOKEN"`
    - `python3 scripts/benchmark.py --mode stream --token "$TTS_PLATFORM_TOKEN"`
    - `python3 scripts/benchmark.py --mode job --token "$TTS_PLATFORM_TOKEN"`
+6. On Windows, optionally install the user-scoped autostart task with
+   `tts service-install --user`, inspect it with `tts service-status --user`,
+   and remove it with `tts service-remove --user`.
 
 Optional browser prototype validation keeps the service running on a localhost URL Chrome can reach, allow-lists the extension origin, and uses `python3 scripts/check_extension.py` plus manual popup/playback checks.
 
@@ -115,5 +148,7 @@ Optional browser prototype validation keeps the service running on a localhost U
 - Backend runtime modes are `stub`, `auto`, and `real`.
 - Tests can exercise the real-backend path through a fake in-test `sherpa_onnx` runtime instead of requiring heavyweight model downloads in the normal suite.
 - Browser WebSocket clients may send the bearer token in the first `start` event because standard browser clients cannot attach arbitrary `Authorization` headers. This is a deliberate localhost-only compromise, not a general API expansion.
-- There is still no full automated MV3 test harness in the repo. The extension currently relies on manual verification plus `python3 scripts/check_extension.py`.
+- Chrome/MV3 smoke coverage is skip-aware by default because branded Chrome may
+  reject command-line unpacked extension loading; strict evidence can be
+  required with the browser flags documented in `Documentation.md`.
 - `docs/codex/Prompt.md`, `docs/codex/Plan.md`, `docs/codex/Implement.md`, and `docs/codex/Documentation.md` are now the Codex-oriented workflow source of truth.

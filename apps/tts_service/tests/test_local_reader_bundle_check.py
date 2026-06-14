@@ -39,6 +39,7 @@ def test_local_reader_bundle_check_runs_bundle_compatible_commands(
         "extension_onboarding",
         "extension_reader_flow",
         "chrome_extension_smoke",
+        "windows_service_task",
     ]
     assert [call[0] for call in calls] == [
         ["python-test", "scripts/check_local_service_bootstrap.py"],
@@ -47,6 +48,7 @@ def test_local_reader_bundle_check_runs_bundle_compatible_commands(
         ["python-test", "scripts/check_extension_onboarding.py"],
         ["python-test", "scripts/check_extension_reader_flow.py"],
         ["python-test", "scripts/check_chrome_extension_smoke.py"],
+        ["python-test", "scripts/check_windows_service_task.py"],
     ]
     assert all(env is None for _, env in calls)
 

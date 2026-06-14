@@ -100,6 +100,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/windows/install_local.cmd" in names
     assert "tts-platform/scripts/windows/run_service.ps1" in names
     assert "tts-platform/scripts/windows/run_service.cmd" in names
+    assert "tts-platform/scripts/windows/run_scheduled_service.ps1" in names
     assert "tts-platform/scripts/check_extension_onboarding.py" in names
     assert "tts-platform/scripts/check_extension_reader_flow.py" in names
     assert "tts-platform/scripts/check_local_reader_bundle.py" in names
@@ -110,6 +111,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/check_windows_bundle_bootstrap.py" in names
     assert "tts-platform/scripts/check_windows_bundle_install.py" in names
     assert "tts-platform/scripts/check_windows_launchers.py" in names
+    assert "tts-platform/scripts/check_windows_service_task.py" in names
     assert "tts-platform/scripts/demo_real_voice.py" in names
     assert "tts-platform/scripts/package_windows_bundle.py" in names
     assert "tts-platform/scripts/release_check.py" in names
@@ -133,17 +135,25 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "should put the `model-install` command above first" in readme
     assert "tts.exe model-install <model-id> --catalog <catalog> --activate" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
+    assert "tts.exe service-install --user" in readme
+    assert "tts.exe service-status --user" in readme
+    assert "tts.exe service-start --user" in readme
+    assert "tts.exe service-stop --user" in readme
+    assert "tts.exe service-remove --user" in readme
+    assert "logs\\tts-service.log" in readme
     assert "apps\\chrome_extension\\INSTALL.md" in readme
     assert "apps\\chrome_extension\\TROUBLESHOOTING.md" in readme
     assert "scripts\\check_local_reader_bundle.py" in readme
+    assert "scripts\\check_windows_service_task.py" in readme
     assert "scripts\\check_extension.py" in readme
     assert "scripts\\check_chrome_extension_smoke.py" in readme
     assert "--require-browser" in readme
     assert "--browser-executable <path-to-browser>" in readme
     assert "pass the strict browser flags to" in readme
     assert "Chrome for Testing or Chromium" in readme
-    assert "persistent Windows service" in readme
-    assert "manager" in readme
+    assert "per-user autostart" in readme
+    assert "Task Scheduler" in readme
+    assert "machine-wide Windows Service" in readme
     assert "scripts\\windows\\install_local.ps1" in install_guide
     assert "scripts\\windows\\run_service.ps1" in install_guide
     assert "tts extension-allow-origin <copied-origin>" in install_guide

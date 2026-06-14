@@ -486,8 +486,9 @@ page-capture metadata capped at that service limit.
 The seventy-eighth reader-flow reliability slice makes the offscreen audio
 scheduler respect `highWatermarkMs`, bounding how far ahead browser audio is
 scheduled and topping up queued PCM chunks as scheduled sources finish.
-The next planned finish-mode slice adds a per-user Windows Task Scheduler
-service/autostart flow for `tts serve`, with install/status/start/stop/remove
-commands, local logging, tests, docs, and release/readiness wiring.
-After the remaining closeout/install work, finish with a final security-focused
-pass before calling v1 done.
+The seventy-ninth Windows finish-mode slice adds a per-user Windows Task
+Scheduler service/autostart flow for `tts serve`, with
+`service-install --user`, status/start/stop/remove commands, local logging,
+tests, docs, and release/readiness wiring.
+The next planned pass is the final security-focused review before calling v1
+done.

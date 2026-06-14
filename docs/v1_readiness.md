@@ -93,10 +93,11 @@ for long web-page text.
   model manifest, default model catalog, model-readiness handoff guidance,
   extension source, extension install/troubleshooting guides, icons, direct
   extension validation commands for extracted-bundle operators,
-  `scripts/check_local_reader_bundle.py`, and a validated extension zip.
-  Pass `--node-executable <path-to-node> --require-js-syntax` to package scripts
-  when standalone package builds must fail instead of skipping extension
-  JavaScript syntax validation.
+  `scripts/check_local_reader_bundle.py`, `scripts/check_windows_service_task.py`,
+  and a validated extension zip. Pass
+  `--node-executable <path-to-node> --require-js-syntax` to package scripts when
+  standalone package builds must fail instead of skipping extension JavaScript
+  syntax validation.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package plus its base dependencies,
   and running `setup-local` without choosing a persistent service manager.
@@ -115,6 +116,12 @@ for long web-page text.
   long-lived service process. On
   Windows, it also starts both launchers as foreground services on reserved
   loopback ports, runs public-contract smoke, and stops the process trees.
+- `python3 scripts/check_windows_service_task.py` verifies the v1 per-user
+  Windows Task Scheduler autostart contract without creating a real scheduled
+  task: `tts service-install --user` command construction, trusted
+  `schtasks.exe`/PowerShell paths, `tts service-status --user` parsing,
+  scheduled wrapper forwarding to `run_service.ps1`, and
+  `logs\tts-service.log` wiring.
 - `python3 scripts/check_windows_bundle_install.py` extracts a Windows local
   reader bundle, creates a temporary `.venv`, installs the extracted package,
   validates installed setup next-step guidance, starts the installed
@@ -137,9 +144,10 @@ for long web-page text.
 
 - Run the Windows launcher scripts directly on an operator machine for manual
   long-running service observation if desired. The extracted-bundle launcher
-  setup-only path, foreground launcher smoke, venv install, and installed
-  `tts serve` path are automated; extended operator comfort checks remain
-  manual.
+  setup-only path, launcher foreground service smoke, venv install, installed
+  `tts serve` path, and Task Scheduler command contract are automated; extended
+  operator comfort checks and actual login-triggered autostart observation
+  remain manual.
 - Install and activate the default English local voice with
   `tts model-install vits-piper-en_US-lessac-medium --activate`. For alternate
   catalogs, use
@@ -192,9 +200,10 @@ for long web-page text.
 
 ## Product Choices
 
-- Permanent Windows auto-start/service-manager installation remains undecided;
-  do not silently choose NSSM, Task Scheduler, pywin32, or a startup-folder
-  mechanism.
+- V1 Windows autostart uses a per-user Task Scheduler task installed by
+  `tts service-install --user`. Do not switch to a machine-wide Windows
+  Service, NSSM, pywin32, or a Startup-folder mechanism without a new explicit
+  product decision.
 - Chrome Web Store signing/publishing remains out of scope for the local
   handoff package until explicitly chosen.
 - A richer named reader-mode outline remains a future UX choice; current
@@ -220,8 +229,8 @@ for long web-page text.
   gate because it can install runtime dependencies and download a real model.
   Use the explicit `--real-voice-demo` release-check flag when a machine should
   provide that evidence.
-- Extended foreground PowerShell/CMD launcher observation remains manual; the
-  automated gates cover safe extraction, local install bootstrap, launcher
-  setup-only execution, launcher foreground service smoke, `setup-local`,
-  temporary venv installation, installed `tts serve`, loopback service startup,
-  and stub-backed smoke.
+- Actual Windows login-triggered Task Scheduler startup remains manual; the
+  automated gates cover command construction, status parsing, safe extraction,
+  local install bootstrap, launcher setup-only execution, launcher foreground
+  service smoke, `setup-local`, temporary venv installation, installed
+  `tts serve`, loopback service startup, and stub-backed smoke.

@@ -320,6 +320,10 @@ def _run_release_checks_with_package_path(
             ],
         ),
         (
+            "windows_service_task",
+            [python_executable, "scripts/check_windows_service_task.py"],
+        ),
+        (
             "windows_bundle_install",
             _build_windows_bundle_install_command(
                 python_executable=python_executable,
