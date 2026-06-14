@@ -35,6 +35,7 @@ INCLUDED_FILES = (
     "scripts/check_chrome_extension_smoke.py",
     "scripts/check_extension_onboarding.py",
     "scripts/check_extension_reader_flow.py",
+    "scripts/check_local_reader_bundle.py",
     "scripts/check_local_service_bootstrap.py",
     "scripts/check_model_management_flow.py",
     "scripts/check_security_defaults.py",
@@ -309,16 +310,23 @@ manager, scheduled task, or auto-start entry.
 9. Optional local validation after setup:
 
    ```powershell
+   .\\.venv\\Scripts\\python.exe scripts\\check_local_reader_bundle.py
+   .\\.venv\\Scripts\\python.exe scripts\\check_local_reader_bundle.py `
+     --require-browser `
+     --browser-executable <path-to-browser>
    .\\.venv\\Scripts\\python.exe scripts\\check_extension.py
    .\\.venv\\Scripts\\python.exe scripts\\check_chrome_extension_smoke.py `
      --require-browser `
      --browser-executable <path-to-browser>
    ```
 
+   The bundle check runs local service bootstrap, model-management,
+   extension-onboarding, reader-flow, and skip-aware Chrome/MV3 smoke checks.
    Use Chrome for Testing or Chromium when the installed browser ignores
-   command-line unpacked extension loading. The Chrome/MV3 smoke starts a
-   temporary loopback service and test page; keep the normal foreground service
-   launcher separate for day-to-day reading.
+   command-line unpacked extension loading; pass the strict browser flags to
+   the bundle check too when strict browser evidence is required. The Chrome/MV3
+   smoke starts a temporary loopback service and test page; keep the normal
+   foreground service launcher separate for day-to-day reading.
 
 ## Notes
 

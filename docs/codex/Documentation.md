@@ -11,23 +11,26 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: improve Windows bundle handoff by documenting the
-  bundle-compatible extension validation commands after first-run setup.
-- Current loop result: the generated `WINDOWS_BUNDLE_README.md` now includes an
-  optional local validation step for `scripts\check_extension.py` and strict
-  Chrome/MV3 smoke evidence with
-  `--require-browser --browser-executable <path-to-browser>` from inside the
-  extracted bundle.
+- Current loop target: improve extracted Windows bundle validation without
+  relying on repo-only release-check assumptions.
+- Current loop result: `scripts/check_local_reader_bundle.py` now orchestrates
+  bundle-compatible local service bootstrap, model-management, extension
+  onboarding, reader-flow, skip-aware Chrome/MV3 smoke, and optional real voice
+  demo checks. The generated `WINDOWS_BUNDLE_README.md` points operators at the
+  new script plus strict Chrome/MV3 smoke flags for compatible browsers.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_windows_bundle.py`.
+    `py -3 -m ruff check scripts\check_local_reader_bundle.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
   - Targeted bundle/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 5 passed.
+    `py -3 -m pytest apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 8 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 42 readiness
-    markers across 40 checked files.
+    markers across 41 checked files.
+  - `py -3 scripts\check_local_reader_bundle.py` passed in default skip-aware
+    mode. The Chrome/MV3 smoke reported the known branded-Chrome unpacked
+    extension registration skip with diagnostics.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 196 tests.
+  - `py -3 -m pytest -q` passed with 199 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
@@ -425,6 +428,11 @@ This file is the live status log and shared memory for future Codex loops.
     bundle-compatible extension validation commands, including strict
     Chrome/MV3 smoke with `--require-browser` and `--browser-executable`, so
     extracted-bundle users do not need to infer repo-only release-check flows.
+  - `scripts/check_local_reader_bundle.py` now provides a bundle-compatible
+    local validation entry point that avoids repo-only `pytest` and `.gitignore`
+    assumptions while still exercising service bootstrap, model management,
+    extension onboarding, reader flow, Chrome/MV3 smoke, and optional real voice
+    demo checks.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.
@@ -589,6 +597,7 @@ python3 scripts/release_check.py --live-smoke --token-file config/token.txt
 python3 scripts/release_check.py --real-voice-demo --install-real-runtime
 python3 scripts/release_check.py --require-browser --browser-executable <path-to-browser>
 python3 scripts/package_windows_bundle.py
+python3 scripts/check_local_reader_bundle.py
 python3 scripts/check_v1_readiness.py
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip

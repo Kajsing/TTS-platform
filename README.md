@@ -204,7 +204,8 @@ The bundle is written to `dist/windows/tts-platform-local-reader.zip` by
 default. It is a local source handoff package, not a persistent service-manager
 installer. Its generated `WINDOWS_BUNDLE_README.md` includes the local
 `.venv` install path plus `model-check` and real-model install guidance before
-first Chrome playback.
+first Chrome playback, and `scripts\check_local_reader_bundle.py` for
+bundle-compatible service/model/extension validation after extraction.
 
 The `catalog-list`, `model-list`, `model-install`, `model-activate`,
 `model-check`, and `model-remove` commands are local model-management helpers

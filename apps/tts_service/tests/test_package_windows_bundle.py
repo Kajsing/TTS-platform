@@ -102,6 +102,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/windows/run_service.cmd" in names
     assert "tts-platform/scripts/check_extension_onboarding.py" in names
     assert "tts-platform/scripts/check_extension_reader_flow.py" in names
+    assert "tts-platform/scripts/check_local_reader_bundle.py" in names
     assert "tts-platform/scripts/check_security_defaults.py" in names
     assert "tts-platform/scripts/check_local_service_bootstrap.py" in names
     assert "tts-platform/scripts/check_model_management_flow.py" in names
@@ -134,10 +135,12 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "apps\\chrome_extension\\INSTALL.md" in readme
     assert "apps\\chrome_extension\\TROUBLESHOOTING.md" in readme
+    assert "scripts\\check_local_reader_bundle.py" in readme
     assert "scripts\\check_extension.py" in readme
     assert "scripts\\check_chrome_extension_smoke.py" in readme
     assert "--require-browser" in readme
     assert "--browser-executable <path-to-browser>" in readme
+    assert "pass the strict browser flags to" in readme
     assert "Chrome for Testing or Chromium" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme

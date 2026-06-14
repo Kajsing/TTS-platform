@@ -115,6 +115,7 @@ def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(
         "tts-platform/models/catalog.json",
         "tts-platform/models/MANIFEST.json",
         "tts-platform/docs/v1_readiness.md",
+        "tts-platform/scripts/check_local_reader_bundle.py",
         "tts-platform/scripts/windows/run_service.ps1",
         "tts-platform/scripts/windows/run_service.cmd",
         "tts-platform/WINDOWS_BUNDLE_README.md",

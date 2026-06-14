@@ -244,6 +244,13 @@ bundle should install the optional `.[real]` runtime dependencies during the
 same bootstrap. Use `-NoDependencies` only for an already provisioned
 environment.
 
+Inside an extracted bundle, run the bundle-compatible local reader checks with:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_local_reader_bundle.py
+.\.venv\Scripts\python.exe scripts\check_local_reader_bundle.py --require-browser --browser-executable <path-to-browser>
+```
+
 Check the built bundle's first-run bootstrap path with:
 
 ```bash
