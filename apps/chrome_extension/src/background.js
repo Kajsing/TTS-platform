@@ -130,7 +130,7 @@ function isOffscreenOwnedMessage(message) {
 
 async function speakSelection() {
   const tab = await getActiveTab();
-  const response = await chrome.tabs.sendMessage(tab.id, {
+  const response = await sendContentScriptMessage(tab, {
     type: "tts-extension:get-selection",
   });
   const text = (response?.text || "").trim();
@@ -384,7 +384,8 @@ async function focusSourceTab() {
 }
 
 async function getPageCapture(tabId, maxChars, startSectionIndex = 0, startTextChar = 0) {
-  const response = await chrome.tabs.sendMessage(tabId, {
+  const tab = await chrome.tabs.get(tabId);
+  const response = await sendContentScriptMessage(tab, {
     type: "tts-extension:get-page-text",
     maxChars,
     startSectionIndex,
@@ -398,6 +399,54 @@ async function getPageCapture(tabId, maxChars, startSectionIndex = 0, startTextC
       maxChars,
     }),
   };
+}
+
+async function sendContentScriptMessage(tab, message) {
+  if (!tab?.id) {
+    throw new Error("No active tab is available.");
+  }
+
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch (error) {
+    if (!shouldRetryContentScriptMessage(error)) {
+      throw error;
+    }
+  }
+
+  await ensureContentScript(tab);
+  return chrome.tabs.sendMessage(tab.id, message);
+}
+
+async function ensureContentScript(tab) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["src/content-script.js"],
+    });
+  } catch (error) {
+    throw new Error(contentScriptUnavailableMessage(tab, error));
+  }
+}
+
+function shouldRetryContentScriptMessage(error) {
+  return String(error?.message || "").includes("Receiving end does not exist");
+}
+
+function contentScriptUnavailableMessage(tab, error) {
+  const url = String(tab?.url || "");
+  if (
+    url.startsWith("chrome://") ||
+    url.startsWith("edge://") ||
+    url.startsWith("about:") ||
+    url.startsWith("chrome-extension://")
+  ) {
+    return "Open a normal web page before using Speak Selection or Speak Page.";
+  }
+  return (
+    "The page reader is not available in this tab yet. Refresh the page and try again. " +
+    String(error?.message || "")
+  ).trim();
 }
 
 async function startPlayback({
