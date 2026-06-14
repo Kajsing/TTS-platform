@@ -38,8 +38,14 @@ def test_windows_install_launcher_bootstraps_venv_package_and_setup() -> None:
 def test_windows_cmd_launcher_delegates_to_powershell_launcher() -> None:
     launcher = REPO_ROOT / "scripts" / "windows" / "run_service.cmd"
     script = launcher.read_text(encoding="utf-8")
+    trusted_powershell = (
+        "POWERSHELL_EXE=%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    )
 
-    assert "powershell.exe" in script
+    assert trusted_powershell in script
+    assert '"%POWERSHELL_EXE%" -NoProfile' in script
+    assert "Trusted Windows PowerShell executable not found" in script
+    assert "powershell.exe -NoProfile" not in script
     assert "-ExecutionPolicy Bypass" in script
     assert "run_service.ps1" in script
     assert "%*" in script
@@ -48,8 +54,14 @@ def test_windows_cmd_launcher_delegates_to_powershell_launcher() -> None:
 def test_windows_install_cmd_launcher_delegates_to_powershell_installer() -> None:
     launcher = REPO_ROOT / "scripts" / "windows" / "install_local.cmd"
     script = launcher.read_text(encoding="utf-8")
+    trusted_powershell = (
+        "POWERSHELL_EXE=%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    )
 
-    assert "powershell.exe" in script
+    assert trusted_powershell in script
+    assert '"%POWERSHELL_EXE%" -NoProfile' in script
+    assert "Trusted Windows PowerShell executable not found" in script
+    assert "powershell.exe -NoProfile" not in script
     assert "-ExecutionPolicy Bypass" in script
     assert "install_local.ps1" in script
     assert "%*" in script

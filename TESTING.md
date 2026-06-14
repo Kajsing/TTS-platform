@@ -89,7 +89,8 @@ backend-realism work, and early v1 model-management helpers:
 - local service run command wiring for configured host/port/log level, explicit
   overrides, missing-config guidance, and loopback-only default binding
 - Windows launcher structure, including repo-local `PYTHONPATH`, module CLI
-  invocation, setup fallback, and PowerShell delegation from the CMD launcher
+  invocation, setup fallback, and trusted system PowerShell delegation from the
+  CMD launcher
 - Chrome extension popup setup-checklist, manifest-policy, and privacy-boundary
   wiring through the lightweight extension validator
 - Chrome extension zip packaging with manifest at the archive root and

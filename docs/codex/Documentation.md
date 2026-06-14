@@ -11,25 +11,26 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: fix security scan hardening finding F-006 by bounding
-  remote model artifact download destinations, redirects, and response sizes.
-- Current loop result: `model-install` now caps remote artifact downloads before
-  checksum verification, enforces catalog `artifact_size_bytes` during streaming
-  when present, validates `Content-Length`, follows redirects manually, rejects
-  artifact URLs with credentials, and blocks local/private network destinations
-  unless they are the same origin as the explicitly selected remote catalog.
+- Current loop target: fix security scan hardening finding F-007 by removing
+  bare `powershell.exe` lookup from Windows CMD launchers.
+- Current loop result: `scripts/windows/install_local.cmd` and
+  `scripts/windows/run_service.cmd` now delegate through
+  `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` and fail with a
+  clear error if that trusted executable is missing, instead of resolving
+  `powershell.exe` from the current directory or `PATH`.
 - Validation status for the current loop:
-  - Targeted model-flow tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
-    reported 55 passed.
+  - Targeted launcher/package tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py apps\tts_service\tests\test_package_windows_bundle.py -q`
+    and reported 10 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
-  - `py -3 scripts\check_model_management_flow.py` passed, including the
-    loopback remote catalog relative-artifact install path.
-  - The F-006 redirect/size reproducer paths are now covered by regression
-    tests: redirect to loopback from a non-loopback catalog fails before body
-    read, streaming past catalog `artifact_size_bytes` fails, and oversized
-    `Content-Length` fails before streaming.
+    `py -3 -m ruff check apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_windows_launchers_check.py apps\tts_service\tests\test_package_windows_bundle.py`.
+  - `py -3 scripts\check_windows_launchers.py` passed, including setup-only
+    and foreground service smoke for both PowerShell and CMD launchers.
+  - F-007 static reproducer path is now covered by regression tests: both CMD
+    launchers contain the trusted `%SystemRoot%` PowerShell path and no longer
+    contain bare `powershell.exe -NoProfile` invocation.
+  - `rg -n -g "*.cmd" "^powershell\.exe|powershell\.exe -NoProfile" scripts\windows`
+    reported no bare PowerShell invocation.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 228 tests.
 - Tooling status:
@@ -461,6 +462,8 @@ This file is the live status log and shared memory for future Codex loops.
   - remote model artifact downloads now enforce a maximum size, catalog
     `artifact_size_bytes` streaming cap, `Content-Length` validation, manual
     redirect destination checks, and credential-free HTTP(S) artifact URLs.
+  - Windows CMD launchers now delegate to a trusted system PowerShell path
+    instead of bare executable lookup.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

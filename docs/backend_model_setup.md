@@ -90,6 +90,9 @@ scripts\windows\run_service.cmd
 The launchers set `PYTHONPATH` for the repo-local service/core packages, honor
 `TTS_PLATFORM_PYTHON` when set, prefer `.venv\Scripts\python.exe` when present,
 fall back to `py -3`, run `setup-local` when needed, and then run `tts serve`.
+The CMD launchers delegate to the trusted
+`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` path instead of
+performing bare `powershell.exe` lookup in the current directory or `PATH`.
 Use `.\scripts\windows\run_service.ps1 -SetupOnly` to create
 `config\config.toml` and `config\token.txt` without starting the service. They
 are convenience launchers, not persistent Windows service installers.
