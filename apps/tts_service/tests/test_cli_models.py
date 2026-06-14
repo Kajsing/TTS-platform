@@ -65,6 +65,7 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
                         "language": "en",
                         "artifact_url": str(artifact_path),
                         "artifact_sha256": checksum,
+                        "artifact_size_bytes": len(artifact_bytes),
                         "backend": {
                             "model_type": "vits",
                             "model": "model.onnx",
@@ -86,6 +87,12 @@ def test_model_install_from_local_catalog_updates_manifest(tmp_path: Path) -> No
     )
 
     assert result["installed_model"] == "voice-a"
+    assert result["catalog_source"] == str(catalog_path)
+    assert result["artifact_url"] == str(artifact_path)
+    assert result["artifact_bytes"] == len(artifact_bytes)
+    assert result["artifact_size_mib"] == round(len(artifact_bytes) / (1024 * 1024), 1)
+    assert result["catalog_artifact_size_bytes"] == len(artifact_bytes)
+    assert result["catalog_artifact_size_matches"] is True
     voice_dir = tmp_path / "models" / "voices" / "voice-a"
     assert (voice_dir / "model.onnx").exists()
     assert (voice_dir / "tokens.txt").exists()
@@ -298,6 +305,7 @@ def test_model_install_command_can_activate_model(
                         "name": "Voice A",
                         "artifact_url": str(artifact_path),
                         "artifact_sha256": checksum,
+                        "artifact_size_bytes": len(artifact_bytes),
                         "backend": {
                             "model_type": "vits",
                             "model": "model.onnx",
@@ -332,6 +340,9 @@ def test_model_install_command_can_activate_model(
     payload = json.loads(captured.out)
     assert payload["installed_model"] == "voice-a"
     assert payload["activated_model"] == "voice-a"
+    assert payload["artifact_bytes"] == len(artifact_bytes)
+    assert payload["artifact_size_mib"] == round(len(artifact_bytes) / (1024 * 1024), 1)
+    assert payload["catalog_artifact_size_matches"] is True
     assert payload["checksum_verified"] is True
     assert payload["files_installed"] == 2
     assert payload["install_steps"][-1]["step"] == "activate_model"

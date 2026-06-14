@@ -364,6 +364,9 @@ Install behavior:
 - writes or updates the manifest entry
 - reports installed file count, checksum verification status, and suggested
   next steps
+- reports the artifact URL, actual artifact byte count, MiB size, catalog
+  artifact size declaration, and whether the declaration matched the loaded
+  artifact
 - prints progress status lines to stderr while preserving structured JSON on
   stdout
 
@@ -477,10 +480,11 @@ model before restarting the service.
 
 These model-management commands edit local files and do not call protected
 service endpoints, so they do not require `--token` or `TTS_PLATFORM_TOKEN`.
-`model-install --activate` also updates `config/config.toml` `[tts].default_voice`
-and reports the config path in its JSON output. `model-install` JSON also
-includes `install_steps`, so scripts can inspect which local steps completed
-without parsing stderr progress lines.
+`model-install --activate` also updates `config/config.toml`
+`[tts].default_voice` and reports the config path in its JSON output.
+`model-install` JSON also includes artifact metadata plus `install_steps`, so
+scripts can inspect what was loaded and which local steps completed without
+parsing stderr progress lines.
 
 For a reproducible local real-voice demo without committing local model files,
 run:

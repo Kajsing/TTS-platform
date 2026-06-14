@@ -11,16 +11,15 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: continue the v1 model-management UX track by making
-  `tts catalog-list` summaries more useful for choosing and installing local
-  English voices, without changing install behavior or requiring new downloads.
-- Current loop result: `tts catalog-list` now includes operator-facing
-  metadata in each `model_summaries` entry: artifact URL, download size in
-  bytes and MiB, license/source/upstream links, tags, and normalized capability
-  flags. `scripts/check_model_management_flow.py` now seeds those fields in its
-  generated catalogs and fails if the CLI does not preserve them in catalog
-  summaries. This keeps first-run model choice clearer without changing
-  download/install behavior.
+- Current loop target: continue the v1 model-management hardening track by
+  making `tts model-install` stdout more audit-friendly after a local model is
+  installed, without changing download/install behavior or requiring new
+  downloads.
+- Current loop result: `tts model-install` JSON now reports the catalog source,
+  artifact URL, actual loaded artifact bytes, MiB size, catalog-declared
+  artifact size, and whether the catalog declaration matched the loaded
+  artifact. `scripts/check_model_management_flow.py` now fails if those install
+  result fields disappear from the generated local catalog flow.
 - Validation status for the current loop:
   - Targeted ruff passed with
     `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py`.
@@ -30,7 +29,7 @@ This file is the live status log and shared memory for future Codex loops.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
     markers across 39 checked files.
   - `py -3 scripts\check_model_management_flow.py` passed, including the new
-    catalog summary metadata assertions.
+    install artifact metadata assertions.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 193 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
@@ -55,10 +54,10 @@ This file is the live status log and shared memory for future Codex loops.
 - Chrome MV3 prototype work exists in `apps/chrome_extension/`.
 - Phase 7 work already completed includes backend runtime config (`stub` / `auto` / `real`), manifest-side backend asset binding, more truthful backend readiness, health backend snapshots, fake-runtime coverage for sync/jobs/streaming, async job benchmarking, and a first chunk-planning component shared across sync/jobs/streaming.
 - Early v1 model-management work now includes local catalog listing, model
-  summaries with install metadata, artifact install with checksum verification
-  required by default, safe zip extraction against absolute paths,
-  drive-qualified paths, and traversal entries, manifest update, default voice
-  activation in `config/config.toml`, and model removal.
+  summaries with install metadata, artifact install with result metadata and
+  checksum verification required by default, safe zip extraction against
+  absolute paths, drive-qualified paths, and traversal entries, manifest
+  update, default voice activation in `config/config.toml`, and model removal.
 - A new public-contract smoke script now exists:
   - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
   - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.

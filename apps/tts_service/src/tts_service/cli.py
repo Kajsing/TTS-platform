@@ -1086,6 +1086,9 @@ def _install_model_from_catalog(
     artifact_url = str(model.get("artifact_url", "")).strip()
     if not artifact_url:
         raise SystemExit(f"Catalog model '{model_id}' is missing artifact_url.")
+    catalog_artifact_size_bytes = _catalog_artifact_size_bytes(
+        model.get("artifact_size_bytes")
+    )
     with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
         artifact = _load_artifact_file(
             artifact_url=artifact_url,
@@ -1173,6 +1176,11 @@ def _install_model_from_catalog(
         progress=progress,
         files_installed=len(installed_files),
     )
+    catalog_artifact_size_matches = (
+        None
+        if catalog_artifact_size_bytes is None
+        else catalog_artifact_size_bytes == artifact.bytes
+    )
     manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
     _upsert_manifest_entry(manifest_path=manifest_path, entry=manifest_entry)
     _record_install_step(
@@ -1185,6 +1193,12 @@ def _install_model_from_catalog(
 
     result: dict[str, object] = {
         "installed_model": model_id,
+        "catalog_source": catalog_source,
+        "artifact_url": artifact_url,
+        "artifact_bytes": artifact.bytes,
+        "artifact_size_mib": _catalog_artifact_size_mib(artifact.bytes),
+        "catalog_artifact_size_bytes": catalog_artifact_size_bytes,
+        "catalog_artifact_size_matches": catalog_artifact_size_matches,
         "install_dir": str(install_dir),
         "manifest_path": str(manifest_path),
         "files_installed": len(installed_files),

@@ -381,5 +381,9 @@ The fifty-ninth model-management UX slice expands `tts catalog-list`
 `model_summaries` with operator-facing install metadata: artifact URL and
 download size, license/source/upstream links, tags, and capability flags, with
 model-management smoke coverage proving those fields survive the catalog flow.
+The sixtieth model-management hardening slice adds artifact metadata to
+`tts model-install` JSON output, including actual loaded bytes, MiB size,
+catalog-declared size, and a size-match signal, with model-management smoke
+coverage proving those fields survive install.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

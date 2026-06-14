@@ -153,6 +153,10 @@ def check_model_management_flow(
                 env=env,
                 timeout_s=command_timeout_s,
             )
+            _assert_install_artifact_metadata(
+                install_payload,
+                expected_artifact_bytes=int(artifact["bytes"]),
+            )
         _assert_installed_repo_state(repo_root=repo_root)
         model_list_payload = _run_json_command(
             [
@@ -544,6 +548,24 @@ def _assert_catalog_summary_metadata(
             )
 
 
+def _assert_install_artifact_metadata(
+    payload: dict[str, object],
+    *,
+    expected_artifact_bytes: int,
+) -> None:
+    expected_fields = {
+        "artifact_bytes": expected_artifact_bytes,
+        "artifact_size_mib": round(expected_artifact_bytes / (1024 * 1024), 1),
+        "catalog_artifact_size_bytes": expected_artifact_bytes,
+        "catalog_artifact_size_matches": True,
+    }
+    for field, expected_value in expected_fields.items():
+        if payload.get(field) != expected_value:
+            raise ModelManagementFlowError(
+                f"model-install result field {field!r} was not preserved."
+            )
+
+
 def _summarize_catalog(payload: dict[str, object]) -> dict[str, object]:
     catalog = payload.get("catalog", {})
     source = str(_dict_get(catalog, "source") or "")
@@ -571,6 +593,8 @@ def _summarize_install(payload: dict[str, object]) -> dict[str, object]:
     return {
         "installed_model": payload.get("installed_model"),
         "activated_model": payload.get("activated_model"),
+        "artifact_bytes": payload.get("artifact_bytes"),
+        "catalog_artifact_size_matches": payload.get("catalog_artifact_size_matches"),
         "files_installed": payload.get("files_installed"),
         "checksum_verified": payload.get("checksum_verified"),
         "install_steps": [

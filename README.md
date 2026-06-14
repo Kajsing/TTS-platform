@@ -221,7 +221,8 @@ catalog artifact, verifies `artifact_sha256` by default, resolves relative
 artifacts against the local catalog path or remote catalog URL, stages the
 artifact in a temporary file, extracts zip or tar archives safely under
 `models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
-status to stderr, and keeps its structured result on stdout. Use
+status to stderr, reports actual artifact bytes plus catalog size-match
+metadata, and keeps its structured result on stdout. Use
 `--allow-missing-checksum` only for trusted local artifacts.
 The committed default catalog currently includes the English
 `vits-piper-en_US-lessac-medium` sherpa-onnx voice. Install it with

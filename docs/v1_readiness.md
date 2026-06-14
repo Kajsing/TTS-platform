@@ -54,9 +54,10 @@ for long web-page text.
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
   verifies operator-facing catalog summary metadata and the default
   `models/catalog.json` path behavior, lists installed manifest models offline,
-  runs download/install, activate, service smoke with the installed voice,
-  read-only model readiness diagnostics with catalog-aware next steps, and
-  remove without external downloads. Model installs require
+  runs download/install with artifact-size result metadata, activate, service
+  smoke with the installed voice, read-only model readiness diagnostics with
+  catalog-aware next steps, and remove without external downloads. Model
+  installs require
   `artifact_sha256` by default, with
   `--allow-missing-checksum` reserved for trusted local artifacts. The default
   catalog now includes the English
