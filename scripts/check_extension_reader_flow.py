@@ -303,9 +303,12 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "await stopAudioSources()",
             "status: \"cancelled\"",
             "completeWhenDrained = \"done\"",
+            "needsPrebuffer = false",
+            "await flushQueue(config)",
             "estimateScheduledMs() < config.highWatermarkMs",
             "void flushQueue(config)",
             "lastEvent: \"stop\"",
+            "audioContextState",
         ],
     }
     errors: list[str] = []
@@ -339,6 +342,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "filtered_fallback_capture": True,
         "best_root_selection": True,
         "bounded_audio_scheduling": True,
+        "short_stream_drain": True,
     }
 
 

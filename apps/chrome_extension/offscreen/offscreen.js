@@ -22,6 +22,7 @@ let playbackState = {
   underrunCount: 0,
   readerProgress: null,
   lastEvent: null,
+  audioContextState: null,
 };
 
 chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
@@ -182,12 +183,14 @@ async function handleJsonEvent(event, config) {
 
   if (event.type === "done") {
     completeWhenDrained = "done";
+    needsPrebuffer = false;
     await setState({
       status: "draining",
       message: "Finishing queued audio",
       lastEvent: "done",
       readerProgress: event.progress || playbackState.readerProgress,
     });
+    await flushQueue(config);
     finalizeIfDrained();
     return;
   }
@@ -278,11 +281,10 @@ async function flushQueue(config) {
     }
   }
 
-  while (
-    queuedChunks.length &&
-    scheduledUntilTime > audioContext.currentTime &&
-    estimateScheduledMs() < config.highWatermarkMs
-  ) {
+  while (queuedChunks.length && estimateScheduledMs() < config.highWatermarkMs) {
+    if (scheduledUntilTime < audioContext.currentTime) {
+      scheduledUntilTime = audioContext.currentTime;
+    }
     const chunk = queuedChunks.shift();
     queuedAudioBytes = Math.max(0, queuedAudioBytes - chunk.float32.byteLength);
     const buffer = audioContext.createBuffer(
@@ -458,6 +460,7 @@ async function setState(partialState) {
   playbackState = {
     ...playbackState,
     ...partialState,
+    audioContextState: audioContext?.state ?? null,
   };
   await chrome.runtime.sendMessage({
     type: "tts-extension:playback-state",

@@ -36,6 +36,7 @@ def test_extension_reader_flow_contract_and_fixture_are_long_page_ready() -> Non
         "filtered_fallback_capture": True,
         "best_root_selection": True,
         "bounded_audio_scheduling": True,
+        "short_stream_drain": True,
     }
     assert fixture_summary["word_count"] >= 1000
     assert fixture_summary["section_count"] >= 4

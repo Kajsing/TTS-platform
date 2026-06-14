@@ -42,6 +42,7 @@ async function refreshState() {
   const state = await sendMessage({ type: "tts-extension:get-state" });
   statusText.textContent = formatPlaybackState(state);
   updateReaderActionState(state);
+  surfacePlaybackMessage(state);
 }
 
 async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
@@ -235,6 +236,24 @@ async function runAction(type) {
 function setActionMessage(message, kind = "info") {
   actionMessage.textContent = message;
   actionMessage.dataset.kind = kind;
+}
+
+function surfacePlaybackMessage(state) {
+  if (state.status === "error" || state.status === "interrupted") {
+    setActionMessage(state.message || "Playback failed.", "error");
+    return;
+  }
+  if (isActivePlaybackStatus(state.status)) {
+    setActionMessage(state.message || "Playback is running.", "info");
+    return;
+  }
+  if (state.status === "done" && state.lastEvent === "done") {
+    setActionMessage(state.message || "Playback finished.", "success");
+    return;
+  }
+  if (state.status === "cancelled") {
+    setActionMessage(state.message || "Playback cancelled.", "info");
+  }
 }
 
 function updateReaderActionState(state) {
@@ -461,6 +480,7 @@ function formatPlaybackState(state) {
     state.sourceTabMessage ? `Source Tab: ${state.sourceTabMessage}` : null,
     state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
     state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
+    state.audioContextState ? `Audio Context: ${state.audioContextState}` : null,
     state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
     state.lastEvent ? `Last Event: ${state.lastEvent}` : null,
   ];

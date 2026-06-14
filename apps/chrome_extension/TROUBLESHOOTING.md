@@ -122,3 +122,6 @@
 - Inputs and textareas use the current text selection inside the control.
 - Page playback intentionally bounds and normalizes text, so exact visual parity
   with the page is not guaranteed.
+- If a short selection opens and closes the service WebSocket without sound,
+  reload the unpacked extension and check `Playback State` for `Audio Context`
+  and `Last Event` details.

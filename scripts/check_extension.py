@@ -512,10 +512,13 @@ def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -
             "auth_token: config.token",
             "payload: {\n          text: config.text,",
             "estimateScheduledMs() < config.highWatermarkMs",
+            "needsPrebuffer = false",
+            "await flushQueue(config)",
             "canQueueAudioChunk(float32, durationMs)",
             'lastEvent: "buffer-limit"',
             "void flushQueue(config)",
             'type: "tts-extension:playback-state"',
+            "audioContextState",
         ],
     )
 
