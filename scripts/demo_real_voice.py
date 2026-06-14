@@ -49,6 +49,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--min-stream-text-chunks", type=int, default=2)
     parser.add_argument("--skip-smoke", action="store_true")
     parser.add_argument("--force-install", action="store_true")
+    parser.add_argument(
+        "--install-real-runtime",
+        action="store_true",
+        help='Install the optional ".[real]" dependencies before setup/model checks.',
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -65,6 +70,7 @@ def main(argv: list[str] | None = None) -> None:
             min_stream_text_chunks=args.min_stream_text_chunks,
             skip_smoke=args.skip_smoke,
             force_install=args.force_install,
+            install_real_runtime=args.install_real_runtime,
         )
     except RealVoiceDemoError as exc:
         raise SystemExit(str(exc)) from exc
@@ -86,6 +92,7 @@ def run_real_voice_demo(
     min_stream_text_chunks: int,
     skip_smoke: bool,
     force_install: bool,
+    install_real_runtime: bool = False,
 ) -> dict[str, object]:
     if not model_id.strip():
         raise RealVoiceDemoError("--model-id must not be empty.")
@@ -108,6 +115,15 @@ def run_real_voice_demo(
     )
     env = _source_env()
 
+    runtime_install = (
+        _install_real_runtime_dependencies(
+            python_executable=python_executable,
+            env=env,
+            timeout_s=command_timeout_s,
+        )
+        if install_real_runtime
+        else {"performed": False}
+    )
     seed_summary = _seed_demo_root(resolved_demo_root)
     setup_payload = _run_json_command(
         [
@@ -201,6 +217,7 @@ def run_real_voice_demo(
     return {
         "demo_root": str(resolved_demo_root),
         "model_id": model_id,
+        "runtime_install": runtime_install,
         "seed": seed_summary,
         "setup": _summarize_setup(setup_payload),
         "install": _summarize_install(install_payload),
@@ -228,6 +245,33 @@ def run_real_voice_demo(
         },
         "smoke": _summarize_smoke(smoke_payload),
         "wav": wav_summary,
+    }
+
+
+def _install_real_runtime_dependencies(
+    *,
+    python_executable: str,
+    env: dict[str, str],
+    timeout_s: float,
+) -> dict[str, object]:
+    command = [python_executable, "-m", "pip", "install", "-e", ".[real]"]
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=timeout_s,
+    )
+    if completed.returncode != 0:
+        raise RealVoiceDemoError(
+            "Real runtime dependency install failed:\n"
+            + " ".join(command)
+            + f"\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+    return {
+        "performed": True,
+        "command": "python -m pip install -e \".[real]\"",
     }
 
 

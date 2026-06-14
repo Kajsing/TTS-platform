@@ -396,5 +396,10 @@ The sixty-third release-hardening slice propagates `--node-executable` and
 `--require-js-syntax` into standalone extension and Windows bundle packaging,
 so local package builds can require extension JavaScript syntax validation
 without relying on a separate release-check invocation.
+The sixty-fourth real-audio UX slice adds
+`scripts/demo_real_voice.py --install-real-runtime`, an explicit opt-in path
+that installs `.[real]` into the active Python environment before demo
+setup/model checks, keeping the default offline gates download-free while
+making real English voice reproduction closer to one command.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

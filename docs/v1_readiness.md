@@ -140,7 +140,8 @@ for long web-page text.
   temporary service, runs public-contract smoke with `--token-file`, writes a
   WAV, and stops the service. Install `.[real]` in the active environment first
   with `python -m pip install -e ".[real]"` when the runtime packages are not
-  present.
+  present, or pass `--install-real-runtime` to let the demo install that extra
+  before setup/model checks.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.

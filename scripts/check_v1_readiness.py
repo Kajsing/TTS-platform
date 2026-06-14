@@ -167,6 +167,8 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/demo_real_voice.py": (
         "dist",
         "real-demo",
+        "--install-real-runtime",
+        "_install_real_runtime_dependencies",
         "model-install",
         "model-check",
         "smoke_service.py",
@@ -206,6 +208,7 @@ REQUIRED_TEXT_MARKERS = {
         "should put the `model-install` command above first",
         ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install sherpa-onnx",
         "demo_real_voice.py",
+        "--install-real-runtime",
         "extension-allow-origin",
     ),
     "scripts/package_extension.py": (
@@ -279,6 +282,7 @@ REQUIRED_TEXT_MARKERS = {
         "`sherpa_onnx` runtime install",
         "numpy",
         "demo_real_voice.py",
+        "--install-real-runtime",
         ".[real]",
         "-InstallRealRuntime",
         "--install-real-runtime",

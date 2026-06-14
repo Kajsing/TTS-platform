@@ -259,12 +259,16 @@ manager, scheduled task, or auto-start entry.
    ```powershell
    .\\.venv\\Scripts\\python.exe scripts\\demo_real_voice.py `
      --python-executable .\\.venv\\Scripts\\python.exe
+   .\\.venv\\Scripts\\python.exe scripts\\demo_real_voice.py `
+     --python-executable .\\.venv\\Scripts\\python.exe `
+     --install-real-runtime
    ```
 
    The demo script installs the default catalog model in the ignored demo
    root, starts a temporary loopback service, runs public-contract smoke with a
    token file, writes `dist\\real-demo\\lessac-demo.wav`, and stops the
-   service process.
+   service process. Use `--install-real-runtime` when this environment should
+   install `.[real]` as part of the demo run.
 
 6. Start the local service:
 

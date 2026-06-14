@@ -32,6 +32,7 @@ def test_real_voice_demo_orchestrates_install_smoke_and_wav(
     demo_module = _load_demo_module()
     demo_root = tmp_path / "demo"
     commands: list[list[str]] = []
+    events: list[str] = []
     stopped_processes: list[object] = []
     model_check_calls = 0
 
@@ -46,6 +47,7 @@ def test_real_voice_demo_orchestrates_install_smoke_and_wav(
         nonlocal model_check_calls
         commands.append(command)
         if "setup-local" in command:
+            events.append("setup")
             token_file = demo_root / "config" / "token.txt"
             token_file.parent.mkdir(parents=True, exist_ok=True)
             token_file.write_text("demo-token", encoding="utf-8")
@@ -83,6 +85,15 @@ def test_real_voice_demo_orchestrates_install_smoke_and_wav(
             }
         raise AssertionError(f"Unexpected command: {command}")
 
+    def fake_install_real_runtime_dependencies(**kwargs):
+        events.append("runtime")
+        return {"performed": True, "command": 'python -m pip install -e ".[real]"'}
+
+    monkeypatch.setattr(
+        demo_module,
+        "_install_real_runtime_dependencies",
+        fake_install_real_runtime_dependencies,
+    )
     monkeypatch.setattr(demo_module, "_run_json_command", fake_run_json_command)
     monkeypatch.setattr(demo_module, "_reserve_loopback_port", lambda: 45678)
     monkeypatch.setattr(
@@ -125,12 +136,15 @@ def test_real_voice_demo_orchestrates_install_smoke_and_wav(
         min_stream_text_chunks=2,
         skip_smoke=False,
         force_install=False,
+        install_real_runtime=True,
     )
 
+    assert events[:2] == ["runtime", "setup"]
     smoke_commands = [command for command in commands if "smoke_service.py" in " ".join(command)]
     assert smoke_commands
     assert "--token-file" in smoke_commands[0]
     assert "--token" not in smoke_commands[0]
+    assert summary["runtime_install"]["performed"] is True
     assert summary["install"]["performed"] is True
     assert summary["model_check"]["ready"] is True
     assert summary["service"]["base_url"] == "http://127.0.0.1:45678"

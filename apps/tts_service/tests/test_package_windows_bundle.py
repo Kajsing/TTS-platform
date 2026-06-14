@@ -127,6 +127,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts.exe model-install vits-piper-en_US-lessac-medium --activate" in readme
     assert "tts.exe model-check vits-piper-en_US-lessac-medium" in readme
     assert "scripts\\demo_real_voice.py" in readme
+    assert "--install-real-runtime" in readme
     assert "dist\\real-demo\\lessac-demo.wav" in readme
     assert "should put the `model-install` command above first" in readme
     assert "tts.exe model-install <model-id> --catalog <catalog> --activate" in readme

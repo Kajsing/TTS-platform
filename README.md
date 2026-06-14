@@ -298,6 +298,7 @@ contract smoke, writes a WAV, and stops the service:
 ```bash
 python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
+python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe --install-real-runtime
 ```
 
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.

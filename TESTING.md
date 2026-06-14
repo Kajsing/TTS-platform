@@ -291,6 +291,7 @@ Generate and verify a local real English voice demo WAV with:
 ```bash
 python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
+python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe --install-real-runtime
 ```
 
 The demo script installs the default catalog model into ignored
@@ -298,6 +299,8 @@ The demo script installs the default catalog model into ignored
 `dist/real-demo/lessac-demo.wav`, and stops its temporary service process.
 The `real` extra installs `sherpa-onnx` plus `numpy` for the real async and
 stream callback paths.
+Use `--install-real-runtime` when the active Python environment should install
+that extra before the demo performs setup and model checks.
 
 Check the Chrome extension onboarding contract directly with:
 

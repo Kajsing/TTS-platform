@@ -11,33 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: continue release hardening for Chrome extension
-  packaging by making standalone package commands strict-capable for JavaScript
-  syntax validation.
-- Current loop result: `scripts/package_extension.py` and
-  `scripts/package_windows_bundle.py` now accept `--node-executable` and
-  `--require-js-syntax`, passing those options into extension validation before
-  writing local handoff zips. `scripts/release_check.py` now propagates the
-  same flags into both package commands when strict extension syntax validation
-  is requested.
+- Current loop target: continue real-audio readiness without changing the
+  default offline release gate by making the optional real English voice demo
+  able to bootstrap its runtime dependencies explicitly.
+- Current loop result: `scripts/demo_real_voice.py` now accepts
+  `--install-real-runtime`, which installs the optional `.[real]` dependencies
+  into the selected Python environment before `setup-local`, model install, and
+  readiness checks. The default demo path still avoids dependency downloads
+  unless this flag is set.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\package_extension.py scripts\package_windows_bundle.py scripts\release_check.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
-  - Targeted extension/release package tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 11 passed.
+    `py -3 -m ruff check scripts\demo_real_voice.py scripts\package_windows_bundle.py scripts\check_v1_readiness.py apps\tts_service\tests\test_demo_real_voice.py apps\tts_service\tests\test_package_windows_bundle.py`.
+  - Targeted demo/package readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_demo_real_voice.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 5 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
     markers across 40 checked files.
-  - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
-    passed.
-  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
-    passed and reported `js_syntax_required: true`.
-  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
-    passed and propagated `js_syntax_required: true` into the extension
-    package summary.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 194 tests.
-  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax --package-out $env:TEMP\tts-platform-release-extension.zip --windows-bundle-out $env:TEMP\tts-platform-release-windows.zip`
+  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
     extension checks, extension packaging, Windows bundle
@@ -253,6 +245,8 @@ This file is the live status log and shared memory for future Codex loops.
     activates the default catalog model when needed, starts a temporary
     loopback service, runs public-contract smoke with `--token-file`, writes a
     WAV, and stops the service.
+  - `scripts/demo_real_voice.py --install-real-runtime` can install `.[real]`
+    into the selected Python environment before the demo setup/model checks.
   - real-runtime readiness now checks `numpy` in addition to `sherpa_onnx`,
     because the real async job and streaming callback paths can require
     `numpy` even when short sync synthesis succeeds.
