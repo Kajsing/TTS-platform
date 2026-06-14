@@ -64,11 +64,13 @@ backend-realism work, and early v1 model-management helpers:
 - callback-driven fake `sherpa_onnx` runtime coverage for incremental streaming
   and real-runtime cancellation callback behavior
 - chunk-plan generation and synthesis routing
-- model catalog listing summaries and warnings, local artifact install, manifest
-  update, remote catalog relative-artifact download, temporary-file artifact
-  staging before checksum/extraction, safe zip and tar extraction, install progress
-  metadata, overwrite refusal, checksum-required-by-default install behavior
-  with an explicit trusted-local override, default `models/catalog.json`
+- model catalog listing summaries and warnings, including operator metadata for
+  download size, license/source links, tags, and capability flags; local
+  artifact install, manifest update, remote catalog relative-artifact download,
+  temporary-file artifact staging before checksum/extraction, safe zip and tar
+  extraction, install progress metadata, overwrite refusal,
+  checksum-required-by-default install behavior with an explicit trusted-local
+  override, default `models/catalog.json`
   discovery with friendly missing-file guidance,
   install-and-activate first-run shortcut, offline manifest model listing,
   default-voice activation, read-only real-backend readiness diagnostics with

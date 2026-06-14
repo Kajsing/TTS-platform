@@ -310,11 +310,15 @@ Recommended model fields:
 - `language`
 - `sample_rate_hz`
 - `license`
+- `license_url`
+- `source_url`
+- `upstream_url`
 - `quality_tier`
 - `latency_tier`
 - `tags`
 - `capabilities`
 - `artifact_sha256`
+- `artifact_size_bytes`
 - `backend`
 
 `artifact_url` may be `http`, `https`, an absolute local path, or a path
@@ -338,7 +342,9 @@ SHA-256 checksum, and maps the installed VITS backend to:
 `tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
 
 - `catalog` counts for total, installable, and checksum-covered entries
-- `model_summaries` for quick operator scanning
+- `model_summaries` for quick operator scanning, including language, engine,
+  quality/latency tiers, license/source links, tags, capability flags,
+  artifact URL, download size, and checksum state
 - `warnings` for duplicate model ids, missing artifacts, and missing checksums
 - `next_steps` with the suggested install command shape
 

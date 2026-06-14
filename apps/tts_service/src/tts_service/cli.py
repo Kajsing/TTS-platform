@@ -949,6 +949,7 @@ def _catalog_model_summary(model: dict[str, object]) -> dict[str, object]:
     model_id = str(model.get("id", "")).strip()
     artifact_url = str(model.get("artifact_url", "")).strip()
     checksum = str(model.get("artifact_sha256", "")).strip()
+    artifact_size_bytes = _catalog_artifact_size_bytes(model.get("artifact_size_bytes"))
     return {
         "id": model_id,
         "name": str(model.get("name", model_id)),
@@ -956,11 +957,56 @@ def _catalog_model_summary(model: dict[str, object]) -> dict[str, object]:
         "engine": str(model.get("engine", "sherpa_onnx")),
         "sample_rate_hz": model.get("sample_rate_hz", 24000),
         "license": str(model.get("license", "unknown")),
+        "license_url": _catalog_optional_string(model.get("license_url")),
+        "source_url": _catalog_optional_string(model.get("source_url")),
+        "upstream_url": _catalog_optional_string(model.get("upstream_url")),
         "quality_tier": str(model.get("quality_tier", "unknown")),
         "latency_tier": str(model.get("latency_tier", "unknown")),
+        "tags": _catalog_string_list(model.get("tags")),
+        "capabilities": _catalog_capabilities(model.get("capabilities")),
         "installable": bool(artifact_url),
+        "artifact_url": artifact_url or None,
+        "artifact_size_bytes": artifact_size_bytes,
+        "artifact_size_mib": _catalog_artifact_size_mib(artifact_size_bytes),
         "checksum": "sha256" if checksum else "missing",
     }
+
+
+def _catalog_optional_string(value: object) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def _catalog_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
+def _catalog_capabilities(value: object) -> dict[str, bool]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "supports_pitch": bool(value.get("supports_pitch", False)),
+        "supports_streaming": bool(value.get("supports_streaming", False)),
+        "supports_multi_speaker": bool(value.get("supports_multi_speaker", False)),
+    }
+
+
+def _catalog_artifact_size_bytes(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        return None
+    return size if size >= 0 else None
+
+
+def _catalog_artifact_size_mib(size_bytes: int | None) -> float | None:
+    if size_bytes is None:
+        return None
+    return round(size_bytes / (1024 * 1024), 1)
 
 
 def _catalog_warnings(models: list[dict[str, object]]) -> list[str]:

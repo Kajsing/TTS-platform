@@ -208,8 +208,10 @@ first Chrome playback.
 The `catalog-list`, `model-list`, `model-install`, `model-activate`,
 `model-check`, and `model-remove` commands are local model-management helpers
 and do not require service auth tokens. `catalog-list` reports catalog counts,
-install readiness, checksum coverage, warnings, and next-step guidance while
-preserving the raw model entries in JSON. `model-list` reports installed
+install readiness, checksum coverage, operator-facing model summaries with
+download size, license/source links, tags, capability flags, warnings, and
+next-step guidance while preserving the raw model entries in JSON. `model-list`
+reports installed
 manifest voices, the configured default voice, backend-config presence, default
 catalog status, `sherpa_onnx` runtime status, and next-step guidance without
 starting the service. By default, `catalog-list` and `model-install` read

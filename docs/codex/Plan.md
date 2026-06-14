@@ -377,5 +377,9 @@ The fifty-eighth Windows first-run hardening slice makes the extracted-bundle
 installer install the package's base dependencies by default, adds
 `-NoDependencies`/`--no-dependencies` only for already provisioned environments,
 and reports `dependencies_installed` in the installer/check summaries.
+The fifty-ninth model-management UX slice expands `tts catalog-list`
+`model_summaries` with operator-facing install metadata: artifact URL and
+download size, license/source/upstream links, tags, and capability flags, with
+model-management smoke coverage proving those fields survive the catalog flow.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

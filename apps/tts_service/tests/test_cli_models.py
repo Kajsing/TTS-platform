@@ -630,6 +630,17 @@ def test_catalog_list_command_prints_models(
                         "name": "Voice A",
                         "artifact_url": "voice-a.zip",
                         "artifact_sha256": "a" * 64,
+                        "artifact_size_bytes": 5 * 1024 * 1024,
+                        "license": "test license",
+                        "license_url": "https://example.test/license",
+                        "source_url": "https://example.test/source",
+                        "upstream_url": "https://example.test/upstream",
+                        "tags": ["english", "vits"],
+                        "capabilities": {
+                            "supports_pitch": False,
+                            "supports_streaming": True,
+                            "supports_multi_speaker": False,
+                        },
                     },
                     {
                         "id": "voice-b",
@@ -658,7 +669,21 @@ def test_catalog_list_command_prints_models(
         "voice-a",
         "voice-b",
     ]
-    assert payload["model_summaries"][0]["checksum"] == "sha256"
+    voice_a_summary = payload["model_summaries"][0]
+    assert voice_a_summary["checksum"] == "sha256"
+    assert voice_a_summary["artifact_url"] == "voice-a.zip"
+    assert voice_a_summary["artifact_size_bytes"] == 5 * 1024 * 1024
+    assert voice_a_summary["artifact_size_mib"] == 5.0
+    assert voice_a_summary["license"] == "test license"
+    assert voice_a_summary["license_url"] == "https://example.test/license"
+    assert voice_a_summary["source_url"] == "https://example.test/source"
+    assert voice_a_summary["upstream_url"] == "https://example.test/upstream"
+    assert voice_a_summary["tags"] == ["english", "vits"]
+    assert voice_a_summary["capabilities"] == {
+        "supports_pitch": False,
+        "supports_streaming": True,
+        "supports_multi_speaker": False,
+    }
     assert payload["warnings"] == []
     assert payload["next_steps"] == [
         "review model_summaries for installable models and checksum coverage",

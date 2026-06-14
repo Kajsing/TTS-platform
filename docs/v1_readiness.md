@@ -52,10 +52,11 @@ for long web-page text.
   install command before first playback.
 - `python3 scripts/check_model_management_flow.py` creates a local loopback
   HTTP model-artifact catalog with a relative artifact URL, runs catalog-list,
-  verifies the default `models/catalog.json` path behavior, lists installed
-  manifest models offline, runs download/install, activate, service smoke with
-  the installed voice, read-only model readiness diagnostics with catalog-aware
-  next steps, and remove without external downloads. Model installs require
+  verifies operator-facing catalog summary metadata and the default
+  `models/catalog.json` path behavior, lists installed manifest models offline,
+  runs download/install, activate, service smoke with the installed voice,
+  read-only model readiness diagnostics with catalog-aware next steps, and
+  remove without external downloads. Model installs require
   `artifact_sha256` by default, with
   `--allow-missing-checksum` reserved for trusted local artifacts. The default
   catalog now includes the English

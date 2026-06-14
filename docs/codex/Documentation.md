@@ -11,29 +11,26 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop result: `scripts/windows/install_local.ps1` now installs base
-  package dependencies by default for extracted Windows bundles, reports
-  `dependencies_installed`, and keeps `-NoDependencies` as an explicit
-  pre-provisioned-environment escape hatch. It also supports
-  `-InstallRealRuntime`, an opt-in first-run path that installs the optional
-  `.[real]` runtime dependencies into the bundle `.venv` before `setup-local`.
-  `scripts/check_windows_bundle_install.py` exposes the matching
-  `--no-dependencies` and `--install-real-runtime` validation knobs while the
-  default release gate keeps real-runtime downloads opt-in.
+- Current loop target: continue the v1 model-management UX track by making
+  `tts catalog-list` summaries more useful for choosing and installing local
+  English voices, without changing install behavior or requiring new downloads.
+- Current loop result: `tts catalog-list` now includes operator-facing
+  metadata in each `model_summaries` entry: artifact URL, download size in
+  bytes and MiB, license/source/upstream links, tags, and normalized capability
+  flags. `scripts/check_model_management_flow.py` now seeds those fields in its
+  generated catalogs and fails if the CLI does not preserve them in catalog
+  summaries. This keeps first-run model choice clearer without changing
+  download/install behavior.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_windows_bundle_install.py scripts\package_windows_bundle.py scripts\check_extension.py scripts\check_v1_readiness.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py`.
-  - Targeted installer/bundle/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_windows_launchers.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 13 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed.
-  - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
-    passed.
-  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip`
-    passed.
-  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip`
-    passed.
-  - `py -3 -m ruff check .` passed.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py`.
+  - Targeted model CLI tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q`
+    and reported 39 passed.
+  - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
+    markers across 39 checked files.
+  - `py -3 scripts\check_model_management_flow.py` passed, including the new
+    catalog summary metadata assertions.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 193 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
@@ -58,9 +55,10 @@ This file is the live status log and shared memory for future Codex loops.
 - Chrome MV3 prototype work exists in `apps/chrome_extension/`.
 - Phase 7 work already completed includes backend runtime config (`stub` / `auto` / `real`), manifest-side backend asset binding, more truthful backend readiness, health backend snapshots, fake-runtime coverage for sync/jobs/streaming, async job benchmarking, and a first chunk-planning component shared across sync/jobs/streaming.
 - Early v1 model-management work now includes local catalog listing, model
-  artifact install with checksum verification required by default, safe zip extraction
-  against absolute paths, drive-qualified paths, and traversal entries, manifest
-  update, default voice activation in `config/config.toml`, and model removal.
+  summaries with install metadata, artifact install with checksum verification
+  required by default, safe zip extraction against absolute paths,
+  drive-qualified paths, and traversal entries, manifest update, default voice
+  activation in `config/config.toml`, and model removal.
 - A new public-contract smoke script now exists:
   - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
   - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.

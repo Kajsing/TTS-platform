@@ -111,6 +111,10 @@ def check_model_management_flow(
             env=env,
             timeout_s=command_timeout_s,
         )
+        _assert_catalog_summary_metadata(
+            default_catalog_payload,
+            expected_artifact_bytes=int(default_catalog_artifact["bytes"]),
+        )
 
         with _serve_catalog_root(catalog_root) as catalog_url:
             catalog_payload = _run_json_command(
@@ -124,6 +128,10 @@ def check_model_management_flow(
                 ],
                 env=env,
                 timeout_s=command_timeout_s,
+            )
+            _assert_catalog_summary_metadata(
+                catalog_payload,
+                expected_artifact_bytes=int(artifact["bytes"]),
             )
             install_payload = _run_json_command(
                 [
@@ -285,11 +293,20 @@ def _write_catalog(
                         "engine": "sherpa_onnx",
                         "sample_rate_hz": 24000,
                         "license": "test-only",
+                        "license_url": "https://example.test/license",
+                        "source_url": "https://example.test/source",
+                        "upstream_url": "https://example.test/upstream",
                         "quality_tier": "development",
                         "latency_tier": "local",
                         "artifact_url": artifact_url or str(artifact["path"]),
                         "artifact_sha256": artifact["sha256"],
+                        "artifact_size_bytes": artifact["bytes"],
                         "tags": ["local-flow", "test"],
+                        "capabilities": {
+                            "supports_pitch": False,
+                            "supports_streaming": True,
+                            "supports_multi_speaker": False,
+                        },
                     }
                 ],
             },
@@ -487,6 +504,44 @@ def _assert_removed_repo_state(*, repo_root: Path) -> None:
     ]
     if MODEL_ID in voice_ids:
         raise ModelManagementFlowError("model-remove did not delete the manifest entry.")
+
+
+def _assert_catalog_summary_metadata(
+    payload: dict[str, object],
+    *,
+    expected_artifact_bytes: int,
+) -> None:
+    summaries = payload.get("model_summaries")
+    if not isinstance(summaries, list) or not summaries:
+        raise ModelManagementFlowError("catalog-list did not report model summaries.")
+    summary = next(
+        (
+            candidate
+            for candidate in summaries
+            if isinstance(candidate, dict) and candidate.get("id") == MODEL_ID
+        ),
+        None,
+    )
+    if summary is None:
+        raise ModelManagementFlowError("catalog-list did not summarize the flow model.")
+    expected_fields = {
+        "artifact_size_bytes": expected_artifact_bytes,
+        "artifact_size_mib": round(expected_artifact_bytes / (1024 * 1024), 1),
+        "license_url": "https://example.test/license",
+        "source_url": "https://example.test/source",
+        "upstream_url": "https://example.test/upstream",
+        "tags": ["local-flow", "test"],
+        "capabilities": {
+            "supports_pitch": False,
+            "supports_streaming": True,
+            "supports_multi_speaker": False,
+        },
+    }
+    for field, expected_value in expected_fields.items():
+        if summary.get(field) != expected_value:
+            raise ModelManagementFlowError(
+                f"catalog-list summary field {field!r} was not preserved."
+            )
 
 
 def _summarize_catalog(payload: dict[str, object]) -> dict[str, object]:
