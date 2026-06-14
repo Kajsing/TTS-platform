@@ -206,7 +206,7 @@ REQUIRED_TEXT_MARKERS = {
         "js_syntax_required",
         'pip install -e ".[real]"',
         "should put the `model-install` command above first",
-        ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install sherpa-onnx",
+        ".\\\\.venv\\\\Scripts\\\\python.exe -m pip install -e \".[real]\"",
         "demo_real_voice.py",
         "--install-real-runtime",
         "extension-allow-origin",

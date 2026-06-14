@@ -401,5 +401,10 @@ The sixty-fourth real-audio UX slice adds
 that installs `.[real]` into the active Python environment before demo
 setup/model checks, keeping the default offline gates download-free while
 making real English voice reproduction closer to one command.
+The sixty-fifth Windows first-run UX slice simplifies the generated Windows
+bundle README's manual runtime setup by keeping
+`python -m pip install -e ".[real]"` as the primary venv-local command and
+moving targeted single-package installs back to CLI guidance for partial
+runtime states.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

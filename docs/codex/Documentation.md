@@ -11,19 +11,18 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: continue real-audio readiness without changing the
-  default offline release gate by making the optional real English voice demo
-  able to bootstrap its runtime dependencies explicitly.
-- Current loop result: `scripts/demo_real_voice.py` now accepts
-  `--install-real-runtime`, which installs the optional `.[real]` dependencies
-  into the selected Python environment before `setup-local`, model install, and
-  readiness checks. The default demo path still avoids dependency downloads
-  unless this flag is set.
+- Current loop target: reduce Windows first-run friction by aligning the
+  generated bundle README with the preferred `.[real]` runtime install path.
+- Current loop result: `scripts/package_windows_bundle.py` now keeps the
+  Windows bundle's manual real-runtime setup to one venv-local
+  `python -m pip install -e ".[real]"` command, while prose still explains that
+  setup/list/check may report targeted single-package guidance for partial
+  runtime installs.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\demo_real_voice.py scripts\package_windows_bundle.py scripts\check_v1_readiness.py apps\tts_service\tests\test_demo_real_voice.py apps\tts_service\tests\test_package_windows_bundle.py`.
-  - Targeted demo/package readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_demo_real_voice.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_windows_bundle.py`.
+  - Targeted bundle/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
     and reported 5 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
     markers across 40 checked files.
@@ -408,9 +407,10 @@ This file is the live status log and shared memory for future Codex loops.
   - The generated `WINDOWS_BUNDLE_README.md` now puts the default English
     `model-install` command before model readiness re-checking, matching
     `setup-local` next-step guidance.
-  - The generated `WINDOWS_BUNDLE_README.md` now also includes the venv-local
-    `sherpa-onnx` runtime install command before real playback readiness
-    checks.
+  - The generated `WINDOWS_BUNDLE_README.md` now also uses the venv-local
+    `python -m pip install -e ".[real]"` command before real playback
+    readiness checks instead of listing duplicate single-package installs as
+    the primary path.
   - `scripts/check_extension_reader_flow.py` now covers stop/restart recovery
     and popup reopen-state wiring in addition to the generated long-page stream
     smoke.

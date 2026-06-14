@@ -234,8 +234,6 @@ manager, scheduled task, or auto-start entry.
    .\\.venv\\Scripts\\tts.exe catalog-list
    .\\.venv\\Scripts\\tts.exe model-list
    .\\.venv\\Scripts\\python.exe -m pip install -e ".[real]"
-   .\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx
-   .\\.venv\\Scripts\\python.exe -m pip install numpy
    .\\.venv\\Scripts\\tts.exe model-install vits-piper-en_US-lessac-medium --activate
    .\\.venv\\Scripts\\tts.exe model-check vits-piper-en_US-lessac-medium
    ```
@@ -243,10 +241,11 @@ manager, scheduled task, or auto-start entry.
    The bundled manifest includes the development/debug voice for local service
    smoke tests. `setup-local` prints JSON next steps and, with the bundled
    default catalog, should put the `model-install` command above first. If
-   `sherpa_onnx` or `numpy` is not importable in `.venv`, setup/list/check
-   guidance also includes the runtime install commands above. For alternate
-   catalogs, install and activate a real model from that catalog, then re-check
-   readiness:
+   `sherpa_onnx` and `numpy` are not importable in `.venv`, setup/list/check
+   guidance also includes the `.[real]` install command above. If only one
+   runtime package is missing, those commands may report a targeted
+   single-package install step instead. For alternate catalogs, install and
+   activate a real model from that catalog, then re-check readiness:
 
    ```powershell
    .\\.venv\\Scripts\\tts.exe model-install <model-id> --catalog <catalog> --activate

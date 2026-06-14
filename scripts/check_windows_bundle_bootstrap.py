@@ -26,7 +26,7 @@ README_MARKERS = (
     "python -m tts_service.cli setup-local --repo-root .",
     ".\\.venv\\Scripts\\tts.exe model-check",
     ".\\.venv\\Scripts\\tts.exe catalog-list",
-    ".\\.venv\\Scripts\\python.exe -m pip install sherpa-onnx",
+    ".\\.venv\\Scripts\\python.exe -m pip install -e \".[real]\"",
     "tts.exe model-install vits-piper-en_US-lessac-medium --activate",
     "tts.exe model-install <model-id> --catalog <catalog> --activate",
     ".\\scripts\\windows\\run_service.ps1 -SetupOnly",
