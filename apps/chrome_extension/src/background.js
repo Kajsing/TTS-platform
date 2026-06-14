@@ -427,13 +427,13 @@ async function getPlaybackState() {
       activeStreamId: null,
       lastEvent: "interrupted",
     });
-    return playbackState;
+    return withSourceTabStatus(playbackState);
   }
 
-  return {
+  return withSourceTabStatus({
     ...playbackState,
     offscreenReady,
-  };
+  });
 }
 
 async function getServiceSnapshot() {
@@ -578,6 +578,35 @@ function validateActiveSourceTab(state, activeTab) {
     return "Switch back to the original page tab before using this page action.";
   }
   return "";
+}
+
+async function withSourceTabStatus(state) {
+  if (!isPageActionState(state)) {
+    return {
+      ...state,
+      sourceTabActive: null,
+      sourceTabMessage: "",
+    };
+  }
+  try {
+    const activeTab = await getActiveTab();
+    const mismatchMessage = validateActiveSourceTab(state, activeTab);
+    return {
+      ...state,
+      sourceTabActive: !mismatchMessage,
+      sourceTabMessage: mismatchMessage || "Original page tab is active.",
+    };
+  } catch (error) {
+    return {
+      ...state,
+      sourceTabActive: false,
+      sourceTabMessage: error.message || "Active page tab is unavailable.",
+    };
+  }
+}
+
+function isPageActionState(state) {
+  return Boolean(state?.pageCapture) || isPagePlaybackSource(state?.source);
 }
 
 function resolveNextSectionIndex({ progress, pageCapture }) {

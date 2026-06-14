@@ -57,6 +57,8 @@
 - Confirm the active tab is the same tab you were listening to. Manual page
   resume, continue, and section actions refuse to use stored page progress from
   another active tab.
+- Check `Source Tab` in the popup `Playback State`; it reports whether the
+  original page tab is active and explains disabled manual page actions.
 - Resume re-extracts readable page text and uses the last planned text chunk
   index; if the page content changed, the resumed position may shift.
 - Resume intentionally repeats the latest known text chunk instead of skipping
@@ -100,6 +102,8 @@
 - Pages without semantic `h1` to `h4` headings may not expose usable sections.
 - Switch back to the original page tab before using section navigation from
   stored page progress.
+- The popup disables section navigation when the active tab does not match the
+  stored page-progress source tab.
 - If the page is truncated but has no later heading-backed section, use
   `Continue Page` instead. Normal page playback also tries this automatically
   when a truncated segment finishes.

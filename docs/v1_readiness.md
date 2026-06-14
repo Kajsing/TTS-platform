@@ -39,7 +39,8 @@ for long web-page text.
 - Manual page resume, continue, previous-section, and next-section actions now
   require that the active tab matches the original source tab for the stored
   page playback state, preventing old reader progress from being applied to a
-  different active tab.
+  different active tab. The popup also reports source-tab status and disables
+  those manual page actions when the active tab does not match.
 - `python3 scripts/check_chrome_extension_smoke.py` validates the extension
   static contract, then uses Chrome or Edge through DevTools Protocol when a
   browser is available. It loads the unpacked MV3 extension, discovers the

@@ -11,19 +11,18 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: improve Chrome reader-flow reliability by guarding
-  manual page resume/continue/section actions against accidental cross-tab
-  reuse of stored page progress.
-- Current loop result: the extension background now checks that the active tab
-  matches the original source tab before manual `Resume Page`, `Continue Page`,
-  `Previous Section`, or `Next Section` re-extracts page text. The guard uses
-  the existing source tab id and does not persist page URLs or raw page text.
+- Current loop target: make the Chrome reader's source-tab guard visible in the
+  popup before the operator clicks a manual page action.
+- Current loop result: background `get-state` responses now add non-persisted
+  `sourceTabActive` and `sourceTabMessage` fields for page playback state, and
+  the popup uses them to show a `Source Tab` playback-state line and disable
+  manual page resume/continue/section actions while another tab is active.
 - Validation status for the current loop:
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
     remains skip-aware because Node.js is not on `PATH`.
-  - `py -3 scripts\check_extension_reader_flow.py` passed, including the new
-    `source_tab_guard` contract marker and generated long-article WebSocket
-    smoke with 145 stream text chunks.
+  - `py -3 scripts\check_extension_reader_flow.py` passed, including
+    `source_tab_guard`, `source_tab_status`, and generated long-article
+    WebSocket smoke with 145 stream text chunks.
   - `py -3 -m pytest apps\tts_service\tests\test_extension_reader_flow_check.py -q`
     passed with 3 tests.
   - `py -3 scripts\check_v1_readiness.py` passed.
@@ -467,6 +466,8 @@ This file is the live status log and shared memory for future Codex loops.
     progress to a different active tab; operators must switch back to the
     original page tab before using `Resume Page`, `Continue Page`, `Previous
     Section`, or `Next Section`.
+  - the popup now exposes source-tab status for stored page playback and
+    disables manual page actions when another tab is active.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

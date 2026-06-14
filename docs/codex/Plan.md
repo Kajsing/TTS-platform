@@ -445,5 +445,10 @@ manual page resume, continue, previous-section, and next-section actions, so
 stored reader progress cannot be accidentally applied to a different active
 tab. The guard uses the existing non-textual source tab id in session playback
 state and does not persist page URLs or raw page text.
+The seventy-third reader-flow UX slice exposes that same source-tab status from
+background `get-state` responses and uses it in the popup to disable manual
+page resume/continue/section actions while another tab is active. The popup now
+shows a `Source Tab` playback-state line without storing page URLs or raw page
+text.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

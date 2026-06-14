@@ -214,26 +214,43 @@ function setActionMessage(message, kind = "info") {
 }
 
 function updateReaderActionState(state) {
-  const capabilities = resolveReaderCapabilities(state);
+  const baseCapabilities = resolveReaderBaseCapabilities(state);
+  const capabilities = applySourceTabGuard(baseCapabilities, state);
   setActionButtonState(
     readerActionButtons.resumePage,
     capabilities.resumePage,
-    "No resumable page progress is available."
+    pageActionUnavailableTitle(
+      state,
+      baseCapabilities.resumePage,
+      "No resumable page progress is available."
+    )
   );
   setActionButtonState(
     readerActionButtons.continuePage,
     capabilities.continuePage,
-    "No truncated page continuation is available."
+    pageActionUnavailableTitle(
+      state,
+      baseCapabilities.continuePage,
+      "No truncated page continuation is available."
+    )
   );
   setActionButtonState(
     readerActionButtons.previousSection,
     capabilities.previousSection,
-    "No previous page section is available."
+    pageActionUnavailableTitle(
+      state,
+      baseCapabilities.previousSection,
+      "No previous page section is available."
+    )
   );
   setActionButtonState(
     readerActionButtons.nextSection,
     capabilities.nextSection,
-    "No next page section is available."
+    pageActionUnavailableTitle(
+      state,
+      baseCapabilities.nextSection,
+      "No next page section is available."
+    )
   );
   setActionButtonState(
     readerActionButtons.stopPlayback,
@@ -249,6 +266,10 @@ function setActionButtonState(button, enabled, unavailableTitle) {
 }
 
 function resolveReaderCapabilities(state) {
+  return applySourceTabGuard(resolveReaderBaseCapabilities(state), state);
+}
+
+function resolveReaderBaseCapabilities(state) {
   return {
     resumePage: canResumePage(state.readerProgress),
     continuePage: canContinuePage(state.pageCapture),
@@ -256,6 +277,24 @@ function resolveReaderCapabilities(state) {
     nextSection: resolveNextSectionIndex(state) != null,
     stopPlayback: isActivePlaybackStatus(state.status),
   };
+}
+
+function applySourceTabGuard(capabilities, state) {
+  const sourceTabReady = state.sourceTabActive !== false;
+  return {
+    ...capabilities,
+    resumePage: capabilities.resumePage && sourceTabReady,
+    continuePage: capabilities.continuePage && sourceTabReady,
+    previousSection: capabilities.previousSection && sourceTabReady,
+    nextSection: capabilities.nextSection && sourceTabReady,
+  };
+}
+
+function pageActionUnavailableTitle(state, baseCapability, fallbackTitle) {
+  if (baseCapability && state.sourceTabActive === false) {
+    return state.sourceTabMessage || "Switch back to the original page tab.";
+  }
+  return fallbackTitle;
 }
 
 function canResumePage(progress) {
@@ -372,6 +411,7 @@ function formatPlaybackState(state) {
     state.readerProgress ? `Progress: ${formatReaderProgress(state.readerProgress)}` : null,
     state.pageCapture ? `Page Capture: ${formatPageCapture(state.pageCapture)}` : null,
     state.pageCapture ? formatLongPageStatus(state) : null,
+    state.sourceTabMessage ? `Source Tab: ${state.sourceTabMessage}` : null,
     state.bufferedMs != null ? `Buffered: ${state.bufferedMs} ms` : null,
     state.underrunCount != null ? `Underruns: ${state.underrunCount}` : null,
     state.offscreenReady != null ? `Offscreen Ready: ${state.offscreenReady}` : null,
