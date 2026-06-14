@@ -141,7 +141,9 @@ for long web-page text.
   WAV, and stops the service. Install `.[real]` in the active environment first
   with `python -m pip install -e ".[real]"` when the runtime packages are not
   present, or pass `--install-real-runtime` to let the demo install that extra
-  before setup/model checks.
+  before setup/model checks. Use
+  `python3 scripts/release_check.py --real-voice-demo --install-real-runtime`
+  when the same demo should be included as an explicit opt-in release gate.
 - Run live smoke against the started service with
   `python3 scripts/release_check.py --live-smoke --token-file config/token.txt
   --stream-text-repeat 200 --min-stream-text-chunks 2`.
@@ -187,8 +189,10 @@ for long web-page text.
   `node` is available on `PATH`, or when `--node-executable`/`TTS_PLATFORM_NODE`
   points at Node.js. Use `--require-js-syntax` when missing Node.js should fail
   the gate instead of reporting a skip.
-- Real acoustic-output readiness requires a real local model install and live
-  service smoke outside the default offline release gate.
+- Real acoustic-output readiness remains outside the default offline release
+  gate because it can install runtime dependencies and download a real model.
+  Use the explicit `--real-voice-demo` release-check flag when a machine should
+  provide that evidence.
 - Extended foreground PowerShell/CMD launcher observation remains manual; the
   automated gates cover safe extraction, local install bootstrap, launcher
   setup-only execution, launcher foreground service smoke, `setup-local`,

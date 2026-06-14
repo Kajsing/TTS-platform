@@ -495,6 +495,7 @@ run:
 python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe --install-real-runtime
+python3 scripts/release_check.py --real-voice-demo --install-real-runtime
 ```
 
 The demo seeds ignored `dist/real-demo`, installs and activates the default
@@ -502,7 +503,10 @@ catalog model there when needed, starts a temporary loopback service, runs
 public-contract smoke with `--token-file`, writes
 `dist/real-demo/lessac-demo.wav`, and stops the service process.
 Use `--install-real-runtime` when the active Python environment should install
-the optional `.[real]` runtime dependencies as part of the demo run.
+the optional `.[real]` runtime dependencies as part of the demo run. Use
+`release_check.py --real-voice-demo` to include the same demo as an explicit
+opt-in release gate without adding real model downloads to the default release
+check.
 
 ## Long-Text Implications
 

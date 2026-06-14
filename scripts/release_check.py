@@ -35,6 +35,24 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Fail extension validation when JavaScript syntax checks cannot run.",
     )
+    parser.add_argument(
+        "--real-voice-demo",
+        action="store_true",
+        help=(
+            "Also run scripts/demo_real_voice.py as an explicit real acoustic "
+            "output gate."
+        ),
+    )
+    parser.add_argument(
+        "--install-real-runtime",
+        action="store_true",
+        help=(
+            "With --real-voice-demo, install the optional .[real] dependencies "
+            "before demo setup/model checks."
+        ),
+    )
+    parser.add_argument("--real-voice-demo-root", default=None)
+    parser.add_argument("--real-voice-demo-out", default=None)
     args = parser.parse_args(argv)
 
     try:
@@ -56,6 +74,14 @@ def main(argv: list[str] | None = None) -> None:
             min_stream_text_chunks=args.min_stream_text_chunks,
             node_executable=args.node_executable,
             require_js_syntax=args.require_js_syntax,
+            real_voice_demo=args.real_voice_demo,
+            install_real_runtime=args.install_real_runtime,
+            real_voice_demo_root=(
+                Path(args.real_voice_demo_root) if args.real_voice_demo_root else None
+            ),
+            real_voice_demo_out=(
+                Path(args.real_voice_demo_out) if args.real_voice_demo_out else None
+            ),
         )
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
@@ -80,6 +106,10 @@ def run_release_checks(
     min_stream_text_chunks: int = 1,
     node_executable: str | None = None,
     require_js_syntax: bool = False,
+    real_voice_demo: bool = False,
+    install_real_runtime: bool = False,
+    real_voice_demo_root: Path | None = None,
+    real_voice_demo_out: Path | None = None,
 ) -> dict[str, object]:
     if package_out_path is not None and windows_bundle_out_path is not None:
         return _run_release_checks_with_package_path(
@@ -98,6 +128,10 @@ def run_release_checks(
             min_stream_text_chunks=min_stream_text_chunks,
             node_executable=node_executable,
             require_js_syntax=require_js_syntax,
+            real_voice_demo=real_voice_demo,
+            install_real_runtime=install_real_runtime,
+            real_voice_demo_root=real_voice_demo_root,
+            real_voice_demo_out=real_voice_demo_out,
         )
 
     with tempfile.TemporaryDirectory(prefix="tts-platform-release-") as temp_dir:
@@ -127,6 +161,10 @@ def run_release_checks(
             min_stream_text_chunks=min_stream_text_chunks,
             node_executable=node_executable,
             require_js_syntax=require_js_syntax,
+            real_voice_demo=real_voice_demo,
+            install_real_runtime=install_real_runtime,
+            real_voice_demo_root=real_voice_demo_root,
+            real_voice_demo_out=real_voice_demo_out,
         )
 
 
@@ -147,6 +185,10 @@ def _run_release_checks_with_package_path(
     min_stream_text_chunks: int,
     node_executable: str | None,
     require_js_syntax: bool,
+    real_voice_demo: bool,
+    install_real_runtime: bool,
+    real_voice_demo_root: Path | None,
+    real_voice_demo_out: Path | None,
 ) -> dict[str, object]:
     child_env = _build_release_env(node_executable=node_executable)
     checks = [
@@ -249,6 +291,18 @@ def _run_release_checks_with_package_path(
                     stream_text_file=stream_text_file,
                     stream_text_repeat=stream_text_repeat,
                     min_stream_text_chunks=min_stream_text_chunks,
+                ),
+            )
+        )
+    if real_voice_demo:
+        checks.append(
+            (
+                "real_voice_demo",
+                _build_real_voice_demo_command(
+                    python_executable=python_executable,
+                    install_real_runtime=install_real_runtime,
+                    demo_root=real_voice_demo_root,
+                    out_path=real_voice_demo_out,
                 ),
             )
         )
@@ -380,6 +434,28 @@ def _build_live_smoke_command(
         command.extend(["--stream-text-repeat", str(stream_text_repeat)])
     if min_stream_text_chunks != 1:
         command.extend(["--min-stream-text-chunks", str(min_stream_text_chunks)])
+    return command
+
+
+def _build_real_voice_demo_command(
+    *,
+    python_executable: str,
+    install_real_runtime: bool,
+    demo_root: Path | None,
+    out_path: Path | None,
+) -> list[str]:
+    command = [
+        python_executable,
+        "scripts/demo_real_voice.py",
+        "--python-executable",
+        python_executable,
+    ]
+    if install_real_runtime:
+        command.append("--install-real-runtime")
+    if demo_root is not None:
+        command.extend(["--demo-root", str(demo_root.expanduser().resolve())])
+    if out_path is not None:
+        command.extend(["--out", str(out_path.expanduser().resolve())])
     return command
 
 

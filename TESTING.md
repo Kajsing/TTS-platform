@@ -292,6 +292,7 @@ Generate and verify a local real English voice demo WAV with:
 python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe --install-real-runtime
+python3 scripts/release_check.py --real-voice-demo --install-real-runtime
 ```
 
 The demo script installs the default catalog model into ignored
@@ -300,7 +301,10 @@ The demo script installs the default catalog model into ignored
 The `real` extra installs `sherpa-onnx` plus `numpy` for the real async and
 stream callback paths.
 Use `--install-real-runtime` when the active Python environment should install
-that extra before the demo performs setup and model checks.
+that extra before the demo performs setup and model checks. Use
+`release_check.py --real-voice-demo` when the real English voice demo should be
+included as an explicit opt-in release gate; it remains outside the default
+offline release gate.
 
 Check the Chrome extension onboarding contract directly with:
 

@@ -11,23 +11,22 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: reduce Windows first-run friction by aligning the
-  generated bundle README with the preferred `.[real]` runtime install path.
-- Current loop result: `scripts/package_windows_bundle.py` now keeps the
-  Windows bundle's manual real-runtime setup to one venv-local
-  `python -m pip install -e ".[real]"` command, while prose still explains that
-  setup/list/check may report targeted single-package guidance for partial
-  runtime installs.
+- Current loop target: make real acoustic-output evidence available from the
+  release-check workflow without making the default offline gate heavyweight.
+- Current loop result: `scripts/release_check.py` now accepts
+  `--real-voice-demo` to run `scripts/demo_real_voice.py` as an explicit
+  opt-in release gate, and `--install-real-runtime` passes through the demo's
+  optional `.[real]` runtime bootstrap.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_windows_bundle.py`.
-  - Targeted bundle/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 5 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
+    `py -3 -m ruff check scripts\release_check.py scripts\check_v1_readiness.py apps\tts_service\tests\test_release_check.py`.
+  - Targeted release/readiness tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_release_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 7 passed.
+  - `py -3 scripts\check_v1_readiness.py` passed and reported 41 readiness
     markers across 40 checked files.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 194 tests.
+  - `py -3 -m pytest -q` passed with 195 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
     passed, including strict extension JavaScript syntax parsing, security
     defaults, v1 readiness, local service bootstrap, model-management flow,
@@ -37,6 +36,9 @@ This file is the live status log and shared memory for future Codex loops.
     `real_runtime_installed: false`, confirming base dependencies are now part
     of first-run bootstrap while `.[real]` remains opt-in unless
     `--install-real-runtime` is requested.
+  - The actual `--real-voice-demo` gate was not invoked during default
+    validation because it can install runtime dependencies and download a real
+    model artifact; mocked release-check coverage verifies command wiring.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -330,6 +332,10 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/release_check.py --live-smoke` can also run the public-contract
     smoke script against an already running service using `--token`,
     `--token-file`, and optional `--voice`.
+  - `scripts/release_check.py --real-voice-demo` can also run the optional real
+    English voice demo as an explicit acoustic-output gate, with
+    `--install-real-runtime` available when the selected Python environment
+    should bootstrap `.[real]` first.
   - `scripts/release_check.py` redacts inline `--token` values in its JSON
     summary so release logs do not echo bearer tokens.
   - `scripts/release_check.py` now validates the Windows local reader bundle in
@@ -572,6 +578,7 @@ python3 -m pytest -q
 python3 -m ruff check .
 python3 scripts/release_check.py
 python3 scripts/release_check.py --live-smoke --token-file config/token.txt
+python3 scripts/release_check.py --real-voice-demo --install-real-runtime
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_v1_readiness.py
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip

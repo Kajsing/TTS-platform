@@ -299,7 +299,12 @@ contract smoke, writes a WAV, and stops the service:
 python3 -m pip install -e ".[real]"
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe
 python3 scripts/demo_real_voice.py --python-executable .venv/Scripts/python.exe --install-real-runtime
+python3 scripts/release_check.py --real-voice-demo --install-real-runtime
 ```
+
+The release-check flag keeps real acoustic-output evidence opt-in so the
+default offline gate does not install runtime dependencies or download model
+artifacts.
 
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 

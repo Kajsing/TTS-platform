@@ -154,6 +154,47 @@ def test_release_check_can_include_optional_live_smoke(
     ]
 
 
+def test_release_check_can_include_optional_real_voice_demo(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    release_module = _load_release_check_module()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert cwd == REPO_ROOT
+        assert check is True
+        calls.append(command)
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+    demo_root = tmp_path / "real-demo"
+    demo_out = tmp_path / "lessac-demo.wav"
+
+    summary = release_module.run_release_checks(
+        python_executable="python-test",
+        package_out_path=tmp_path / "extension.zip",
+        windows_bundle_out_path=tmp_path / "windows.zip",
+        real_voice_demo=True,
+        install_real_runtime=True,
+        real_voice_demo_root=demo_root,
+        real_voice_demo_out=demo_out,
+    )
+
+    assert summary["checks"][-1]["name"] == "real_voice_demo"
+    assert calls[-1] == [
+        "python-test",
+        "scripts/demo_real_voice.py",
+        "--python-executable",
+        "python-test",
+        "--install-real-runtime",
+        "--demo-root",
+        str(demo_root.resolve()),
+        "--out",
+        str(demo_out.resolve()),
+    ]
+    assert summary["checks"][-1]["command"] == calls[-1]
+
+
 def test_release_check_can_require_extension_js_syntax(
     tmp_path: Path,
     monkeypatch,

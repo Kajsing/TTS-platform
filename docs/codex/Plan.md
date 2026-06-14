@@ -406,5 +406,10 @@ bundle README's manual runtime setup by keeping
 `python -m pip install -e ".[real]"` as the primary venv-local command and
 moving targeted single-package installs back to CLI guidance for partial
 runtime states.
+The sixty-sixth real-audio release-hardening slice adds
+`scripts/release_check.py --real-voice-demo`, an explicit opt-in gate that runs
+`scripts/demo_real_voice.py` from the release-check flow and can pass through
+`--install-real-runtime` without making the default offline release gate
+download model/runtime artifacts.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
