@@ -7,6 +7,7 @@ const DEFAULT_CONFIG = {
   highWatermarkMs: 600,
   maxChars: 24000,
 };
+const LOCAL_MAX_PAGE_CHARS = 48000;
 const ALLOWED_SERVICE_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const BASE_URL_ERROR =
   "Base URL must be an HTTP localhost origin using 127.0.0.1 or localhost.";
@@ -131,7 +132,8 @@ async function speakSelection() {
 async function speakPage() {
   const tab = await getActiveTab();
   const config = await getConfig();
-  const capture = await getPageCapture(tab.id, config.maxChars);
+  const maxChars = await resolvePageMaxChars(config);
+  const capture = await getPageCapture(tab.id, maxChars);
   if (!capture.text) {
     return { ok: false, message: "No page text found." };
   }
@@ -160,7 +162,8 @@ async function resumePage() {
     return { ok: false, message: tabMismatchMessage };
   }
   const config = await getConfig();
-  const capture = await getPageCapture(tab.id, config.maxChars);
+  const maxChars = await resolvePageMaxChars(config);
+  const capture = await getPageCapture(tab.id, maxChars);
   if (!capture.text) {
     return { ok: false, message: "No page text found." };
   }
@@ -194,9 +197,10 @@ async function continuePage() {
     return { ok: false, message: tabMismatchMessage };
   }
   const config = await getConfig();
+  const maxChars = await resolvePageMaxChars(config);
   const capture = await getPageCapture(
     tab.id,
-    config.maxChars,
+    maxChars,
     startSectionIndex,
     startTextChar
   );
@@ -241,9 +245,10 @@ async function maybeAutoContinuePage(state) {
 
   try {
     const config = await getConfig();
+    const maxChars = await resolvePageMaxChars(config);
     const capture = await getPageCapture(
       Math.floor(tabId),
-      config.maxChars,
+      maxChars,
       startSectionIndex,
       startTextChar
     );
@@ -288,7 +293,8 @@ async function previousSection() {
     return { ok: false, message: tabMismatchMessage };
   }
   const config = await getConfig();
-  const capture = await getPageCapture(tab.id, config.maxChars, previousSectionIndex);
+  const maxChars = await resolvePageMaxChars(config);
+  const capture = await getPageCapture(tab.id, maxChars, previousSectionIndex);
   if (!capture.text) {
     return { ok: false, message: "No page text found for the previous section." };
   }
@@ -323,7 +329,8 @@ async function nextSection() {
     return { ok: false, message: tabMismatchMessage };
   }
   const config = await getConfig();
-  const capture = await getPageCapture(tab.id, config.maxChars, nextSectionIndex);
+  const maxChars = await resolvePageMaxChars(config);
+  const capture = await getPageCapture(tab.id, maxChars, nextSectionIndex);
   if (!capture.text) {
     return { ok: false, message: "No page text found for the next section." };
   }
@@ -482,6 +489,7 @@ async function getServiceSnapshot() {
     voices: [],
     defaultVoice: config.voice || "",
     authEnabled: true,
+    textLimits: buildServiceTextLimits(null),
     message: "Service has not been contacted yet.",
   };
 
@@ -491,6 +499,7 @@ async function getServiceSnapshot() {
       fetchJson(config.baseUrl + "/v1/voices"),
     ]);
 
+    const textLimits = buildServiceTextLimits(healthResponse);
     return {
       ...snapshot,
       reachable: true,
@@ -498,6 +507,7 @@ async function getServiceSnapshot() {
       voices: voicesResponse.voices ?? [],
       defaultVoice: voicesResponse.default_voice ?? "",
       authEnabled: Boolean(healthResponse.auth_enabled),
+      textLimits,
       message: `Connected to local service (${healthResponse.status}).`,
     };
   } catch (error) {
@@ -506,6 +516,35 @@ async function getServiceSnapshot() {
       message: error.message,
     };
   }
+}
+
+async function resolvePageMaxChars(config) {
+  const serviceMaxPageChars = await getServiceMaxPageChars(config.baseUrl);
+  return Math.min(config.maxChars, serviceMaxPageChars);
+}
+
+async function getServiceMaxPageChars(baseUrl) {
+  try {
+    const health = await fetchJson(baseUrl + "/v1/health");
+    return buildServiceTextLimits(health).maxPageChars;
+  } catch {
+    return LOCAL_MAX_PAGE_CHARS;
+  }
+}
+
+function buildServiceTextLimits(health) {
+  const maxCharsPerRequest = sanitizeOptionalPositiveInteger(
+    health?.tts?.max_chars_per_request
+  );
+  const maxCharsPerStream = sanitizeOptionalPositiveInteger(
+    health?.tts?.max_chars_per_stream
+  );
+  return {
+    maxCharsPerRequest,
+    maxCharsPerStream,
+    maxPageChars: Math.min(maxCharsPerStream ?? LOCAL_MAX_PAGE_CHARS, LOCAL_MAX_PAGE_CHARS),
+    localMaxPageChars: LOCAL_MAX_PAGE_CHARS,
+  };
 }
 
 function sanitizeConfig(config, options = {}) {
@@ -519,7 +558,12 @@ function sanitizeConfig(config, options = {}) {
     sanitizeNumber(config.highWatermarkMs, DEFAULT_CONFIG.highWatermarkMs, 100),
     prebufferMs
   );
-  const maxChars = sanitizeNumber(config.maxChars, DEFAULT_CONFIG.maxChars, 200, 48000);
+  const maxChars = sanitizeNumber(
+    config.maxChars,
+    DEFAULT_CONFIG.maxChars,
+    200,
+    LOCAL_MAX_PAGE_CHARS
+  );
 
   return {
     baseUrl: sanitizeBaseUrl(config.baseUrl, options),
@@ -566,6 +610,14 @@ function sanitizeNumber(value, fallback, minimum, maximum = Number.POSITIVE_INFI
     return fallback;
   }
   return Math.max(minimum, Math.min(maximum, Math.round(parsed)));
+}
+
+function sanitizeOptionalPositiveInteger(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.floor(parsed);
 }
 
 function resolveResumeTextChunkIndex(progress) {
@@ -759,7 +811,12 @@ function resolveNextUncapturedSectionIndex({ progress, pageCapture, structure, s
 
 function sanitizePageCaptureMeta(meta, fallback) {
   const textChars = sanitizeNumber(meta?.textChars, fallback.textChars, 0);
-  const maxChars = sanitizeNumber(meta?.maxChars, fallback.maxChars, 200, 48000);
+  const maxChars = sanitizeNumber(
+    meta?.maxChars,
+    fallback.maxChars,
+    200,
+    LOCAL_MAX_PAGE_CHARS
+  );
   return {
     source: String(meta?.source || "unknown"),
     textChars,

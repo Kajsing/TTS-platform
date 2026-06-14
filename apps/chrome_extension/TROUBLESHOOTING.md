@@ -81,8 +81,9 @@
   character offset when the page has no later heading-backed section.
 - If the prior page segment finished normally, the extension should try this
   continuation automatically before manual action is needed.
-- Increase `Max Page Characters` up to the local service stream limit, then save
-  settings and start page playback again.
+- Refresh the popup so it can read the local service stream limit from
+  `/v1/health`, then increase `Max Page Characters` up to the displayed cap,
+  save settings, and start page playback again.
 - The popup stores capture counts and extraction metadata only; it does not
   store raw page text.
 

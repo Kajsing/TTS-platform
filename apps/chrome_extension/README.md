@@ -133,7 +133,12 @@ the manifest and toolbar action.
 - Page text capture skips hidden and non-reader DOM subtrees such as
   `aria-hidden`, `hidden`, `inert`, navigation, forms, and script/style assets
   in both structured extraction and fallback plain-text extraction.
-- Page playback uses the service WebSocket stream path and defaults to a 24,000 character page capture limit. The local service default `tts.max_chars_per_stream` is 48,000 characters.
+- Page playback uses the service WebSocket stream path and defaults to a 24,000
+  character page capture limit. The popup reads `/v1/health`
+  `tts.max_chars_per_stream` and clamps `Max Page Characters` to the lower of
+  that service stream limit and the extension's 48,000-character per-segment
+  safety cap; longer pages continue through follow-up segments instead of
+  storing raw page text.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
 - The extension stores only page-capture metadata in session playback state, not
   raw page text.

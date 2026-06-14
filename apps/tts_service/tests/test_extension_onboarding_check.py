@@ -35,6 +35,8 @@ def test_extension_onboarding_check_validates_popup_service_and_origin_snippet()
     assert summary["service_snapshot"]["auth_enabled"] is True
     assert summary["service_snapshot"]["backend_ready"] is True
     assert summary["service_snapshot"]["default_voice_loaded"] is True
+    assert summary["service_snapshot"]["max_chars_per_request"] == 4000
+    assert summary["service_snapshot"]["max_chars_per_stream"] == 48000
     assert summary["service_snapshot"]["default_voice"] == "sherpa-en-debug"
     assert summary["service_snapshot"]["voice_count"] >= 1
 

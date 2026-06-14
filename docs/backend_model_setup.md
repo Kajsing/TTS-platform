@@ -175,6 +175,8 @@ Windows-safe default is `cpu`.
 - `checks.default_voice_loaded`: false when the configured default voice is not
   in the registry.
 - `startup_error`: the warmup error message, if any.
+- `tts.max_chars_per_request`: current `/v1/tts` and job text limit.
+- `tts.max_chars_per_stream`: current WebSocket stream text limit.
 - `backend.runtime_mode`: active backend mode.
 - `backend.configured_real_voices`: number of manifest voices with backend
   config.
@@ -546,6 +548,11 @@ The service keeps separate text limits for short requests and streamed reading:
 
 The split keeps synchronous WAV and async job requests bounded while allowing
 the browser reader to send page-scale text to the streaming path.
+
+`GET /v1/health` exposes both text limits under `tts`. The Chrome extension
+uses `tts.max_chars_per_stream` as the service-side cap for page capture, while
+still keeping its local per-segment safety cap and continuation flow for very
+long articles.
 
 Async jobs are also bounded by the `[limits]` section:
 

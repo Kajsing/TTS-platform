@@ -281,6 +281,10 @@ def verify_extension_wiring() -> None:
             "checklistLine",
             "snapshot.originCliCommand",
             "response?.ok === false",
+            "applyServiceTextLimits",
+            "fields.maxChars.max",
+            "Stream Text Limit:",
+            "Max Page Characters:",
         ],
         EXTENSION_ROOT / "src" / "background.js": [
             '"tts-extension:resume-page"',
@@ -317,6 +321,10 @@ def verify_extension_wiring() -> None:
             "isAllowedLocalServiceUrl",
             "ALLOWED_SERVICE_HOSTS",
             "Base URL must be an HTTP localhost origin",
+            "buildServiceTextLimits",
+            "resolvePageMaxChars",
+            "max_chars_per_stream",
+            "LOCAL_MAX_PAGE_CHARS",
         ],
         EXTENSION_ROOT / "src" / "content-script.js": [
             "getPageCapture",

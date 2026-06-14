@@ -261,6 +261,7 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         voices = _get_json(client, f"{base_url}/v1/voices")
 
     health_checks = health.get("checks")
+    text_limits = health.get("tts")
     voice_list = voices.get("voices")
     default_voice = voices.get("default_voice")
     errors: list[str] = []
@@ -275,6 +276,17 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         or health_checks.get("default_voice_loaded") is not True
     ):
         errors.append("health checks must expose default_voice_loaded=true")
+    if not isinstance(text_limits, dict):
+        errors.append("health must expose tts text limits for popup page limits")
+    elif (
+        not isinstance(text_limits.get("max_chars_per_request"), int)
+        or not isinstance(text_limits.get("max_chars_per_stream"), int)
+        or text_limits["max_chars_per_stream"] < text_limits["max_chars_per_request"]
+    ):
+        errors.append(
+            "health tts limits must include max_chars_per_request and "
+            "max_chars_per_stream with stream >= request"
+        )
     if not isinstance(voice_list, list) or not voice_list:
         errors.append("voices payload must include at least one voice")
     voice_ids = [
@@ -295,6 +307,8 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         "auth_enabled": health["auth_enabled"],
         "backend_ready": health_checks["backend_ready"],
         "default_voice_loaded": health_checks["default_voice_loaded"],
+        "max_chars_per_request": text_limits["max_chars_per_request"],
+        "max_chars_per_stream": text_limits["max_chars_per_stream"],
         "default_voice": default_voice,
         "voice_count": len(voice_ids),
     }

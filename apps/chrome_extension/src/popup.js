@@ -46,6 +46,7 @@ async function refreshState() {
 
 async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
   const snapshot = await sendMessage({ type: "tts-extension:get-service-snapshot" });
+  applyServiceTextLimits(snapshot);
   serviceStatus.textContent = formatServiceSnapshot(snapshot);
   onboardingStatus.textContent = formatOnboardingStatus(snapshot);
   originCommand.textContent = snapshot.originCliCommand;
@@ -93,6 +94,20 @@ function populateVoiceOptions({ voices, configuredVoice, defaultVoice }) {
   } else {
     voiceHint.textContent =
       "No voices were discovered yet. Check the base URL and local service startup.";
+  }
+}
+
+function applyServiceTextLimits(snapshot) {
+  const maxPageChars = Number(snapshot.textLimits?.maxPageChars);
+  if (!Number.isFinite(maxPageChars) || maxPageChars < 200) {
+    return;
+  }
+
+  const roundedMaxPageChars = Math.floor(maxPageChars);
+  fields.maxChars.max = String(roundedMaxPageChars);
+  const currentMaxChars = Number(fields.maxChars.value);
+  if (Number.isFinite(currentMaxChars) && currentMaxChars > roundedMaxPageChars) {
+    fields.maxChars.value = String(roundedMaxPageChars);
   }
 }
 
@@ -537,6 +552,7 @@ function formatPageStructure(structure) {
 
 function formatServiceSnapshot(snapshot) {
   const checks = snapshot.health?.checks ?? {};
+  const textLimits = snapshot.textLimits ?? {};
   const lines = [
     `Reachable: ${snapshot.reachable}`,
     `Message: ${snapshot.message}`,
@@ -546,6 +562,8 @@ function formatServiceSnapshot(snapshot) {
     `Default Voice: ${snapshot.defaultVoice || "none"}`,
     `Voices Discovered: ${snapshot.voices.length}`,
     `Auth Enabled: ${snapshot.authEnabled}`,
+    `Stream Text Limit: ${formatOptionalNumber(textLimits.maxCharsPerStream)}`,
+    `Max Page Characters: ${formatOptionalNumber(textLimits.maxPageChars)}`,
     Object.keys(checks).length ? `Checks: ${JSON.stringify(checks)}` : null,
   ];
   return lines.filter(Boolean).join("\n");
@@ -598,6 +616,14 @@ function formatReadinessCheck(value) {
     return "false";
   }
   return "unknown";
+}
+
+function formatOptionalNumber(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "unknown";
+  }
+  return String(Math.floor(parsed));
 }
 
 function checklistLine(label, ok, detail) {

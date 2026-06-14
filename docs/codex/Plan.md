@@ -458,5 +458,9 @@ The seventy-fifth extension security-hardening slice validates the saved
 extension service `Base URL` at runtime before background fetch/WebSocket use,
 allowing only HTTP localhost origins on `127.0.0.1` or `localhost` and
 rejecting credentials, paths, query strings, fragments, and external hosts.
+The seventy-sixth long-reader alignment slice exposes the service TTS text
+limits from `/v1/health` and makes the Chrome extension clamp page capture to
+the service stream limit plus its local per-segment safety cap before starting
+page playback.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

@@ -134,8 +134,33 @@ def test_health_endpoint_returns_service_status(tmp_path: Path) -> None:
     assert response.json()["checks"]["default_voice_loaded"] is True
     assert response.json()["startup_error"] is None
     assert response.json()["auth_enabled"] is True
+    assert response.json()["tts"] == {
+        "max_chars_per_request": 4000,
+        "max_chars_per_stream": 48000,
+    }
     assert response.json()["backend"]["runtime_mode"] == "auto"
     assert response.json()["backend"]["configured_real_voices"] == 0
+
+
+def test_health_endpoint_reports_configured_tts_text_limits(tmp_path: Path) -> None:
+    client, _, _ = build_test_bundle(
+        tmp_path,
+        config_data={
+            "tts": {
+                "default_voice": "manifest-voice",
+                "max_chars_per_request": 1200,
+                "max_chars_per_stream": 9600,
+            }
+        },
+    )
+
+    response = client.get("/v1/health")
+
+    assert response.status_code == 200
+    assert response.json()["tts"] == {
+        "max_chars_per_request": 1200,
+        "max_chars_per_stream": 9600,
+    }
 
 
 def test_voices_endpoint_returns_registry(tmp_path: Path) -> None:
