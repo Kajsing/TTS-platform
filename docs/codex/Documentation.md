@@ -11,24 +11,31 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: continue the v1 model-management hardening track by
-  making `tts model-install` fail fast when a model directory already exists
-  and `--overwrite` was not requested, avoiding unnecessary large artifact
-  loads.
-- Current loop result: `tts model-install` now refuses an existing model
-  directory before downloading or copying the catalog artifact unless
-  `--overwrite` is set. The overwrite path still uses temporary extraction and
-  replaces the old model only after extraction succeeds.
+- Current loop target: continue the Chrome extension installability track by
+  making the local troubleshooting guide a validated handoff asset alongside
+  `INSTALL.md` and the packaged icon set.
+- Current loop result: `scripts/check_extension.py` now requires
+  `apps/chrome_extension/TROUBLESHOOTING.md` and validates key local setup,
+  backend readiness, long-page playback, and section navigation troubleshooting
+  sections. `scripts/package_extension.py` reports `troubleshooting_path`, and
+  `scripts/package_windows_bundle.py` propagates that metadata in the embedded
+  extension package summary.
 - Validation status for the current loop:
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py scripts\check_model_management_flow.py`.
-  - Targeted model CLI tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q`
-    and reported 39 passed.
+    `py -3 -m ruff check scripts\check_extension.py scripts\package_extension.py scripts\package_windows_bundle.py scripts\check_windows_bundle_bootstrap.py scripts\check_v1_readiness.py apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py`.
+  - Targeted extension/bundle package tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_package_extension.py apps\tts_service\tests\test_package_windows_bundle.py apps\tts_service\tests\test_windows_bundle_bootstrap_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
+    and reported 6 passed.
   - `py -3 scripts\check_v1_readiness.py` passed and reported 40 readiness
-    markers across 39 checked files.
-  - `py -3 scripts\check_model_management_flow.py` passed, including the
-    model-management install flow smoke.
+    markers across 40 checked files.
+  - `py -3 scripts\check_extension.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
+    passed.
+  - `py -3 scripts\package_extension.py --out $env:TEMP\tts-platform-test-extension.zip`
+    passed and reported `troubleshooting_path: TROUBLESHOOTING.md`.
+  - `py -3 scripts\package_windows_bundle.py --out $env:TEMP\tts-platform-test-windows.zip`
+    passed and propagated the extension `troubleshooting_path` metadata.
+  - `py -3 scripts\check_windows_bundle_bootstrap.py --bundle $env:TEMP\tts-platform-test-windows.zip`
+    passed and verified the embedded extension troubleshooting guide.
   - `py -3 -m ruff check .` passed.
   - `py -3 -m pytest -q` passed with 193 tests.
   - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
@@ -300,8 +307,9 @@ This file is the live status log and shared memory for future Codex loops.
     `extension-allow-origin` CLI helper against a fresh `setup-local` repo.
   - `scripts/package_extension.py` now builds a validated local extension zip
     at `dist/chrome_extension/tts-platform-prototype.zip` by default.
-  - the Chrome extension package now includes `INSTALL.md` plus manifest/action
-    PNG icons for local Chrome handoff builds.
+  - the Chrome extension package now includes `INSTALL.md`,
+    `TROUBLESHOOTING.md`, plus manifest/action PNG icons for local Chrome
+    handoff builds.
   - the packaged extension install guide now points extracted Windows bundle
     users at `scripts\windows\install_local.ps1` before service launch,
     extension loading, origin allow-listing, and token save.
@@ -316,7 +324,7 @@ This file is the live status log and shared memory for future Codex loops.
     calls, popup/offscreen storage use, broad browser persistence APIs, and
     non-offscreen WebSocket creation.
   - `scripts/check_extension.py` now validates local installability assets:
-    `INSTALL.md` guidance plus the manifest/action icon set.
+    `INSTALL.md`, `TROUBLESHOOTING.md`, plus the manifest/action icon set.
 - Release hardening has started:
   - `security.allowed_origins` entries are normalized for harmless trailing
     slashes and must be explicit `http`, `https`, or `chrome-extension` origins.
@@ -356,8 +364,8 @@ This file is the live status log and shared memory for future Codex loops.
   - `scripts/check_windows_bundle_bootstrap.py` now safely extracts a Windows
     local reader bundle, verifies the absence of local token/model artifacts,
     checks first-run/model-readiness guide markers, checks the embedded
-    extension zip including install guide/icons, and runs `setup-local` from
-    the extracted source paths.
+    extension zip including install/troubleshooting guides and icons, and runs
+    `setup-local` from the extracted source paths.
   - local service and Windows bundle bootstrap checks now expose and validate
     `setup-local` next-step guidance, including `tts model-check`, in their
     JSON summaries.
@@ -533,8 +541,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Extension zip packaging is local handoff/installability only; Chrome Web Store
   signing or publishing is out of scope until explicitly chosen.
 - Chrome extension local installability should be self-contained in the
-  extension zip: manifest at archive root, `INSTALL.md`, and the packaged icon
-  set referenced by the manifest and action.
+  extension zip: manifest at archive root, `INSTALL.md`,
+  `TROUBLESHOOTING.md`, and the packaged icon set referenced by the manifest
+  and action.
 - Browser allow-list config should fail closed. Empty `allowed_origins` remains
   the secure default; configured entries must be explicit origins, not wildcards
   or URL paths.

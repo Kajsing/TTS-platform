@@ -35,11 +35,13 @@ README_MARKERS = (
     "security.allowed_origins",
     "persistent Windows service",
     "apps\\chrome_extension\\INSTALL.md",
+    "apps\\chrome_extension\\TROUBLESHOOTING.md",
 )
 
 EXTENSION_PACKAGE_MARKERS = (
     "manifest.json",
     "INSTALL.md",
+    "TROUBLESHOOTING.md",
     "icons/icon-16.png",
     "icons/icon-32.png",
     "icons/icon-48.png",
@@ -108,6 +110,8 @@ def check_windows_bundle_bootstrap(
             "archive_path": EXTENSION_PACKAGE_ARCNAME.removeprefix(f"{BUNDLE_ROOT}/"),
             "file_count": extension_file_count,
             "manifest_path": "manifest.json",
+            "install_guide_path": "INSTALL.md",
+            "troubleshooting_path": "TROUBLESHOOTING.md",
         },
         "setup": {
             "config_created": setup_payload["config_created"],

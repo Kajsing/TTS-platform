@@ -335,7 +335,8 @@ The extension currently supports:
 - displaying a setup checklist for service reachability, saved token,
   allow-list command/snippet readiness, voice discovery, backend readiness,
   default voice loading, and health
-- packaged local install guidance and extension icons for Chrome handoff builds
+- packaged local install/troubleshooting guidance and extension icons for Chrome
+  handoff builds
 
 The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events. The extension manifest keeps service host permissions limited to localhost; page access is handled by the declared content script.
 
@@ -349,8 +350,8 @@ To build a local Chrome extension zip after validation:
 python3 scripts/package_extension.py
 ```
 
-The zip includes `INSTALL.md` plus the extension icon set used by the manifest
-and toolbar action.
+The zip includes `INSTALL.md`, `TROUBLESHOOTING.md`, and the extension icon set
+used by the manifest and toolbar action.
 
 To run the optional real-browser Chrome/MV3 smoke when a compatible Chrome,
 Chrome for Testing, Chromium, or Edge build is available:

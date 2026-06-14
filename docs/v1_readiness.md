@@ -15,8 +15,8 @@ for long web-page text.
   service defaults and ignored local artifacts.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
-  boundaries, local install guidance/icons, and JavaScript syntax when `node`
-  is installed.
+  boundaries, local install/troubleshooting guidance and icons, and JavaScript
+  syntax when `node` is installed.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
   copyable `tts extension-allow-origin` first-run helper before checking the
@@ -76,7 +76,8 @@ for long web-page text.
 - `python3 scripts/package_windows_bundle.py` builds the local reader handoff
   bundle with service/core source, Windows launchers, config example, docs,
   model manifest, default model catalog, model-readiness handoff guidance,
-  extension source, extension install guide/icons, and validated extension zip.
+  extension source, extension install/troubleshooting guides, icons, and a
+  validated extension zip.
 - `scripts/windows/install_local.ps1` bootstraps an extracted bundle by
   creating `.venv`, installing the local package plus its base dependencies,
   and running `setup-local` without choosing a persistent service manager.

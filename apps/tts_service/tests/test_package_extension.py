@@ -24,15 +24,18 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert payload["package_path"] == str(out_path.resolve())
     assert payload["manifest_path"] == "manifest.json"
     assert payload["install_guide_path"] == "INSTALL.md"
+    assert payload["troubleshooting_path"] == "TROUBLESHOOTING.md"
     assert payload["icon_count"] == 4
     assert payload["file_count"] > 0
 
     with zipfile.ZipFile(out_path) as archive:
         names = set(archive.namelist())
         install_guide = archive.read("INSTALL.md").decode()
+        troubleshooting = archive.read("TROUBLESHOOTING.md").decode()
 
     assert "manifest.json" in names
     assert "INSTALL.md" in names
+    assert "TROUBLESHOOTING.md" in names
     assert "icons/icon-16.png" in names
     assert "icons/icon-32.png" in names
     assert "icons/icon-48.png" in names
@@ -49,6 +52,9 @@ def test_package_extension_builds_chrome_loadable_zip(tmp_path: Path, monkeypatc
     assert "tts extension-allow-origin <copied-origin>" in install_guide
     assert "security.allowed_origins" in install_guide
     assert "config\\token.txt" in install_guide
+    assert "Chrome Extension Troubleshooting" in troubleshooting
+    assert "Default voice loaded" in troubleshooting
+    assert "Continue Page" in troubleshooting
     assert all(not name.startswith("/") for name in names)
     assert all("\\" not in name for name in names)
 

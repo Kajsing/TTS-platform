@@ -31,7 +31,8 @@ This directory contains the first MV3 prototype client for the local TTS platfor
 - show a setup checklist for service reachability, saved token, allow-list
   command/snippet, voice discovery, backend readiness, default voice loading,
   and health
-- include `INSTALL.md` and manifest/action icons in local handoff packages
+- include `INSTALL.md`, `TROUBLESHOOTING.md`, and manifest/action icons in
+  local handoff packages
 - recover more deliberately from playback underruns by rebuffering before audio resumes
 - retry offscreen playback startup if the offscreen document has gone stale
 - provide a troubleshooting guide, a lightweight repo-native validation script,
@@ -75,8 +76,8 @@ python3 scripts/package_extension.py
 The package script runs `scripts/check_extension.py` first and writes the zip to
 `dist/chrome_extension/tts-platform-prototype.zip` by default. The zip is for
 local testing and handoff; it is not Chrome Web Store signing or publishing.
-It includes `INSTALL.md` and the icon set referenced by the manifest and toolbar
-action.
+It includes `INSTALL.md`, `TROUBLESHOOTING.md`, and the icon set referenced by
+the manifest and toolbar action.
 
 ## Prototype flow
 

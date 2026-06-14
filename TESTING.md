@@ -86,8 +86,8 @@ backend-realism work, and early v1 model-management helpers:
 - Chrome extension popup setup-checklist, manifest-policy, and privacy-boundary
   wiring through the lightweight extension validator
 - Chrome extension zip packaging with manifest at the archive root and
-  POSIX-style relative asset paths, including `INSTALL.md` and manifest icon
-  assets
+  POSIX-style relative asset paths, including `INSTALL.md`,
+  `TROUBLESHOOTING.md`, and manifest icon assets
 - Windows local reader bundle packaging that includes the service source,
   Windows launchers, docs, config example, model manifest, extension source,
   model-readiness handoff guidance, and a validated extension zip while
@@ -97,7 +97,8 @@ backend-realism work, and early v1 model-management helpers:
   persistent service manager
 - Windows local reader bundle bootstrap checks that safely extract the bundle,
   verify local token/model artifacts are absent, inspect model-readiness guide
-  markers, inspect the embedded extension zip, and run catalog-aware
+  markers, inspect the embedded extension zip for install/troubleshooting
+  guides and icons, and run catalog-aware
   `setup-local` from the extracted source paths
 - Windows launcher setup-only checks that run the bundled PowerShell/CMD
   launchers far enough to create local config/token files without starting a
@@ -194,7 +195,8 @@ It verifies the Chrome extension onboarding contract by checking popup setup
 controls, service health/voice discovery against a temporary service, and the
 extension-origin allow-list snippet plus CLI helper behavior.
 It verifies Chrome extension installability assets by checking local
-`INSTALL.md` guidance and the manifest/action icon set.
+`INSTALL.md` and `TROUBLESHOOTING.md` guidance plus the manifest/action icon
+set.
 It also verifies the long-page reader-flow contract and streams a generated
 thousand-word article through the WebSocket service path. That reader-flow
 contract includes previous/next section navigation, truncated-section

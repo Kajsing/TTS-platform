@@ -30,15 +30,17 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")
             archive.writestr("INSTALL.md", "Load unpacked")
+            archive.writestr("TROUBLESHOOTING.md", "Chrome Extension Troubleshooting")
             archive.writestr("icons/icon-16.png", b"icon")
             archive.writestr("icons/icon-32.png", b"icon")
             archive.writestr("icons/icon-48.png", b"icon")
             archive.writestr("icons/icon-128.png", b"icon")
         return {
             "package_path": str(out_path),
-            "file_count": 6,
+            "file_count": 7,
             "manifest_path": "manifest.json",
             "install_guide_path": "INSTALL.md",
+            "troubleshooting_path": "TROUBLESHOOTING.md",
             "icon_count": 4,
         }
 
@@ -59,8 +61,10 @@ def test_windows_bundle_bootstrap_check_runs_setup_from_extracted_bundle(
     assert summary["bundle_root"] == "tts-platform"
     assert summary["extension_package"] == {
         "archive_path": "dist/chrome_extension/tts-platform-prototype.zip",
-        "file_count": 6,
+        "file_count": 7,
         "manifest_path": "manifest.json",
+        "install_guide_path": "INSTALL.md",
+        "troubleshooting_path": "TROUBLESHOOTING.md",
     }
     assert summary["setup"]["config_created"] is True
     assert summary["setup"]["token_created"] is True
@@ -89,6 +93,10 @@ def test_windows_bundle_bootstrap_check_rejects_token_file_in_bundle(
     with zipfile.ZipFile(extension_zip_path, mode="w") as extension_archive:
         extension_archive.writestr("manifest.json", "{}")
         extension_archive.writestr("INSTALL.md", "Load unpacked")
+        extension_archive.writestr(
+            "TROUBLESHOOTING.md",
+            "Chrome Extension Troubleshooting",
+        )
         extension_archive.writestr("icons/icon-16.png", b"icon")
         extension_archive.writestr("icons/icon-32.png", b"icon")
         extension_archive.writestr("icons/icon-48.png", b"icon")
@@ -137,6 +145,7 @@ def _entry_payload(entry: str) -> str:
                 "tts.exe model-install <model-id> --catalog <catalog> --activate",
                 ".\\scripts\\windows\\run_service.ps1",
                 "apps\\chrome_extension\\INSTALL.md",
+                "apps\\chrome_extension\\TROUBLESHOOTING.md",
                 "config\\token.txt",
                 "security.allowed_origins",
                 "persistent Windows service",

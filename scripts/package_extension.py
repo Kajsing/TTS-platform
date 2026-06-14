@@ -50,6 +50,7 @@ def package_extension(*, out_path: Path) -> dict[str, object]:
         "file_count": len(files),
         "manifest_path": "manifest.json",
         "install_guide_path": "INSTALL.md",
+        "troubleshooting_path": "TROUBLESHOOTING.md",
         "icon_count": sum(
             1
             for path in files

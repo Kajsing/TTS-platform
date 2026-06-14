@@ -35,6 +35,7 @@ REQUIRED_FILES = (
     "scripts/windows/run_service.cmd",
     "apps/chrome_extension/manifest.json",
     "apps/chrome_extension/INSTALL.md",
+    "apps/chrome_extension/TROUBLESHOOTING.md",
     "apps/chrome_extension/icons/icon-16.png",
     "apps/chrome_extension/icons/icon-32.png",
     "apps/chrome_extension/icons/icon-48.png",
@@ -216,6 +217,7 @@ REQUIRED_TEXT_MARKERS = {
     "scripts/check_windows_bundle_bootstrap.py": (
         "catalog_single_installable_model",
         "setup-local did not put the default catalog install step first",
+        "TROUBLESHOOTING.md",
     ),
     "apps/tts_service/src/tts_service/cli.py": (
         "tarfile",
@@ -253,6 +255,7 @@ REQUIRED_TEXT_MARKERS = {
         "v1-readiness",
         "manual",
         "INSTALL.md",
+        "TROUBLESHOOTING.md",
         "icon",
         "Continue Page",
         "truncated text-offset continuation",
@@ -272,6 +275,7 @@ REQUIRED_TEXT_MARKERS = {
     ),
     "apps/chrome_extension/README.md": (
         "INSTALL.md",
+        "TROUBLESHOOTING.md",
         "icons",
         "Continue Page",
         "next known text character offset",

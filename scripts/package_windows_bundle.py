@@ -107,6 +107,10 @@ def package_windows_bundle(*, out_path: Path) -> dict[str, object]:
     }
     if "install_guide_path" in extension_payload:
         extension_summary["install_guide_path"] = extension_payload["install_guide_path"]
+    if "troubleshooting_path" in extension_payload:
+        extension_summary["troubleshooting_path"] = extension_payload[
+            "troubleshooting_path"
+        ]
     if "icon_count" in extension_payload:
         extension_summary["icon_count"] = extension_payload["icon_count"]
 
@@ -262,6 +266,9 @@ manager, scheduled task, or auto-start entry.
      local handoff build.
    - follow `apps\\chrome_extension\\INSTALL.md` for the local loading and first
      playback checklist.
+   - use `apps\\chrome_extension\\TROUBLESHOOTING.md` if the popup cannot reach
+     the service, backend readiness is not green, or long-page playback needs
+     recovery.
 
 8. Copy the `Allow-List Command` from the popup, then run it to update
    `security.allowed_origins`:

@@ -21,15 +21,17 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
         with zipfile.ZipFile(out_path, mode="w") as archive:
             archive.writestr("manifest.json", "{}")
             archive.writestr("INSTALL.md", "Load unpacked")
+            archive.writestr("TROUBLESHOOTING.md", "Chrome Extension Troubleshooting")
             archive.writestr("icons/icon-16.png", b"icon")
             archive.writestr("icons/icon-32.png", b"icon")
             archive.writestr("icons/icon-48.png", b"icon")
             archive.writestr("icons/icon-128.png", b"icon")
         return {
             "package_path": str(out_path),
-            "file_count": 6,
+            "file_count": 7,
             "manifest_path": "manifest.json",
             "install_guide_path": "INSTALL.md",
+            "troubleshooting_path": "TROUBLESHOOTING.md",
             "icon_count": 4,
         }
 
@@ -47,9 +49,10 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert payload["bundle_root"] == "tts-platform"
     assert payload["extension_package"] == {
         "archive_path": "dist/chrome_extension/tts-platform-prototype.zip",
-        "file_count": 6,
+        "file_count": 7,
         "manifest_path": "manifest.json",
         "install_guide_path": "INSTALL.md",
+        "troubleshooting_path": "TROUBLESHOOTING.md",
         "icon_count": 4,
     }
 
@@ -67,6 +70,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/packages/tts_core/src/tts_core/text.py" in names
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
     assert "tts-platform/apps/chrome_extension/INSTALL.md" in names
+    assert "tts-platform/apps/chrome_extension/TROUBLESHOOTING.md" in names
     assert "tts-platform/apps/chrome_extension/icons/icon-128.png" in names
     assert "tts-platform/scripts/windows/install_local.ps1" in names
     assert "tts-platform/scripts/windows/install_local.cmd" in names
@@ -104,6 +108,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts.exe model-install <model-id> --catalog <catalog> --activate" in readme
     assert ".\\scripts\\windows\\run_service.ps1 -SetupOnly" in readme
     assert "apps\\chrome_extension\\INSTALL.md" in readme
+    assert "apps\\chrome_extension\\TROUBLESHOOTING.md" in readme
     assert "persistent Windows service" in readme
     assert "manager" in readme
     assert "scripts\\windows\\install_local.ps1" in install_guide

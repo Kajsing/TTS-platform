@@ -344,6 +344,25 @@ def verify_extension_install_assets(manifest: dict[str, object]) -> None:
                 "config\\token.txt",
             ],
         )
+    troubleshooting_guide = EXTENSION_ROOT / "TROUBLESHOOTING.md"
+    if not troubleshooting_guide.is_file():
+        errors.append("TROUBLESHOOTING.md must be present for local handoff installs")
+    else:
+        troubleshooting_text = troubleshooting_guide.read_text(encoding="utf-8")
+        _require_fragments(
+            errors,
+            "TROUBLESHOOTING.md",
+            troubleshooting_text,
+            [
+                "Chrome Extension Troubleshooting",
+                "Popup cannot reach the service",
+                "Setup checklist shows todo items",
+                "Default voice loaded",
+                "Page playback stops before the whole article",
+                "Previous/Next Section is unavailable",
+                "Continue Page",
+            ],
+        )
 
     icon_entries = manifest.get("icons") if isinstance(manifest.get("icons"), dict) else {}
     for size_label, icon_value in icon_entries.items():
