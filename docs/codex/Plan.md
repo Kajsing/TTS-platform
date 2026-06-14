@@ -145,6 +145,23 @@ order unless `Documentation.md` records a deliberate reorder:
 5. Release hardening: docs, security defaults, smoke tests, and remaining test
    coverage gaps.
 
+The project is now in v1 finish mode. Prefer closeout, release validation,
+install polish, and blocker removal over new feature tracks. The remaining
+implementation work should converge on a usable v1 rather than expanding the
+product surface.
+
+For Windows autostart, prefer a per-user Task Scheduler task as the v1 path.
+Do not switch to a true Windows Service, NSSM, Startup folder, or another
+service manager unless `Documentation.md` records a deliberate product
+decision. The Task Scheduler slice should stay local-user scoped, removable,
+status-checkable, and validated without requiring cloud services or paid
+dependencies.
+
+Before declaring v1 done, run one final security-focused pass. Use Codex
+Security workflows and subagents when they improve repository-wide or
+cross-cutting coverage, but keep any resulting fixes small, validated, and
+reviewable.
+
 Keep browser-specific behavior inside `apps/chrome_extension/`, and keep the
 service contract stable while adding any long-document orchestration.
 
@@ -469,5 +486,8 @@ page-capture metadata capped at that service limit.
 The seventy-eighth reader-flow reliability slice makes the offscreen audio
 scheduler respect `highWatermarkMs`, bounding how far ahead browser audio is
 scheduled and topping up queued PCM chunks as scheduled sources finish.
-Continue from the readiness audit: either automate another listed manual gate
-or take the next reader-flow/product slice.
+The next planned finish-mode slice adds a per-user Windows Task Scheduler
+service/autostart flow for `tts serve`, with install/status/start/stop/remove
+commands, local logging, tests, docs, and release/readiness wiring.
+After the remaining closeout/install work, finish with a final security-focused
+pass before calling v1 done.

@@ -491,11 +491,15 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Continue the Post-Phase 7 v1 reader track from `Plan.md`.
-- Continue from the v1-readiness audit: either automate another listed manual
-  gate or take the next reader-flow/product slice from `Plan.md`.
-- Leave permanent Windows service manager or auto-start install as an explicit
-  later product choice.
+- Enter v1 finish mode: prefer closeout, release validation, install polish,
+  and blocker removal over new feature tracks.
+- Next implementation pass: add a pragmatic Windows per-user Task Scheduler
+  service/autostart flow for the local reader server.
+- After the remaining closeout/install work, run one final security-focused
+  pass before declaring v1 done. Use Codex Security workflows and subagents
+  where they reduce blind spots, but keep fixes small, validated, and
+  reviewable.
+- Do not expand scope unless a v1 blocker requires it.
 
 ## Decisions Made And Why
 
@@ -617,6 +621,17 @@ This file is the live status log and shared memory for future Codex loops.
   Codex runs now default to committing and pushing the completed slice. Codex
   should still stop before pushing when validation fails, credentials are
   missing, branch/remote state is unsafe, or the user explicitly says not to.
+- The project is now in v1 finish mode. Future Codex loops should close the
+  remaining install, release, and validation gaps rather than opening new
+  feature tracks.
+- For v1 autostart, prefer a per-user Windows Task Scheduler task over a true
+  Windows Service, NSSM, or Startup-folder shortcut. This matches the local
+  desktop reader shape, avoids admin requirements, and keeps GPU/runtime/user
+  environment behavior simpler for v1.
+- The final planned v1 pass should be security-focused. Codex may use Codex
+  Security workflows and subagents for repository-wide or cross-cutting review
+  when that improves coverage, while keeping the main agent responsible for
+  validation, fix selection, and final reporting.
 - This loop intentionally reordered one v1-enabling model-management slice
   ahead of Phase 7 Milestone 3 because the user restated the product goal as a
   local server plus Chrome reader for long web content; a usable voice install
@@ -752,8 +767,10 @@ python3 scripts/package_windows_bundle.py
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Check this file for current status and any newly recorded blockers.
-3. Start with the Post-Phase 7 v1 reader track unless this file records a
-   deliberate reorder.
+3. Continue in v1 finish mode. The next planned slice is the Windows per-user
+   Task Scheduler service/autostart flow for `tts serve`.
 4. Keep the next diff narrowly scoped to that milestone.
 5. Run the milestone validation commands before claiming completion.
-6. Update this file again before handing off.
+6. Before declaring v1 done, run a final security-focused pass using Codex
+   Security workflows and subagents where they improve coverage.
+7. Update this file again before handing off.
