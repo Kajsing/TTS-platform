@@ -11,27 +11,25 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: fix security scan finding F-001 by preventing model ids
-  from escaping the intended `models/voices/<model-id>` boundary during
-  install, activation, readiness checks, catalog guidance, and removal.
-- Current loop result: model-management commands now enforce a central safe
-  model-id policy before using ids as filesystem names, manifest source paths,
-  default voice values, or catalog install guidance. Unsafe ids with path
-  separators, traversal-like names, trailing punctuation, or reserved Windows
-  device names are rejected before artifact load or `shutil.rmtree`; catalog
-  listing marks them as non-installable and does not suggest install commands
-  for them.
+- Current loop target: fix security scan finding F-002 by containing manifest
+  backend asset paths to each voice's `models/voices/<model-id>` source
+  directory during install, readiness checks, and real runtime loading.
+- Current loop result: catalog backend paths are validated before artifact load
+  and manifest writes, `model-check` reports poisoned manifest paths as invalid
+  instead of ready, and the sherpa-onnx runtime resolver rejects absolute,
+  traversal, or sibling-model asset paths before native runtime import.
 - Validation status for the current loop:
-  - Targeted model-flow tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
-    reported 47 passed.
+  - Targeted model/backend tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py packages\tts_core\tests\test_sherpa_onnx_backend.py -q`
+    and reported 65 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
-  - The original F-001 install/remove reproducer was rerun against the fixed
-    code: unsafe ids now raise `Invalid model id`, no escaped install directory
-    or manifest is created, and the sibling delete target remains intact.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py packages\tts_core\src\tts_core\backends\sherpa_onnx.py apps\tts_service\tests\test_cli_models.py packages\tts_core\tests\test_sherpa_onnx_backend.py`.
+  - The original F-002 backend-path reproducer was rerun against the fixed
+    code: catalog manifest build rejects `models/../secret.onnx`, model-check
+    reports backend `valid: false` / `assets_ready: false`, and the outside
+    file is no longer accepted as an existing backend asset.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 212 tests.
+  - `py -3 -m pytest -q` passed with 220 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -50,7 +48,9 @@ This file is the live status log and shared memory for future Codex loops.
   safe zip extraction against absolute paths, drive-qualified paths, and
   traversal entries, manifest update, default voice activation in
   `config/config.toml`, model removal, and safe model-id validation before
-  install/remove path effects.
+  install/remove path effects. Manifest backend asset paths are now contained
+  to the installed model source before install writes, readiness checks, and
+  real runtime loading.
 - A new public-contract smoke script now exists:
   - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
   - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.

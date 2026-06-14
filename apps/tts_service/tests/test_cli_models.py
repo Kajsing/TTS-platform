@@ -596,6 +596,57 @@ def test_model_install_rejects_unsafe_model_id_before_path_effects(
     assert not (tmp_path / "models" / "MANIFEST.json").exists()
 
 
+@pytest.mark.parametrize(
+    ("backend_model_path", "match"),
+    [
+        ("models/../secret.onnx", "unsafe traversal"),
+        ("models/voices/other-voice/model.onnx", "escapes model source"),
+        ("C:/temp/model.onnx", "must be relative"),
+    ],
+)
+def test_model_install_rejects_unsafe_backend_paths_before_artifact_load(
+    tmp_path: Path,
+    backend_model_path: str,
+    match: str,
+) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    artifact_bytes = _build_zip(artifact_path, files={"model.onnx": "fake-model"})
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": "voice-a",
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                        "backend": {
+                            "model_type": "vits",
+                            "model": backend_model_path,
+                            "tokens": "tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match=match):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id="voice-a",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert not (tmp_path / "models" / "voices" / "voice-a").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
 def test_model_install_preserves_existing_directory_when_overwrite_artifact_fails(
     tmp_path: Path,
 ) -> None:
@@ -1610,6 +1661,131 @@ def test_model_check_reports_missing_real_voice_asset(
     assert payload["next_steps"][0] == (
         "tts model-install voice-a --catalog <path-or-url> --activate --overwrite"
     )
+
+
+def test_model_check_accepts_source_relative_backend_asset_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                        "sample_rate_hz": 24000,
+                        "license": "test-only",
+                        "source": "models/voices/voice-a",
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "model.onnx",
+                            "tokens": "tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_real_voice_assets(tmp_path)
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name in {"sherpa_onnx", "numpy"} else None,
+    )
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    voice_dir = tmp_path / "models" / "voices" / "voice-a"
+    assert payload["backend"]["valid"] is True
+    assert payload["backend"]["assets_ready"] is True
+    assert payload["backend"]["asset_checks"] == [
+        {
+            "field": "model",
+            "path": str((voice_dir / "model.onnx").resolve()),
+            "required": True,
+            "exists": True,
+        },
+        {
+            "field": "tokens",
+            "path": str((voice_dir / "tokens.txt").resolve()),
+            "required": False,
+            "exists": True,
+        },
+    ]
+
+
+def test_model_check_rejects_backend_asset_paths_outside_voice_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = _write_model_check_config(tmp_path, default_voice="voice-a")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "voice-a",
+                        "name": "Voice A",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                        "sample_rate_hz": 24000,
+                        "license": "test-only",
+                        "source": "models/voices/voice-a",
+                        "backend": {
+                            "model_type": "vits",
+                            "model": "models/../secret.onnx",
+                            "tokens": "tokens.txt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "secret.onnx").write_text("outside", encoding="utf-8")
+    _write_real_voice_assets(tmp_path)
+    monkeypatch.setattr(
+        cli.importlib.util,
+        "find_spec",
+        lambda name: object() if name in {"sherpa_onnx", "numpy"} else None,
+    )
+
+    payload = cli._check_model_readiness(
+        model_id="voice-a",
+        repo_root=tmp_path,
+        manifest_path=manifest_path,
+        config_path=config_path,
+    )
+
+    assert payload["ready"] is False
+    assert payload["backend"]["valid"] is False
+    assert payload["backend"]["assets_ready"] is False
+    assert payload["backend"]["asset_checks"][0] == {
+        "field": "model",
+        "path": "",
+        "required": True,
+        "exists": False,
+        "error": "Backend asset path contains unsafe traversal: 'models/../secret.onnx'",
+    }
+    assert payload["backend"]["errors"] == [
+        "Backend asset path contains unsafe traversal: 'models/../secret.onnx'"
+    ]
 
 
 def _write_model_check_config(tmp_path: Path, *, default_voice: str) -> Path:

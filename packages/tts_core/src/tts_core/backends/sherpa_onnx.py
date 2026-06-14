@@ -7,7 +7,7 @@ import threading
 from array import array
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from tts_core.audio import encode_wav_pcm16
@@ -573,16 +573,25 @@ class SherpaOnnxBackend:
         voice_id: str,
         runtime_config: SherpaOnnxVoiceRuntimeConfig,
     ) -> SherpaOnnxVoiceRuntimeConfig:
+        voice = self._resolve_voice(voice_id)
+        model_root = self._resolve_voice_source_root(voice)
         resolved = SherpaOnnxVoiceRuntimeConfig(
             model_type=runtime_config.model_type,
-            model=self._resolve_path(runtime_config.model),
-            tokens=self._resolve_path(runtime_config.tokens),
-            data_dir=self._resolve_path(runtime_config.data_dir),
-            lexicon=self._resolve_path(runtime_config.lexicon),
-            voices=self._resolve_path(runtime_config.voices),
-            acoustic_model=self._resolve_path(runtime_config.acoustic_model),
-            vocoder=self._resolve_path(runtime_config.vocoder),
-            rule_fsts=tuple(self._resolve_path(path) for path in runtime_config.rule_fsts),
+            model=self._resolve_path(voice_id, runtime_config.model, model_root=model_root),
+            tokens=self._resolve_path(voice_id, runtime_config.tokens, model_root=model_root),
+            data_dir=self._resolve_path(voice_id, runtime_config.data_dir, model_root=model_root),
+            lexicon=self._resolve_path(voice_id, runtime_config.lexicon, model_root=model_root),
+            voices=self._resolve_path(voice_id, runtime_config.voices, model_root=model_root),
+            acoustic_model=self._resolve_path(
+                voice_id,
+                runtime_config.acoustic_model,
+                model_root=model_root,
+            ),
+            vocoder=self._resolve_path(voice_id, runtime_config.vocoder, model_root=model_root),
+            rule_fsts=tuple(
+                self._resolve_path(voice_id, path, model_root=model_root)
+                for path in runtime_config.rule_fsts
+            ),
             speaker_id=runtime_config.speaker_id,
         )
         self._validate_runtime_paths(voice_id, resolved)
@@ -636,13 +645,64 @@ class SherpaOnnxBackend:
                 f"Voice '{voice_id}' is missing backend asset: {path.as_posix()}"
             )
 
-    def _resolve_path(self, raw_path: str) -> str:
+    def _resolve_path(self, voice_id: str, raw_path: str, *, model_root: Path) -> str:
         if not raw_path:
             return ""
-        path = Path(raw_path)
-        if path.is_absolute():
-            return str(path)
-        return str((self._repo_root() / path).resolve())
+        path = str(raw_path).strip().replace("\\", "/")
+        self._assert_safe_relative_path(
+            voice_id,
+            path,
+            field_name="backend asset path",
+        )
+        path = path.rstrip("/")
+        resolved_path = (
+            (self._repo_root() / path).resolve()
+            if path == "models" or path.startswith("models/")
+            else (model_root / path).resolve()
+        )
+        if resolved_path != model_root and model_root not in resolved_path.parents:
+            raise BackendNotReadyError(
+                f"Voice '{voice_id}' backend asset path escapes voice source: {raw_path!r}"
+            )
+        return str(resolved_path)
+
+    def _resolve_voice_source_root(self, voice: VoiceDescriptor) -> Path:
+        source = voice.source.strip().replace("\\", "/")
+        if not source:
+            raise BackendNotReadyError(f"Voice '{voice.id}' has an empty source path.")
+        self._assert_safe_relative_path(
+            voice.id,
+            source,
+            field_name="source path",
+        )
+        resolved_source = (self._repo_root() / source.rstrip("/")).resolve()
+        resolved_models_root = self.models_root.resolve()
+        if (
+            resolved_source == resolved_models_root
+            or resolved_models_root not in resolved_source.parents
+        ):
+            raise BackendNotReadyError(
+                f"Voice '{voice.id}' source path escapes models root: {voice.source!r}"
+            )
+        return resolved_source
+
+    def _assert_safe_relative_path(
+        self,
+        voice_id: str,
+        raw_path: str,
+        *,
+        field_name: str,
+    ) -> None:
+        posix_path = PurePosixPath(raw_path)
+        windows_path = PureWindowsPath(raw_path)
+        if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
+            raise BackendNotReadyError(
+                f"Voice '{voice_id}' {field_name} must be relative: {raw_path!r}"
+            )
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            raise BackendNotReadyError(
+                f"Voice '{voice_id}' {field_name} contains unsafe traversal: {raw_path!r}"
+            )
 
     def _repo_root(self) -> Path:
         return self.models_root.parent.parent

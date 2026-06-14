@@ -271,9 +271,14 @@ Required asset rules:
 - `kitten` requires `model`, `voices`, `tokens`, and `data_dir`.
 - `lexicon` and every `rule_fsts` entry must exist if provided.
 
-Relative paths are resolved from the repository root. The model-management CLI
-stores installed assets under `models/voices/<voice-id>` and rewrites common
-backend path fields to that location when the catalog uses relative asset names.
+Backend asset paths must be relative and must resolve under the voice
+`source`, normally `models/voices/<voice-id>`. Paths may be model-relative, such
+as `model.onnx`, or already source-prefixed, such as
+`models/voices/<voice-id>/model.onnx`. Absolute paths, traversal entries, and
+paths under a different model directory are rejected by install, readiness
+checks, and runtime loading. The model-management CLI stores installed assets
+under `models/voices/<voice-id>` and rewrites common backend path fields to
+that location when the catalog uses relative asset names.
 
 Example real VITS voice entry:
 
@@ -616,6 +621,8 @@ thread returns.
 - Model archives are local code-adjacent inputs. Use checksums and trusted
   catalog sources.
 - Installed model files stay under `models/voices/<voice-id>`.
+- Manifest backend asset paths must stay under the voice `source`; do not use
+  absolute paths, `..`, or paths pointing at another model directory.
 
 ## Troubleshooting
 

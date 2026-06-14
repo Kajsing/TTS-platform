@@ -1157,6 +1157,7 @@ def _install_model_from_catalog(
             f"Model directory already exists: {install_dir}. "
             "Use --overwrite to replace it."
         )
+    manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
 
     with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
         artifact = _load_artifact_file(
@@ -1242,7 +1243,6 @@ def _install_model_from_catalog(
         if catalog_artifact_size_bytes is None
         else catalog_artifact_size_bytes == artifact.bytes
     )
-    manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
     _upsert_manifest_entry(manifest_path=manifest_path, entry=manifest_entry)
     _record_install_step(
         install_steps,
@@ -1500,16 +1500,51 @@ def _rewrite_backend_paths(*, source: str, backend: dict[str, object]) -> dict[s
     rewritten: dict[str, object] = {}
     for key, value in backend.items():
         if key in path_keys and isinstance(value, str):
-            rewritten[key] = value if value.startswith("models/") else f"{source}/{value}"
+            rewritten[key] = _rewrite_backend_path(source=source, raw_path=value)
             continue
         if key in list_path_keys and isinstance(value, list):
             rewritten[key] = [
-                item if isinstance(item, str) and item.startswith("models/") else f"{source}/{item}"
+                _rewrite_backend_path(source=source, raw_path=str(item))
                 for item in value
             ]
             continue
         rewritten[key] = value
     return rewritten
+
+
+def _rewrite_backend_path(*, source: str, raw_path: str) -> str:
+    path = _normalized_backend_path(raw_path)
+    if not path:
+        return ""
+    _assert_safe_backend_path(raw_path=path)
+    path = path.rstrip("/")
+    if path == source or path.startswith(f"{source}/"):
+        return path
+    if path.startswith("models/"):
+        raise SystemExit(
+            f"Catalog backend asset path escapes model source '{source}': {raw_path!r}"
+        )
+    return f"{source}/{path}"
+
+
+def _normalized_backend_path(raw_path: str) -> str:
+    return str(raw_path).strip().replace("\\", "/")
+
+
+def _assert_safe_backend_path(*, raw_path: str) -> None:
+    validation_error = _backend_path_validation_error(raw_path)
+    if validation_error is not None:
+        raise SystemExit(f"Catalog backend asset path {validation_error}: {raw_path!r}")
+
+
+def _backend_path_validation_error(raw_path: str) -> str | None:
+    posix_path = PurePosixPath(raw_path)
+    windows_path = PureWindowsPath(raw_path)
+    if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
+        return "must be relative"
+    if ".." in posix_path.parts or ".." in windows_path.parts:
+        return "contains unsafe traversal"
+    return None
 
 
 def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> None:
@@ -2148,10 +2183,29 @@ def _inspect_backend_for_model_check(
             "missing_assets": [],
             "error": str(exc),
         }
+    try:
+        voice_source_root = _model_check_voice_source_root(
+            repo_root=repo_root,
+            model_id=model_id,
+            voice=voice,
+        )
+    except ValueError as exc:
+        return {
+            "configured": True,
+            "valid": False,
+            "assets_ready": False,
+            "asset_checks": [],
+            "missing_assets": [],
+            "errors": [str(exc)],
+        }
 
     asset_checks, config_errors = _model_backend_asset_checks(
         repo_root=repo_root,
+        voice_source_root=voice_source_root,
         runtime_config=runtime_config,
+    )
+    config_errors.extend(
+        str(check["error"]) for check in asset_checks if check.get("error")
     )
     missing_assets = [check["path"] for check in asset_checks if check.get("exists") is not True]
     return {
@@ -2168,6 +2222,7 @@ def _inspect_backend_for_model_check(
 def _model_backend_asset_checks(
     *,
     repo_root: Path,
+    voice_source_root: Path,
     runtime_config: SherpaOnnxVoiceRuntimeConfig,
 ) -> tuple[list[dict[str, object]], list[str]]:
     required_fields = {
@@ -2189,6 +2244,7 @@ def _model_backend_asset_checks(
         checks.append(
             _model_asset_check(
                 repo_root=repo_root,
+                voice_source_root=voice_source_root,
                 field=field,
                 raw_path=str(getattr(runtime_config, field)),
                 required=True,
@@ -2200,6 +2256,7 @@ def _model_backend_asset_checks(
             checks.append(
                 _model_asset_check(
                     repo_root=repo_root,
+                    voice_source_root=voice_source_root,
                     field=field,
                     raw_path=raw_path,
                     required=False,
@@ -2209,6 +2266,7 @@ def _model_backend_asset_checks(
         checks.append(
             _model_asset_check(
                 repo_root=repo_root,
+                voice_source_root=voice_source_root,
                 field=f"rule_fsts[{index}]",
                 raw_path=raw_path,
                 required=False,
@@ -2220,26 +2278,71 @@ def _model_backend_asset_checks(
 def _model_asset_check(
     *,
     repo_root: Path,
+    voice_source_root: Path,
     field: str,
     raw_path: str,
     required: bool,
 ) -> dict[str, object]:
-    resolved_path = _resolve_model_asset_path(repo_root=repo_root, raw_path=raw_path)
-    return {
+    resolved_path, error = _resolve_model_asset_path(
+        repo_root=repo_root,
+        voice_source_root=voice_source_root,
+        raw_path=raw_path,
+    )
+    check: dict[str, object] = {
         "field": field,
         "path": str(resolved_path) if resolved_path is not None else "",
         "required": required,
-        "exists": resolved_path is not None and resolved_path.exists(),
+        "exists": error is None and resolved_path is not None and resolved_path.exists(),
     }
+    if error is not None:
+        check["error"] = error
+    return check
 
 
-def _resolve_model_asset_path(*, repo_root: Path, raw_path: str) -> Path | None:
-    if not raw_path:
-        return None
-    path = Path(raw_path)
-    if path.is_absolute():
-        return path
-    return (repo_root / path).resolve()
+def _resolve_model_asset_path(
+    *,
+    repo_root: Path,
+    voice_source_root: Path,
+    raw_path: str,
+) -> tuple[Path | None, str | None]:
+    path = _normalized_backend_path(raw_path)
+    if not path:
+        return None, None
+    validation_error = _backend_path_validation_error(path)
+    if validation_error is not None:
+        return None, f"Backend asset path {validation_error}: {raw_path!r}"
+    path = path.rstrip("/")
+    resolved_path = (
+        (repo_root / path).resolve()
+        if path == "models" or path.startswith("models/")
+        else (voice_source_root / path).resolve()
+    )
+    if resolved_path != voice_source_root and voice_source_root not in resolved_path.parents:
+        return (
+            resolved_path,
+            f"Backend asset path escapes model source: {raw_path!r}",
+        )
+    return resolved_path, None
+
+
+def _model_check_voice_source_root(
+    *,
+    repo_root: Path,
+    model_id: str,
+    voice: dict[str, object],
+) -> Path:
+    raw_source = str(voice.get("source", "")).strip()
+    if not raw_source:
+        raise ValueError(f"Voice '{model_id}' is missing source path.")
+    source = _normalized_backend_path(raw_source)
+    validation_error = _backend_path_validation_error(source)
+    if validation_error is not None:
+        raise ValueError(f"Voice '{model_id}' source path {validation_error}: {raw_source!r}")
+    resolved_source = (repo_root / source.rstrip("/")).resolve()
+    models_root = (repo_root / "models" / "voices").resolve()
+    if resolved_source == models_root or models_root not in resolved_source.parents:
+        raise ValueError(f"Voice '{model_id}' source path escapes models root: {raw_source!r}")
+    return resolved_source
 
 
 def _inspect_runtime_for_model_check(config_status: dict[str, object]) -> dict[str, object]:

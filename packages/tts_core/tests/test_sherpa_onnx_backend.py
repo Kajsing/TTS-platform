@@ -224,6 +224,80 @@ def test_sherpa_backend_real_mode_validates_required_assets_before_runtime_impor
         backend.warmup("sherpa-en-debug")
 
 
+def test_sherpa_backend_real_mode_accepts_source_relative_backend_paths(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "sherpa-en-debug"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "model.onnx").write_text("fake-model", encoding="utf-8")
+    (voice_dir / "tokens.txt").write_text("fake-tokens", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "sherpa_onnx", build_fake_sherpa_onnx_module())
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "vits",
+                "model": "model.onnx",
+                "tokens": "tokens.txt",
+            }
+        },
+    )
+
+    backend.warmup("sherpa-en-debug")
+
+    assert backend.snapshot()["loaded_real_voices"] == ["sherpa-en-debug"]
+
+
+def test_sherpa_backend_real_mode_rejects_backend_traversal_before_runtime_import(
+    tmp_path,
+) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "sherpa-en-debug"
+    voice_dir.mkdir(parents=True)
+    (voice_dir / "tokens.txt").write_text("fake-tokens", encoding="utf-8")
+    (tmp_path / "secret.onnx").write_text("outside", encoding="utf-8")
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "vits",
+                "model": "models/../secret.onnx",
+                "tokens": "tokens.txt",
+            }
+        },
+    )
+
+    with pytest.raises(BackendNotReadyError, match="unsafe traversal"):
+        backend.warmup("sherpa-en-debug")
+
+
+def test_sherpa_backend_real_mode_rejects_backend_path_outside_voice_source(
+    tmp_path,
+) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "sherpa-en-debug"
+    other_voice_dir = tmp_path / "models" / "voices" / "other-voice"
+    voice_dir.mkdir(parents=True)
+    other_voice_dir.mkdir(parents=True)
+    (voice_dir / "tokens.txt").write_text("fake-tokens", encoding="utf-8")
+    (other_voice_dir / "model.onnx").write_text("other-model", encoding="utf-8")
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "vits",
+                "model": "models/voices/other-voice/model.onnx",
+                "tokens": "tokens.txt",
+            }
+        },
+    )
+
+    with pytest.raises(BackendNotReadyError, match="escapes voice source"):
+        backend.warmup("sherpa-en-debug")
+
+
 def test_sherpa_backend_real_mode_can_synthesize_with_fake_runtime(tmp_path, monkeypatch) -> None:
     backend = build_real_backend(tmp_path, monkeypatch, build_fake_sherpa_onnx_module())
 
