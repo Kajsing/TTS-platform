@@ -11,52 +11,27 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: connect extracted Windows bundle install validation to
-  the bundle-compatible local-reader validation path, including strict
-  JavaScript/browser pass-through options, without making the default release
-  gate heavier.
-- Current loop result: `scripts/check_windows_bundle_install.py` now supports
-  `--run-local-reader-check`, which runs bundled
-  `scripts/check_local_reader_bundle.py` with the installed `.venv` Python after
-  extracted-bundle install, installed `tts serve`, and public-contract smoke
-  have passed. `scripts/check_local_reader_bundle.py` now captures child check
-  stdout/stderr and relays it to stderr, keeping its own stdout as one JSON
-  summary so higher-level gates can parse it reliably. The install check also
-  accepts `--node-executable` and `--require-js-syntax` for no-`--bundle`
-  temporary package builds, inherits those settings for the nested
-  local-reader check, and exposes `--local-reader-*` overrides for strict
-  nested JavaScript and Chrome/MV3 browser evidence.
+- Current loop target: fix security scan finding F-001 by preventing model ids
+  from escaping the intended `models/voices/<model-id>` boundary during
+  install, activation, readiness checks, catalog guidance, and removal.
+- Current loop result: model-management commands now enforce a central safe
+  model-id policy before using ids as filesystem names, manifest source paths,
+  default voice values, or catalog install guidance. Unsafe ids with path
+  separators, traversal-like names, trailing punctuation, or reserved Windows
+  device names are rejected before artifact load or `shutil.rmtree`; catalog
+  listing marks them as non-installable and does not suggest install commands
+  for them.
 - Validation status for the current loop:
+  - Targeted model-flow tests passed with
+    `py -3 -m pytest apps\tts_service\tests\test_cli_models.py -q` and
+    reported 47 passed.
   - Targeted ruff passed with
-    `py -3 -m ruff check scripts\check_local_reader_bundle.py scripts\check_windows_bundle_install.py scripts\check_v1_readiness.py apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_windows_bundle_install_check.py`.
-  - Targeted bundle/readiness tests passed with
-    `py -3 -m pytest apps\tts_service\tests\test_local_reader_bundle_check.py apps\tts_service\tests\test_windows_bundle_install_check.py apps\tts_service\tests\test_v1_readiness_check.py -q`
-    and reported 15 passed.
-  - `py -3 scripts\check_v1_readiness.py` passed and reported 45 readiness
-    markers across 41 checked files.
-  - `py -3 scripts\check_local_reader_bundle.py` passed in default skip-aware
-    mode and now emits a single JSON summary on stdout while relaying child
-    check diagnostics to stderr. The Chrome/MV3 smoke reported the known
-    branded-Chrome unpacked extension registration skip with diagnostics.
-  - `py -3 scripts\check_windows_bundle_install.py --run-local-reader-check --local-reader-timeout-s 600`
-    passed. Its JSON summary reported `local_reader_check.performed: true` and
-    covered `local_service_bootstrap`, `model_management_flow`, `extension`,
-    `extension_onboarding`, `extension_reader_flow`, and
-    `chrome_extension_smoke`.
-  - `py -3 scripts\check_windows_bundle_install.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax --run-local-reader-check --local-reader-timeout-s 600`
-    passed, including strict JavaScript syntax validation during the temporary
-    bundle package build and the nested local-reader check.
+    `py -3 -m ruff check apps\tts_service\src\tts_service\cli.py apps\tts_service\tests\test_cli_models.py`.
+  - The original F-001 install/remove reproducer was rerun against the fixed
+    code: unsafe ids now raise `Invalid model id`, no escaped install directory
+    or manifest is created, and the sibling delete target remains intact.
   - `py -3 -m ruff check .` passed.
-  - `py -3 -m pytest -q` passed with 204 tests.
-  - `py -3 scripts\release_check.py --node-executable C:\Users\ckajs\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --require-js-syntax`
-    passed, including strict extension JavaScript syntax parsing, security
-    defaults, v1 readiness, local service bootstrap, model-management flow,
-    extension checks, extension packaging, Windows bundle
-    packaging/bootstrap/install, and Windows launcher smoke. The default
-    Windows bundle install gate reported `dependencies_installed: true` and
-    `real_runtime_installed: false`, confirming base dependencies are now part
-    of first-run bootstrap while `.[real]` remains opt-in unless
-    `--install-real-runtime` is requested.
+  - `py -3 -m pytest -q` passed with 212 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -74,7 +49,8 @@ This file is the live status log and shared memory for future Codex loops.
   pre-download overwrite refusal, checksum verification required by default,
   safe zip extraction against absolute paths, drive-qualified paths, and
   traversal entries, manifest update, default voice activation in
-  `config/config.toml`, and model removal.
+  `config/config.toml`, model removal, and safe model-id validation before
+  install/remove path effects.
 - A new public-contract smoke script now exists:
   - `scripts/smoke_service.py` exercises `health`, `voices`, sync TTS, WebSocket streaming, and async jobs in one run.
   - `apps/tts_service/tests/test_smoke_script.py` verifies the smoke script orchestration with mocked public-contract clients.

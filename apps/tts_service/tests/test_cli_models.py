@@ -549,6 +549,53 @@ def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path)
         )
 
 
+@pytest.mark.parametrize(
+    "unsafe_model_id",
+    [
+        r"..\..\owned-model",
+        "../owned-model",
+        ".",
+        "CON",
+        "voice-a.",
+    ],
+)
+def test_model_install_rejects_unsafe_model_id_before_path_effects(
+    tmp_path: Path,
+    unsafe_model_id: str,
+) -> None:
+    artifact_path = tmp_path / "voice-a.zip"
+    artifact_bytes = _build_zip(artifact_path, files={"model.onnx": "fake-model"})
+    checksum = hashlib.sha256(artifact_bytes).hexdigest()
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": unsafe_model_id,
+                        "artifact_url": str(artifact_path),
+                        "artifact_sha256": checksum,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="Invalid model id"):
+        cli._install_model_from_catalog(
+            catalog_source=str(catalog_path),
+            model_id=unsafe_model_id,
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=tmp_path / "models" / "MANIFEST.json",
+            overwrite=False,
+        )
+
+    assert not (tmp_path / "owned-model").exists()
+    assert not (tmp_path / "models" / "MANIFEST.json").exists()
+
+
 def test_model_install_preserves_existing_directory_when_overwrite_artifact_fails(
     tmp_path: Path,
 ) -> None:
@@ -786,6 +833,47 @@ def test_catalog_list_reports_install_readiness_warnings(
         "Model 'voice-b' is missing artifact_url and cannot be installed.",
         "Model 'voice-b' is missing artifact_sha256; installs cannot verify integrity.",
         "Duplicate model id 'voice-a' at index 2; install uses the first match.",
+    ]
+
+
+def test_catalog_list_marks_unsafe_model_id_not_installable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": [
+                    {
+                        "id": r"..\..\owned-model",
+                        "name": "Unsafe Voice",
+                        "artifact_url": "voice-a.zip",
+                        "artifact_sha256": "a" * 64,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli.main(["catalog-list", "--catalog", str(catalog_path)])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["catalog"]["installable_count"] == 0
+    assert payload["model_summaries"][0]["model_id_valid"] is False
+    assert payload["model_summaries"][0]["installable"] is False
+    assert payload["warnings"] == [
+        (
+            "Model id '..\\..\\owned-model' at index 0 is invalid and cannot "
+            "be installed: model ids must be 1-128 characters, start and end "
+            "with a letter or digit, and contain only letters, digits, '.', "
+            "'_', or '-'."
+        )
+    ]
+    assert payload["next_steps"] == [
+        "review model_summaries for installable models and checksum coverage"
     ]
 
 
@@ -1037,6 +1125,27 @@ def test_model_remove_is_noop_when_model_is_missing(tmp_path: Path) -> None:
     assert payload["removed_manifest_entry"] is False
 
 
+def test_model_remove_rejects_unsafe_model_id_without_deleting_sibling(
+    tmp_path: Path,
+) -> None:
+    delete_target = tmp_path / "owned-delete"
+    delete_target.mkdir()
+    sentinel = delete_target / "sentinel.txt"
+    sentinel.write_text("keep me", encoding="utf-8")
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps({"version": 1, "voices": []}), encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="Invalid model id"):
+        cli._remove_model(
+            model_id=r"..\..\owned-delete",
+            models_root=tmp_path / "models" / "voices",
+            manifest_path=manifest_path,
+        )
+
+    assert sentinel.read_text(encoding="utf-8") == "keep me"
+
+
 def test_model_activate_updates_existing_default_voice(tmp_path: Path) -> None:
     manifest_path = tmp_path / "models" / "MANIFEST.json"
     _write_manifest(manifest_path, voice_ids=["voice-a"])
@@ -1115,6 +1224,25 @@ def test_model_activate_rejects_missing_manifest_voice_without_changing_config(
     with pytest.raises(SystemExit, match="was not found in manifest"):
         cli._activate_model(
             model_id="missing-voice",
+            manifest_path=manifest_path,
+            config_path=config_path,
+        )
+
+    assert load_config(config_path, env={}).tts.default_voice == "voice-a"
+
+
+def test_model_activate_rejects_unsafe_model_id_without_changing_config(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "models" / "MANIFEST.json"
+    _write_manifest(manifest_path, voice_ids=[r"..\..\owned-model", "voice-a"])
+    config_path = tmp_path / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text('[tts]\ndefault_voice = "voice-a"\n', encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="Invalid model id"):
+        cli._activate_model(
+            model_id=r"..\..\owned-model",
             manifest_path=manifest_path,
             config_path=config_path,
         )

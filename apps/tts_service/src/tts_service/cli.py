@@ -31,6 +31,15 @@ DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
 REAL_RUNTIME_INSTALL_STEP = 'python -m pip install -e ".[real]"'
 SHERPA_ONNX_INSTALL_STEP = "python -m pip install sherpa-onnx"
 NUMPY_INSTALL_STEP = "python -m pip install numpy"
+MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$")
+WINDOWS_RESERVED_MODEL_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -877,6 +886,45 @@ class ArtifactFile:
     bytes: int
 
 
+def _model_id_validation_error(model_id: str) -> str | None:
+    if not model_id:
+        return "model id must not be empty"
+    if MODEL_ID_PATTERN.fullmatch(model_id) is None:
+        return (
+            "model ids must be 1-128 characters, start and end with a letter "
+            "or digit, and contain only letters, digits, '.', '_', or '-'"
+        )
+    device_name = model_id.split(".", maxsplit=1)[0].upper()
+    if device_name in WINDOWS_RESERVED_MODEL_NAMES:
+        return f"model id must not use reserved Windows device name '{device_name}'"
+    return None
+
+
+def _is_safe_model_id(model_id: str) -> bool:
+    return _model_id_validation_error(model_id) is None
+
+
+def _require_safe_model_id(model_id: str) -> str:
+    normalized_model_id = str(model_id).strip()
+    validation_error = _model_id_validation_error(normalized_model_id)
+    if validation_error is not None:
+        raise SystemExit(f"Invalid model id '{model_id}': {validation_error}.")
+    return normalized_model_id
+
+
+def _model_install_dir(*, models_root: Path, model_id: str) -> Path:
+    safe_model_id = _require_safe_model_id(model_id)
+    install_dir = models_root / safe_model_id
+    resolved_models_root = models_root.resolve()
+    resolved_install_dir = install_dir.resolve()
+    if (
+        resolved_install_dir == resolved_models_root
+        or resolved_models_root not in resolved_install_dir.parents
+    ):
+        raise SystemExit(f"Model install path escapes models root: {install_dir}")
+    return install_dir
+
+
 def _load_model_catalog(catalog_source: str) -> tuple[dict[str, object], CatalogLocation]:
     parsed = urlparse(catalog_source)
     if parsed.scheme in {"http", "https"}:
@@ -925,7 +973,10 @@ def _build_catalog_list_payload(
     models = _catalog_models(catalog_payload)
     warnings = _catalog_warnings(models)
     installable_count = sum(
-        1 for model in models if str(model.get("artifact_url", "")).strip()
+        1
+        for model in models
+        if _is_safe_model_id(str(model.get("id", "")).strip())
+        and str(model.get("artifact_url", "")).strip()
     )
     checksum_count = sum(
         1 for model in models if str(model.get("artifact_sha256", "")).strip()
@@ -950,8 +1001,10 @@ def _catalog_model_summary(model: dict[str, object]) -> dict[str, object]:
     artifact_url = str(model.get("artifact_url", "")).strip()
     checksum = str(model.get("artifact_sha256", "")).strip()
     artifact_size_bytes = _catalog_artifact_size_bytes(model.get("artifact_size_bytes"))
+    model_id_valid = _is_safe_model_id(model_id)
     return {
         "id": model_id,
+        "model_id_valid": model_id_valid,
         "name": str(model.get("name", model_id)),
         "language": str(model.get("language", "unknown")),
         "engine": str(model.get("engine", "sherpa_onnx")),
@@ -964,7 +1017,7 @@ def _catalog_model_summary(model: dict[str, object]) -> dict[str, object]:
         "latency_tier": str(model.get("latency_tier", "unknown")),
         "tags": _catalog_string_list(model.get("tags")),
         "capabilities": _catalog_capabilities(model.get("capabilities")),
-        "installable": bool(artifact_url),
+        "installable": model_id_valid and bool(artifact_url),
         "artifact_url": artifact_url or None,
         "artifact_size_bytes": artifact_size_bytes,
         "artifact_size_mib": _catalog_artifact_size_mib(artifact_size_bytes),
@@ -1014,6 +1067,12 @@ def _catalog_warnings(models: list[dict[str, object]]) -> list[str]:
     seen_ids: set[str] = set()
     for index, model in enumerate(models):
         model_id = str(model.get("id", "")).strip()
+        model_id_error = _model_id_validation_error(model_id)
+        if model_id_error is not None:
+            warnings.append(
+                f"Model id '{model_id}' at index {index} is invalid and cannot "
+                f"be installed: {model_id_error}."
+            )
         if model_id in seen_ids:
             warnings.append(
                 f"Duplicate model id '{model_id}' at index {index}; install uses the first match."
@@ -1040,8 +1099,12 @@ def _catalog_next_steps(
     installable_models = [
         str(model.get("id", "")).strip()
         for model in models
-        if str(model.get("artifact_url", "")).strip()
+        if _is_safe_model_id(str(model.get("id", "")).strip())
+        and str(model.get("artifact_url", "")).strip()
     ]
+    next_steps = ["review model_summaries for installable models and checksum coverage"]
+    if not installable_models:
+        return next_steps
     if len(installable_models) == 1:
         model_ref = installable_models[0]
     else:
@@ -1051,10 +1114,8 @@ def _catalog_next_steps(
         if catalog_source == DEFAULT_MODEL_CATALOG_PATH
         else " --catalog <catalog>"
     )
-    return [
-        "review model_summaries for installable models and checksum coverage",
-        f"tts model-install {model_ref}{catalog_argument} --activate",
-    ]
+    next_steps.append(f"tts model-install {model_ref}{catalog_argument} --activate")
+    return next_steps
 
 
 def _install_model_from_catalog(
@@ -1069,6 +1130,7 @@ def _install_model_from_catalog(
     progress: Callable[[str], None] | None = None,
     allow_missing_checksum: bool = False,
 ) -> dict[str, object]:
+    model_id = _require_safe_model_id(model_id)
     catalog_payload, catalog_location = _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
     model = next((candidate for candidate in models if candidate.get("id") == model_id), None)
@@ -1089,7 +1151,7 @@ def _install_model_from_catalog(
     catalog_artifact_size_bytes = _catalog_artifact_size_bytes(
         model.get("artifact_size_bytes")
     )
-    install_dir = models_root / model_id
+    install_dir = _model_install_dir(models_root=models_root, model_id=model_id)
     if install_dir.exists() and not overwrite:
         raise SystemExit(
             f"Model directory already exists: {install_dir}. "
@@ -1388,6 +1450,7 @@ def _assert_safe_archive_member_path(*, member_name: str, out_dir_resolved: Path
 
 
 def _build_manifest_voice_entry(*, model_id: str, model: dict[str, object]) -> dict[str, object]:
+    model_id = _require_safe_model_id(model_id)
     source = f"models/voices/{model_id}"
     capabilities = model.get("capabilities", {})
     if not isinstance(capabilities, dict):
@@ -1476,6 +1539,7 @@ def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> 
 
 
 def _activate_model(*, model_id: str, manifest_path: Path, config_path: Path) -> dict[str, object]:
+    model_id = _require_safe_model_id(model_id)
     if not _manifest_contains_voice(manifest_path=manifest_path, model_id=model_id):
         raise SystemExit(f"Model '{model_id}' was not found in manifest: {manifest_path}")
 
@@ -1573,11 +1637,12 @@ def _remove_model(
     manifest_path: Path,
     config_path: Path | None = None,
 ) -> dict[str, object]:
+    model_id = _require_safe_model_id(model_id)
     config_default_status = _inspect_config_default_for_remove(
         model_id=model_id,
         config_path=config_path,
     )
-    install_dir = models_root / model_id
+    install_dir = _model_install_dir(models_root=models_root, model_id=model_id)
     removed_files = False
     if install_dir.exists():
         shutil.rmtree(install_dir)
@@ -1897,6 +1962,8 @@ def _check_model_readiness(
     resolved_config_path = _resolve_under_root(resolved_repo_root, config_path)
     config_status = _inspect_config_for_model_check(resolved_config_path)
     selected_model_id = model_id or str(config_status.get("default_voice") or "").strip()
+    if selected_model_id:
+        selected_model_id = _require_safe_model_id(selected_model_id)
     selected_source = "argument" if model_id else "config_default"
     manifest_status = _inspect_manifest_for_model_check(
         manifest_path=resolved_manifest_path,
@@ -2212,7 +2279,7 @@ def _inspect_catalog_for_model_check(repo_root: Path) -> dict[str, object]:
     installable_model_ids = [
         str(model.get("id", "")).strip()
         for model in models
-        if str(model.get("id", "")).strip()
+        if _is_safe_model_id(str(model.get("id", "")).strip())
         and str(model.get("artifact_url", "")).strip()
     ]
     status.update(
