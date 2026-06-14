@@ -25,6 +25,10 @@ let playbackState = {
 };
 
 chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
+  if (!isOffscreenMessage(message)) {
+    return false;
+  }
+
   (async () => {
     if (message?.type === "tts-extension:start-stream") {
       await startStream(message.payload);
@@ -55,6 +59,14 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
 
   return true;
 });
+
+function isOffscreenMessage(message) {
+  return new Set([
+    "tts-extension:start-stream",
+    "tts-extension:stop-stream",
+    "tts-extension:get-playback-state",
+  ]).has(message?.type);
+}
 
 async function startStream(config) {
   await stopStream({ notifyServer: false });

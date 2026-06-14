@@ -311,6 +311,9 @@ def verify_extension_wiring() -> None:
             "buildOriginCliCommand",
             "sanitizeBaseUrl",
             "isAllowedLocalServiceUrl",
+            "isOffscreenOwnedMessage",
+            '"tts-extension:start-stream"',
+            '"tts-extension:stop-stream"',
             "ALLOWED_SERVICE_HOSTS",
             "Base URL must be an HTTP localhost origin",
             "buildServiceTextLimits",
@@ -343,6 +346,7 @@ def verify_extension_wiring() -> None:
             "MAX_QUEUED_AUDIO_CHUNKS",
             "MAX_QUEUED_AUDIO_MS",
             "failPlaybackBufferLimit",
+            "isOffscreenMessage",
         ],
     }
     missing: list[str] = []

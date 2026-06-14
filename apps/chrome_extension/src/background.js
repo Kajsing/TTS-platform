@@ -45,6 +45,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (isOffscreenOwnedMessage(message)) {
+    return false;
+  }
+
   (async () => {
     switch (message?.type) {
       case "tts-extension:get-config":
@@ -115,6 +119,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return true;
 });
+
+function isOffscreenOwnedMessage(message) {
+  return new Set([
+    "tts-extension:start-stream",
+    "tts-extension:stop-stream",
+    "tts-extension:get-playback-state",
+  ]).has(message?.type);
+}
 
 async function speakSelection() {
   const tab = await getActiveTab();
