@@ -20,8 +20,9 @@ for long web-page text.
 - `python3 scripts/check_extension.py` verifies manifest references,
   popup/offscreen assets, extension wiring, manifest policy, privacy/layering
   boundaries, runtime localhost-only service URL validation, service-aware page
-  character limit wiring, local install/troubleshooting guidance and icons, and
-  JavaScript syntax when `node` is installed.
+  character limit wiring, bounded high-watermark offscreen audio scheduling,
+  local install/troubleshooting guidance and icons, and JavaScript syntax when
+  `node` is installed.
 - `python3 scripts/check_extension_onboarding.py` verifies popup onboarding
   controls, Chrome-extension origin allow-list snippet compatibility, and the
   copyable `tts extension-allow-origin` first-run helper before checking the
@@ -34,9 +35,9 @@ for long web-page text.
   reader candidates, truncated-page continuation to the first known uncaptured
   section, truncated text-offset continuation without storing raw page text,
   automatic continuation after a truncated segment finishes, filtered fallback
-  capture for flat pages, plus stop/restart recovery and popup reopen-state
-  signals, then streams a generated thousand-word article through the local
-  service WebSocket contract.
+  capture for flat pages, bounded high-watermark offscreen audio scheduling,
+  plus stop/restart recovery and popup reopen-state signals, then streams a
+  generated thousand-word article through the local service WebSocket contract.
 - Manual page resume, continue, previous-section, and next-section actions now
   require that the active tab matches the original source tab for the stored
   page playback state, preventing old reader progress from being applied to a
@@ -185,8 +186,9 @@ for long web-page text.
   actual Chrome if operator comfort evidence is desired. The reader-flow
   contract automates truncated-section continuation, manual and automatic
   truncated text-offset continuation, best-root selection, filtered fallback
-  capture, stop/recovery wiring, and popup state fields; the Chrome/MV3 smoke
-  automates one real browser path when a compatible browser build is available.
+  capture, bounded offscreen audio scheduling, stop/recovery wiring, and popup
+  state fields; the Chrome/MV3 smoke automates one real browser path when a
+  compatible browser build is available.
 
 ## Product Choices
 

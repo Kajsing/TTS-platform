@@ -466,5 +466,8 @@ The seventy-seventh release-hardening slice strengthens the optional
 Chrome/MV3 smoke by lowering its temporary service stream text limit below the
 extension's configured page limit and asserting that `Speak Page` stores
 page-capture metadata capped at that service limit.
+The seventy-eighth reader-flow reliability slice makes the offscreen audio
+scheduler respect `highWatermarkMs`, bounding how far ahead browser audio is
+scheduled and topping up queued PCM chunks as scheduled sources finish.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.

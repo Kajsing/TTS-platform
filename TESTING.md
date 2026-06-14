@@ -209,8 +209,8 @@ It also verifies the long-page reader-flow contract and streams a generated
 thousand-word article through the WebSocket service path. That reader-flow
 contract includes previous/next section navigation, truncated-section
 continuation, manual and automatic truncated text-offset continuation,
-stop/restart recovery wiring, and the popup state fields used after reopening
-the popup.
+stop/restart recovery wiring, bounded high-watermark offscreen audio
+scheduling, and the popup state fields used after reopening the popup.
 It runs a skip-aware Chrome/MV3 browser smoke that uses Chrome or Edge when a
 compatible browser build can load unpacked extensions from automation. The
 smoke lowers the temporary service `tts.max_chars_per_stream` below the

@@ -500,6 +500,8 @@ def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -
             "new WebSocket(wsUrl)",
             "auth_token: config.token",
             "payload: {\n          text: config.text,",
+            "estimateScheduledMs() < config.highWatermarkMs",
+            "void flushQueue(config)",
             'type: "tts-extension:playback-state"',
         ],
     )

@@ -600,6 +600,11 @@ text.
 When a page playback segment finishes normally and the latest capture still has
 a continuation offset, the extension starts that next segment automatically
 from the same metadata.
+The offscreen player also uses its configured high watermark to bound how far
+ahead browser audio is scheduled, topping up queued PCM chunks as scheduled
+sources finish. This keeps long-page playback from creating a large planned
+audio window in the browser while retaining the same segmented continuation
+model for page-scale text.
 
 When the installed `sherpa_onnx` runtime exposes generation callbacks, the real
 backend streaming path emits audio from those callbacks instead of waiting for

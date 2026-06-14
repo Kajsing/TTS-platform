@@ -255,7 +255,11 @@ async function flushQueue(config) {
     }
   }
 
-  while (queuedChunks.length && scheduledUntilTime > audioContext.currentTime) {
+  while (
+    queuedChunks.length &&
+    scheduledUntilTime > audioContext.currentTime &&
+    estimateScheduledMs() < config.highWatermarkMs
+  ) {
     const chunk = queuedChunks.shift();
     const buffer = audioContext.createBuffer(
       playbackState.channels,
@@ -287,6 +291,7 @@ async function flushQueue(config) {
           lastEvent: "underrun",
         });
       }
+      void flushQueue(config);
       finalizeIfDrained();
     };
   }
@@ -361,10 +366,17 @@ function estimateBufferedMs() {
     (total, chunk) => total + chunk.durationMs,
     0
   );
-  const scheduledMs = audioContext
-    ? Math.max(0, (scheduledUntilTime - audioContext.currentTime) * 1000)
-    : 0;
-  return Math.round(queuedDurationMs + scheduledMs);
+  return Math.round(queuedDurationMs + estimateScheduledMs());
+}
+
+function estimateScheduledMs() {
+  if (!audioContext) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    Math.round((scheduledUntilTime - audioContext.currentTime) * 1000)
+  );
 }
 
 function pcm16ToFloat32(samples) {

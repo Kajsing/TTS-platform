@@ -300,6 +300,8 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "await stopAudioSources()",
             "status: \"cancelled\"",
             "completeWhenDrained = \"done\"",
+            "estimateScheduledMs() < config.highWatermarkMs",
+            "void flushQueue(config)",
             "lastEvent: \"stop\"",
         ],
     }
@@ -333,6 +335,7 @@ def _verify_extension_reader_contract() -> dict[str, object]:
         "raw_page_text_persistence": False,
         "filtered_fallback_capture": True,
         "best_root_selection": True,
+        "bounded_audio_scheduling": True,
     }
 
 

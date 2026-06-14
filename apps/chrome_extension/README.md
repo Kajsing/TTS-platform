@@ -90,7 +90,8 @@ the manifest and toolbar action.
 
 - `background.js` orchestrates text capture and offscreen playback.
 - `content-script.js` reads selection or page text.
-- `offscreen.js` connects to the local service and plays streamed PCM audio with a small prebuffer.
+- `offscreen.js` connects to the local service and plays streamed PCM audio
+  with a small prebuffer and bounded scheduled-audio window.
 - `popup.html` and `popup.js` provide a basic control surface for configuration, playback actions, reader progress, and page resume.
 
 ## Suggested manual check
@@ -126,7 +127,10 @@ the manifest and toolbar action.
 
 - Browser WebSocket clients cannot set custom `Authorization` headers, so the prototype sends the bearer token in the first `start` event for `WS /v1/tts/stream`.
 - This token flow is intentionally limited to the localhost MVP shape and should be revisited if the browser client becomes more broadly distributed.
-- The current playback buffer now includes simple rebuffering behavior, but it is still a lightweight jitter-buffer-style scheduler rather than a final production playback engine.
+- The current playback buffer now includes simple rebuffering behavior and
+  uses `highWatermarkMs` to limit how far ahead browser audio is scheduled, but
+  it is still a lightweight jitter-buffer-style scheduler rather than a final
+  production playback engine.
 - Page text capture now scores likely article/main content candidates before
   falling back to a body snapshot, but it still uses heuristic extraction
   rather than a full reader-mode pipeline.
