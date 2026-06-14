@@ -26,6 +26,8 @@ EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 DEFAULT_MAX_CAPTURE_CHARS = 1600
+DEFAULT_SERVICE_MAX_CHARS_PER_REQUEST = 800
+DEFAULT_SERVICE_MAX_CHARS_PER_STREAM = 1200
 EXTENSION_POPUP_PATH = "src/popup.html"
 
 for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC):
@@ -49,6 +51,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--startup-timeout-s", type=float, default=30.0)
     parser.add_argument("--command-timeout-s", type=float, default=90.0)
     parser.add_argument("--max-capture-chars", type=int, default=DEFAULT_MAX_CAPTURE_CHARS)
+    parser.add_argument(
+        "--service-stream-limit-chars",
+        type=int,
+        default=DEFAULT_SERVICE_MAX_CHARS_PER_STREAM,
+        help=(
+            "Temporary service tts.max_chars_per_stream used by the browser smoke. "
+            "It must be lower than --max-capture-chars so the smoke proves the "
+            "extension follows the service cap."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -60,6 +72,7 @@ def main(argv: list[str] | None = None) -> None:
             startup_timeout_s=args.startup_timeout_s,
             command_timeout_s=args.command_timeout_s,
             max_capture_chars=args.max_capture_chars,
+            service_stream_limit_chars=args.service_stream_limit_chars,
         )
     except ChromeExtensionSmokeError as exc:
         raise SystemExit(str(exc)) from exc
@@ -76,9 +89,16 @@ def check_chrome_extension_smoke(
     startup_timeout_s: float = 30.0,
     command_timeout_s: float = 90.0,
     max_capture_chars: int = DEFAULT_MAX_CAPTURE_CHARS,
+    service_stream_limit_chars: int = DEFAULT_SERVICE_MAX_CHARS_PER_STREAM,
 ) -> dict[str, object]:
     if max_capture_chars <= 0:
         raise ChromeExtensionSmokeError("--max-capture-chars must be positive.")
+    if service_stream_limit_chars <= 1000:
+        raise ChromeExtensionSmokeError("--service-stream-limit-chars must be above 1000.")
+    if max_capture_chars <= service_stream_limit_chars:
+        raise ChromeExtensionSmokeError(
+            "--max-capture-chars must be greater than --service-stream-limit-chars."
+        )
     browser_path = _resolve_browser_executable(browser_executable)
     if browser_path is None:
         if require_browser:
@@ -102,6 +122,7 @@ def check_chrome_extension_smoke(
             startup_timeout_s=startup_timeout_s,
             command_timeout_s=command_timeout_s,
             max_capture_chars=max_capture_chars,
+            service_stream_limit_chars=service_stream_limit_chars,
         )
     except ChromeExtensionSmokeError as exc:
         if require_browser:
@@ -119,6 +140,7 @@ def _run_browser_smoke(
     startup_timeout_s: float,
     command_timeout_s: float,
     max_capture_chars: int,
+    service_stream_limit_chars: int,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="tts-platform-chrome-smoke-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -168,6 +190,11 @@ def _run_browser_smoke(
                 env=env,
                 timeout_s=command_timeout_s,
             )
+            _set_tts_text_limits(
+                repo_root=repo_root,
+                max_chars_per_request=DEFAULT_SERVICE_MAX_CHARS_PER_REQUEST,
+                max_chars_per_stream=service_stream_limit_chars,
+            )
 
             service_port = service_bootstrap._reserve_loopback_port()
             base_url = f"http://127.0.0.1:{service_port}"
@@ -199,6 +226,7 @@ def _run_browser_smoke(
                         page_url=page_url,
                         token=token_file.read_text(encoding="utf-8").strip(),
                         max_capture_chars=max_capture_chars,
+                        service_stream_limit_chars=service_stream_limit_chars,
                         command_timeout_s=command_timeout_s,
                     )
             finally:
@@ -512,6 +540,27 @@ def _run_extension_allow_origin(
         raise ChromeExtensionSmokeError("extension-allow-origin did not allow-list Chrome.")
 
 
+def _set_tts_text_limits(
+    *,
+    repo_root: Path,
+    max_chars_per_request: int,
+    max_chars_per_stream: int,
+) -> None:
+    config_path = repo_root / "config" / "config.toml"
+    config_text = config_path.read_text(encoding="utf-8")
+    replacements = {
+        "max_chars_per_request = 4000": f"max_chars_per_request = {max_chars_per_request}",
+        "max_chars_per_stream = 48000": f"max_chars_per_stream = {max_chars_per_stream}",
+    }
+    for source, replacement in replacements.items():
+        if source not in config_text:
+            raise ChromeExtensionSmokeError(
+                f"Temporary service config is missing expected line: {source}"
+            )
+        config_text = config_text.replace(source, replacement, 1)
+    config_path.write_text(config_text, encoding="utf-8")
+
+
 def _write_and_serve_article(article_dir: Path) -> str:
     article_dir.mkdir(parents=True, exist_ok=True)
     article = _build_long_article_fixture(section_count=8, paragraphs_per_section=3)
@@ -571,6 +620,7 @@ def _run_extension_smoke(
     page_url: str,
     token: str,
     max_capture_chars: int,
+    service_stream_limit_chars: int,
     command_timeout_s: float,
 ) -> dict[str, object]:
     websocket_url = str(extension_target.get("webSocketDebuggerUrl", ""))
@@ -586,7 +636,11 @@ def _run_extension_smoke(
                 max_capture_chars=max_capture_chars,
             ),
         )
-        _assert_start_payload(start_payload)
+        _assert_start_payload(
+            start_payload,
+            max_capture_chars=max_capture_chars,
+            service_stream_limit_chars=service_stream_limit_chars,
+        )
         final_state = _wait_for_playback_state(
             cdp=cdp,
             timeout_s=command_timeout_s,
@@ -598,6 +652,12 @@ def _run_extension_smoke(
             "text_chars": start_payload["captureTextChars"],
             "truncated": start_payload["captureMeta"]["truncated"],
             "source": start_payload["captureMeta"]["source"],
+            "configured_max_chars": max_capture_chars,
+            "playback_max_chars": start_payload["playbackCaptureMeta"]["maxChars"],
+        },
+        "text_limits": {
+            "service_max_chars_per_stream": service_stream_limit_chars,
+            "snapshot_max_page_chars": start_payload["serviceTextLimits"]["maxPageChars"],
         },
         "service_health_status": start_payload["healthStatus"],
         "start_result": start_payload["startResult"],
@@ -628,6 +688,9 @@ def _start_expression(
     highWatermarkMs: 100,
     maxChars: {max_capture_chars}
   }});
+  const serviceSnapshot = await chrome.runtime.sendMessage({{
+    type: "tts-extension:get-service-snapshot"
+  }});
   const tabs = await chrome.tabs.query({{}});
   const tab = tabs.find((candidate) => candidate.url === {json.dumps(page_url)});
   if (!tab || typeof tab.id !== "number") {{
@@ -643,11 +706,16 @@ def _start_expression(
     target: {{tabId: tab.id}},
     func: () => chrome.runtime.sendMessage({{type: "tts-extension:speak-page"}})
   }});
+  const stored = await chrome.storage.session.get("playbackState");
+  const playbackState = stored.playbackState || {{}};
   return {{
     tabId: tab.id,
     captureTextChars: capture.text.length,
     captureMeta: capture.meta,
     healthStatus: health.status,
+    healthTts: health.tts,
+    serviceTextLimits: serviceSnapshot.textLimits,
+    playbackCaptureMeta: playbackState.pageCapture,
     startResult: startResults[0].result
   }};
 }})()
@@ -690,17 +758,51 @@ def _wait_for_playback_state(*, cdp: "_CdpClient", timeout_s: float) -> dict[str
     raise ChromeExtensionSmokeError(f"Timed out waiting for extension playback: {last_state!r}")
 
 
-def _assert_start_payload(payload: dict[str, object]) -> None:
+def _assert_start_payload(
+    payload: dict[str, object],
+    *,
+    max_capture_chars: int,
+    service_stream_limit_chars: int,
+) -> None:
     capture_meta = payload.get("captureMeta")
+    playback_capture_meta = payload.get("playbackCaptureMeta")
+    health_tts = payload.get("healthTts")
+    service_text_limits = payload.get("serviceTextLimits")
     start_result = payload.get("startResult")
     if not isinstance(capture_meta, dict):
         raise ChromeExtensionSmokeError("Extension capture did not return metadata.")
+    if not isinstance(playback_capture_meta, dict):
+        raise ChromeExtensionSmokeError("Extension playback did not store page-capture metadata.")
+    if not isinstance(health_tts, dict):
+        raise ChromeExtensionSmokeError("Service health did not return TTS text limits.")
+    if not isinstance(service_text_limits, dict):
+        raise ChromeExtensionSmokeError("Extension service snapshot did not return text limits.")
     if payload.get("healthStatus") != "ok":
         raise ChromeExtensionSmokeError("Extension background could not fetch service health.")
+    if health_tts.get("max_chars_per_stream") != service_stream_limit_chars:
+        raise ChromeExtensionSmokeError(
+            f"Service stream limit mismatch: {health_tts!r}"
+        )
+    if service_text_limits.get("maxPageChars") != service_stream_limit_chars:
+        raise ChromeExtensionSmokeError(
+            "Extension service snapshot did not expose the service page cap: "
+            f"{service_text_limits!r}"
+        )
+    if capture_meta.get("maxChars") != max_capture_chars:
+        raise ChromeExtensionSmokeError(
+            f"Direct page capture did not use configured max chars: {capture_meta!r}"
+        )
+    if playback_capture_meta.get("maxChars") != service_stream_limit_chars:
+        raise ChromeExtensionSmokeError(
+            "Speak Page did not clamp page capture to the service stream limit: "
+            f"{playback_capture_meta!r}"
+        )
     if int(payload.get("captureTextChars", 0)) < 1000:
         raise ChromeExtensionSmokeError("Extension did not capture long-page text.")
     if capture_meta.get("truncated") is not True:
         raise ChromeExtensionSmokeError("Extension long-page capture was not truncated.")
+    if playback_capture_meta.get("truncated") is not True:
+        raise ChromeExtensionSmokeError("Extension playback capture was not truncated.")
     if not isinstance(start_result, dict) or start_result.get("ok") is not True:
         raise ChromeExtensionSmokeError(f"Speak Page did not start successfully: {start_result!r}")
 

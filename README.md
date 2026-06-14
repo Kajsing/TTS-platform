@@ -388,6 +388,11 @@ python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
 python3 scripts/release_check.py --require-browser --headed
 ```
 
+The Chrome/MV3 smoke starts its temporary service with a lower
+`tts.max_chars_per_stream` than the extension's configured page limit, then
+checks that `Speak Page` stores page-capture metadata capped at the service
+stream limit.
+
 If the installed browser ignores command-line unpacked extension loading, pass a
 compatible browser explicitly:
 

@@ -212,10 +212,13 @@ continuation, manual and automatic truncated text-offset continuation,
 stop/restart recovery wiring, and the popup state fields used after reopening
 the popup.
 It runs a skip-aware Chrome/MV3 browser smoke that uses Chrome or Edge when a
-compatible browser build can load unpacked extensions from automation. When the
-local browser/MV3 environment cannot run the smoke, the gate reports a skipped
-smoke rather than failing the offline release gate; use `--require-browser` on
-the smoke script or release check when strict browser evidence is needed.
+compatible browser build can load unpacked extensions from automation. The
+smoke lowers the temporary service `tts.max_chars_per_stream` below the
+extension's configured page limit and confirms `Speak Page` stores
+page-capture metadata capped at that service stream limit. When the local
+browser/MV3 environment cannot run the smoke, the gate reports a skipped smoke
+rather than failing the offline release gate; use `--require-browser` on the
+smoke script or release check when strict browser evidence is needed.
 Branded Chrome 137+ may ignore `--load-extension`; for strict automated
 evidence, pass Chrome for Testing or Chromium with `--browser-executable`.
 If the service is already running, include the public-contract smoke path:

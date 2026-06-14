@@ -51,9 +51,11 @@ for long web-page text.
   extension popup as the CDP execution context, starts an isolated loopback
   service with the generated extension origin allow-listed, opens a generated
   long article, verifies content-script page capture and background health
-  fetch, starts `Speak Page`, and observes playback state. Without Chrome or
-  Edge, or when the local browser/MV3 environment cannot run the smoke, it
-  reports a skipped smoke unless `--require-browser` is set;
+  fetch, starts `Speak Page`, confirms playback capture is capped by the
+  service stream limit when it is lower than the configured page limit, and
+  observes playback state. Without Chrome or Edge, or when the local
+  browser/MV3 environment cannot run the smoke, it reports a skipped smoke
+  unless `--require-browser` is set;
   extension-registration skips include a short observed profile-extension id
   diagnostic.
 - `python3 scripts/check_local_service_bootstrap.py` creates an isolated

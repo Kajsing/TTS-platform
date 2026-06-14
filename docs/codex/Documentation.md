@@ -11,25 +11,23 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: align long-page Chrome reader capture limits with the
-  local service stream text limit exposed by `/v1/health`.
-- Current loop result: `/v1/health` now reports `tts.max_chars_per_request`
-  and `tts.max_chars_per_stream`; the extension service snapshot reads those
-  limits, the popup shows/clamps `Max Page Characters`, and page actions use
-  the lower of the configured page limit, service stream limit, and extension
-  local safety cap.
+- Current loop target: strengthen the optional real-browser Chrome/MV3 smoke so
+  it proves extension page playback follows the service stream text limit.
+- Current loop result: the Chrome smoke now starts its temporary service with a
+  lower `tts.max_chars_per_stream` than the extension's configured page limit,
+  then asserts that background service snapshot text limits and `Speak Page`
+  page-capture metadata use that service cap.
 - Validation status for the current loop:
-  - `py -3 -m pytest apps\tts_service\tests\test_api.py::test_health_endpoint_returns_service_status apps\tts_service\tests\test_api.py::test_health_endpoint_reports_configured_tts_text_limits apps\tts_service\tests\test_extension_onboarding_check.py apps\tts_service\tests\test_extension_reader_flow_check.py apps\tts_service\tests\test_check_extension.py -q`
-    passed with 16 tests.
+  - `py -3 -m pytest apps\tts_service\tests\test_chrome_extension_smoke_check.py -q`
+    passed with 13 tests.
+  - `py -3 scripts\check_chrome_extension_smoke.py` returned the existing
+    skip-aware Chrome registration diagnostic in this local branded Chrome
+    environment.
   - `py -3 scripts\check_extension.py` passed; JavaScript syntax parsing
     remains skip-aware because Node.js is not on `PATH`.
-  - `py -3 scripts\check_extension_onboarding.py` passed and reported
-    `max_chars_per_request=4000`, `max_chars_per_stream=48000`.
-  - `py -3 scripts\check_extension_reader_flow.py` passed, including
-    generated long-article WebSocket smoke with 145 stream text chunks.
   - `py -3 -m ruff check .` passed.
   - `py -3 scripts\check_v1_readiness.py` passed.
-  - `py -3 -m pytest -q` passed with 231 tests.
+  - `py -3 -m pytest -q` passed with 234 tests.
 - Tooling status:
   - `python3 scripts/smoke_service.py --token-file config/token.txt` passed against a live local service.
 
@@ -480,6 +478,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `/v1/health` now exposes the active TTS request and stream text limits, and
     the Chrome extension uses the stream limit to clamp page-capture size before
     page playback.
+  - the optional Chrome/MV3 smoke now verifies that the real browser `Speak
+    Page` flow stores page-capture metadata capped at the service stream text
+    limit when that limit is lower than the extension's configured page limit.
 - This Codex memory structure is now in place:
   - `docs/codex/Prompt.md`
   - `docs/codex/Plan.md`

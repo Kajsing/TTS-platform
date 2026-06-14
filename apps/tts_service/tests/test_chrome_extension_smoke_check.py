@@ -37,6 +37,23 @@ def test_chrome_extension_smoke_can_require_browser(tmp_path: Path) -> None:
         )
 
 
+def test_chrome_extension_smoke_requires_capture_above_service_limit(tmp_path: Path) -> None:
+    check_module = _load_chrome_smoke_module()
+    browser_path = tmp_path / "chrome.exe"
+    browser_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(
+        check_module.ChromeExtensionSmokeError,
+        match="--max-capture-chars must be greater",
+    ):
+        check_module.check_chrome_extension_smoke(
+            python_executable="python-test",
+            browser_executable=str(browser_path),
+            max_capture_chars=1200,
+            service_stream_limit_chars=1200,
+        )
+
+
 def test_chrome_extension_smoke_skips_environment_failure_by_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -210,7 +227,63 @@ def test_chrome_extension_smoke_start_expression_targets_article_url() -> None:
 
     assert "chrome.tabs.query({})" in expression
     assert 'candidate.url === "http://127.0.0.1:5001/article.html"' in expression
+    assert '"tts-extension:get-service-snapshot"' in expression
+    assert "playbackState.pageCapture" in expression
     assert "active: true" not in expression
+
+
+def test_chrome_extension_smoke_sets_temp_service_text_limits(tmp_path: Path) -> None:
+    check_module = _load_chrome_smoke_module()
+    repo_root = tmp_path / "repo"
+    config_path = repo_root / "config" / "config.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        "\n".join(
+            [
+                "[tts]",
+                "max_chars_per_request = 4000",
+                "max_chars_per_stream = 48000",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    check_module._set_tts_text_limits(
+        repo_root=repo_root,
+        max_chars_per_request=800,
+        max_chars_per_stream=1200,
+    )
+
+    assert config_path.read_text(encoding="utf-8") == (
+        "[tts]\n"
+        "max_chars_per_request = 800\n"
+        "max_chars_per_stream = 1200\n"
+    )
+
+
+def test_chrome_extension_smoke_asserts_service_capped_playback_capture() -> None:
+    check_module = _load_chrome_smoke_module()
+
+    check_module._assert_start_payload(
+        {
+            "captureTextChars": 1600,
+            "captureMeta": {
+                "maxChars": 1600,
+                "truncated": True,
+            },
+            "playbackCaptureMeta": {
+                "maxChars": 1200,
+                "truncated": True,
+            },
+            "healthStatus": "ok",
+            "healthTts": {"max_chars_per_stream": 1200},
+            "serviceTextLimits": {"maxPageChars": 1200},
+            "startResult": {"ok": True},
+        },
+        max_capture_chars=1600,
+        service_stream_limit_chars=1200,
+    )
 
 
 def test_chrome_extension_smoke_chrome_registration_hint() -> None:

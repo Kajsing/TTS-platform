@@ -462,5 +462,9 @@ The seventy-sixth long-reader alignment slice exposes the service TTS text
 limits from `/v1/health` and makes the Chrome extension clamp page capture to
 the service stream limit plus its local per-segment safety cap before starting
 page playback.
+The seventy-seventh release-hardening slice strengthens the optional
+Chrome/MV3 smoke by lowering its temporary service stream text limit below the
+extension's configured page limit and asserting that `Speak Page` stores
+page-capture metadata capped at that service limit.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
