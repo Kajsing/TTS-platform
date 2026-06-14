@@ -522,10 +522,6 @@ def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path)
     existing_dir = tmp_path / "models" / "voices" / "voice-a"
     existing_dir.mkdir(parents=True)
 
-    artifact_path = tmp_path / "voice-a.zip"
-    artifact_bytes = _build_zip(artifact_path, files={"model.onnx": "fake"})
-    checksum = hashlib.sha256(artifact_bytes).hexdigest()
-
     catalog_path = tmp_path / "catalog.json"
     catalog_path.write_text(
         json.dumps(
@@ -534,8 +530,8 @@ def test_model_install_requires_overwrite_for_existing_directory(tmp_path: Path)
                 "models": [
                     {
                         "id": "voice-a",
-                        "artifact_url": str(artifact_path),
-                        "artifact_sha256": checksum,
+                        "artifact_url": str(tmp_path / "missing.zip"),
+                        "artifact_sha256": "0" * 64,
                     }
                 ],
             }

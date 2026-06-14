@@ -1089,6 +1089,13 @@ def _install_model_from_catalog(
     catalog_artifact_size_bytes = _catalog_artifact_size_bytes(
         model.get("artifact_size_bytes")
     )
+    install_dir = models_root / model_id
+    if install_dir.exists() and not overwrite:
+        raise SystemExit(
+            f"Model directory already exists: {install_dir}. "
+            "Use --overwrite to replace it."
+        )
+
     with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
         artifact = _load_artifact_file(
             artifact_url=artifact_url,
@@ -1141,14 +1148,6 @@ def _install_model_from_catalog(
                 progress=progress,
                 reason="allowed missing artifact_sha256 for trusted local artifact",
             )
-
-        install_dir = models_root / model_id
-        if install_dir.exists():
-            if not overwrite:
-                raise SystemExit(
-                    f"Model directory already exists: {install_dir}. "
-                    "Use --overwrite to replace it."
-                )
 
         models_root.mkdir(parents=True, exist_ok=True)
         temp_install_dir: Path | None = Path(

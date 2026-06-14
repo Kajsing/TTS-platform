@@ -355,6 +355,8 @@ Install behavior:
 - downloads or copies the artifact into a temporary file before checksum and
   extraction so large artifacts do not need to stay resident as one in-memory
   byte string
+- refuses an already-installed model before artifact download/copy unless
+  `--overwrite` is set
 - verifies `artifact_sha256` before extraction
 - rejects missing `artifact_sha256` unless `--allow-missing-checksum` is used
   for a trusted local artifact

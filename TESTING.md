@@ -68,7 +68,7 @@ backend-realism work, and early v1 model-management helpers:
   download size, license/source links, tags, and capability flags; local
   artifact install, manifest update, remote catalog relative-artifact download,
   temporary-file artifact staging before checksum/extraction, safe zip and tar
-  extraction, install progress metadata, overwrite refusal,
+  extraction, install progress metadata, pre-download overwrite refusal,
   install result artifact-size metadata, checksum-required-by-default install
   behavior with an explicit trusted-local override, default `models/catalog.json`
   discovery with friendly missing-file guidance,

@@ -220,7 +220,8 @@ catalog file or remote catalog URL. `model-install` downloads or reads a
 catalog artifact, verifies `artifact_sha256` by default, resolves relative
 artifacts against the local catalog path or remote catalog URL, stages the
 artifact in a temporary file, extracts zip or tar archives safely under
-`models/voices/<model-id>`, updates `models/MANIFEST.json`, prints progress
+`models/voices/<model-id>`, refuses an existing model before artifact load
+unless `--overwrite` is set, updates `models/MANIFEST.json`, prints progress
 status to stderr, reports actual artifact bytes plus catalog size-match
 metadata, and keeps its structured result on stdout. Use
 `--allow-missing-checksum` only for trusted local artifacts.

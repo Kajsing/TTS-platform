@@ -385,5 +385,8 @@ The sixtieth model-management hardening slice adds artifact metadata to
 `tts model-install` JSON output, including actual loaded bytes, MiB size,
 catalog-declared size, and a size-match signal, with model-management smoke
 coverage proving those fields survive install.
+The sixty-first model-management hardening slice moves existing model directory
+refusal ahead of artifact load when `--overwrite` is not set, so rerunning
+`tts model-install` does not download or copy a large artifact before failing.
 Continue from the readiness audit: either automate another listed manual gate
 or take the next reader-flow/product slice.
