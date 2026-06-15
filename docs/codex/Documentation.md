@@ -32,6 +32,11 @@ This file is the live status log and shared memory for future Codex loops.
   `HKLM` SAPI tokens requires elevated PowerShell. The first committed spike
   therefore uses reversible install/remove/check scripts for a dummy
   machine-scope SAPI voice alias instead of a native COM engine DLL.
+- Manual TextAloud verification on 2026-06-15 passed: after running the
+  elevated install script, TextAloud 3.0.117 displayed a `TTS Platform`
+  provider with `TTS Platform Dummy Voice`, and playback produced Microsoft
+  Zira audio as expected for the dummy alias token. This proves machine-scope
+  custom SAPI voice tokens are visible to TextAloud on this machine.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, and no

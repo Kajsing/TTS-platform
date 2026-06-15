@@ -236,6 +236,21 @@ machine-scope install/remove/check scripts. The user should run the install
 script from an elevated PowerShell prompt when ready to test whether TextAloud
 lists `TTS Platform Dummy Voice`.
 
+## Manual TextAloud Verification
+
+Manual verification on 2026-06-15 confirmed:
+
+- Running `scripts\windows\install_sapi_voice.ps1` from an elevated
+  PowerShell prompt installed the dummy machine-scope voice token.
+- TextAloud 3.0.117 displayed a `TTS Platform` provider node.
+- Under that provider, TextAloud listed `TTS Platform Dummy Voice`.
+- TextAloud playback produced Microsoft Zira audio through the dummy voice,
+  which is expected because this spike aliases the existing Zira SAPI engine.
+
+This satisfies the first feasibility question: TextAloud can see a custom
+TTS Platform SAPI voice token when it is installed machine-wide. The next slice
+can move from token visibility to a real native SAPI engine DLL.
+
 ## Commit Strategy
 
 Keep this in small, reviewable commits:
