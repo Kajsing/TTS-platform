@@ -46,11 +46,12 @@ def check_sapi_toolchain(*, require_build_tools: bool = False) -> dict[str, obje
     }
     headers = {
         "sapi_h": _find_windows_header("sapi.h", windows_sdk),
+        "sapiddk_h": _find_windows_header("sapiddk.h", windows_sdk),
         "sphelper_h": _find_windows_header("sphelper.h", windows_sdk),
     }
     project_exists = SAPI_PROJECT.is_file()
     can_attempt_msvc_build = bool(
-        tools["cl"] and tools["msbuild"] and headers["sapi_h"] and headers["sphelper_h"]
+        tools["cl"] and tools["msbuild"] and headers["sapi_h"] and headers["sapiddk_h"]
     )
     missing_required = [
         name
@@ -58,7 +59,7 @@ def check_sapi_toolchain(*, require_build_tools: bool = False) -> dict[str, obje
             "cl": tools["cl"],
             "msbuild": tools["msbuild"],
             "sapi.h": headers["sapi_h"],
-            "sphelper.h": headers["sphelper_h"],
+            "sapiddk.h": headers["sapiddk_h"],
             "TtsPlatformSapiBridge.vcxproj": str(SAPI_PROJECT) if project_exists else None,
         }.items()
         if not value
@@ -288,7 +289,7 @@ def _next_steps(missing_required: list[str]) -> list[str]:
         ]
     return [
         "Install Visual Studio Build Tools with Desktop development with C++",
-        "Include the Windows 10 or 11 SDK so sapi.h and sphelper.h are available",
+        "Include the Windows 10 or 11 SDK so sapi.h and sapiddk.h are available",
         "Open a Visual Studio Developer PowerShell before building the SAPI bridge",
     ]
 

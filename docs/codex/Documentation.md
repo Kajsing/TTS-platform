@@ -41,10 +41,11 @@ This file is the live status log and shared memory for future Codex loops.
   C++ COM DLL skeleton with `ISpTTSEngine`, `ISpObjectWithToken`, class
   factory exports, a `.vcxproj`, and dummy PCM tone output via
   `ISpTTSEngineSite::Write`. `scripts/check_sapi_toolchain.py` reports that
-  this machine still lacks the native build prerequisites: `cl`, `msbuild`,
-  `sapi.h`, and `sphelper.h`. The toolchain check now also reports Visual
-  Studio installs, `vswhere`, Windows SDK include roots, `winget` availability,
-  and the expected Visual Studio Build Tools 2022 install command.
+  this machine now has the native build prerequisites: `cl`, `msbuild`,
+  `sapi.h`, and `sapiddk.h`. The toolchain check also reports Visual Studio
+  installs, `vswhere`, Windows SDK include roots, `winget` availability, and
+  the expected Visual Studio Build Tools 2022 install command. The native
+  skeleton is ATL-free and deliberately avoids `sphelper.h`.
 - `scripts/check_model_management_flow.py` now seeds its temporary manifest
   from a deterministic test fixture instead of copying the local working-tree
   `models/MANIFEST.json`, so local installed voices do not break full pytest
@@ -54,30 +55,34 @@ This file is the live status log and shared memory for future Codex loops.
   `scripts/windows/install_sapi_native_voice.ps1`,
   `scripts/windows/check_sapi_native_voice.ps1`, and
   `scripts/windows/remove_sapi_native_voice.ps1`. They are not manually
-  verified against TextAloud yet because the native DLL cannot be built until
-  MSVC and the Windows SDK are available. The build script currently exits
-  cleanly in non-strict mode with `ok: false` and next-step guidance when
-  MSBuild is unavailable.
+  verified against TextAloud yet. After Visual Studio Build Tools 2022 was
+  installed, `scripts/windows/build_sapi_bridge.ps1 -Platform Both
+  -Configuration Release -RequireBuildTools` built both Win32 and x64 Release
+  DLLs. Codex cannot perform the HKLM native install from its non-elevated
+  shell, so the next manual step is running
+  `install_sapi_native_voice.ps1` and `check_sapi_native_voice.ps1` from the
+  Administrator Developer PowerShell.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native
     skeleton presence, dummy PCM `Speak`, and no localhost integration yet.
   - `py -3 scripts\check_sapi_toolchain.py` passed in non-strict mode and
-    reported the native skeleton project exists but the MSVC/SAPI build
-    toolchain is incomplete on this machine.
+    reported the native skeleton project exists and the MSVC/SAPI build
+    toolchain is now complete on this machine.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\build_sapi_bridge.ps1`
-    passed in non-strict mode by reporting `ok: false`, `built: false`, and
-    MSBuild/Build Tools next steps.
+    passed with `ok: true`, `built: true`, and Win32/x64 Release DLL outputs
+    after Visual Studio Build Tools 2022 was installed.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_native_voice.ps1`
     passed and reported that the native dummy token/CLSID are not installed
-    yet, which is expected before a native DLL build and elevated install.
+    yet, which is expected before the elevated native install step.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_voice.ps1`
     passed without requiring elevation and reported the dummy token absent,
     with Microsoft David/Zira visible through both current and WOW64 SAPI COM
     enumeration.
-  - `py -3 -m pytest apps\tts_service\tests\test_sapi_bridge_check.py -q`
-    passed with 1 test.
+  - `py -3 -m pytest apps\tts_service\tests\test_sapi_bridge_check.py apps\tts_service\tests\test_sapi_toolchain_check.py -q`
+    passed with 3 tests.
   - `py -3 -m ruff check .` passed.
+  - `py -3 -m pytest -q` passed with 261 tests.
   - `py -3 scripts\check_v1_completion.py --require-complete` passed and
     reported 9 ready criteria, 0 pending final-security criteria, and
     `can_mark_v1_complete: true`.

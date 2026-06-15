@@ -110,7 +110,7 @@ STDMETHODIMP TtsPlatformSapiEngine::Speak(
         return E_POINTER;
     }
     if (!IsSupportedFormat(formatId, waveFormatEx)) {
-        return SPERR_UNSUPPORTED_FORMAT;
+        return E_INVALIDARG;
     }
 
     const std::vector<int16_t> pcm = MakeTonePcm();

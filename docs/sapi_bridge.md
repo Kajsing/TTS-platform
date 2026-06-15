@@ -251,9 +251,10 @@ The skeleton is ATL-free, implements `ISpTTSEngine` and
 `scripts/check_sapi_toolchain.py` now reports whether the current machine can
 attempt a native MSVC build. It checks PATH, Visual Studio install locations,
 `vswhere` when available, Windows SDK include roots, and `winget`
-availability. On this machine it currently reports missing `cl`, `msbuild`,
-`sapi.h`, and `sphelper.h`; install Visual Studio Build Tools 2022 with Desktop
-development with C++ and the Windows SDK before building the DLL.
+availability. The native skeleton is ATL-free and avoids `sphelper.h`, so the
+required build inputs are `cl`, `msbuild`, `sapi.h`, `sapiddk.h`, and the
+`.vcxproj`; install Visual Studio Build Tools 2022 with Desktop development
+with C++ and the Windows SDK before building the DLL.
 
 The current `winget` package id is `Microsoft.VisualStudio.2022.BuildTools`.
 The repo guidance uses the C++ workload plus Windows 10 SDK component because
@@ -280,6 +281,33 @@ The native registration path is staged but not manually verified yet:
 
 These scripts are ready for the next machine state where MSVC and the Windows
 SDK are installed. They still require elevated PowerShell for HKLM writes.
+
+Build verification on 2026-06-15 after installing Visual Studio Build Tools
+2022:
+
+- `scripts\windows\build_sapi_bridge.ps1 -Platform Both -Configuration Release -RequireBuildTools`
+  built both `Win32` and `x64` DLLs with 0 warnings and 0 errors.
+- Generated DLLs:
+  - `apps\sapi_bridge\build\Win32\Release\TtsPlatformSapiBridge.dll`
+  - `apps\sapi_bridge\build\x64\Release\TtsPlatformSapiBridge.dll`
+- The first build attempt showed why the native skeleton should avoid
+  `sphelper.h`: that header pulls in ATL (`atlbase.h`). The bridge now uses
+  `sapiddk.h` for `ISpTTSEngine` and remains ATL-free.
+- Codex could not install the native token itself because its shell was not
+  elevated. Run the install/check scripts from an Administrator Developer
+  PowerShell.
+
+Next manual native test:
+
+```powershell
+cd C:\project\TTS-platform
+.\scripts\windows\build_sapi_bridge.ps1 -Platform Both -Configuration Release -RequireBuildTools
+.\scripts\windows\install_sapi_native_voice.ps1 -Architecture X86 -DllPath .\apps\sapi_bridge\build\Win32\Release\TtsPlatformSapiBridge.dll
+.\scripts\windows\check_sapi_native_voice.ps1 -Architecture X86 -RequireInstalled
+```
+
+If TextAloud does not list or play the X86 native voice, repeat the install and
+check commands with `-Architecture X64` and the x64 DLL path.
 
 ## Manual TextAloud Verification
 

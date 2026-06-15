@@ -1,7 +1,7 @@
 #pragma once
 
 #include <sapi.h>
-#include <sphelper.h>
+#include <sapiddk.h>
 #include <windows.h>
 
 #include <atomic>
@@ -65,4 +65,3 @@ private:
 
 void DllAddRef();
 void DllRelease();
-

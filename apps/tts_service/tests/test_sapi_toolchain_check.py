@@ -14,6 +14,8 @@ def test_sapi_toolchain_check_reports_project_and_missing_tools(
     check_module = _load_check_module()
     monkeypatch.setattr(check_module.shutil, "which", lambda _name: None)
     monkeypatch.setattr(check_module, "DEFAULT_WINDOWS_KITS_INCLUDE", tmp_path)
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "Program Files"))
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "Program Files (x86)"))
 
     summary = check_module.check_sapi_toolchain(require_build_tools=False)
 
@@ -22,6 +24,7 @@ def test_sapi_toolchain_check_reports_project_and_missing_tools(
     assert "cl" in summary["missing_required"]
     assert "msbuild" in summary["missing_required"]
     assert "sapi.h" in summary["missing_required"]
+    assert "sapiddk.h" in summary["missing_required"]
     assert summary["ok"] is True
 
 
@@ -64,9 +67,10 @@ def test_sapi_toolchain_check_discovers_vs_and_sdk_without_path(
     msbuild.write_text("", encoding="utf-8")
     cl.write_text("", encoding="utf-8")
     (sdk_um / "sapi.h").write_text("", encoding="utf-8")
-    (sdk_um / "sphelper.h").write_text("", encoding="utf-8")
+    (sdk_um / "sapiddk.h").write_text("", encoding="utf-8")
 
     monkeypatch.setattr(check_module.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(check_module, "DEFAULT_WINDOWS_KITS_INCLUDE", tmp_path / "missing-sdk")
     monkeypatch.setenv("ProgramFiles", str(program_files))
     monkeypatch.setenv("ProgramFiles(x86)", str(program_files_x86))
 
@@ -77,7 +81,8 @@ def test_sapi_toolchain_check_discovers_vs_and_sdk_without_path(
     assert summary["tools"]["msbuild"] == str(msbuild)
     assert summary["tools"]["cl"] == str(cl)
     assert summary["headers"]["sapi_h"] == str(sdk_um / "sapi.h")
-    assert summary["headers"]["sphelper_h"] == str(sdk_um / "sphelper.h")
+    assert summary["headers"]["sapiddk_h"] == str(sdk_um / "sapiddk.h")
+    assert summary["headers"]["sphelper_h"] is None
     assert summary["visual_studio"]["installations"] == [str(install_root.resolve())]
     assert summary["windows_sdk"]["versions"] == ["10.0.19041.0"]
 

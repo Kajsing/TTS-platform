@@ -96,7 +96,8 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source wing
 ```
 
 After install, open a Visual Studio Developer PowerShell or rerun the check so
-it can discover `MSBuild.exe`, `cl.exe`, `sapi.h`, and `sphelper.h`.
+it can discover `MSBuild.exe`, `cl.exe`, `sapi.h`, and `sapiddk.h`. The native
+skeleton is ATL-free and intentionally avoids `sphelper.h`.
 
 Build the native DLL once MSVC and the Windows SDK are installed:
 
@@ -105,6 +106,10 @@ Build the native DLL once MSVC and the Windows SDK are installed:
 .\scripts\windows\build_sapi_bridge.ps1 -Platform x64
 ```
 
+The bridge currently builds as both `Win32` and `x64` Release DLLs with Visual
+Studio Build Tools 2022. The build outputs are local generated artifacts under
+`apps\sapi_bridge\build\` and should not be committed.
+
 Register the built native dummy voice for the bitness TextAloud needs:
 
 ```powershell
@@ -112,6 +117,15 @@ Register the built native dummy voice for the bitness TextAloud needs:
   -Architecture X86 `
   -DllPath .\apps\sapi_bridge\build\Win32\Release\TtsPlatformSapiBridge.dll
 .\scripts\windows\check_sapi_native_voice.ps1 -Architecture X86 -RequireInstalled
+```
+
+For 64-bit SAPI clients, use:
+
+```powershell
+.\scripts\windows\install_sapi_native_voice.ps1 `
+  -Architecture X64 `
+  -DllPath .\apps\sapi_bridge\build\x64\Release\TtsPlatformSapiBridge.dll
+.\scripts\windows\check_sapi_native_voice.ps1 -Architecture X64 -RequireInstalled
 ```
 
 Remove the native dummy voice:

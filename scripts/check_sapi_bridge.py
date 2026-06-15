@@ -64,6 +64,7 @@ def check_sapi_bridge() -> dict[str, object]:
             "TextAloud-required bitness",
         ],
         SAPI_ROOT / "src" / "TtsPlatformSapiEngine.h": [
+            "#include <sapiddk.h>",
             "public ISpTTSEngine",
             "public ISpObjectWithToken",
             "STDMETHODIMP Speak",
@@ -76,7 +77,7 @@ def check_sapi_bridge() -> dict[str, object]:
             "site->Write",
             "SPDFID_WaveFormatEx",
             "WAVE_FORMAT_PCM",
-            "SPERR_UNSUPPORTED_FORMAT",
+            "E_INVALIDARG",
         ],
         SAPI_ROOT / "src" / "dllmain.cpp": [
             "DllGetClassObject",

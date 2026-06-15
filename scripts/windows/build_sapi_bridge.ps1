@@ -90,9 +90,11 @@ function Build-Platform {
         "/p:Configuration=$Configuration",
         "/p:Platform=$BuildPlatform"
     )
-    & $ResolvedMsBuild @arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "MSBuild failed for $BuildPlatform $Configuration with exit code $LASTEXITCODE."
+    $buildOutput = & $ResolvedMsBuild @arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        $tail = ($buildOutput | Select-Object -Last 40) -join [Environment]::NewLine
+        throw "MSBuild failed for $BuildPlatform $Configuration with exit code $exitCode.$([Environment]::NewLine)$tail"
     }
 
     $dllPath = Join-Path $RepoRoot "apps\sapi_bridge\build\$BuildPlatform\$Configuration\TtsPlatformSapiBridge.dll"
