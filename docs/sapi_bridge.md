@@ -249,9 +249,23 @@ The skeleton is ATL-free, implements `ISpTTSEngine` and
 `ISpTTSEngineSite::Write`. It does not call `/v1/tts` yet.
 
 `scripts/check_sapi_toolchain.py` now reports whether the current machine can
-attempt a native MSVC build. On this machine it currently reports missing
-`cl`, `msbuild`, `sapi.h`, and `sphelper.h`; install Visual Studio Build Tools
-with Desktop development with C++ and the Windows SDK before building the DLL.
+attempt a native MSVC build. It checks PATH, Visual Studio install locations,
+`vswhere` when available, Windows SDK include roots, and `winget`
+availability. On this machine it currently reports missing `cl`, `msbuild`,
+`sapi.h`, and `sphelper.h`; install Visual Studio Build Tools 2022 with Desktop
+development with C++ and the Windows SDK before building the DLL.
+
+The current `winget` package id is `Microsoft.VisualStudio.2022.BuildTools`.
+The repo guidance uses the C++ workload plus Windows 10 SDK component because
+that is enough for the ATL-free SAPI bridge skeleton:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source winget --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --includeRecommended"
+```
+
+The build script still does not install global prerequisites automatically. It
+only reports this command and exits cleanly in non-strict mode when MSBuild is
+missing.
 
 The native registration path is staged but not manually verified yet:
 

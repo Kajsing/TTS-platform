@@ -42,7 +42,13 @@ This file is the live status log and shared memory for future Codex loops.
   factory exports, a `.vcxproj`, and dummy PCM tone output via
   `ISpTTSEngineSite::Write`. `scripts/check_sapi_toolchain.py` reports that
   this machine still lacks the native build prerequisites: `cl`, `msbuild`,
-  `sapi.h`, and `sphelper.h`.
+  `sapi.h`, and `sphelper.h`. The toolchain check now also reports Visual
+  Studio installs, `vswhere`, Windows SDK include roots, `winget` availability,
+  and the expected Visual Studio Build Tools 2022 install command.
+- `scripts/check_model_management_flow.py` now seeds its temporary manifest
+  from a deterministic test fixture instead of copying the local working-tree
+  `models/MANIFEST.json`, so local installed voices do not break full pytest
+  validation.
 - Native build/registration scripts are staged for the next toolchain pass:
   `scripts/windows/build_sapi_bridge.ps1`,
   `scripts/windows/install_sapi_native_voice.ps1`,

@@ -87,6 +87,17 @@ To require a complete native build environment:
 py -3 scripts\check_sapi_toolchain.py --require-build-tools
 ```
 
+If the check reports missing MSVC or Windows SDK files, install Visual Studio
+Build Tools 2022 with the C++ workload and SDK. On machines with `winget`, the
+check output includes the exact command it expects, currently:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source winget --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --includeRecommended"
+```
+
+After install, open a Visual Studio Developer PowerShell or rerun the check so
+it can discover `MSBuild.exe`, `cl.exe`, `sapi.h`, and `sphelper.h`.
+
 Build the native DLL once MSVC and the Windows SDK are installed:
 
 ```powershell

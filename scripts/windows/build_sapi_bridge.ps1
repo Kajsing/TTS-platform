@@ -13,6 +13,35 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 $ProjectPath = Join-Path $RepoRoot "apps\sapi_bridge\TtsPlatformSapiBridge.vcxproj"
+$BuildToolsPackageId = "Microsoft.VisualStudio.2022.BuildTools"
+$BuildToolsComponents = @(
+    "Microsoft.VisualStudio.Workload.VCTools",
+    "Microsoft.VisualStudio.Component.Windows10SDK.19041"
+)
+
+function Get-BuildToolsInstallCommand {
+    $componentArgs = ($BuildToolsComponents | ForEach-Object { "--add $_" }) -join " "
+    return "winget install --id $BuildToolsPackageId --exact --source winget --override `"--wait --passive $componentArgs --includeRecommended`""
+}
+
+function Find-MSBuildUnderVisualStudio {
+    $roots = @(
+        (Join-Path $env:ProgramFiles "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio")
+    )
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+        $candidate = Get-ChildItem -Path $root -Recurse -Filter MSBuild.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*\MSBuild\Current\Bin\MSBuild.exe" } |
+            Select-Object -First 1
+        if ($candidate) {
+            return $candidate.FullName
+        }
+    }
+    return ""
+}
 
 function Resolve-MSBuild {
     if ($MsBuildPath) {
@@ -38,7 +67,7 @@ function Resolve-MSBuild {
         }
     }
 
-    return ""
+    return Find-MSBuildUnderVisualStudio
 }
 
 function Get-Platforms {
@@ -86,6 +115,12 @@ if (-not $resolvedMsBuild) {
         built = $false
         message = $message
         project = $ProjectPath
+        install_guidance = [ordered]@{
+            winget_available = [bool](Get-Command winget.exe -ErrorAction SilentlyContinue)
+            visual_studio_build_tools_package = $BuildToolsPackageId
+            required_components = $BuildToolsComponents
+            winget_command = Get-BuildToolsInstallCommand
+        }
         next_steps = @(
             "Install Visual Studio Build Tools with Desktop development with C++",
             "Include the Windows 10 or 11 SDK",
@@ -114,4 +149,3 @@ $results = foreach ($buildPlatform in Get-Platforms) {
         "Open TextAloud and test TTS Platform Native Dummy Voice"
     )
 } | ConvertTo-Json -Depth 5
-

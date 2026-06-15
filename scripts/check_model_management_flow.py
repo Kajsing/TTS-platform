@@ -257,11 +257,44 @@ def check_model_management_flow(
 
 
 def _seed_temp_repo(repo_root: Path) -> None:
-    for relative_path in ("config/config.example.toml", "models/MANIFEST.json"):
-        source = REPO_ROOT / relative_path
-        destination = repo_root / relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(source.read_bytes())
+    config_source = REPO_ROOT / "config" / "config.example.toml"
+    config_destination = repo_root / "config" / "config.example.toml"
+    config_destination.parent.mkdir(parents=True, exist_ok=True)
+    config_destination.write_bytes(config_source.read_bytes())
+    _write_seed_manifest(repo_root / "models" / "MANIFEST.json")
+
+
+def _write_seed_manifest(manifest_path: Path) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "voices": [
+                    {
+                        "id": "sherpa-en-debug",
+                        "name": "Sherpa English Debug",
+                        "engine": "sherpa_onnx",
+                        "language": "en",
+                        "sample_rate_hz": 24000,
+                        "license": "development-only",
+                        "source": "models/voices/sherpa-en-debug",
+                        "quality_tier": "development",
+                        "latency_tier": "unknown",
+                        "tags": ["stub", "debug"],
+                        "capabilities": {
+                            "supports_pitch": False,
+                            "supports_streaming": False,
+                            "supports_multi_speaker": False,
+                        },
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _write_local_model_artifact(artifact_path: Path) -> dict[str, object]:
