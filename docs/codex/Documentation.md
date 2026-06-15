@@ -71,11 +71,14 @@ This file is the live status log and shared memory for future Codex loops.
   It falls back to the native dummy tone on service/auth/format failures and
   writes non-sensitive diagnostics to `logs/sapi-bridge.log`. The code builds
   to a temp Win32 Release output and the normal x64 Release output; the
-  registered Win32 DLL path could not be overwritten because TextAloud had the
-  DLL loaded. Close TextAloud before rebuilding the registered Win32 DLL for
-  manual service-audio verification. If playback still produces only the dummy
-  tone, first confirm the local service is listening on `127.0.0.1:7777`; the
-  latest observed port check had no listener.
+  registered Win32 DLL path must be rebuilt after closing TextAloud because
+  TextAloud holds the loaded COM DLL. Manual verification now confirmed that
+  TextAloud playback through `TTS Platform Native Dummy Voice` can reach
+  `/v1/tts` and produce service voice output. The service reported HTTP 200,
+  `default_voice = vits-piper-en_US-lessac-high`, `backend_ready = true`, and
+  `default_voice_loaded = true`. Subjective quality is still not good enough;
+  the next slice should compare direct service WAV output with TextAloud
+  playback and then tune model/prosody/chunking/output settings.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native
@@ -90,6 +93,9 @@ This file is the live status log and shared memory for future Codex loops.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_native_voice.ps1`
     passed for X86 with `ok: true` after manual elevated install, and reported
     X64 not installed.
+  - Manual TextAloud localhost verification passed: service log showed
+    authenticated `POST /v1/tts` HTTP 200 from the SAPI path, and TextAloud
+    produced service voice output rather than the fallback dummy tone.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_voice.ps1`
     passed without requiring elevation and reported the dummy token absent,
     with Microsoft David/Zira visible through both current and WOW64 SAPI COM

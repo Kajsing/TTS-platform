@@ -156,6 +156,24 @@ Initial MVP status on 2026-06-15:
   overwritten while TextAloud still had it loaded; close TextAloud before
   rebuilding the registered DLL path for manual playback verification.
 
+Manual localhost verification on 2026-06-15 confirmed:
+
+- After closing TextAloud, rebuilding the Win32 DLL, starting
+  `scripts\windows\run_service.ps1`, and reopening TextAloud, playback through
+  `TTS Platform Native Dummy Voice` produced service voice output instead of
+  the dummy tone.
+- The local service log showed a successful authenticated `POST /v1/tts` from
+  the native SAPI bridge path with HTTP 200.
+- `/v1/health` reported `default_voice = vits-piper-en_US-lessac-high`,
+  `backend_ready = true`, `default_voice_loaded = true`, and
+  `sherpa_onnx` module loaded.
+- A direct `/v1/tts` quality-check WAV from the same service was PCM16 mono at
+  22050 Hz, matching the SAPI bridge output format.
+- Subjective quality was not yet good enough. Next work should compare direct
+  service WAV output against TextAloud playback, then tune voice/model,
+  prosody, chunking, and SAPI/TextAloud output settings before treating the
+  bridge as a normal listening path.
+
 ### Phase 3: Long Text Behavior
 
 Make long TextAloud documents practical.
@@ -360,11 +378,11 @@ Manual native verification on 2026-06-15 confirmed:
 - TextAloud playback produced the native dummy tone, described by the user as a
   single "dut".
 
-This satisfies the native Phase 1 acceptance criteria for X86: TextAloud can
-enumerate the custom native voice, instantiate the COM engine, call `Speak`,
-and receive dummy PCM audio without crashing. The evidence also strongly
-suggests this TextAloud 3.x installation is using 32-bit SAPI. The next slice
-can connect the X86 native engine to the localhost `/v1/tts` service.
+This satisfies the native Phase 1 acceptance criteria for X86 and the first
+Phase 2 MVP proof: TextAloud can enumerate the custom native voice, instantiate
+the COM engine, call `Speak`, reach localhost `/v1/tts`, and receive service
+audio without crashing. The evidence also strongly suggests this TextAloud 3.x
+installation is using 32-bit SAPI.
 
 ## Commit Strategy
 
