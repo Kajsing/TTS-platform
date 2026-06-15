@@ -118,6 +118,11 @@ If the registered DLL is already loaded by TextAloud, the Win32 Release build
 may fail with `LNK1104` because Windows has the DLL locked. Close TextAloud and
 build again before replacing the registered DLL.
 
+When the bridge falls back to the dummy tone, it writes diagnostic events to
+`logs\sapi-bridge.log`. The log records connection, HTTP status, token lookup,
+and WAV format mismatch reasons without writing the bearer token or raw page
+text.
+
 Register the built native dummy voice for the bitness TextAloud needs:
 
 ```powershell

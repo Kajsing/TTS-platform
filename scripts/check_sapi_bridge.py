@@ -76,6 +76,8 @@ def check_sapi_bridge() -> dict[str, object]:
             "MakeTonePcm",
             "CollectText",
             "ReadToken",
+            "LogBridgeEvent",
+            "sapi-bridge.log",
             "WinHttpOpen",
             "WinHttpSendRequest",
             "DecodeWavPcm16",

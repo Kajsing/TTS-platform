@@ -150,6 +150,8 @@ Initial MVP status on 2026-06-15:
   bit depth match the SAPI output format.
 - If the service is unavailable, auth fails, or the WAV format does not match,
   the engine falls back to the dummy tone so TextAloud does not crash.
+- Fallback diagnostics are written to `logs\sapi-bridge.log` without recording
+  the bearer token or raw text.
 - The code compiles for Win32 and x64. The registered Win32 DLL could not be
   overwritten while TextAloud still had it loaded; close TextAloud before
   rebuilding the registered DLL path for manual playback verification.

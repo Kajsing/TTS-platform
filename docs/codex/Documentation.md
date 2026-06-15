@@ -68,11 +68,14 @@ This file is the live status log and shared memory for future Codex loops.
   collects SAPI text fragments, reads `config/token.txt`, posts JSON to
   `http://127.0.0.1:7777/v1/tts` with bearer auth through WinHTTP, decodes
   PCM16 WAV responses, and writes matching PCM to `ISpTTSEngineSite::Write`.
-  It falls back to the native dummy tone on service/auth/format failures. The
-  code builds to a temp Win32 Release output and the normal x64 Release output;
-  the registered Win32 DLL path could not be overwritten because TextAloud had
-  the DLL loaded. Close TextAloud before rebuilding the registered Win32 DLL
-  for manual service-audio verification.
+  It falls back to the native dummy tone on service/auth/format failures and
+  writes non-sensitive diagnostics to `logs/sapi-bridge.log`. The code builds
+  to a temp Win32 Release output and the normal x64 Release output; the
+  registered Win32 DLL path could not be overwritten because TextAloud had the
+  DLL loaded. Close TextAloud before rebuilding the registered Win32 DLL for
+  manual service-audio verification. If playback still produces only the dummy
+  tone, first confirm the local service is listening on `127.0.0.1:7777`; the
+  latest observed port check had no listener.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native

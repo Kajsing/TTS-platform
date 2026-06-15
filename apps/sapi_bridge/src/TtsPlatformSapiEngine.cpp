@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <new>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <winhttp.h>
@@ -110,6 +111,42 @@ bool FileExists(const std::wstring& path) {
         (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
+void LogBridgeEvent(const std::string& message) {
+    std::wstring repoRoot;
+    std::wstring current = ParentPath(GetModulePath());
+    for (int depth = 0; depth < 8 && !current.empty(); ++depth) {
+        const std::wstring tokenPath = current + L"\\config\\token.txt";
+        if (FileExists(tokenPath)) {
+            repoRoot = current;
+            break;
+        }
+        current = ParentPath(current);
+    }
+    if (repoRoot.empty()) {
+        ::OutputDebugStringA(("TTS Platform SAPI Bridge: " + message + "\n").c_str());
+        return;
+    }
+
+    const std::wstring logDir = repoRoot + L"\\logs";
+    ::CreateDirectoryW(logDir.c_str(), nullptr);
+    const std::wstring logPath = logDir + L"\\sapi-bridge.log";
+    std::ofstream logFile(logPath, std::ios::app | std::ios::binary);
+    if (!logFile) {
+        return;
+    }
+
+    SYSTEMTIME now{};
+    ::GetLocalTime(&now);
+    logFile
+        << now.wYear << "-"
+        << (now.wMonth < 10 ? "0" : "") << now.wMonth << "-"
+        << (now.wDay < 10 ? "0" : "") << now.wDay << " "
+        << (now.wHour < 10 ? "0" : "") << now.wHour << ":"
+        << (now.wMinute < 10 ? "0" : "") << now.wMinute << ":"
+        << (now.wSecond < 10 ? "0" : "") << now.wSecond << " "
+        << message << "\n";
+}
+
 std::wstring FindRepoRoot() {
     std::wstring current = ParentPath(GetModulePath());
     for (int depth = 0; depth < 8 && !current.empty(); ++depth) {
@@ -125,10 +162,12 @@ std::wstring FindRepoRoot() {
 std::string ReadToken() {
     const std::wstring repoRoot = FindRepoRoot();
     if (repoRoot.empty()) {
+        LogBridgeEvent("token lookup failed: repo root not found from DLL path");
         return "";
     }
     std::ifstream tokenFile(repoRoot + L"\\config\\token.txt", std::ios::binary);
     if (!tokenFile) {
+        LogBridgeEvent("token lookup failed: config/token.txt could not be opened");
         return "";
     }
     std::string token(
@@ -290,6 +329,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
         WINHTTP_NO_PROXY_BYPASS,
         0);
     if (!session) {
+        LogBridgeEvent("WinHttpOpen failed");
         return false;
     }
     ::WinHttpSetTimeouts(
@@ -301,6 +341,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
 
     HINTERNET connect = ::WinHttpConnect(session, kServiceHost, kServicePort, 0);
     if (!connect) {
+        LogBridgeEvent("WinHttpConnect failed: service not reachable at 127.0.0.1:7777");
         ::WinHttpCloseHandle(session);
         return false;
     }
@@ -314,6 +355,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         0);
     if (!request) {
+        LogBridgeEvent("WinHttpOpenRequest failed");
         ::WinHttpCloseHandle(connect);
         ::WinHttpCloseHandle(session);
         return false;
@@ -325,6 +367,8 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
         headers += L"Authorization: Bearer ";
         headers += std::wstring(token.begin(), token.end());
         headers += L"\r\n";
+    } else {
+        LogBridgeEvent("sending /v1/tts request without bearer token");
     }
 
     const BOOL sent = ::WinHttpSendRequest(
@@ -336,6 +380,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
         static_cast<DWORD>(requestBody.size()),
         0);
     if (!sent || !::WinHttpReceiveResponse(request, nullptr)) {
+        LogBridgeEvent("WinHTTP send/receive failed");
         ::WinHttpCloseHandle(request);
         ::WinHttpCloseHandle(connect);
         ::WinHttpCloseHandle(session);
@@ -347,11 +392,14 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
     if (!::WinHttpQueryHeaders(
             request,
             WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX,
-            &statusCode,
-            &statusSize,
-            WINHTTP_NO_HEADER_INDEX) ||
+        WINHTTP_HEADER_NAME_BY_INDEX,
+        &statusCode,
+        &statusSize,
+        WINHTTP_NO_HEADER_INDEX) ||
         statusCode != 200) {
+        std::ostringstream message;
+        message << "/v1/tts returned HTTP " << statusCode;
+        LogBridgeEvent(message.str());
         ::WinHttpCloseHandle(request);
         ::WinHttpCloseHandle(connect);
         ::WinHttpCloseHandle(session);
@@ -361,6 +409,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
     while (true) {
         DWORD available = 0;
         if (!::WinHttpQueryDataAvailable(request, &available)) {
+            LogBridgeEvent("WinHttpQueryDataAvailable failed");
             responseBody->clear();
             break;
         }
@@ -375,6 +424,7 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
                 responseBody->data() + oldSize,
                 available,
                 &read)) {
+            LogBridgeEvent("WinHttpReadData failed");
             responseBody->clear();
             break;
         }
@@ -384,6 +434,9 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
     ::WinHttpCloseHandle(request);
     ::WinHttpCloseHandle(connect);
     ::WinHttpCloseHandle(session);
+    if (responseBody->empty()) {
+        LogBridgeEvent("/v1/tts returned an empty response body");
+    }
     return !responseBody->empty();
 }
 
@@ -392,10 +445,12 @@ bool TrySynthesizeFromService(
     const WAVEFORMATEX* expectedFormat,
     PcmAudio* audio) {
     if (text.empty() || !audio || !expectedFormat) {
+        LogBridgeEvent("service synthesis skipped: empty text or missing expected format");
         return false;
     }
     const std::string utf8Text = WideToUtf8(text);
     if (utf8Text.empty()) {
+        LogBridgeEvent("service synthesis skipped: UTF-8 conversion produced no text");
         return false;
     }
     const std::string requestBody =
@@ -403,11 +458,24 @@ bool TrySynthesizeFromService(
 
     std::vector<std::uint8_t> wav;
     if (!PostTtsRequest(requestBody, &wav) || !DecodeWavPcm16(wav, audio)) {
+        LogBridgeEvent("service synthesis failed: request failed or response was not PCM16 WAV");
         return false;
     }
-    return audio->sampleRateHz == expectedFormat->nSamplesPerSec &&
+    const bool formatMatches = audio->sampleRateHz == expectedFormat->nSamplesPerSec &&
         audio->channels == expectedFormat->nChannels &&
         audio->bitsPerSample == expectedFormat->wBitsPerSample;
+    if (!formatMatches) {
+        std::ostringstream message;
+        message << "service WAV format mismatch: got "
+                << audio->sampleRateHz << " Hz, "
+                << audio->channels << " channel(s), "
+                << audio->bitsPerSample << " bit; expected "
+                << expectedFormat->nSamplesPerSec << " Hz, "
+                << expectedFormat->nChannels << " channel(s), "
+                << expectedFormat->wBitsPerSample << " bit";
+        LogBridgeEvent(message.str());
+    }
+    return formatMatches;
 }
 
 }  // namespace
