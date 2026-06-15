@@ -11,15 +11,12 @@ This file is the live status log and shared memory for future Codex loops.
   v1 local reader flow: robust long-document orchestration, model-management
   UX, Windows-friendly service setup, and Chrome extension installability.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: finish v1 by running the final security-focused pass,
-  fixing accepted findings, updating completion evidence, and validating the
-  release gate.
-- Current loop result: the final security-focused pass is complete. The scan
-  `a1645b6_20260614T200121` produced 0 open reportable findings after five
-  accepted candidates were fixed in the working tree. `docs/v1_final_security.md`
-  records the stable repository summary, and `docs/v1_completion_audit.md` now
-  reports all nine `Done When` criteria ready with
-  `can_mark_v1_complete: true`.
+- Current loop target: post-v1 Windows SAPI/TextAloud feasibility spike.
+- Current loop result: the first SAPI spike adds an isolated
+  `apps/sapi_bridge/` skeleton, reversible Windows install/remove/check scripts
+  for a dummy machine-scope SAPI voice alias, and repo-native structural
+  validation. It does not implement the final localhost `ISpTTSEngine` bridge
+  yet.
 - Post-v1 exploration: the user asked whether TextAloud can use this platform
   through a Windows SAPI 5 voice. The agreed direction is an optional
   `apps/sapi_bridge/` Windows integration that registers a SAPI voice and
@@ -29,7 +26,23 @@ This file is the live status log and shared memory for future Codex loops.
   optional integration track: `AGENTS.md`, `docs/codex/Prompt.md`,
   `docs/codex/Plan.md`, and `docs/codex/Implement.md` all point future loops
   at `docs/sapi_bridge.md` without reopening v1 completion scope.
+- Current SAPI spike result: no Visual Studio C++ toolchain was found on PATH
+  (`cl`, `msbuild`, and `vswhere` unavailable), `SAPI.SpVoice` did not
+  enumerate temporary per-user `HKCU` voice tokens, and writing machine-level
+  `HKLM` SAPI tokens requires elevated PowerShell. The first committed spike
+  therefore uses reversible install/remove/check scripts for a dummy
+  machine-scope SAPI voice alias instead of a native COM engine DLL.
 - Validation status for the current loop:
+  - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
+    contract, x64/x86 registry views, elevated install requirement, and no
+    localhost integration yet.
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_voice.ps1`
+    passed without requiring elevation and reported the dummy token absent,
+    with Microsoft David/Zira visible through both current and WOW64 SAPI COM
+    enumeration.
+  - `py -3 -m pytest apps\tts_service\tests\test_sapi_bridge_check.py -q`
+    passed with 1 test.
+  - `py -3 -m ruff check .` passed.
   - `py -3 scripts\check_v1_completion.py --require-complete` passed and
     reported 9 ready criteria, 0 pending final-security criteria, and
     `can_mark_v1_complete: true`.

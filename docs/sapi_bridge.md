@@ -219,6 +219,23 @@ are proven.
 - Install/remove scripts are reversible.
 - Docs record whether the working build is x86, x64, or both.
 
+## First-Run Findings
+
+The first implementation pass found:
+
+- `cl`, `msbuild`, and `vswhere` were not available on the development machine,
+  so a native C++ COM DLL could not be built in this pass.
+- A temporary `HKCU\SOFTWARE\Microsoft\Speech\Voices\Tokens` dummy token was
+  not enumerated by `SAPI.SpVoice`.
+- A temporary `HKCU\SOFTWARE\WOW6432Node\Microsoft\Speech\Voices\Tokens`
+  dummy token was also not enumerated by 32-bit `SAPI.SpVoice`.
+- Writing `HKLM` SAPI voice tokens requires elevated PowerShell.
+
+Because of those findings, the first committed spike provides reversible
+machine-scope install/remove/check scripts. The user should run the install
+script from an elevated PowerShell prompt when ready to test whether TextAloud
+lists `TTS Platform Dummy Voice`.
+
 ## Commit Strategy
 
 Keep this in small, reviewable commits:
