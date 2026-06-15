@@ -268,7 +268,7 @@ The build script still does not install global prerequisites automatically. It
 only reports this command and exits cleanly in non-strict mode when MSBuild is
 missing.
 
-The native registration path is staged but not manually verified yet:
+The native registration path now has a working X86 verification path:
 
 - `scripts\windows\build_sapi_bridge.ps1` builds Win32 and/or x64 with MSBuild.
 - `scripts\windows\install_sapi_native_voice.ps1` registers the built DLL as
@@ -279,8 +279,7 @@ The native registration path is staged but not manually verified yet:
 - `scripts\windows\remove_sapi_native_voice.ps1` removes the native token and
   COM class registration.
 
-These scripts are ready for the next machine state where MSVC and the Windows
-SDK are installed. They still require elevated PowerShell for HKLM writes.
+The install/remove scripts still require elevated PowerShell for HKLM writes.
 
 Build verification on 2026-06-15 after installing Visual Studio Build Tools
 2022:
@@ -296,8 +295,12 @@ Build verification on 2026-06-15 after installing Visual Studio Build Tools
 - Codex could not install the native token itself because its shell was not
   elevated. Run the install/check scripts from an Administrator Developer
   PowerShell.
+- Manual X86 registration from an Administrator Developer PowerShell succeeded:
+  `check_sapi_native_voice.ps1 -Architecture X86` reported the token,
+  CLSID, `InprocServer32`, and registered DLL path present and valid.
+- X64 native registration was not installed during this test.
 
-Next manual native test:
+The native X86 registration command that matched the manual TextAloud test:
 
 ```powershell
 cd C:\project\TTS-platform
@@ -323,6 +326,26 @@ Manual verification on 2026-06-15 confirmed:
 This satisfies the first feasibility question: TextAloud can see a custom
 TTS Platform SAPI voice token when it is installed machine-wide. The next slice
 can move from token visibility to a real native SAPI engine DLL.
+
+Manual native verification on 2026-06-15 confirmed:
+
+- Running `scripts\windows\install_sapi_native_voice.ps1 -Architecture X86`
+  from an Administrator Developer PowerShell installed
+  `TTS Platform Native Dummy Voice`.
+- `scripts\windows\check_sapi_native_voice.ps1 -Architecture X86` reported:
+  token exists, COM class exists, `InprocServer32` exists, and the registered
+  DLL path points to
+  `apps\sapi_bridge\build\Win32\Release\TtsPlatformSapiBridge.dll`.
+- TextAloud 3.0.117 displayed `TTS Platform Native Dummy Voice` under the
+  `TTS Platform` provider.
+- TextAloud playback produced the native dummy tone, described by the user as a
+  single "dut".
+
+This satisfies the native Phase 1 acceptance criteria for X86: TextAloud can
+enumerate the custom native voice, instantiate the COM engine, call `Speak`,
+and receive dummy PCM audio without crashing. The evidence also strongly
+suggests this TextAloud 3.x installation is using 32-bit SAPI. The next slice
+can connect the X86 native engine to the localhost `/v1/tts` service.
 
 ## Commit Strategy
 

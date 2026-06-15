@@ -54,14 +54,16 @@ This file is the live status log and shared memory for future Codex loops.
   `scripts/windows/build_sapi_bridge.ps1`,
   `scripts/windows/install_sapi_native_voice.ps1`,
   `scripts/windows/check_sapi_native_voice.ps1`, and
-  `scripts/windows/remove_sapi_native_voice.ps1`. They are not manually
-  verified against TextAloud yet. After Visual Studio Build Tools 2022 was
-  installed, `scripts/windows/build_sapi_bridge.ps1 -Platform Both
-  -Configuration Release -RequireBuildTools` built both Win32 and x64 Release
-  DLLs. Codex cannot perform the HKLM native install from its non-elevated
-  shell, so the next manual step is running
-  `install_sapi_native_voice.ps1` and `check_sapi_native_voice.ps1` from the
-  Administrator Developer PowerShell.
+  `scripts/windows/remove_sapi_native_voice.ps1`. After Visual Studio Build
+  Tools 2022 was installed, `scripts/windows/build_sapi_bridge.ps1 -Platform
+  Both -Configuration Release -RequireBuildTools` built both Win32 and x64
+  Release DLLs. Manual elevated X86 native registration then succeeded:
+  `check_sapi_native_voice.ps1 -Architecture X86` reports the token, CLSID,
+  `InprocServer32`, and Win32 DLL path present. TextAloud 3.0.117 displayed
+  `TTS Platform Native Dummy Voice` and playback produced the expected single
+  dummy tone. X64 native registration is not installed. The next slice can
+  move from native dummy PCM to localhost `/v1/tts` integration for the X86
+  engine path.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native
@@ -73,8 +75,8 @@ This file is the live status log and shared memory for future Codex loops.
     passed with `ok: true`, `built: true`, and Win32/x64 Release DLL outputs
     after Visual Studio Build Tools 2022 was installed.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_native_voice.ps1`
-    passed and reported that the native dummy token/CLSID are not installed
-    yet, which is expected before the elevated native install step.
+    passed for X86 with `ok: true` after manual elevated install, and reported
+    X64 not installed.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_voice.ps1`
     passed without requiring elevation and reported the dummy token absent,
     with Microsoft David/Zira visible through both current and WOW64 SAPI COM
