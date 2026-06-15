@@ -123,6 +123,11 @@ When the bridge falls back to the dummy tone, it writes diagnostic events to
 and WAV format mismatch reasons without writing the bearer token or raw page
 text.
 
+TextAloud reader playback may send more text than the service's synchronous
+`/v1/tts` request limit. The bridge splits SAPI text into bounded service
+requests, concatenates the returned PCM, and inserts a short silence between
+chunks before writing audio back to SAPI.
+
 Register the built native dummy voice for the bitness TextAloud needs:
 
 ```powershell

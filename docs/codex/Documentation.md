@@ -79,6 +79,12 @@ This file is the live status log and shared memory for future Codex loops.
   `default_voice_loaded = true`. Subjective quality is still not good enough;
   the next slice should compare direct service WAV output with TextAloud
   playback and then tune model/prosody/chunking/output settings.
+- TextAloud reader playback later produced only the dummy tone while direct
+  `/v1/tts` WAV quality was much better. `logs/sapi-bridge.log` showed HTTP
+  400 responses from `/v1/tts`, consistent with the reader path sending text
+  beyond the synchronous request limit. The native bridge now splits long SAPI
+  text into bounded `/v1/tts` requests, concatenates PCM responses, and inserts
+  short silence between chunks.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native

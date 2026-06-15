@@ -7,6 +7,7 @@ __pycache__/
 *.pyd
 dist/
 build/
+logs/
 *.egg-info/
 config/config.toml
 config/token.txt

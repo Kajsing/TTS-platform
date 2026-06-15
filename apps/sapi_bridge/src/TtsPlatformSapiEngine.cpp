@@ -1,5 +1,6 @@
 #include "TtsPlatformSapiEngine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <new>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 #include <winhttp.h>
 
@@ -24,6 +26,8 @@ constexpr wchar_t kServiceHost[] = L"127.0.0.1";
 constexpr INTERNET_PORT kServicePort = 7777;
 constexpr wchar_t kServicePath[] = L"/v1/tts";
 constexpr DWORD kHttpTimeoutMs = 60000;
+constexpr size_t kMaxServiceTextChars = 3500;
+constexpr DWORD kInterChunkPauseMs = 120;
 
 std::atomic<ULONG> g_objectCount{0};
 std::atomic<ULONG> g_lockCount{0};
@@ -316,6 +320,22 @@ bool DecodeWavPcm16(const std::vector<std::uint8_t>& wav, PcmAudio* audio) {
     return sawFormat && sawData && !audio->bytes.empty();
 }
 
+std::string SafeLogSnippet(const std::vector<std::uint8_t>& bytes) {
+    constexpr size_t kMaxSnippetBytes = 300;
+    std::string snippet;
+    const size_t count = std::min(bytes.size(), kMaxSnippetBytes);
+    snippet.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+        const char ch = static_cast<char>(bytes[index]);
+        if (ch >= 0x20 && ch <= 0x7e) {
+            snippet.push_back(ch);
+        } else {
+            snippet.push_back(' ');
+        }
+    }
+    return snippet;
+}
+
 bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* responseBody) {
     if (!responseBody) {
         return false;
@@ -389,22 +409,13 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
 
     DWORD statusCode = 0;
     DWORD statusSize = sizeof(statusCode);
-    if (!::WinHttpQueryHeaders(
-            request,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+    const BOOL hasStatusCode = ::WinHttpQueryHeaders(
+        request,
+        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
         WINHTTP_HEADER_NAME_BY_INDEX,
         &statusCode,
         &statusSize,
-        WINHTTP_NO_HEADER_INDEX) ||
-        statusCode != 200) {
-        std::ostringstream message;
-        message << "/v1/tts returned HTTP " << statusCode;
-        LogBridgeEvent(message.str());
-        ::WinHttpCloseHandle(request);
-        ::WinHttpCloseHandle(connect);
-        ::WinHttpCloseHandle(session);
-        return false;
-    }
+        WINHTTP_NO_HEADER_INDEX);
 
     while (true) {
         DWORD available = 0;
@@ -434,21 +445,71 @@ bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* r
     ::WinHttpCloseHandle(request);
     ::WinHttpCloseHandle(connect);
     ::WinHttpCloseHandle(session);
+    if (!hasStatusCode || statusCode != 200) {
+        std::ostringstream message;
+        message << "/v1/tts returned HTTP " << statusCode;
+        if (!responseBody->empty()) {
+            message << " body: " << SafeLogSnippet(*responseBody);
+        }
+        LogBridgeEvent(message.str());
+        responseBody->clear();
+        return false;
+    }
     if (responseBody->empty()) {
         LogBridgeEvent("/v1/tts returned an empty response body");
     }
     return !responseBody->empty();
 }
 
-bool TrySynthesizeFromService(
-    const std::wstring& text,
+std::vector<std::wstring> SplitTextForService(const std::wstring& text) {
+    std::vector<std::wstring> chunks;
+    size_t offset = 0;
+    while (offset < text.size()) {
+        while (offset < text.size() && iswspace(text[offset])) {
+            ++offset;
+        }
+        if (offset >= text.size()) {
+            break;
+        }
+
+        const size_t remaining = text.size() - offset;
+        if (remaining <= kMaxServiceTextChars) {
+            chunks.push_back(text.substr(offset));
+            break;
+        }
+
+        size_t end = offset + kMaxServiceTextChars;
+        size_t split = text.find_last_of(L".!?;,\r\n\t ", end);
+        if (split == std::wstring::npos || split <= offset + (kMaxServiceTextChars / 2)) {
+            split = end;
+        }
+        chunks.push_back(text.substr(offset, split - offset));
+        offset = split;
+    }
+    return chunks;
+}
+
+void AppendSilence(PcmAudio* audio) {
+    if (!audio || audio->sampleRateHz == 0 || audio->channels == 0 || audio->bitsPerSample != 16) {
+        return;
+    }
+    const size_t bytesPerSample = audio->bitsPerSample / 8;
+    const size_t frameCount = (audio->sampleRateHz * kInterChunkPauseMs) / 1000;
+    audio->bytes.insert(
+        audio->bytes.end(),
+        frameCount * audio->channels * bytesPerSample,
+        0);
+}
+
+bool SynthesizeChunkFromService(
+    const std::wstring& textChunk,
     const WAVEFORMATEX* expectedFormat,
     PcmAudio* audio) {
-    if (text.empty() || !audio || !expectedFormat) {
+    if (textChunk.empty() || !audio || !expectedFormat) {
         LogBridgeEvent("service synthesis skipped: empty text or missing expected format");
         return false;
     }
-    const std::string utf8Text = WideToUtf8(text);
+    const std::string utf8Text = WideToUtf8(textChunk);
     if (utf8Text.empty()) {
         LogBridgeEvent("service synthesis skipped: UTF-8 conversion produced no text");
         return false;
@@ -476,6 +537,53 @@ bool TrySynthesizeFromService(
         LogBridgeEvent(message.str());
     }
     return formatMatches;
+}
+
+bool TrySynthesizeFromService(
+    const std::wstring& text,
+    const WAVEFORMATEX* expectedFormat,
+    PcmAudio* audio) {
+    if (!audio) {
+        return false;
+    }
+    const std::vector<std::wstring> chunks = SplitTextForService(text);
+    if (chunks.empty()) {
+        LogBridgeEvent("service synthesis skipped: no text chunks");
+        return false;
+    }
+    {
+        std::ostringstream message;
+        message << "service synthesis request: chars=" << text.size()
+                << ", chunks=" << chunks.size();
+        LogBridgeEvent(message.str());
+    }
+
+    PcmAudio combined;
+    for (size_t index = 0; index < chunks.size(); ++index) {
+        PcmAudio chunkAudio;
+        if (!SynthesizeChunkFromService(chunks[index], expectedFormat, &chunkAudio)) {
+            std::ostringstream message;
+            message << "service synthesis failed for chunk " << (index + 1)
+                    << " of " << chunks.size()
+                    << ", chars=" << chunks[index].size();
+            LogBridgeEvent(message.str());
+            return false;
+        }
+        if (combined.bytes.empty()) {
+            combined.sampleRateHz = chunkAudio.sampleRateHz;
+            combined.channels = chunkAudio.channels;
+            combined.bitsPerSample = chunkAudio.bitsPerSample;
+        }
+        combined.bytes.insert(
+            combined.bytes.end(),
+            chunkAudio.bytes.begin(),
+            chunkAudio.bytes.end());
+        if (index + 1 < chunks.size()) {
+            AppendSilence(&combined);
+        }
+    }
+    *audio = std::move(combined);
+    return !audio->bytes.empty();
 }
 
 }  // namespace
