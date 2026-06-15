@@ -25,7 +25,8 @@ def test_sapi_bridge_check_accepts_dummy_voice_spike_contract() -> None:
         "dummy_pcm_speak": True,
         "native_build_script": True,
         "native_registration_scripts": True,
-        "localhost_integration": False,
+        "localhost_integration": True,
+        "localhost_integration_verified_in_textaloud": False,
     }
 
 

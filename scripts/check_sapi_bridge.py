@@ -74,6 +74,12 @@ def check_sapi_bridge() -> dict[str, object]:
         SAPI_ROOT / "src" / "TtsPlatformSapiEngine.cpp": [
             "CLSID_TtsPlatformSapiEngine",
             "MakeTonePcm",
+            "CollectText",
+            "ReadToken",
+            "WinHttpOpen",
+            "WinHttpSendRequest",
+            "DecodeWavPcm16",
+            "TrySynthesizeFromService",
             "site->Write",
             "SPDFID_WaveFormatEx",
             "WAVE_FORMAT_PCM",
@@ -94,6 +100,7 @@ def check_sapi_bridge() -> dict[str, object]:
             "Win32",
             "x64",
             "sapi.lib",
+            "winhttp.lib",
             "TtsPlatformSapiEngine.cpp",
             "$(MSBuildProjectDirectory)\\build\\$(Platform)\\$(Configuration)",
         ],
@@ -178,7 +185,8 @@ def check_sapi_bridge() -> dict[str, object]:
         "dummy_pcm_speak": True,
         "native_build_script": True,
         "native_registration_scripts": True,
-        "localhost_integration": False,
+        "localhost_integration": True,
+        "localhost_integration_verified_in_textaloud": False,
     }
 
 

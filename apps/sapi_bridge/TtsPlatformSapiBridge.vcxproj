@@ -68,7 +68,7 @@
     <Link>
       <ModuleDefinitionFile>src\TtsPlatformSapiBridge.def</ModuleDefinitionFile>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>ole32.lib;uuid.lib;sapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ole32.lib;uuid.lib;sapi.lib;winhttp.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

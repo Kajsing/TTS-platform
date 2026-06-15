@@ -1,9 +1,15 @@
 #include "TtsPlatformSapiEngine.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
+#include <cwctype>
+#include <cstring>
+#include <fstream>
 #include <new>
+#include <string>
 #include <vector>
+#include <winhttp.h>
 
 namespace {
 
@@ -13,9 +19,20 @@ constexpr WORD kBitsPerSample = 16;
 constexpr double kToneHz = 440.0;
 constexpr double kToneSeconds = 0.35;
 constexpr double kPi = 3.14159265358979323846;
+constexpr wchar_t kServiceHost[] = L"127.0.0.1";
+constexpr INTERNET_PORT kServicePort = 7777;
+constexpr wchar_t kServicePath[] = L"/v1/tts";
+constexpr DWORD kHttpTimeoutMs = 60000;
 
 std::atomic<ULONG> g_objectCount{0};
 std::atomic<ULONG> g_lockCount{0};
+
+struct PcmAudio {
+    std::vector<std::uint8_t> bytes;
+    DWORD sampleRateHz = 0;
+    WORD channels = 0;
+    WORD bitsPerSample = 0;
+};
 
 WAVEFORMATEX* AllocateWaveFormat() {
     auto* format = static_cast<WAVEFORMATEX*>(::CoTaskMemAlloc(sizeof(WAVEFORMATEX)));
@@ -51,6 +68,346 @@ bool IsSupportedFormat(REFGUID formatId, const WAVEFORMATEX* waveFormatEx) {
         waveFormatEx->nChannels == kChannelCount &&
         waveFormatEx->nSamplesPerSec == kSampleRateHz &&
         waveFormatEx->wBitsPerSample == kBitsPerSample;
+}
+
+std::wstring GetModulePath() {
+    HMODULE module = nullptr;
+    const auto flags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+    if (!::GetModuleHandleExW(
+            flags,
+            reinterpret_cast<LPCWSTR>(&GetModulePath),
+            &module)) {
+        return L"";
+    }
+
+    std::wstring buffer(MAX_PATH, L'\0');
+    DWORD size = 0;
+    while (true) {
+        size = ::GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (size == 0) {
+            return L"";
+        }
+        if (size < buffer.size() - 1) {
+            buffer.resize(size);
+            return buffer;
+        }
+        buffer.resize(buffer.size() * 2);
+    }
+}
+
+std::wstring ParentPath(const std::wstring& path) {
+    const size_t slash = path.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) {
+        return L"";
+    }
+    return path.substr(0, slash);
+}
+
+bool FileExists(const std::wstring& path) {
+    const DWORD attributes = ::GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+std::wstring FindRepoRoot() {
+    std::wstring current = ParentPath(GetModulePath());
+    for (int depth = 0; depth < 8 && !current.empty(); ++depth) {
+        const std::wstring tokenPath = current + L"\\config\\token.txt";
+        if (FileExists(tokenPath)) {
+            return current;
+        }
+        current = ParentPath(current);
+    }
+    return L"";
+}
+
+std::string ReadToken() {
+    const std::wstring repoRoot = FindRepoRoot();
+    if (repoRoot.empty()) {
+        return "";
+    }
+    std::ifstream tokenFile(repoRoot + L"\\config\\token.txt", std::ios::binary);
+    if (!tokenFile) {
+        return "";
+    }
+    std::string token(
+        (std::istreambuf_iterator<char>(tokenFile)),
+        std::istreambuf_iterator<char>());
+    while (!token.empty() && (token.back() == '\r' || token.back() == '\n' || token.back() == ' ')) {
+        token.pop_back();
+    }
+    return token;
+}
+
+std::string WideToUtf8(const std::wstring& value) {
+    if (value.empty()) {
+        return "";
+    }
+    const int size = ::WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        value.data(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+    if (size <= 0) {
+        return "";
+    }
+    std::string output(static_cast<size_t>(size), '\0');
+    ::WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        value.data(),
+        static_cast<int>(value.size()),
+        output.data(),
+        size,
+        nullptr,
+        nullptr);
+    return output;
+}
+
+std::string JsonEscape(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size() + 16);
+    for (const unsigned char ch : value) {
+        switch (ch) {
+        case '"':
+            escaped += "\\\"";
+            break;
+        case '\\':
+            escaped += "\\\\";
+            break;
+        case '\b':
+            escaped += "\\b";
+            break;
+        case '\f':
+            escaped += "\\f";
+            break;
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        default:
+            if (ch < 0x20) {
+                char buffer[7] = {};
+                std::snprintf(buffer, sizeof(buffer), "\\u%04x", ch);
+                escaped += buffer;
+            } else {
+                escaped.push_back(static_cast<char>(ch));
+            }
+        }
+    }
+    return escaped;
+}
+
+std::wstring CollectText(const SPVTEXTFRAG* fragment) {
+    std::wstring text;
+    for (const SPVTEXTFRAG* current = fragment; current; current = current->pNext) {
+        if (current->pTextStart && current->ulTextLen > 0) {
+            text.append(current->pTextStart, current->ulTextLen);
+            text.push_back(L' ');
+        }
+    }
+    while (!text.empty() && iswspace(text.back())) {
+        text.pop_back();
+    }
+    return text;
+}
+
+DWORD ReadLe32(const std::vector<std::uint8_t>& data, size_t offset) {
+    return static_cast<DWORD>(data[offset]) |
+        (static_cast<DWORD>(data[offset + 1]) << 8) |
+        (static_cast<DWORD>(data[offset + 2]) << 16) |
+        (static_cast<DWORD>(data[offset + 3]) << 24);
+}
+
+WORD ReadLe16(const std::vector<std::uint8_t>& data, size_t offset) {
+    return static_cast<WORD>(
+        static_cast<WORD>(data[offset]) |
+        (static_cast<WORD>(data[offset + 1]) << 8));
+}
+
+bool DecodeWavPcm16(const std::vector<std::uint8_t>& wav, PcmAudio* audio) {
+    if (!audio || wav.size() < 44 ||
+        std::memcmp(wav.data(), "RIFF", 4) != 0 ||
+        std::memcmp(wav.data() + 8, "WAVE", 4) != 0) {
+        return false;
+    }
+
+    bool sawFormat = false;
+    bool sawData = false;
+    size_t offset = 12;
+    while (offset + 8 <= wav.size()) {
+        const char* chunkId = reinterpret_cast<const char*>(wav.data() + offset);
+        const DWORD chunkSize = ReadLe32(wav, offset + 4);
+        const size_t payloadOffset = offset + 8;
+        if (payloadOffset + chunkSize > wav.size()) {
+            return false;
+        }
+
+        if (std::memcmp(chunkId, "fmt ", 4) == 0) {
+            if (chunkSize < 16) {
+                return false;
+            }
+            const WORD formatTag = ReadLe16(wav, payloadOffset);
+            audio->channels = ReadLe16(wav, payloadOffset + 2);
+            audio->sampleRateHz = ReadLe32(wav, payloadOffset + 4);
+            audio->bitsPerSample = ReadLe16(wav, payloadOffset + 14);
+            if (formatTag != WAVE_FORMAT_PCM || audio->bitsPerSample != 16) {
+                return false;
+            }
+            sawFormat = true;
+        } else if (std::memcmp(chunkId, "data", 4) == 0) {
+            audio->bytes.assign(
+                wav.begin() + static_cast<std::ptrdiff_t>(payloadOffset),
+                wav.begin() + static_cast<std::ptrdiff_t>(payloadOffset + chunkSize));
+            sawData = true;
+        }
+
+        offset = payloadOffset + chunkSize + (chunkSize % 2);
+    }
+    return sawFormat && sawData && !audio->bytes.empty();
+}
+
+bool PostTtsRequest(const std::string& requestBody, std::vector<std::uint8_t>* responseBody) {
+    if (!responseBody) {
+        return false;
+    }
+    responseBody->clear();
+
+    HINTERNET session = ::WinHttpOpen(
+        L"TTS Platform SAPI Bridge/0.1",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS,
+        0);
+    if (!session) {
+        return false;
+    }
+    ::WinHttpSetTimeouts(
+        session,
+        kHttpTimeoutMs,
+        kHttpTimeoutMs,
+        kHttpTimeoutMs,
+        kHttpTimeoutMs);
+
+    HINTERNET connect = ::WinHttpConnect(session, kServiceHost, kServicePort, 0);
+    if (!connect) {
+        ::WinHttpCloseHandle(session);
+        return false;
+    }
+
+    HINTERNET request = ::WinHttpOpenRequest(
+        connect,
+        L"POST",
+        kServicePath,
+        nullptr,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        0);
+    if (!request) {
+        ::WinHttpCloseHandle(connect);
+        ::WinHttpCloseHandle(session);
+        return false;
+    }
+
+    std::wstring headers = L"Content-Type: application/json\r\nAccept: audio/wav\r\n";
+    const std::string token = ReadToken();
+    if (!token.empty()) {
+        headers += L"Authorization: Bearer ";
+        headers += std::wstring(token.begin(), token.end());
+        headers += L"\r\n";
+    }
+
+    const BOOL sent = ::WinHttpSendRequest(
+        request,
+        headers.c_str(),
+        static_cast<DWORD>(headers.size()),
+        const_cast<char*>(requestBody.data()),
+        static_cast<DWORD>(requestBody.size()),
+        static_cast<DWORD>(requestBody.size()),
+        0);
+    if (!sent || !::WinHttpReceiveResponse(request, nullptr)) {
+        ::WinHttpCloseHandle(request);
+        ::WinHttpCloseHandle(connect);
+        ::WinHttpCloseHandle(session);
+        return false;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusSize = sizeof(statusCode);
+    if (!::WinHttpQueryHeaders(
+            request,
+            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX,
+            &statusCode,
+            &statusSize,
+            WINHTTP_NO_HEADER_INDEX) ||
+        statusCode != 200) {
+        ::WinHttpCloseHandle(request);
+        ::WinHttpCloseHandle(connect);
+        ::WinHttpCloseHandle(session);
+        return false;
+    }
+
+    while (true) {
+        DWORD available = 0;
+        if (!::WinHttpQueryDataAvailable(request, &available)) {
+            responseBody->clear();
+            break;
+        }
+        if (available == 0) {
+            break;
+        }
+        const size_t oldSize = responseBody->size();
+        responseBody->resize(oldSize + available);
+        DWORD read = 0;
+        if (!::WinHttpReadData(
+                request,
+                responseBody->data() + oldSize,
+                available,
+                &read)) {
+            responseBody->clear();
+            break;
+        }
+        responseBody->resize(oldSize + read);
+    }
+
+    ::WinHttpCloseHandle(request);
+    ::WinHttpCloseHandle(connect);
+    ::WinHttpCloseHandle(session);
+    return !responseBody->empty();
+}
+
+bool TrySynthesizeFromService(
+    const std::wstring& text,
+    const WAVEFORMATEX* expectedFormat,
+    PcmAudio* audio) {
+    if (text.empty() || !audio || !expectedFormat) {
+        return false;
+    }
+    const std::string utf8Text = WideToUtf8(text);
+    if (utf8Text.empty()) {
+        return false;
+    }
+    const std::string requestBody =
+        "{\"text\":\"" + JsonEscape(utf8Text) + "\",\"format\":\"wav\"}";
+
+    std::vector<std::uint8_t> wav;
+    if (!PostTtsRequest(requestBody, &wav) || !DecodeWavPcm16(wav, audio)) {
+        return false;
+    }
+    return audio->sampleRateHz == expectedFormat->nSamplesPerSec &&
+        audio->channels == expectedFormat->nChannels &&
+        audio->bitsPerSample == expectedFormat->wBitsPerSample;
 }
 
 }  // namespace
@@ -104,13 +461,22 @@ STDMETHODIMP TtsPlatformSapiEngine::Speak(
     DWORD,
     REFGUID formatId,
     const WAVEFORMATEX* waveFormatEx,
-    const SPVTEXTFRAG*,
+    const SPVTEXTFRAG* textFragment,
     ISpTTSEngineSite* site) {
     if (!site) {
         return E_POINTER;
     }
     if (!IsSupportedFormat(formatId, waveFormatEx)) {
         return E_INVALIDARG;
+    }
+
+    PcmAudio serviceAudio;
+    if (TrySynthesizeFromService(CollectText(textFragment), waveFormatEx, &serviceAudio)) {
+        ULONG bytesWritten = 0;
+        return site->Write(
+            serviceAudio.bytes.data(),
+            static_cast<ULONG>(serviceAudio.bytes.size()),
+            &bytesWritten);
     }
 
     const std::vector<int16_t> pcm = MakeTonePcm();

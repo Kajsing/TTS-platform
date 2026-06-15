@@ -62,12 +62,22 @@ This file is the live status log and shared memory for future Codex loops.
   `InprocServer32`, and Win32 DLL path present. TextAloud 3.0.117 displayed
   `TTS Platform Native Dummy Voice` and playback produced the expected single
   dummy tone. X64 native registration is not installed. The next slice can
-  move from native dummy PCM to localhost `/v1/tts` integration for the X86
-  engine path.
+  manually verify the newly implemented localhost `/v1/tts` integration for
+  the X86 engine path.
+- Current SAPI localhost bridge progress: `TtsPlatformSapiEngine::Speak`
+  collects SAPI text fragments, reads `config/token.txt`, posts JSON to
+  `http://127.0.0.1:7777/v1/tts` with bearer auth through WinHTTP, decodes
+  PCM16 WAV responses, and writes matching PCM to `ISpTTSEngineSite::Write`.
+  It falls back to the native dummy tone on service/auth/format failures. The
+  code builds to a temp Win32 Release output and the normal x64 Release output;
+  the registered Win32 DLL path could not be overwritten because TextAloud had
+  the DLL loaded. Close TextAloud before rebuilding the registered Win32 DLL
+  for manual service-audio verification.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
     contract, x64/x86 registry views, elevated install requirement, native
-    skeleton presence, dummy PCM `Speak`, and no localhost integration yet.
+    skeleton presence, dummy PCM fallback, and localhost integration wiring
+    present but not yet manually verified in TextAloud.
   - `py -3 scripts\check_sapi_toolchain.py` passed in non-strict mode and
     reported the native skeleton project exists and the MSVC/SAPI build
     toolchain is now complete on this machine.

@@ -71,9 +71,13 @@ to the localhost service.
 - `TtsPlatformSapiBridge.def`
 - `../TtsPlatformSapiBridge.vcxproj`
 
-The skeleton implements `ISpTTSEngine` and `ISpObjectWithToken` enough to
-return a short generated PCM tone through `ISpTTSEngineSite::Write`. It does
-not call the localhost service yet.
+The skeleton implements `ISpTTSEngine` and `ISpObjectWithToken`. `Speak` now
+collects SAPI text fragments, reads the local bearer token from
+`config\token.txt`, posts JSON to `http://127.0.0.1:7777/v1/tts`, decodes the
+returned PCM16 WAV, and writes matching PCM audio through
+`ISpTTSEngineSite::Write`. If the service is unavailable, returns an error, or
+returns a WAV format that does not match the SAPI output format, the bridge
+falls back to the short generated dummy tone.
 
 Check whether the current machine can build it:
 
@@ -109,6 +113,10 @@ Build the native DLL once MSVC and the Windows SDK are installed:
 The bridge currently builds as both `Win32` and `x64` Release DLLs with Visual
 Studio Build Tools 2022. The build outputs are local generated artifacts under
 `apps\sapi_bridge\build\` and should not be committed.
+
+If the registered DLL is already loaded by TextAloud, the Win32 Release build
+may fail with `LNK1104` because Windows has the DLL locked. Close TextAloud and
+build again before replacing the registered DLL.
 
 Register the built native dummy voice for the bitness TextAloud needs:
 

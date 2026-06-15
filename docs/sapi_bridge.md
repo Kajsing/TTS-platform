@@ -137,6 +137,23 @@ Expected result:
 Use synchronous HTTP first. WebSocket streaming is useful later, but a sync path
 is simpler and better suited to the first SAPI proof.
 
+Initial MVP status on 2026-06-15:
+
+- `TtsPlatformSapiEngine::Speak` now collects text from the `SPVTEXTFRAG`
+  linked list.
+- The native bridge reads `config\token.txt` by walking upward from the loaded
+  DLL path to find the repo root.
+- The bridge posts `{"text": "...", "format": "wav"}` to
+  `http://127.0.0.1:7777/v1/tts` with `Authorization: Bearer <token>`.
+- The bridge decodes PCM16 WAV responses and writes audio to
+  `ISpTTSEngineSite::Write` when the returned sample rate, channel count, and
+  bit depth match the SAPI output format.
+- If the service is unavailable, auth fails, or the WAV format does not match,
+  the engine falls back to the dummy tone so TextAloud does not crash.
+- The code compiles for Win32 and x64. The registered Win32 DLL could not be
+  overwritten while TextAloud still had it loaded; close TextAloud before
+  rebuilding the registered DLL path for manual playback verification.
+
 ### Phase 3: Long Text Behavior
 
 Make long TextAloud documents practical.
