@@ -10,7 +10,6 @@
 #include <new>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
 #include <winhttp.h>
 
@@ -26,7 +25,7 @@ constexpr wchar_t kServiceHost[] = L"127.0.0.1";
 constexpr INTERNET_PORT kServicePort = 7777;
 constexpr wchar_t kServicePath[] = L"/v1/tts";
 constexpr DWORD kHttpTimeoutMs = 60000;
-constexpr size_t kMaxServiceTextChars = 3500;
+constexpr size_t kMaxServiceTextChars = 600;
 constexpr DWORD kInterChunkPauseMs = 120;
 
 std::atomic<ULONG> g_objectCount{0};
@@ -489,18 +488,6 @@ std::vector<std::wstring> SplitTextForService(const std::wstring& text) {
     return chunks;
 }
 
-void AppendSilence(PcmAudio* audio) {
-    if (!audio || audio->sampleRateHz == 0 || audio->channels == 0 || audio->bitsPerSample != 16) {
-        return;
-    }
-    const size_t bytesPerSample = audio->bitsPerSample / 8;
-    const size_t frameCount = (audio->sampleRateHz * kInterChunkPauseMs) / 1000;
-    audio->bytes.insert(
-        audio->bytes.end(),
-        frameCount * audio->channels * bytesPerSample,
-        0);
-}
-
 bool SynthesizeChunkFromService(
     const std::wstring& textChunk,
     const WAVEFORMATEX* expectedFormat,
@@ -539,17 +526,43 @@ bool SynthesizeChunkFromService(
     return formatMatches;
 }
 
-bool TrySynthesizeFromService(
+bool IsAbortRequested(ISpTTSEngineSite* site) {
+    return site && (site->GetActions() & SPVES_ABORT) != 0;
+}
+
+HRESULT WritePcmBytes(ISpTTSEngineSite* site, const std::vector<std::uint8_t>& bytes) {
+    if (!site || bytes.empty()) {
+        return E_INVALIDARG;
+    }
+    ULONG bytesWritten = 0;
+    return site->Write(
+        bytes.data(),
+        static_cast<ULONG>(bytes.size()),
+        &bytesWritten);
+}
+
+std::vector<std::uint8_t> MakeSilenceBytes(const PcmAudio& audio) {
+    if (audio.sampleRateHz == 0 || audio.channels == 0 || audio.bitsPerSample != 16) {
+        return {};
+    }
+    const size_t bytesPerSample = audio.bitsPerSample / 8;
+    const size_t frameCount = (audio.sampleRateHz * kInterChunkPauseMs) / 1000;
+    return std::vector<std::uint8_t>(frameCount * audio.channels * bytesPerSample, 0);
+}
+
+HRESULT TryWriteServiceAudio(
     const std::wstring& text,
     const WAVEFORMATEX* expectedFormat,
-    PcmAudio* audio) {
-    if (!audio) {
-        return false;
+    ISpTTSEngineSite* site,
+    bool* wroteAudio) {
+    if (!wroteAudio) {
+        return E_POINTER;
     }
+    *wroteAudio = false;
     const std::vector<std::wstring> chunks = SplitTextForService(text);
     if (chunks.empty()) {
         LogBridgeEvent("service synthesis skipped: no text chunks");
-        return false;
+        return S_FALSE;
     }
     {
         std::ostringstream message;
@@ -558,8 +571,12 @@ bool TrySynthesizeFromService(
         LogBridgeEvent(message.str());
     }
 
-    PcmAudio combined;
     for (size_t index = 0; index < chunks.size(); ++index) {
+        if (IsAbortRequested(site)) {
+            LogBridgeEvent("service synthesis aborted before next chunk");
+            return S_OK;
+        }
+
         PcmAudio chunkAudio;
         if (!SynthesizeChunkFromService(chunks[index], expectedFormat, &chunkAudio)) {
             std::ostringstream message;
@@ -567,23 +584,28 @@ bool TrySynthesizeFromService(
                     << " of " << chunks.size()
                     << ", chars=" << chunks[index].size();
             LogBridgeEvent(message.str());
-            return false;
+            return *wroteAudio ? S_OK : S_FALSE;
         }
-        if (combined.bytes.empty()) {
-            combined.sampleRateHz = chunkAudio.sampleRateHz;
-            combined.channels = chunkAudio.channels;
-            combined.bitsPerSample = chunkAudio.bitsPerSample;
+
+        const HRESULT writeResult = WritePcmBytes(site, chunkAudio.bytes);
+        if (FAILED(writeResult)) {
+            LogBridgeEvent("SAPI site Write failed for service audio chunk");
+            return writeResult;
         }
-        combined.bytes.insert(
-            combined.bytes.end(),
-            chunkAudio.bytes.begin(),
-            chunkAudio.bytes.end());
+        *wroteAudio = true;
+
         if (index + 1 < chunks.size()) {
-            AppendSilence(&combined);
+            const std::vector<std::uint8_t> silence = MakeSilenceBytes(chunkAudio);
+            if (!silence.empty()) {
+                const HRESULT silenceResult = WritePcmBytes(site, silence);
+                if (FAILED(silenceResult)) {
+                    LogBridgeEvent("SAPI site Write failed for inter-chunk silence");
+                    return silenceResult;
+                }
+            }
         }
     }
-    *audio = std::move(combined);
-    return !audio->bytes.empty();
+    return *wroteAudio ? S_OK : S_FALSE;
 }
 
 }  // namespace
@@ -646,13 +668,14 @@ STDMETHODIMP TtsPlatformSapiEngine::Speak(
         return E_INVALIDARG;
     }
 
-    PcmAudio serviceAudio;
-    if (TrySynthesizeFromService(CollectText(textFragment), waveFormatEx, &serviceAudio)) {
-        ULONG bytesWritten = 0;
-        return site->Write(
-            serviceAudio.bytes.data(),
-            static_cast<ULONG>(serviceAudio.bytes.size()),
-            &bytesWritten);
+    bool wroteServiceAudio = false;
+    const HRESULT serviceResult = TryWriteServiceAudio(
+        CollectText(textFragment),
+        waveFormatEx,
+        site,
+        &wroteServiceAudio);
+    if (FAILED(serviceResult) || wroteServiceAudio) {
+        return serviceResult;
     }
 
     const std::vector<int16_t> pcm = MakeTonePcm();

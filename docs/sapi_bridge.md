@@ -152,10 +152,12 @@ Initial MVP status on 2026-06-15:
   the engine falls back to the dummy tone so TextAloud does not crash.
 - Fallback diagnostics are written to `logs\sapi-bridge.log` without recording
   the bearer token or raw text.
-- The bridge now splits long SAPI text into bounded synchronous `/v1/tts`
-  requests below the service's request-size limit, concatenates PCM responses,
-  and inserts a short silence between chunks. This is the first long-reader
-  mitigation before a future streaming or job-backed SAPI path.
+- The bridge now splits SAPI text into smaller bounded synchronous `/v1/tts`
+  requests below the service's request-size limit, writes each completed PCM
+  chunk back to SAPI immediately, checks for SAPI abort requests between
+  chunks, and inserts a short silence between chunks. This is the first
+  responsiveness/long-reader mitigation before a future streaming or job-backed
+  SAPI path.
 - The code compiles for Win32 and x64. The registered Win32 DLL could not be
   overwritten while TextAloud still had it loaded; close TextAloud before
   rebuilding the registered DLL path for manual playback verification.

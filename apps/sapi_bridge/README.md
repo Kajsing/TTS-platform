@@ -125,8 +125,8 @@ text.
 
 TextAloud reader playback may send more text than the service's synchronous
 `/v1/tts` request limit. The bridge splits SAPI text into bounded service
-requests, concatenates the returned PCM, and inserts a short silence between
-chunks before writing audio back to SAPI.
+requests, writes each completed PCM chunk back to SAPI immediately, checks for
+SAPI abort requests between chunks, and inserts a short silence between chunks.
 
 Register the built native dummy voice for the bitness TextAloud needs:
 
