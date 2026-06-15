@@ -253,6 +253,20 @@ attempt a native MSVC build. On this machine it currently reports missing
 `cl`, `msbuild`, `sapi.h`, and `sphelper.h`; install Visual Studio Build Tools
 with Desktop development with C++ and the Windows SDK before building the DLL.
 
+The native registration path is staged but not manually verified yet:
+
+- `scripts\windows\build_sapi_bridge.ps1` builds Win32 and/or x64 with MSBuild.
+- `scripts\windows\install_sapi_native_voice.ps1` registers the built DLL as
+  an `InprocServer32` COM class and installs a machine-scope
+  `TTS Platform Native Dummy Voice` SAPI token.
+- `scripts\windows\check_sapi_native_voice.ps1` checks the native token, CLSID,
+  `InprocServer32`, and DLL path.
+- `scripts\windows\remove_sapi_native_voice.ps1` removes the native token and
+  COM class registration.
+
+These scripts are ready for the next machine state where MSVC and the Windows
+SDK are installed. They still require elevated PowerShell for HKLM writes.
+
 ## Manual TextAloud Verification
 
 Manual verification on 2026-06-15 confirmed:

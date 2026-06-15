@@ -87,6 +87,31 @@ To require a complete native build environment:
 py -3 scripts\check_sapi_toolchain.py --require-build-tools
 ```
 
+Build the native DLL once MSVC and the Windows SDK are installed:
+
+```powershell
+.\scripts\windows\build_sapi_bridge.ps1 -Platform Win32
+.\scripts\windows\build_sapi_bridge.ps1 -Platform x64
+```
+
+Register the built native dummy voice for the bitness TextAloud needs:
+
+```powershell
+.\scripts\windows\install_sapi_native_voice.ps1 `
+  -Architecture X86 `
+  -DllPath .\apps\sapi_bridge\build\Win32\Release\TtsPlatformSapiBridge.dll
+.\scripts\windows\check_sapi_native_voice.ps1 -Architecture X86 -RequireInstalled
+```
+
+Remove the native dummy voice:
+
+```powershell
+.\scripts\windows\remove_sapi_native_voice.ps1 -Architecture X86
+```
+
+The native install/remove scripts also write under `HKLM`, so run them from an
+elevated PowerShell prompt.
+
 ## Known Limits
 
 - This dummy token is not the final bridge.

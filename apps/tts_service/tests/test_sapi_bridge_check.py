@@ -13,7 +13,7 @@ def test_sapi_bridge_check_accepts_dummy_voice_spike_contract() -> None:
     summary = check_module.check_sapi_bridge()
 
     assert summary == {
-        "checked_files": 10,
+        "checked_files": 14,
         "dummy_voice_token": "TTS_PLATFORM_DUMMY_ALIAS",
         "dummy_voice_name": "TTS Platform Dummy Voice",
         "machine_scope_registry": True,
@@ -23,6 +23,8 @@ def test_sapi_bridge_check_accepts_dummy_voice_spike_contract() -> None:
         "textaloud_visibility_spike": True,
         "native_skeleton": True,
         "dummy_pcm_speak": True,
+        "native_build_script": True,
+        "native_registration_scripts": True,
         "localhost_integration": False,
     }
 
