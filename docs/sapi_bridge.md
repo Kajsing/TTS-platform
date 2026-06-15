@@ -236,6 +236,23 @@ machine-scope install/remove/check scripts. The user should run the install
 script from an elevated PowerShell prompt when ready to test whether TextAloud
 lists `TTS Platform Dummy Voice`.
 
+The second implementation pass added a native C++ SAPI engine skeleton:
+
+- `apps/sapi_bridge/TtsPlatformSapiBridge.vcxproj`
+- `apps/sapi_bridge/src/TtsPlatformSapiEngine.h`
+- `apps/sapi_bridge/src/TtsPlatformSapiEngine.cpp`
+- `apps/sapi_bridge/src/dllmain.cpp`
+- `apps/sapi_bridge/src/TtsPlatformSapiBridge.def`
+
+The skeleton is ATL-free, implements `ISpTTSEngine` and
+`ISpObjectWithToken`, and returns a short generated PCM tone through
+`ISpTTSEngineSite::Write`. It does not call `/v1/tts` yet.
+
+`scripts/check_sapi_toolchain.py` now reports whether the current machine can
+attempt a native MSVC build. On this machine it currently reports missing
+`cl`, `msbuild`, `sapi.h`, and `sphelper.h`; install Visual Studio Build Tools
+with Desktop development with C++ and the Windows SDK before building the DLL.
+
 ## Manual TextAloud Verification
 
 Manual verification on 2026-06-15 confirmed:

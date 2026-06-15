@@ -29,6 +29,11 @@ def check_sapi_bridge() -> dict[str, object]:
     required_files = [
         SAPI_ROOT / "README.md",
         SAPI_ROOT / "src" / "README.md",
+        SAPI_ROOT / "src" / "TtsPlatformSapiEngine.h",
+        SAPI_ROOT / "src" / "TtsPlatformSapiEngine.cpp",
+        SAPI_ROOT / "src" / "dllmain.cpp",
+        SAPI_ROOT / "src" / "TtsPlatformSapiBridge.def",
+        SAPI_ROOT / "TtsPlatformSapiBridge.vcxproj",
         WINDOWS_SCRIPT_ROOT / "install_sapi_voice.ps1",
         WINDOWS_SCRIPT_ROOT / "remove_sapi_voice.ps1",
         WINDOWS_SCRIPT_ROOT / "check_sapi_voice.ps1",
@@ -53,6 +58,38 @@ def check_sapi_bridge() -> dict[str, object]:
             "ISpObjectWithToken",
             "COM DLL",
             "TextAloud-required bitness",
+        ],
+        SAPI_ROOT / "src" / "TtsPlatformSapiEngine.h": [
+            "public ISpTTSEngine",
+            "public ISpObjectWithToken",
+            "STDMETHODIMP Speak",
+            "STDMETHODIMP GetOutputFormat",
+            "TtsPlatformClassFactory",
+        ],
+        SAPI_ROOT / "src" / "TtsPlatformSapiEngine.cpp": [
+            "CLSID_TtsPlatformSapiEngine",
+            "MakeTonePcm",
+            "site->Write",
+            "SPDFID_WaveFormatEx",
+            "WAVE_FORMAT_PCM",
+            "SPERR_UNSUPPORTED_FORMAT",
+        ],
+        SAPI_ROOT / "src" / "dllmain.cpp": [
+            "DllGetClassObject",
+            "DllCanUnloadNow",
+            "DllRegisterServer",
+            "CLSID_TtsPlatformSapiEngine",
+        ],
+        SAPI_ROOT / "src" / "TtsPlatformSapiBridge.def": [
+            "DllGetClassObject",
+            "DllCanUnloadNow",
+        ],
+        SAPI_ROOT / "TtsPlatformSapiBridge.vcxproj": [
+            "DynamicLibrary",
+            "Win32",
+            "x64",
+            "sapi.lib",
+            "TtsPlatformSapiEngine.cpp",
         ],
         WINDOWS_SCRIPT_ROOT / "install_sapi_voice.ps1": [
             "TTS_PLATFORM_DUMMY_ALIAS",
@@ -100,6 +137,8 @@ def check_sapi_bridge() -> dict[str, object]:
         "x86_registry_view": True,
         "requires_elevated_install": True,
         "textaloud_visibility_spike": True,
+        "native_skeleton": True,
+        "dummy_pcm_speak": True,
         "localhost_integration": False,
     }
 

@@ -37,10 +37,19 @@ This file is the live status log and shared memory for future Codex loops.
   provider with `TTS Platform Dummy Voice`, and playback produced Microsoft
   Zira audio as expected for the dummy alias token. This proves machine-scope
   custom SAPI voice tokens are visible to TextAloud on this machine.
+- Current native SAPI progress: `apps/sapi_bridge/` now includes an ATL-free
+  C++ COM DLL skeleton with `ISpTTSEngine`, `ISpObjectWithToken`, class
+  factory exports, a `.vcxproj`, and dummy PCM tone output via
+  `ISpTTSEngineSite::Write`. `scripts/check_sapi_toolchain.py` reports that
+  this machine still lacks the native build prerequisites: `cl`, `msbuild`,
+  `sapi.h`, and `sphelper.h`.
 - Validation status for the current loop:
   - `py -3 scripts\check_sapi_bridge.py` passed and reported the dummy token
-    contract, x64/x86 registry views, elevated install requirement, and no
-    localhost integration yet.
+    contract, x64/x86 registry views, elevated install requirement, native
+    skeleton presence, dummy PCM `Speak`, and no localhost integration yet.
+  - `py -3 scripts\check_sapi_toolchain.py` passed in non-strict mode and
+    reported the native skeleton project exists but the MSVC/SAPI build
+    toolchain is incomplete on this machine.
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check_sapi_voice.ps1`
     passed without requiring elevation and reported the dummy token absent,
     with Microsoft David/Zira visible through both current and WOW64 SAPI COM

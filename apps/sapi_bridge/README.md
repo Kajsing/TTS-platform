@@ -61,6 +61,32 @@ If TextAloud sees the dummy voice, the next slice is a native SAPI engine DLL
 under `apps/sapi_bridge/src/` that implements `ISpTTSEngine` and forwards text
 to the localhost service.
 
+## Native Skeleton
+
+`src/` now contains an ATL-free C++ COM DLL skeleton:
+
+- `TtsPlatformSapiEngine.h`
+- `TtsPlatformSapiEngine.cpp`
+- `dllmain.cpp`
+- `TtsPlatformSapiBridge.def`
+- `../TtsPlatformSapiBridge.vcxproj`
+
+The skeleton implements `ISpTTSEngine` and `ISpObjectWithToken` enough to
+return a short generated PCM tone through `ISpTTSEngineSite::Write`. It does
+not call the localhost service yet.
+
+Check whether the current machine can build it:
+
+```powershell
+py -3 scripts\check_sapi_toolchain.py
+```
+
+To require a complete native build environment:
+
+```powershell
+py -3 scripts\check_sapi_toolchain.py --require-build-tools
+```
+
 ## Known Limits
 
 - This dummy token is not the final bridge.
@@ -69,4 +95,3 @@ to the localhost service.
 - It does not prove audio streaming behavior.
 - It may require admin rights because SAPI voice enumeration did not see
   per-user `HKCU` voice tokens on the development machine.
-

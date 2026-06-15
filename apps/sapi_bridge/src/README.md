@@ -1,16 +1,16 @@
 # Native SAPI Engine Placeholder
 
-This directory is reserved for the future native SAPI 5 COM engine.
+This directory contains the native SAPI 5 COM DLL engine skeleton.
 
-The current spike intentionally stops before implementing `ISpTTSEngine`.
-First, the project needs to prove that TextAloud can see a custom SAPI voice
-token and whether TextAloud requires x86, x64, or both registry/build targets.
+The current skeleton implements `ISpTTSEngine` and `ISpObjectWithToken` enough
+to return a short generated PCM tone. It is not wired to
+`http://127.0.0.1:7777` yet.
 
-Next native step after the dummy-token spike:
+Next native steps:
 
-1. Add a C++ COM DLL project.
-2. Implement `ISpObjectWithToken`.
-3. Implement `ISpTTSEngine::Speak`.
-4. Write generated PCM to `ISpTTSEngineSite`.
-5. Register the COM class and voice token for the TextAloud-required bitness.
-
+1. Install/locate Visual Studio Build Tools with Desktop development with C++.
+2. Ensure the Windows SDK SAPI headers (`sapi.h`, `sphelper.h`) are present.
+3. Build `TtsPlatformSapiBridge.vcxproj` for the TextAloud-required bitness.
+4. Register the COM class and voice token for that bitness.
+5. Replace dummy PCM with synchronous `/v1/tts` audio once TextAloud can call
+   `Speak` on this COM class.
