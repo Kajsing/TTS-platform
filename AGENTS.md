@@ -25,6 +25,7 @@ Use these files as the Codex workflow source of truth:
 - `docs/codex/Plan.md`: execution order and milestone acceptance criteria
 - `docs/codex/Implement.md`: operating rules for Codex loops
 - `docs/codex/Documentation.md`: live status, decisions, smoke commands, and resume context
+- `docs/sapi_bridge.md`: post-v1 Windows SAPI/TextAloud integration plan
 
 ## Commit And Push Policy
 

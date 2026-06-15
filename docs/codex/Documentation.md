@@ -25,6 +25,10 @@ This file is the live status log and shared memory for future Codex loops.
   `apps/sapi_bridge/` Windows integration that registers a SAPI voice and
   bridges SAPI `Speak` calls to the existing localhost service. The durable
   plan is recorded in `docs/sapi_bridge.md`.
+- Codex workflow files now explicitly treat SAPI/TextAloud as a post-v1
+  optional integration track: `AGENTS.md`, `docs/codex/Prompt.md`,
+  `docs/codex/Plan.md`, and `docs/codex/Implement.md` all point future loops
+  at `docs/sapi_bridge.md` without reopening v1 completion scope.
 - Validation status for the current loop:
   - `py -3 scripts\check_v1_completion.py --require-complete` passed and
     reported 9 ready criteria, 0 pending final-security criteria, and

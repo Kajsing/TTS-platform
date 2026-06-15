@@ -31,6 +31,11 @@ platform. Prefer closeout work: release validation, Windows install polish,
 operator documentation, model-flow safety, extension installability, and a
 final security-focused pass before calling v1 done.
 
+V1 is now complete at the repo/test-contract level. New work should be treated
+as post-v1 unless it fixes a regression or release blocker in the completed
+local reader. The first recorded post-v1 exploration is an optional Windows
+SAPI 5/TextAloud bridge; its durable plan is `docs/sapi_bridge.md`.
+
 ## Non-Goals
 
 The current initiative does not include:
@@ -45,6 +50,8 @@ The current initiative does not include:
 - a machine-wide Windows Service, NSSM, pywin32 service, or Startup-folder
   autostart mechanism unless the user makes a new explicit product decision
 - uploading local model artifacts or generated model files to GitHub
+- treating the Windows SAPI/TextAloud bridge as part of v1 completion; it is a
+  post-v1 optional integration track
 
 ## Hard Constraints
 
@@ -152,3 +159,4 @@ Optional browser prototype validation keeps the service running on a localhost U
   reject command-line unpacked extension loading; strict evidence can be
   required with the browser flags documented in `Documentation.md`.
 - `docs/codex/Prompt.md`, `docs/codex/Plan.md`, `docs/codex/Implement.md`, and `docs/codex/Documentation.md` are now the Codex-oriented workflow source of truth.
+- `docs/sapi_bridge.md` records the post-v1 Windows SAPI/TextAloud bridge plan.

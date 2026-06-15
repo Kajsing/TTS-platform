@@ -514,3 +514,43 @@ WebSocket start-frame resource bounding, remote model artifact checksum/peer
 validation, model archive quota ordering, offscreen audio queue caps, and
 content-script DOM traversal budgets. The final completion audit now reports
 nine ready criteria and `can_mark_v1_complete: true`.
+
+## Post-v1: Windows SAPI Bridge / TextAloud Integration
+
+V1 is complete at the repo/test-contract level. Do not reopen v1 scope for this
+track unless a regression is discovered. Treat SAPI work as an optional Windows
+client integration that calls the existing localhost service.
+
+Durable plan: `docs/sapi_bridge.md`.
+
+Execution order:
+
+1. Feasibility spike: create an isolated `apps/sapi_bridge/` skeleton, register
+   one dummy SAPI 5 voice, and prove TextAloud can enumerate it.
+2. Resolve bitness and registration: determine whether TextAloud 3.x needs x86
+   COM/SAPI registration, x64 registration, or both.
+3. Localhost integration: bridge SAPI `Speak` calls to synchronous `/v1/tts`
+   using the existing local token and default voice.
+4. Long-text behavior: add chunking, stop/abort handling, timeouts, and
+   rate-limit-aware request boundaries.
+5. Hardening: install/remove/check scripts, service-unavailable and bad-token
+   paths, uninstall cleanup, and docs.
+
+Acceptance criteria for the first slice:
+
+- `check_sapi_voice.ps1` or equivalent reports the registered voice token.
+- TextAloud lists the dummy voice.
+- TextAloud can trigger `Speak` without crashing.
+- Install/remove scripts are reversible.
+- Docs record whether the working build is x86, x64, or both.
+
+Constraints:
+
+- Keep the bridge under `apps/sapi_bridge/` and Windows scripts under
+  `scripts/windows/`.
+- Do not redesign the HTTP/WebSocket API for the first SAPI slice.
+- Prefer synchronous `/v1/tts` for the MVP; revisit streaming only after basic
+  SAPI visibility and audio output work.
+- Preserve localhost security defaults and token auth.
+- Do not commit downloaded model assets, installed voice directories, local
+  token files, or machine registry exports.

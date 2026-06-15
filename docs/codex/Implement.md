@@ -5,7 +5,9 @@ This file is the Codex runbook for day-to-day work in this repository.
 ## Operating Rules
 
 - Read `Prompt.md`, `Plan.md`, and `Documentation.md` before making changes.
-- Follow `Plan.md` milestone by milestone.
+- Follow `Plan.md` milestone by milestone. Since v1 is complete, choose
+  post-v1 tracks only when the user explicitly asks for that track or
+  `Documentation.md` records it as the active follow-up.
 - Keep diffs tightly scoped.
 - Do not expand scope without recording why in `Documentation.md`.
 - Run validation after every milestone.
@@ -15,6 +17,9 @@ This file is the Codex runbook for day-to-day work in this repository.
 - Do not treat intermediate progress as completion.
 - After validation passes, commit and push the completed slice by default.
 - Before finishing, verify every "done when" criterion in `Prompt.md` or mark what remains in `Documentation.md`.
+- For post-v1 optional integrations, verify the track-specific acceptance
+  criteria in the relevant doc, such as `docs/sapi_bridge.md`, instead of
+  reopening completed v1 criteria.
 
 ## Repo Rules To Preserve
 
@@ -30,7 +35,8 @@ This file is the Codex runbook for day-to-day work in this repository.
 ## Loop Checklist
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Documentation.md`.
-2. Pick the first incomplete milestone in `Plan.md`.
+2. Pick the first incomplete milestone or user-requested post-v1 track in
+   `Plan.md`.
 3. Record the current target and any assumptions in `Documentation.md`.
 4. Implement the smallest reviewable slice that moves that milestone forward.
 5. Add or update tests if behavior changed.
@@ -47,6 +53,8 @@ This file is the Codex runbook for day-to-day work in this repository.
 - Do not invent requirements that are not supported by repo docs, code, or tests.
 - Do not rewrite unrelated parts of the app to make a milestone feel cleaner.
 - Prefer additive documentation and focused refactors over broad structural churn.
+- Keep optional Windows integrations, such as the SAPI/TextAloud bridge,
+  isolated from core service contracts until a shared need is proven.
 
 ## Finish Checklist
 
