@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-06-14
+- Date: 2026-06-15
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 are complete at the repository behavior and
   test-contract level. The active long-horizon implementation target is now the
@@ -20,6 +20,11 @@ This file is the live status log and shared memory for future Codex loops.
   records the stable repository summary, and `docs/v1_completion_audit.md` now
   reports all nine `Done When` criteria ready with
   `can_mark_v1_complete: true`.
+- Post-v1 exploration: the user asked whether TextAloud can use this platform
+  through a Windows SAPI 5 voice. The agreed direction is an optional
+  `apps/sapi_bridge/` Windows integration that registers a SAPI voice and
+  bridges SAPI `Speak` calls to the existing localhost service. The durable
+  plan is recorded in `docs/sapi_bridge.md`.
 - Validation status for the current loop:
   - `py -3 scripts\check_v1_completion.py --require-complete` passed and
     reported 9 ready criteria, 0 pending final-security criteria, and
@@ -537,6 +542,10 @@ This file is the live status log and shared memory for future Codex loops.
 - If third-party remote catalogs become a supported end-user feature instead of
   an operator-controlled escape hatch, add signed catalog or pinned-host policy
   work before treating that channel as trusted.
+- Optional post-v1 feature track: implement the Windows SAPI 5/TextAloud bridge
+  described in `docs/sapi_bridge.md`. Start with a feasibility spike that proves
+  TextAloud can enumerate a dummy custom SAPI voice before integrating the TTS
+  service.
 
 ## Decisions Made And Why
 
@@ -676,6 +685,16 @@ This file is the live status log and shared memory for future Codex loops.
   ahead of Phase 7 Milestone 3 because the user restated the product goal as a
   local server plus Chrome reader for long web content; a usable voice install
   path is a prerequisite for that end state.
+- The SAPI/TextAloud bridge should be an optional Windows client integration,
+  not a core API redesign. Keep it isolated under `apps/sapi_bridge/` and have
+  it call the existing localhost service.
+- The first SAPI bridge slice should prove COM/SAPI registration and TextAloud
+  visibility with dummy audio before connecting to `/v1/tts`. This prevents
+  spending integration effort before resolving likely 32-bit vs 64-bit and
+  registry-token issues.
+- For the SAPI bridge MVP, prefer synchronous `/v1/tts` over WebSocket
+  streaming. Streaming can be revisited after TextAloud visibility, basic audio
+  output, stop handling, and long-text chunking are understood.
 
 ## Commands To Run And Smoke Test
 
@@ -803,6 +822,10 @@ python3 scripts/package_windows_bundle.py
   default in this environment because `node` is not installed on `PATH`, but it
   now supports `--require-js-syntax`, `--node-executable`, and
   `TTS_PLATFORM_NODE` for strict validation when Node.js is available elsewhere.
+- TextAloud/SAPI integration is not implemented yet. It is a post-v1 plan in
+  `docs/sapi_bridge.md`. Main unknowns are TextAloud 3.x bitness, SAPI COM
+  registration shape, per-user vs machine-wide registration permissions, and
+  long-text responsiveness through synchronous SAPI calls.
 
 ## Resume Instructions For The Next Codex Loop
 
