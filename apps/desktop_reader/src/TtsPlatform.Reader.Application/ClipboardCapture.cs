@@ -16,7 +16,8 @@ public sealed record ClipboardCaptureResult(
     bool Succeeded,
     string Message,
     ReaderDocument? Document = null,
-    bool OpenDocument = false);
+    bool OpenDocument = false,
+    string? DuplicateDocumentId = null);
 
 public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
 {
@@ -52,7 +53,9 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
                 "Pause or stop playback before appending to the open document.");
         }
         catch (Exception exception) when (
-            exception is ReaderApiException or ReaderServiceUnavailableException)
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
         {
             return new ClipboardCaptureResult(false, exception.Message);
         }
@@ -61,6 +64,7 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
     public async Task<ClipboardCaptureResult> CreateAsync(
         string text,
         bool openDocument,
+        bool allowDuplicate = false,
         CancellationToken cancellationToken = default)
     {
         ValidateText(text);
@@ -71,7 +75,7 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
                     $"Clipboard {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}",
                     "clipboard",
                     text,
-                    AllowDuplicate: true),
+                    AllowDuplicate: allowDuplicate),
                 cancellationToken).ConfigureAwait(false);
             return new ClipboardCaptureResult(
                 true,
@@ -81,8 +85,43 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
                 document,
                 OpenDocument: openDocument);
         }
+        catch (ReaderApiException exception) when (
+            exception.ErrorType == "reader_duplicate_document")
+        {
+            exception.Details.TryGetValue("document_id", out var documentId);
+            return new ClipboardCaptureResult(
+                false,
+                "Identical clipboard text is already saved.",
+                DuplicateDocumentId: documentId as string);
+        }
         catch (Exception exception) when (
-            exception is ReaderApiException or ReaderServiceUnavailableException)
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            return new ClipboardCaptureResult(false, exception.Message);
+        }
+    }
+
+    public async Task<ClipboardCaptureResult> OpenExistingAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        try
+        {
+            var document = await client.GetDocumentAsync(documentId, cancellationToken)
+                .ConfigureAwait(false);
+            return new ClipboardCaptureResult(
+                true,
+                "Opened the existing clipboard document.",
+                document,
+                OpenDocument: true);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
         {
             return new ClipboardCaptureResult(false, exception.Message);
         }

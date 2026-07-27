@@ -115,6 +115,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ReadingWindowPager.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardDuplicateDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardDuplicateDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
@@ -206,6 +208,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "DesktopOpenTimer_Tick",
         "CheckDesktopOpenRequestAsync",
         "Opened a document saved from the browser.",
+        "DesktopOpenPollInterval = TimeSpan.FromSeconds(10)",
+        "DesktopOpenRateLimitBackoff = TimeSpan.FromMinutes(1)",
+        'exception.ErrorType == "rate_limited"',
     ]
     missing_browser_handoff_features = [
         value
@@ -217,6 +222,23 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             "Milestone 9 browser handoff features are missing: "
             f"{missing_browser_handoff_features}"
         )
+    clipboard_duplicate_features = [
+        "reader_duplicate_document",
+        "ClipboardDuplicateDialog",
+        "Open existing",
+        "Create anyway",
+        "Clipboard capture:",
+    ]
+    missing_clipboard_duplicate_features = [
+        value
+        for value in clipboard_duplicate_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_clipboard_duplicate_features:
+        raise DesktopReaderCheckError(
+            "Clipboard duplicate or error-handling features are missing: "
+            f"{missing_clipboard_duplicate_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
@@ -224,6 +246,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "speech_rules": "implemented",
         "library_workflow": "implemented",
         "browser_handoff": "implemented",
+        "clipboard_duplicate_choice": "implemented",
     }
 
 

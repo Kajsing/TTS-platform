@@ -17,6 +17,9 @@ namespace TtsPlatform.Reader.App;
 
 public partial class MainWindow : Window
 {
+    private static readonly TimeSpan DesktopOpenPollInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DesktopOpenRateLimitBackoff = TimeSpan.FromMinutes(1);
+
     private readonly IDesktopSettingsStore _settingsStore;
     private readonly bool _smokeTest;
     private DesktopSettings _settings;
@@ -47,7 +50,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
     private readonly DispatcherTimer _desktopOpenTimer = new()
     {
-        Interval = TimeSpan.FromSeconds(2),
+        Interval = DesktopOpenPollInterval,
     };
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
@@ -419,6 +422,7 @@ public partial class MainWindow : Window
         try
         {
             var openRequest = await GetClient().GetNextDesktopOpenRequestAsync();
+            _desktopOpenTimer.Interval = DesktopOpenPollInterval;
             if (openRequest is null)
             {
                 return;
@@ -445,8 +449,15 @@ public partial class MainWindow : Window
             OpenMainWindow();
             FooterText.Text = "Opened a document saved from the browser.";
         }
+        catch (ReaderApiException exception) when (exception.ErrorType == "rate_limited")
+        {
+            _desktopOpenTimer.Interval = DesktopOpenRateLimitBackoff;
+            FooterText.Text = "Browser handoff is waiting for the local service rate limit.";
+        }
         catch (Exception exception) when (
-            exception is ReaderApiException or ReaderServiceUnavailableException)
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
         {
             FooterText.Text = $"Browser handoff: {exception.Message}";
         }
@@ -717,6 +728,13 @@ public partial class MainWindow : Window
                 text,
                 change.SourceExecutable);
         }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Clipboard capture: {exception.Message}";
+        }
         finally
         {
             _clipboardPromptOpen = false;
@@ -749,10 +767,16 @@ public partial class MainWindow : Window
                     FooterText.Text = "Connect to the local Reader before saving.";
                     return;
                 }
-                await ApplyClipboardCaptureResultAsync(
-                    await _clipboardCapture.CreateAsync(
+                var openDocument = action == ClipboardCaptureAction.CreateNewDocument;
+                var result = await _clipboardCapture.CreateAsync(text, openDocument);
+                if (result.DuplicateDocumentId is not null)
+                {
+                    result = await ResolveClipboardDuplicateAsync(
+                        result.DuplicateDocumentId,
                         text,
-                        openDocument: action == ClipboardCaptureAction.CreateNewDocument));
+                        openDocument);
+                }
+                await ApplyClipboardCaptureResultAsync(result);
                 return;
             case ClipboardCaptureAction.AlwaysIgnoreApplication:
                 if (!string.IsNullOrWhiteSpace(sourceExecutable))
@@ -783,6 +807,29 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task<ClipboardCaptureResult> ResolveClipboardDuplicateAsync(
+        string documentId,
+        string text,
+        bool openDocument)
+    {
+        var dialog = new ClipboardDuplicateDialog
+        {
+            Owner = IsVisible ? this : null,
+        };
+        _ = dialog.ShowDialog();
+        return dialog.SelectedChoice switch
+        {
+            ClipboardDuplicateChoice.OpenExisting =>
+                await _clipboardCapture!.OpenExistingAsync(documentId),
+            ClipboardDuplicateChoice.CreateAnyway =>
+                await _clipboardCapture!.CreateAsync(
+                    text,
+                    openDocument,
+                    allowDuplicate: true),
+            _ => new ClipboardCaptureResult(false, "Clipboard text was not saved again."),
+        };
+    }
+
     private async Task ApplyClipboardCaptureResultAsync(ClipboardCaptureResult result)
     {
         FooterText.Text = result.Message;
@@ -791,12 +838,32 @@ public partial class MainWindow : Window
             return;
         }
 
-        await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+        try
+        {
+            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"{result.Message} Library refresh is delayed: {exception.Message}";
+            if (result.OpenDocument)
+            {
+                await LoadDocumentAsync(result.Document);
+            }
+            return;
+        }
         LoadMoreButton.IsEnabled = _library.HasMore;
         if (result.OpenDocument)
         {
-            var current = _library.Documents.FirstOrDefault(item => item.Id == result.Document.Id)
-                ?? result.Document;
+            var current = _library.Documents.FirstOrDefault(item => item.Id == result.Document.Id);
+            if (current is null)
+            {
+                await LoadDocumentAsync(result.Document);
+                FooterText.Text = result.Message;
+                return;
+            }
             DocumentsGrid.SelectedItem = current;
             if (_editor is not null &&
                 (DocumentsGrid.SelectedItem as ReaderDocument)?.Id == _editor.Document?.Id)
@@ -808,6 +875,7 @@ public partial class MainWindow : Window
                 UpdateEditorButtons();
             }
         }
+        FooterText.Text = result.Message;
     }
 
     private bool IsBlockedApplication(string? executable)

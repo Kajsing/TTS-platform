@@ -48,7 +48,45 @@ public sealed class ClipboardCaptureTests
         Assert.True(create.OpenDocument);
         Assert.False(inbox.OpenDocument);
         Assert.All(client.Created, request => Assert.Equal("clipboard", request.SourceType));
-        Assert.All(client.Created, request => Assert.True(request.AllowDuplicate));
+        Assert.All(client.Created, request => Assert.False(request.AllowDuplicate));
+    }
+
+    [Fact]
+    public async Task Duplicate_create_returns_existing_id_and_requires_explicit_retry()
+    {
+        var client = new CaptureClient { DuplicateDocumentId = "existing-doc" };
+        var capture = new ClipboardDocumentCapture(client);
+
+        var duplicate = await capture.CreateAsync("Saved text", openDocument: true);
+
+        Assert.False(duplicate.Succeeded);
+        Assert.Equal("existing-doc", duplicate.DuplicateDocumentId);
+        Assert.Single(client.Created);
+        Assert.False(client.Created[0].AllowDuplicate);
+
+        var created = await capture.CreateAsync(
+            "Saved text",
+            openDocument: true,
+            allowDuplicate: true);
+
+        Assert.True(created.Succeeded);
+        Assert.Equal(2, client.Created.Count);
+        Assert.True(client.Created[1].AllowDuplicate);
+    }
+
+    [Fact]
+    public async Task Duplicate_document_can_be_opened_without_creating_another_copy()
+    {
+        var client = new CaptureClient();
+        var capture = new ClipboardDocumentCapture(client);
+
+        var result = await capture.OpenExistingAsync("existing-doc");
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.OpenDocument);
+        Assert.Equal("existing-doc", result.Document?.Id);
+        Assert.Equal(["existing-doc"], client.OpenedDocumentIds);
+        Assert.Empty(client.Created);
     }
 
     [Fact]
@@ -64,8 +102,8 @@ public sealed class ClipboardCaptureTests
         Assert.Empty(EphemeralTextChunker.Chunk("   "));
     }
 
-    private static ReaderDocument Document(int rowVersion) => new(
-        "doc",
+    private static ReaderDocument Document(int rowVersion, string id = "doc") => new(
+        id,
         "Document",
         "plain_text",
         null,
@@ -87,16 +125,38 @@ public sealed class ClipboardCaptureTests
     private sealed class CaptureClient : IReaderServiceClient
     {
         public bool AppendLocked { get; init; }
+        public string? DuplicateDocumentId { get; init; }
         public List<string> AppendedText { get; } = [];
         public List<int> AppendRowVersions { get; } = [];
         public List<CreateDocumentRequest> Created { get; } = [];
+        public List<string> OpenedDocumentIds { get; } = [];
 
         public Task<ReaderDocument> CreateDocumentAsync(
             CreateDocumentRequest request,
             CancellationToken cancellationToken = default)
         {
             Created.Add(request);
+            if (!request.AllowDuplicate && DuplicateDocumentId is not null)
+            {
+                return Task.FromException<ReaderDocument>(
+                    new ReaderApiException(
+                        "reader_duplicate_document",
+                        "duplicate",
+                        409,
+                        details: new Dictionary<string, object?>
+                        {
+                            ["document_id"] = DuplicateDocumentId,
+                        }));
+            }
             return Task.FromResult(Document(Created.Count));
+        }
+
+        public Task<ReaderDocument> GetDocumentAsync(
+            string documentId,
+            CancellationToken cancellationToken = default)
+        {
+            OpenedDocumentIds.Add(documentId);
+            return Task.FromResult(Document(1, documentId));
         }
 
         public Task<MutationResponse> AppendContentAsync(

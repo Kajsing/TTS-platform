@@ -18,6 +18,27 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed post-Milestone 9 reliability follow-up: a real desktop run exposed
+  that the two-second browser-handoff poll alone exhausted the default
+  30-request-per-minute localhost limit. The bounded fix reduces normal polling
+  to ten seconds, backs off for one minute after a typed rate-limit response,
+  and contains expected clipboard/network failures so WPF event handlers do
+  not terminate the process. Clipboard document creation now rejects identical
+  content first and offers explicit Open existing, Create anyway, and Cancel
+  choices instead of silently allowing duplicates. The newer accidental local
+  duplicate was archived through the reversible Reader state API after all
+  validation passed; the older Inbox copy remains canonical. The rebuilt Reader
+  is running against the healthy schema-4 local service with a responsive WPF
+  window.
+- Post-Milestone 9 reliability validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 392 passed; `py -3 -m ruff check .`, `git diff
+    --check`, and .NET format verification passed;
+  - `.NET Release` solution tests: 59 passed; the full WPF solution build
+    completed with zero warnings and zero errors;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live Reader behavior, privacy-safe clipboard/Windows integration,
+    audio, self-contained packaging, WPF rendering, and source checks for the
+    duplicate-choice and rate-limit protections.
 - Reader Milestone 9 implementation details:
   - the protected browser-capture API accepts bounded structured blocks and
     HTTP(S)-only source metadata, writes through the Reader application layer,
