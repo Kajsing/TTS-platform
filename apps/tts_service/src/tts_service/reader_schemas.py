@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from reader_core import (
     BlockKind,
     Bookmark,
@@ -16,6 +17,7 @@ from reader_core import (
     QueueStatus,
     ReaderBlock,
     ReaderCursor,
+    ReaderDesktopOpenRequest,
     ReaderDocument,
     ReaderExportJob,
     RuleScope,
@@ -128,6 +130,53 @@ class CreateReaderDocumentRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10_000_000)
     language_hint: str | None = Field(default=None, max_length=64)
     allow_duplicate: bool = False
+
+
+class ReaderBrowserCaptureBlock(BaseModel):
+    kind: BlockKind
+    text: str = Field(min_length=1, max_length=1_000_000)
+    heading_level: int | None = Field(default=None, ge=1, le=6)
+
+    @model_validator(mode="after")
+    def validate_heading_level(self) -> "ReaderBrowserCaptureBlock":
+        if self.kind is BlockKind.HEADING and self.heading_level is None:
+            raise ValueError("browser heading blocks require heading_level")
+        if self.kind is not BlockKind.HEADING and self.heading_level is not None:
+            raise ValueError("heading_level is only valid for heading blocks")
+        return self
+
+
+class CreateReaderBrowserCaptureRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    source_uri: str = Field(min_length=1, max_length=4096)
+    source_name: str | None = Field(default=None, max_length=500)
+    language_hint: str | None = Field(default=None, max_length=64)
+    blocks: list[ReaderBrowserCaptureBlock] = Field(min_length=1, max_length=5000)
+    extraction_source: str = Field(default="readable-blocks", max_length=64)
+    truncated: bool = False
+    allow_duplicate: bool = False
+    reuse_existing: bool = True
+    add_to_queue: bool = False
+    open_in_desktop: bool = False
+
+    @field_validator("source_uri")
+    @classmethod
+    def validate_source_uri(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("source_uri must be an HTTP(S) page URL without credentials")
+        return value
+
+    @model_validator(mode="after")
+    def validate_total_characters(self) -> "CreateReaderBrowserCaptureRequest":
+        if sum(len(block.text) for block in self.blocks) > 10_000_000:
+            raise ValueError("browser capture exceeds the document character limit")
+        return self
 
 
 class UpdateReaderDocumentRequest(BaseModel):
@@ -397,6 +446,30 @@ class ReaderQueueItemResponse(BaseModel):
 
 class ReaderQueueResponse(BaseModel):
     items: list[ReaderQueueItemResponse]
+
+
+class ReaderDesktopOpenRequestResponse(BaseModel):
+    id: str
+    document_id: str
+    created_at: datetime
+
+    @classmethod
+    def from_domain(
+        cls,
+        request: ReaderDesktopOpenRequest,
+    ) -> "ReaderDesktopOpenRequestResponse":
+        return cls(
+            id=request.id,
+            document_id=request.document_id,
+            created_at=request.created_at,
+        )
+
+
+class ReaderBrowserCaptureResponse(BaseModel):
+    document: ReaderDocumentResponse
+    queue_item: ReaderQueueItemResponse | None
+    desktop_open_request: ReaderDesktopOpenRequestResponse | None
+    reused_existing: bool
 
 
 class CreateReaderExportRequest(BaseModel):
@@ -697,6 +770,12 @@ class ReaderExportCapability(BaseModel):
     formats: list[str]
 
 
+class ReaderBrowserCaptureCapability(BaseModel):
+    available: bool
+    max_characters: int
+    desktop_handoff: bool
+
+
 class ReaderCapabilitiesResponse(BaseModel):
     contract_version: int
     enabled: bool
@@ -705,6 +784,7 @@ class ReaderCapabilitiesResponse(BaseModel):
     rules: ReaderRuleCapability
     playback: ReaderPlaybackCapability
     exports: ReaderExportCapability
+    browser_capture: ReaderBrowserCaptureCapability
 
 
 class ReaderErrorBody(BaseModel):

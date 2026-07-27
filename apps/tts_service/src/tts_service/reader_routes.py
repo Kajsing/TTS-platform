@@ -17,6 +17,7 @@ from reader_core import (
     PlaybackPosition,
     QueueItem,
     ReaderCursor,
+    ReaderDesktopOpenRequest,
     ReaderError,
     ReaderStaleCursorError,
     ReaderValidationError,
@@ -39,6 +40,7 @@ from .reader_schemas import (
     AddReaderQueueItemRequest,
     AppendReaderContentRequest,
     CreateReaderBookmarkRequest,
+    CreateReaderBrowserCaptureRequest,
     CreateReaderDocumentRequest,
     CreateReaderExportRequest,
     CreateReaderRuleRequest,
@@ -48,9 +50,12 @@ from .reader_schemas import (
     ReaderBlockResponse,
     ReaderBookmarkListResponse,
     ReaderBookmarkResponse,
+    ReaderBrowserCaptureCapability,
+    ReaderBrowserCaptureResponse,
     ReaderCapabilitiesResponse,
     ReaderCursorPayload,
     ReaderDatabaseCapability,
+    ReaderDesktopOpenRequestResponse,
     ReaderDiagnosticsResponse,
     ReaderDocumentPageResponse,
     ReaderDocumentResponse,
@@ -92,6 +97,7 @@ from .reader_schemas import (
     UpdateReaderRuleSetRequest,
 )
 from .reader_service import (
+    BrowserCaptureContentBlock,
     ReaderApplicationService,
     ReaderImportPreview,
     ReaderImportPreviewCapacityError,
@@ -144,6 +150,11 @@ def build_reader_router() -> APIRouter:
             ),
             exports=ReaderExportCapability(
                 formats=list(config.exports.formats) if config.exports.enabled else []
+            ),
+            browser_capture=ReaderBrowserCaptureCapability(
+                available=runtime.database_ready,
+                max_characters=10_000_000,
+                desktop_handoff=True,
             ),
         )
 
@@ -272,6 +283,53 @@ def build_reader_router() -> APIRouter:
             )
         )
         return ReaderDocumentResponse.from_domain(document)
+
+    @router.post(
+        "/browser-captures",
+        response_model=ReaderBrowserCaptureResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_browser_capture(
+        request: Request,
+        payload: CreateReaderBrowserCaptureRequest,
+    ) -> ReaderBrowserCaptureResponse:
+        service = _service(request)
+        document, queue_item, open_request, reused_existing = _run_reader(
+            lambda: service.create_browser_capture(
+                title=payload.title,
+                source_uri=payload.source_uri,
+                source_name=payload.source_name,
+                language_hint=payload.language_hint,
+                blocks=tuple(
+                    BrowserCaptureContentBlock(
+                        kind=block.kind,
+                        text=block.text,
+                        heading_level=block.heading_level,
+                    )
+                    for block in payload.blocks
+                ),
+                extraction_source=payload.extraction_source,
+                truncated=payload.truncated,
+                allow_duplicate=payload.allow_duplicate,
+                reuse_existing=payload.reuse_existing,
+                add_to_queue=payload.add_to_queue,
+                open_in_desktop=payload.open_in_desktop,
+            )
+        )
+        return ReaderBrowserCaptureResponse(
+            document=ReaderDocumentResponse.from_domain(document),
+            queue_item=(
+                ReaderQueueItemResponse.from_domain(queue_item)
+                if queue_item is not None
+                else None
+            ),
+            desktop_open_request=(
+                ReaderDesktopOpenRequestResponse.from_domain(open_request)
+                if open_request is not None
+                else None
+            ),
+            reused_existing=reused_existing,
+        )
 
     @router.post(
         "/documents/{document_id}/duplicate-as-editable",
@@ -792,6 +850,58 @@ def build_reader_router() -> APIRouter:
             document_id=document_id,
         )
         return ReaderQueueItemResponse.from_domain(item) if item is not None else None
+
+    @router.post(
+        "/documents/{document_id}/desktop-open",
+        response_model=ReaderDesktopOpenRequestResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def request_desktop_open(
+        request: Request,
+        document_id: str,
+    ) -> ReaderDesktopOpenRequestResponse:
+        service = _service(request)
+        open_request = _run_reader(
+            lambda: service.repository.request_desktop_open(
+                ReaderDesktopOpenRequest(
+                    id=str(uuid.uuid4()),
+                    document_id=document_id,
+                    created_at=datetime.now(timezone.utc),
+                )
+            ),
+            missing_entity="document",
+        )
+        return ReaderDesktopOpenRequestResponse.from_domain(open_request)
+
+    @router.get(
+        "/desktop/open-requests/next",
+        response_model=ReaderDesktopOpenRequestResponse | None,
+    )
+    async def next_desktop_open_request(
+        request: Request,
+    ) -> ReaderDesktopOpenRequestResponse | None:
+        service = _service(request)
+        open_request = _run_reader(service.repository.peek_desktop_open_request)
+        return (
+            ReaderDesktopOpenRequestResponse.from_domain(open_request)
+            if open_request is not None
+            else None
+        )
+
+    @router.delete(
+        "/desktop/open-requests/{request_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def acknowledge_desktop_open_request(
+        request: Request,
+        request_id: str,
+    ) -> Response:
+        service = _service(request)
+        _run_reader(
+            lambda: service.repository.acknowledge_desktop_open_request(request_id),
+            missing_entity="desktop open request",
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.get("/exports", response_model=ReaderExportJobListResponse)
     async def list_exports(request: Request) -> ReaderExportJobListResponse:

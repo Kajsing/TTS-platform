@@ -200,12 +200,30 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         raise DesktopReaderCheckError(
             f"Milestone 8 library-workflow features are missing: {missing_library_features}"
         )
+    browser_handoff_features = [
+        "GetNextDesktopOpenRequestAsync",
+        "AcknowledgeDesktopOpenRequestAsync",
+        "DesktopOpenTimer_Tick",
+        "CheckDesktopOpenRequestAsync",
+        "Opened a document saved from the browser.",
+    ]
+    missing_browser_handoff_features = [
+        value
+        for value in browser_handoff_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_browser_handoff_features:
+        raise DesktopReaderCheckError(
+            "Milestone 9 browser handoff features are missing: "
+            f"{missing_browser_handoff_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
         "structured_import": "implemented",
         "speech_rules": "implemented",
         "library_workflow": "implemented",
+        "browser_handoff": "implemented",
     }
 
 

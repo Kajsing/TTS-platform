@@ -98,7 +98,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 3,
+        "schema_version": 4,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -107,7 +107,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 3,
+        "schema_version": 4,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -128,6 +128,11 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     }
     assert payload["playback"]["stream_protocol_version"] == 1
     assert payload["exports"]["formats"] == ["wav"]
+    assert payload["browser_capture"] == {
+        "available": True,
+        "max_characters": 10_000_000,
+        "desktop_handoff": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -457,6 +462,125 @@ def test_reader_routes_enforce_origin_policy(tmp_path: Path) -> None:
 
     assert response.status_code == 403
     assert response.json()["error"]["type"] == "forbidden_origin"
+
+
+def test_browser_capture_is_structured_protected_and_handed_to_desktop(
+    tmp_path: Path,
+) -> None:
+    extension_origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+    client, headers, _ = build_reader_bundle(
+        tmp_path,
+        security_config={"allowed_origins": [extension_origin]},
+    )
+    payload = {
+        "title": "Structured browser article",
+        "source_uri": "https://example.test/articles/reader?part=1",
+        "source_name": "example.test",
+        "language_hint": "en",
+        "blocks": [
+            {"kind": "heading", "text": "Chapter one", "heading_level": 2},
+            {"kind": "paragraph", "text": "Readable browser body."},
+            {"kind": "list_item", "text": "A captured list item."},
+            {"kind": "quote", "text": "A captured quotation."},
+        ],
+        "extraction_source": "readable-blocks",
+        "truncated": False,
+        "add_to_queue": True,
+        "open_in_desktop": True,
+    }
+
+    unauthenticated = client.post(
+        "/v1/reader/browser-captures",
+        headers={"Origin": extension_origin},
+        json=payload,
+    )
+    wrong_origin = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": "https://evil.example"},
+        json=payload,
+    )
+    created = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": extension_origin},
+        json=payload,
+    )
+
+    assert unauthenticated.status_code == 401
+    assert wrong_origin.status_code == 403
+    assert created.status_code == 201, created.text
+    body = created.json()
+    document = body["document"]
+    assert document["source_type"] == "browser"
+    assert document["source_uri"] == payload["source_uri"]
+    assert document["metadata"]["browser_capture"] == {
+        "extraction_source": "readable-blocks",
+        "truncated": False,
+    }
+    assert body["queue_item"]["document_id"] == document["id"]
+    assert body["desktop_open_request"]["document_id"] == document["id"]
+    assert body["reused_existing"] is False
+
+    reused = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": extension_origin},
+        json=payload,
+    )
+    assert reused.status_code == 201
+    assert reused.json()["document"]["id"] == document["id"]
+    assert reused.json()["queue_item"]["id"] == body["queue_item"]["id"]
+    assert reused.json()["desktop_open_request"]["id"] == body["desktop_open_request"]["id"]
+    assert reused.json()["reused_existing"] is True
+
+    duplicate_rejected = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": extension_origin},
+        json={**payload, "reuse_existing": False},
+    )
+    assert duplicate_rejected.status_code == 409
+
+    different_source_rejected = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": extension_origin},
+        json={**payload, "source_uri": "https://other.example/same-text"},
+    )
+    assert different_source_rejected.status_code == 409
+
+    blocks = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+    assert [block["kind"] for block in blocks] == [
+        "heading",
+        "paragraph",
+        "list_item",
+        "quote",
+    ]
+    assert [block["text"] for block in blocks] == [
+        item["text"] for item in payload["blocks"]
+    ]
+
+    next_request = client.get(
+        "/v1/reader/desktop/open-requests/next",
+        headers=headers,
+    )
+    assert next_request.status_code == 200
+    assert next_request.json()["document_id"] == document["id"]
+    acknowledged = client.delete(
+        f"/v1/reader/desktop/open-requests/{next_request.json()['id']}",
+        headers=headers,
+    )
+    assert acknowledged.status_code == 204
+    assert client.get(
+        "/v1/reader/desktop/open-requests/next",
+        headers=headers,
+    ).json() is None
+
+    unsafe_source = client.post(
+        "/v1/reader/browser-captures",
+        headers={**headers, "Origin": extension_origin},
+        json={**payload, "source_uri": "file:///C:/private.txt"},
+    )
+    assert unsafe_source.status_code == 400
 
 
 def test_document_crud_search_keyset_and_block_paging(tmp_path: Path) -> None:
@@ -965,7 +1089,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 3
+    assert diagnostics.json()["schema_version"] == 4
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,

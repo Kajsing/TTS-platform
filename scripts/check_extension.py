@@ -249,6 +249,11 @@ def verify_extension_wiring() -> None:
             'id="previous-section"',
             'id="next-section"',
             'id="onboarding-status"',
+            'id="reader-status"',
+            'id="save-selection"',
+            'id="save-page"',
+            'id="add-page-to-queue"',
+            'id="open-page-desktop"',
             'id="copy-command"',
             'id="origin-command"',
         ],
@@ -258,6 +263,12 @@ def verify_extension_wiring() -> None:
             '"tts-extension:focus-source-tab"',
             '"tts-extension:previous-section"',
             '"tts-extension:next-section"',
+            '"tts-extension:save-selection"',
+            '"tts-extension:save-page"',
+            '"tts-extension:add-page-to-queue"',
+            '"tts-extension:open-page-in-desktop"',
+            "formatReaderStatus",
+            '"Reader library ready"',
             "formatOnboardingStatus",
             "formatReadinessCheck",
             '"Backend ready"',
@@ -284,6 +295,15 @@ def verify_extension_wiring() -> None:
             '"tts-extension:focus-source-tab"',
             '"tts-extension:previous-section"',
             '"tts-extension:next-section"',
+            '"tts-extension:save-selection"',
+            '"tts-extension:save-page"',
+            '"tts-extension:add-page-to-queue"',
+            '"tts-extension:open-page-in-desktop"',
+            "async function saveCaptureToLibrary(",
+            'readerFetchJson(config, "/v1/reader/browser-captures"',
+            "Authorization: `Bearer ${config.token}`",
+            "add_to_queue: addToQueue",
+            "open_in_desktop: openInDesktop",
             "async function focusSourceTab()",
             "chrome.tabs.get",
             "chrome.tabs.update",
@@ -343,6 +363,9 @@ def verify_extension_wiring() -> None:
             "MAX_DOM_TRAVERSAL_NODES",
             "collectMatchingElements",
             "traversalLimitReached",
+            '"tts-extension:get-library-page"',
+            "limitBlockEntries",
+            "MAX_LIBRARY_CAPTURE_CHARS",
         ],
         EXTENSION_ROOT / "offscreen" / "offscreen.js": [
             "start_text_chunk_index",
@@ -503,6 +526,20 @@ def verify_extension_privacy_boundaries(extension_root: Path = EXTENSION_ROOT) -
             "sendOffscreenMessage({",
         ],
     )
+    page_meta_sanitizer = contents["background"].split(
+        "function sanitizePageCaptureMeta", 1
+    )[-1].split("function sanitizePageStructureMeta", 1)[0]
+    if "blocks" in page_meta_sanitizer or "text:" in page_meta_sanitizer:
+        errors.append(
+            "background page-capture session metadata must not retain raw blocks or text"
+        )
+    capture_result = contents["content script"].split(
+        "function buildCaptureResult", 1
+    )[-1].split("chrome.runtime.onMessage", 1)[0]
+    if "blocks:" not in capture_result or "blocks:" in capture_result.split("meta:", 1)[-1]:
+        errors.append(
+            "content script must return raw blocks transiently outside persisted capture metadata"
+        )
     _require_fragments(
         errors,
         "offscreen",

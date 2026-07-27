@@ -143,6 +143,11 @@ public interface IReaderServiceClient
     Task<ReaderQueueItem?> AdvanceQueueAsync(
         string documentId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDesktopOpenRequest?> GetNextDesktopOpenRequestAsync(
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task AcknowledgeDesktopOpenRequestAsync(
+        string requestId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task RemoveQueueItemAsync(
         string itemId,
         int expectedRowVersion,
@@ -487,6 +492,11 @@ public sealed record ReaderQueueItem(
     int RowVersion);
 
 public sealed record ReaderQueuePage(IReadOnlyList<ReaderQueueItem> Items);
+
+public sealed record ReaderDesktopOpenRequest(
+    string Id,
+    string DocumentId,
+    DateTimeOffset CreatedAt);
 
 public sealed record CreateExportRequest(
     [property: JsonPropertyName("document_ids")] IReadOnlyList<string>? DocumentIds = null,

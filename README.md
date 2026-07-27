@@ -32,7 +32,7 @@ and v1-readiness work:
 - `tts` CLI
 - benchmark script
 - audio regression tests
-- Chrome MV3 prototype
+- Chrome MV3 Reader integration
 - offscreen streamed playback
 - extension popup, background worker, and content-script text capture
 - browser-friendly WebSocket start-event auth for the localhost extension flow
@@ -349,7 +349,7 @@ artifacts.
 
 The benchmark script reports average latency, output duration, output size, and an approximate real-time factor.
 
-## Chrome Extension Prototype
+## Chrome Extension Reader
 
 See [apps/chrome_extension/README.md](apps/chrome_extension/README.md) for setup and loading instructions.
 
@@ -357,6 +357,8 @@ The extension currently supports:
 
 - speaking the current text selection
 - speaking a bounded readable snapshot of the current page
+- saving selections and structured page captures to the desktop Reader library
+- adding captured pages to the durable Reader queue and requesting safe desktop opening
 - offscreen playback of streamed PCM audio
 - popup-side reader progress for streamed page playback
 - resuming page playback from the latest reader progress on the active tab
@@ -386,7 +388,14 @@ The extension currently supports:
 - packaged local install/troubleshooting guidance and extension icons for Chrome
   handoff builds
 
-The browser client is still a prototype. It deliberately keeps all browser-specific behavior inside `apps/chrome_extension/` and reuses the existing localhost HTTP and WebSocket contracts. Page playback uses the WebSocket stream path, which supports a larger `tts.max_chars_per_stream` limit than the shorter HTTP/job request path and exposes reader progress in stream events. The extension manifest keeps service host permissions limited to localhost, exposes no extension pages through `web_accessible_resources`, and handles page access through the declared content script.
+The browser client keeps all browser-specific behavior inside
+`apps/chrome_extension/` and reuses the existing protected localhost HTTP and
+WebSocket contracts. Page playback uses the WebSocket stream path, while
+structured selection/page saves use the Reader API and never retain raw page
+text in extension storage. The extension manifest keeps service host
+permissions limited to localhost, exposes no extension pages through
+`web_accessible_resources`, and handles page access through the declared
+content script.
 
 For extension-specific setup and troubleshooting, see
 [README.md](apps/chrome_extension/README.md) and

@@ -38,6 +38,7 @@ def test_local_reader_bundle_check_runs_bundle_compatible_commands(
         "extension",
         "extension_onboarding",
         "extension_reader_flow",
+        "extension_library_flow",
         "chrome_extension_smoke",
         "windows_service_task",
     ]
@@ -47,6 +48,7 @@ def test_local_reader_bundle_check_runs_bundle_compatible_commands(
         ["python-test", "scripts/check_extension.py"],
         ["python-test", "scripts/check_extension_onboarding.py"],
         ["python-test", "scripts/check_extension_reader_flow.py"],
+        ["python-test", "scripts/check_extension_library_flow.py"],
         ["python-test", "scripts/check_chrome_extension_smoke.py"],
         ["python-test", "scripts/check_windows_service_task.py"],
     ]
@@ -96,7 +98,7 @@ def test_local_reader_bundle_check_forwards_strict_extension_flags(
     ]
     assert calls[2][1] is not None
     assert calls[2][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
-    assert calls[5][0] == [
+    assert calls[6][0] == [
         "python-test",
         "scripts/check_chrome_extension_smoke.py",
         "--browser-executable",
@@ -104,8 +106,8 @@ def test_local_reader_bundle_check_forwards_strict_extension_flags(
         "--require-browser",
         "--headed",
     ]
-    assert calls[5][1] is not None
-    assert calls[5][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
+    assert calls[6][1] is not None
+    assert calls[6][1]["TTS_PLATFORM_NODE"] == str(node_path.resolve())
 
 
 def test_local_reader_bundle_check_can_include_real_voice_demo(

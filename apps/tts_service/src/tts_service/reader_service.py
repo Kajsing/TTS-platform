@@ -23,8 +23,11 @@ from reader_core import (
     BlockKind,
     DocumentPage,
     DocumentState,
+    QueueItem,
+    QueueStatus,
     ReaderBlock,
     ReaderDatabaseReport,
+    ReaderDesktopOpenRequest,
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderError,
@@ -77,6 +80,13 @@ class ReaderImportPreviewNotFoundError(ReaderError):
 @dataclass(frozen=True, slots=True)
 class ReaderImportPreviewCapacityError(ReaderError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserCaptureContentBlock:
+    kind: BlockKind
+    text: str
+    heading_level: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +223,96 @@ class ReaderApplicationService:
             block_count=document.total_blocks,
         )
         return document
+
+    def create_browser_capture(
+        self,
+        *,
+        title: str,
+        source_uri: str,
+        source_name: str | None,
+        language_hint: str | None,
+        blocks: tuple[BrowserCaptureContentBlock, ...],
+        extraction_source: str,
+        truncated: bool,
+        allow_duplicate: bool,
+        reuse_existing: bool,
+        add_to_queue: bool,
+        open_in_desktop: bool,
+    ) -> tuple[
+        ReaderDocument,
+        QueueItem | None,
+        ReaderDesktopOpenRequest | None,
+        bool,
+    ]:
+        source_text = "\n\n".join(block.text for block in blocks)
+        source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+        duplicate = self.repository.find_document_by_source_hash(source_hash)
+        reusable_browser_capture = (
+            duplicate is not None
+            and duplicate.source_type is SourceType.BROWSER
+            and duplicate.source_uri == source_uri
+        )
+        reused_existing = (
+            not allow_duplicate and reuse_existing and reusable_browser_capture
+        )
+        if duplicate is not None and not allow_duplicate and not reuse_existing:
+            raise ReaderDuplicateDocumentError(duplicate.id)
+        if duplicate is not None and not allow_duplicate and not reusable_browser_capture:
+            raise ReaderDuplicateDocumentError(duplicate.id)
+        if reused_existing:
+            document = duplicate
+            assert document is not None
+        else:
+            bundle = _reader_bundle_from_browser_capture(
+                title=title,
+                source_uri=source_uri,
+                source_name=source_name,
+                language_hint=language_hint,
+                blocks=blocks,
+                extraction_source=extraction_source,
+                truncated=truncated,
+                source_sha256=source_hash,
+            )
+            document = self.repository.create_document(bundle)
+        queue_item: QueueItem | None = None
+        now = datetime.now(timezone.utc)
+        if add_to_queue:
+            queue_item = next(
+                (
+                    item
+                    for item in self.repository.list_queue()
+                    if item.document_id == document.id
+                    and item.status in {QueueStatus.QUEUED, QueueStatus.PLAYING}
+                ),
+                None,
+            )
+            if queue_item is None:
+                queue_item = self.repository.add_queue_item(
+                    QueueItem(
+                        id=str(uuid.uuid4()),
+                        document_id=document.id,
+                        ordinal=self.next_queue_ordinal(),
+                        status=QueueStatus.QUEUED,
+                        added_at=now,
+                        updated_at=now,
+                    )
+                )
+        open_request: ReaderDesktopOpenRequest | None = None
+        if open_in_desktop:
+            open_request = self.repository.request_desktop_open(
+                ReaderDesktopOpenRequest(
+                    id=str(uuid.uuid4()),
+                    document_id=document.id,
+                    created_at=now,
+                )
+            )
+        self.observability.log_reader_operation(
+            operation="browser_capture",
+            document_id=document.id,
+            character_count=document.total_characters,
+            block_count=document.total_blocks,
+        )
+        return document, queue_item, open_request, reused_existing
 
     def list_documents(
         self,
@@ -839,6 +939,98 @@ def _reader_bundle_from_import(imported: ImportedDocument) -> ReaderDocumentBund
         },
     )
     return ReaderDocumentBundle(document=document, sections=sections, blocks=blocks)
+
+
+def _reader_bundle_from_browser_capture(
+    *,
+    title: str,
+    source_uri: str,
+    source_name: str | None,
+    language_hint: str | None,
+    blocks: tuple[BrowserCaptureContentBlock, ...],
+    extraction_source: str,
+    truncated: bool,
+    source_sha256: str,
+) -> ReaderDocumentBundle:
+    document_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    sections: list[ReaderSection] = []
+    reader_blocks: list[ReaderBlock] = []
+    section_stack: list[tuple[int, str]] = []
+    current_section_id: str | None = None
+
+    for ordinal, source_block in enumerate(blocks):
+        if source_block.kind is BlockKind.HEADING or current_section_id is None:
+            level = source_block.heading_level or 1
+            while section_stack and section_stack[-1][0] >= level:
+                section_stack.pop()
+            parent_section_id = section_stack[-1][1] if section_stack else None
+            current_section_id = str(uuid.uuid4())
+            sections.append(
+                ReaderSection(
+                    id=current_section_id,
+                    document_id=document_id,
+                    ordinal=len(sections),
+                    level=level,
+                    heading=(
+                        source_block.text
+                        if source_block.kind is BlockKind.HEADING
+                        else None
+                    ),
+                    first_block_ordinal=ordinal,
+                    parent_section_id=parent_section_id,
+                    metadata={"source": "browser"},
+                )
+            )
+            section_stack.append((level, current_section_id))
+        reader_blocks.append(
+            ReaderBlock(
+                id=str(uuid.uuid4()),
+                document_id=document_id,
+                section_id=current_section_id,
+                ordinal=ordinal,
+                kind=source_block.kind,
+                text=source_block.text,
+                character_count=len(source_block.text),
+                content_sha256=hashlib.sha256(source_block.text.encode("utf-8")).hexdigest(),
+                metadata={
+                    "source": "browser",
+                    **(
+                        {"heading_level": source_block.heading_level}
+                        if source_block.heading_level is not None
+                        else {}
+                    ),
+                },
+            )
+        )
+
+    document = ReaderDocument(
+        id=document_id,
+        title=title,
+        source_type=SourceType.BROWSER,
+        source_name=source_name,
+        source_uri=source_uri,
+        source_sha256=source_sha256,
+        language_hint=language_hint,
+        state=DocumentState.INBOX,
+        created_at=now,
+        updated_at=now,
+        imported_at=now,
+        total_sections=len(sections),
+        total_blocks=len(reader_blocks),
+        total_characters=sum(block.character_count for block in reader_blocks),
+        metadata={
+            "browser_capture": {
+                "extraction_source": extraction_source,
+                "truncated": truncated,
+            }
+        },
+    )
+    return ReaderDocumentBundle(
+        document=document,
+        sections=tuple(sections),
+        blocks=tuple(reader_blocks),
+    )
 
 
 def _bundle_with_source_uri(

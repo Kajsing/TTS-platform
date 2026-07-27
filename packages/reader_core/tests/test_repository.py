@@ -15,6 +15,7 @@ from reader_core import (
     QueueStatus,
     ReaderConflictError,
     ReaderCursor,
+    ReaderDesktopOpenRequest,
     ReaderEditHistoryError,
     ReaderExportJob,
     ReaderLibrary,
@@ -607,6 +608,28 @@ def test_queue_activation_and_advance_are_atomic_and_durable(repository, documen
     persisted = reopened.list_queue()
     assert [item.document_id for item in persisted] == [document.id, second.id]
     assert [item.status for item in persisted] == [QueueStatus.COMPLETED, QueueStatus.PLAYING]
+
+
+def test_desktop_open_request_is_idempotent_persistent_and_acknowledged(
+    repository,
+    document,
+) -> None:
+    request = ReaderDesktopOpenRequest(
+        id=str(uuid.uuid4()),
+        document_id=document.id,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    created = repository.request_desktop_open(request)
+    duplicate = repository.request_desktop_open(
+        replace(request, id=str(uuid.uuid4()))
+    )
+    reopened = SqliteReaderRepository(repository.database_path)
+
+    assert duplicate == created
+    assert reopened.peek_desktop_open_request() == created
+    reopened.acknowledge_desktop_open_request(created.id)
+    assert reopened.peek_desktop_open_request() is None
 
 
 def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:

@@ -12,6 +12,7 @@ const statusText = document.querySelector("#status-text");
 const extensionOrigin = document.querySelector("#extension-origin");
 const serviceStatus = document.querySelector("#service-status");
 const onboardingStatus = document.querySelector("#onboarding-status");
+const readerStatus = document.querySelector("#reader-status");
 const originCommand = document.querySelector("#origin-command");
 const originSnippet = document.querySelector("#origin-snippet");
 const voiceHint = document.querySelector("#voice-hint");
@@ -50,6 +51,7 @@ async function refreshServiceSnapshot(configuredVoice = fields.voice.value) {
   applyServiceTextLimits(snapshot);
   serviceStatus.textContent = formatServiceSnapshot(snapshot);
   onboardingStatus.textContent = formatOnboardingStatus(snapshot);
+  readerStatus.textContent = formatReaderStatus(snapshot);
   originCommand.textContent = snapshot.originCliCommand;
   originSnippet.textContent = snapshot.originConfigSnippet;
   populateVoiceOptions({
@@ -151,6 +153,22 @@ document.querySelector("#speak-selection").addEventListener("click", async () =>
 
 document.querySelector("#speak-page").addEventListener("click", async () => {
   await runAction("tts-extension:speak-page");
+});
+
+document.querySelector("#save-selection").addEventListener("click", async () => {
+  await runAction("tts-extension:save-selection");
+});
+
+document.querySelector("#save-page").addEventListener("click", async () => {
+  await runAction("tts-extension:save-page");
+});
+
+document.querySelector("#add-page-to-queue").addEventListener("click", async () => {
+  await runAction("tts-extension:add-page-to-queue");
+});
+
+document.querySelector("#open-page-desktop").addEventListener("click", async () => {
+  await runAction("tts-extension:open-page-in-desktop");
 });
 
 document.querySelector("#resume-page").addEventListener("click", async () => {
@@ -582,11 +600,22 @@ function formatServiceSnapshot(snapshot) {
     `Default Voice: ${snapshot.defaultVoice || "none"}`,
     `Voices Discovered: ${snapshot.voices.length}`,
     `Auth Enabled: ${snapshot.authEnabled}`,
+    `Reader Capture: ${snapshot.reader?.browser_capture?.available === true}`,
     `Stream Text Limit: ${formatOptionalNumber(textLimits.maxCharsPerStream)}`,
     `Max Page Characters: ${formatOptionalNumber(textLimits.maxPageChars)}`,
     Object.keys(checks).length ? `Checks: ${JSON.stringify(checks)}` : null,
   ];
   return lines.filter(Boolean).join("\n");
+}
+
+function formatReaderStatus(snapshot) {
+  const capture = snapshot.reader?.browser_capture;
+  return [
+    `Available: ${capture?.available === true}`,
+    `Desktop Handoff: ${capture?.desktop_handoff === true}`,
+    `Maximum Capture Characters: ${formatOptionalNumber(capture?.max_characters)}`,
+    `Message: ${snapshot.readerMessage}`,
+  ].join("\n");
 }
 
 function formatOnboardingStatus(snapshot) {
@@ -618,6 +647,11 @@ function formatOnboardingStatus(snapshot) {
       "Default voice loaded",
       checks.default_voice_loaded === true,
       formatReadinessCheck(checks.default_voice_loaded)
+    ),
+    checklistLine(
+      "Reader library ready",
+      snapshot.reader?.browser_capture?.available === true,
+      snapshot.readerMessage
     ),
     checklistLine(
       "Health ok",

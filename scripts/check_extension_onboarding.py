@@ -121,7 +121,7 @@ def check_extension_onboarding(
                 process=service_process,
                 timeout_s=startup_timeout_s,
             )
-            service_summary = _verify_service_snapshot_contract(base_url)
+            service_summary = _verify_service_snapshot_contract(base_url, token_file)
         finally:
             service_bootstrap._stop_process(service_process)
 
@@ -153,6 +153,11 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
         "copy-snippet": {"tag": "button"},
         "service-status": {"tag": "pre"},
         "onboarding-status": {"tag": "pre"},
+        "reader-status": {"tag": "pre"},
+        "save-selection": {"tag": "button"},
+        "save-page": {"tag": "button"},
+        "add-page-to-queue": {"tag": "button"},
+        "open-page-desktop": {"tag": "button"},
         "extension-origin": {"tag": "p"},
         "origin-command": {"tag": "pre"},
         "origin-snippet": {"tag": "pre"},
@@ -181,8 +186,11 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
         '"Voice available"',
         '"Backend ready"',
         '"Default voice loaded"',
+        '"Reader library ready"',
         '"Health ok"',
         "formatReadinessCheck",
+        "formatReaderStatus",
+        "snapshot.readerMessage",
         "populateVoiceOptions({",
     ]
     for fragment in required_fragments:
@@ -195,7 +203,8 @@ def _verify_popup_onboarding_surface() -> dict[str, object]:
 
     return {
         "required_element_count": len(required_elements),
-        "checklist_items": 8,
+        "checklist_items": 9,
+        "reader_library_actions": 4,
         "voice_selector": True,
         "copy_command": True,
         "copy_snippet": True,
@@ -266,15 +275,27 @@ def _verify_allow_list_cli_helper(
     }
 
 
-def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
+def _verify_service_snapshot_contract(
+    base_url: str,
+    token_file: Path,
+) -> dict[str, object]:
     with httpx.Client(timeout=30.0) as client:
         health = _get_json(client, f"{base_url}/v1/health")
         voices = _get_json(client, f"{base_url}/v1/voices")
+        capabilities = _get_json(
+            client,
+            f"{base_url}/v1/reader/capabilities",
+            headers={
+                "Authorization": f"Bearer {token_file.read_text(encoding='utf-8').strip()}",
+                "Origin": SAMPLE_EXTENSION_ORIGIN,
+            },
+        )
 
     health_checks = health.get("checks")
     text_limits = health.get("tts")
     voice_list = voices.get("voices")
     default_voice = voices.get("default_voice")
+    browser_capture = capabilities.get("browser_capture")
     errors: list[str] = []
     if health.get("status") != "ok":
         errors.append(f"health status must be ok, got {health.get('status')!r}")
@@ -307,6 +328,12 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
     ]
     if not isinstance(default_voice, str) or default_voice not in voice_ids:
         errors.append("voices.default_voice must match a listed voice")
+    if (
+        not isinstance(browser_capture, dict)
+        or browser_capture.get("available") is not True
+        or browser_capture.get("desktop_handoff") is not True
+    ):
+        errors.append("Reader capabilities must expose browser capture and desktop handoff")
     if errors:
         raise ExtensionOnboardingError(
             "Extension service snapshot contract failed:\n" + "\n".join(errors)
@@ -322,11 +349,18 @@ def _verify_service_snapshot_contract(base_url: str) -> dict[str, object]:
         "max_chars_per_stream": text_limits["max_chars_per_stream"],
         "default_voice": default_voice,
         "voice_count": len(voice_ids),
+        "reader_browser_capture": True,
+        "reader_desktop_handoff": True,
     }
 
 
-def _get_json(client: httpx.Client, url: str) -> dict[str, object]:
-    response = client.get(url)
+def _get_json(
+    client: httpx.Client,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    response = client.get(url, headers=headers)
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):

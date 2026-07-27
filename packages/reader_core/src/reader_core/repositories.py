@@ -15,6 +15,7 @@ from .models import (
     ReaderBlock,
     ReaderCursor,
     ReaderDatabaseReport,
+    ReaderDesktopOpenRequest,
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderExportJob,
@@ -160,6 +161,15 @@ class ReaderRepository(Protocol):
     def activate_queue_item(self, item_id: str) -> QueueItem: ...
 
     def advance_queue(self, document_id: str) -> QueueItem | None: ...
+
+    def request_desktop_open(
+        self,
+        request: ReaderDesktopOpenRequest,
+    ) -> ReaderDesktopOpenRequest: ...
+
+    def peek_desktop_open_request(self) -> ReaderDesktopOpenRequest | None: ...
+
+    def acknowledge_desktop_open_request(self, request_id: str) -> None: ...
 
     def create_export_job(self, job: ReaderExportJob) -> ReaderExportJob: ...
 

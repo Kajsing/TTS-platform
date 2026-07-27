@@ -66,3 +66,13 @@ and load the extracted directory with `Load unpacked`.
 3. Choose `Speak Page` for a longer page.
 4. Confirm the popup shows reader progress and page-capture metadata.
 5. Stop playback and confirm a new playback request can start cleanly.
+
+## First Library Check
+
+1. Select text on a normal HTTP(S) page and choose `Save Selection`.
+2. Choose `Save Page`, then confirm both documents appear in the desktop Inbox.
+3. Choose `Add Page to Queue` and confirm the new document appears in the
+   desktop queue.
+4. With the desktop Reader running, choose `Open Page in Desktop` and confirm
+   the saved document opens. If an edit is unsaved or playback is active, the
+   desktop keeps the handoff pending until it is safe to switch documents.

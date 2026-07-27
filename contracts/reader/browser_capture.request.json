@@ -1,0 +1,24 @@
+{
+  "title": "Example article",
+  "source_uri": "https://example.test/article",
+  "source_name": "example.test",
+  "language_hint": "en",
+  "blocks": [
+    {
+      "kind": "heading",
+      "text": "Introduction",
+      "heading_level": 1
+    },
+    {
+      "kind": "paragraph",
+      "text": "A structured browser paragraph.",
+      "heading_level": null
+    }
+  ],
+  "extraction_source": "readable-blocks",
+  "truncated": false,
+  "allow_duplicate": false,
+  "reuse_existing": true,
+  "add_to_queue": true,
+  "open_in_desktop": true
+}

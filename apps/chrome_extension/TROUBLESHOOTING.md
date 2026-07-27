@@ -29,6 +29,8 @@
   runtime package.
 - `Default voice loaded`: install and activate a real voice, then restart the
   service so `/v1/health` can load the configured default voice.
+- `Reader library ready`: confirm the token is saved, the extension origin is
+  allow-listed, and `/v1/reader/capabilities` reports browser capture available.
 - `Health ok`: refresh after setup changes or inspect `/v1/health` for the
   degraded check.
 
@@ -46,6 +48,19 @@
 - Confirm `/v1/voices` works from the local service.
 - Confirm the model manifest or backend fallback exposes at least one voice.
 - Use the service status panel to confirm the service is reachable before assuming the voice registry is empty.
+
+## Save to Reader fails
+
+- Confirm `Reader Library` reports `Available: true`.
+- Confirm the bearer token is current and the displayed extension origin is in
+  `security.allowed_origins`; restart the service after changing its config.
+- Only normal HTTP(S) pages can be saved. Browser settings pages, extension
+  pages, and local `file:` URLs are deliberately rejected.
+- A duplicate-content response means the text is already in the library. Edit
+  or remove the existing copy before saving the same capture again.
+- `Open Page in Desktop` persists a handoff in the service. If the desktop has
+  unsaved edits or active playback, finish that work and the pending document
+  will open on the next poll.
 
 ## Playback stops mid-stream
 

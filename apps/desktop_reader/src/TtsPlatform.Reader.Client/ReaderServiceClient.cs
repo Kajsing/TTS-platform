@@ -524,6 +524,26 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task<ReaderDesktopOpenRequest?> GetNextDesktopOpenRequestAsync(
+        CancellationToken cancellationToken = default) =>
+        SendOptionalAsync<ReaderDesktopOpenRequest>(
+            HttpMethod.Get,
+            "v1/reader/desktop/open-requests/next",
+            true,
+            null,
+            cancellationToken);
+
+    public Task AcknowledgeDesktopOpenRequestAsync(
+        string requestId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        return SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/desktop/open-requests/{Uri.EscapeDataString(requestId)}",
+            cancellationToken);
+    }
+
     public Task RemoveQueueItemAsync(
         string itemId,
         int expectedRowVersion,

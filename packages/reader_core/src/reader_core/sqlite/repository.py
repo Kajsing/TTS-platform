@@ -37,6 +37,7 @@ from ..models import (
     ReaderBlock,
     ReaderCursor,
     ReaderDatabaseReport,
+    ReaderDesktopOpenRequest,
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderExportJob,
@@ -967,6 +968,52 @@ class SqliteReaderRepository:
             ).fetchone()
             assert refreshed is not None
             return _queue_from_row(refreshed)
+
+    def request_desktop_open(
+        self,
+        request: ReaderDesktopOpenRequest,
+    ) -> ReaderDesktopOpenRequest:
+        with self._write() as connection:
+            document = self._require_document(connection, request.document_id)
+            if document.deleted_at is not None:
+                raise ReaderValidationError("soft-deleted documents cannot be opened")
+            existing = connection.execute(
+                "SELECT * FROM reader_desktop_open_requests WHERE document_id = ?",
+                (request.document_id,),
+            ).fetchone()
+            if existing is not None:
+                return _desktop_open_request_from_row(existing)
+            connection.execute(
+                """
+                INSERT INTO reader_desktop_open_requests(id, document_id, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (request.id, request.document_id, _time_dump(request.created_at)),
+            )
+            return request
+
+    def peek_desktop_open_request(self) -> ReaderDesktopOpenRequest | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT request.* FROM reader_desktop_open_requests AS request
+                JOIN reader_documents AS document ON document.id = request.document_id
+                WHERE document.deleted_at IS NULL
+                ORDER BY request.created_at, request.id LIMIT 1
+                """
+            ).fetchone()
+            return _desktop_open_request_from_row(row) if row is not None else None
+
+    def acknowledge_desktop_open_request(self, request_id: str) -> None:
+        with self._write() as connection:
+            deleted = connection.execute(
+                "DELETE FROM reader_desktop_open_requests WHERE id = ?",
+                (request_id,),
+            ).rowcount
+            if deleted == 0:
+                raise ReaderNotFoundError(
+                    f"Reader desktop open request not found: {request_id}"
+                )
 
     def create_export_job(self, job: ReaderExportJob) -> ReaderExportJob:
         with self._write() as connection:
@@ -2144,6 +2191,14 @@ def _queue_from_row(row: sqlite3.Row) -> QueueItem:
         added_at=_time_load(row["added_at"]),
         updated_at=_time_load(row["updated_at"]),
         row_version=int(row["row_version"]),
+    )
+
+
+def _desktop_open_request_from_row(row: sqlite3.Row) -> ReaderDesktopOpenRequest:
+    return ReaderDesktopOpenRequest(
+        id=str(row["id"]),
+        document_id=str(row["document_id"]),
+        created_at=_time_load(row["created_at"]),
     )
 
 

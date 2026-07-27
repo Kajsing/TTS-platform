@@ -32,3 +32,9 @@ playback compilation retains its separate bounded-window limit.
 Milestone 8 adds `create_export.request.json` and `export_job.response.json`.
 WAV jobs persist in the Reader database, expose bounded progress without source
 text or output-directory paths, and continue while desktop clients disconnect.
+
+Milestone 9 adds structured browser-capture and desktop-open-request fixtures.
+Browser captures accept only HTTP(S) source URLs, preserve bounded block kinds
+and headings, and expose no filesystem destination. Desktop handoffs are
+persistent, idempotent per document, and acknowledged only after the WPF client
+has opened the saved document.

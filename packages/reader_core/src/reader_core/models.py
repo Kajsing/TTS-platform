@@ -131,6 +131,18 @@ class ReaderExportJob:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderDesktopOpenRequest:
+    id: str
+    document_id: str
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "desktop open request id")
+        _require_id(self.document_id, "document id")
+        _require_utc(self.created_at, "desktop open request created_at")
+
+
+@dataclass(frozen=True, slots=True)
 class ReaderDocument:
     id: str
     title: str

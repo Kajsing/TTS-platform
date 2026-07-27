@@ -1,11 +1,17 @@
-# Chrome Extension Prototype
+# TTS Platform Reader Chrome Extension
 
-This directory contains the first MV3 prototype client for the local TTS platform.
+This directory contains the canonical MV3 browser client for the local TTS
+Platform service and Reader library.
 
 ## What it can do
 
 - speak the current selection from the active tab
 - speak a bounded readable snapshot of the current page text
+- save the current selection or a structure-aware page capture to the Reader
+  library with its HTTP(S) source URL, hostname, title, and language hint
+- add a saved page directly to the durable Reader queue
+- request that a saved page open in the WPF desktop Reader; the service retains
+  the handoff until a connected desktop has opened and acknowledged it
 - stream audio through an offscreen document
 - buffer PCM audio before playback starts
 - show reader progress for streamed page playback
@@ -86,10 +92,12 @@ local testing and handoff; it is not Chrome Web Store signing or publishing.
 It includes `INSTALL.md`, `TROUBLESHOOTING.md`, and the icon set referenced by
 the manifest and toolbar action.
 
-## Prototype flow
+## Architecture flow
 
-- `background.js` orchestrates text capture and offscreen playback.
-- `content-script.js` reads selection or page text.
+- `background.js` orchestrates transient text capture, authenticated library
+  saves, and offscreen playback.
+- `content-script.js` reads selection or page text and emits bounded heading,
+  paragraph, list-item, and quote blocks.
 - `offscreen.js` connects to the local service and plays streamed PCM audio
   with a small prebuffer and bounded scheduled-audio window.
 - `popup.html` and `popup.js` provide a basic control surface for configuration, playback actions, reader progress, and page resume.
@@ -122,6 +130,11 @@ the manifest and toolbar action.
     ask you to return to the original page tab.
 17. Use `Focus Page` and confirm Chrome returns to the original page tab.
 18. Stop page playback and use `Resume Page` on the same page to restart from the latest text chunk.
+19. Save a selection and a page, then confirm both appear in the desktop Inbox.
+20. Use `Add Page to Queue` and confirm the saved document appears in the
+    desktop queue. Use `Open Page in Desktop` while the desktop is running and
+    confirm the saved document opens without replacing an unsaved edit or
+    interrupting active playback.
 
 ## Notes
 
@@ -146,6 +159,11 @@ the manifest and toolbar action.
 - The service stream reports progress by planned text chunk. The extension shows that progress in the popup playback state.
 - The extension stores only page-capture metadata in session playback state, not
   raw page text.
+- Library capture blocks are kept only in the content-script/background request
+  path and are released after the authenticated save completes. Neither
+  `chrome.storage.local` nor `chrome.storage.session` receives captured text.
+- Browser library requests accept no output path and the service rejects
+  non-HTTP(S) source URLs, so the extension cannot select arbitrary local files.
 - Page-capture structure metadata stores counts only; it does not store heading
   text or other raw page text.
 - `Previous Section` and `Next Section` use heading offsets and section indexes
@@ -213,6 +231,16 @@ manual and automatic truncated text-offset continuation, filtered fallback
 capture, stop/restart recovery, and popup reopen-state wiring, then
 streams a generated thousand-word article through the local WebSocket service
 path.
+
+Run the browser-to-library contract check with:
+
+```bash
+python3 scripts/check_extension_library_flow.py
+```
+
+This verifies popup wiring, raw-text non-persistence, bearer authentication,
+the Chrome-extension origin allow-list, structured blocks, desktop visibility,
+queue persistence, desktop handoff persistence, and filesystem-source rejection.
 
 Run the optional Chrome/MV3 browser smoke with:
 

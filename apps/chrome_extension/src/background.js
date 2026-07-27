@@ -8,6 +8,7 @@ const DEFAULT_CONFIG = {
   maxChars: 24000,
 };
 const LOCAL_MAX_PAGE_CHARS = 48000;
+const MAX_LIBRARY_CAPTURE_CHARS = 1_000_000;
 const ALLOWED_SERVICE_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const BASE_URL_ERROR =
   "Base URL must be an HTTP localhost origin using 127.0.0.1 or localhost.";
@@ -27,21 +28,33 @@ chrome.runtime.onInstalled.addListener(async () => {
     title: "Speak selected text",
     contexts: ["selection"],
   });
+  chrome.contextMenus.create({
+    id: "tts-platform-save-selection",
+    title: "Save selection to TTS Platform Reader",
+    contexts: ["selection"],
+  });
+  chrome.contextMenus.create({
+    id: "tts-platform-save-page",
+    title: "Save page to TTS Platform Reader",
+    contexts: ["page"],
+  });
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== "tts-platform-speak-selection") {
-    return;
+  if (info.menuItemId === "tts-platform-speak-selection") {
+    const text = (info.selectionText || "").trim();
+    if (text) {
+      await startPlayback({
+        text,
+        source: "context-menu",
+        tabId: tab?.id ?? null,
+      });
+    }
+  } else if (info.menuItemId === "tts-platform-save-selection") {
+    await saveSelectionToLibrary(tab, info.selectionText || "");
+  } else if (info.menuItemId === "tts-platform-save-page") {
+    await savePageToLibrary({ tab });
   }
-  const text = (info.selectionText || "").trim();
-  if (!text) {
-    return;
-  }
-  await startPlayback({
-    text,
-    source: "context-menu",
-    tabId: tab?.id ?? null,
-  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -75,6 +88,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       case "tts-extension:speak-page":
         sendResponse(await speakPage());
+        return;
+      case "tts-extension:save-selection":
+        sendResponse(await saveSelectionToLibrary());
+        return;
+      case "tts-extension:save-page":
+        sendResponse(await savePageToLibrary());
+        return;
+      case "tts-extension:add-page-to-queue":
+        sendResponse(await savePageToLibrary({ addToQueue: true }));
+        return;
+      case "tts-extension:open-page-in-desktop":
+        sendResponse(await savePageToLibrary({ openInDesktop: true }));
         return;
       case "tts-extension:resume-page":
         sendResponse(await resumePage());
@@ -139,6 +164,143 @@ async function speakSelection() {
   }
   await startPlayback({ text, source: "selection", tabId: tab.id });
   return { ok: true, message: "Started speaking selection." };
+}
+
+async function saveSelectionToLibrary(tab = null, suppliedText = "") {
+  const sourceTab = tab?.id ? tab : await getActiveTab();
+  let capture;
+  const text = String(suppliedText || "").trim();
+  if (text) {
+    capture = {
+      text,
+      blocks: [{ kind: "paragraph", text, headingLevel: null }],
+      language: null,
+    };
+  } else {
+    capture = await sendContentScriptMessage(sourceTab, {
+      type: "tts-extension:get-selection",
+    });
+  }
+  if (!capture?.text?.trim()) {
+    return { ok: false, message: "No selected text found." };
+  }
+  return saveCaptureToLibrary(sourceTab, capture, {
+    captureKind: "selection",
+  });
+}
+
+async function savePageToLibrary({
+  tab = null,
+  addToQueue = false,
+  openInDesktop = false,
+} = {}) {
+  const sourceTab = tab?.id ? tab : await getActiveTab();
+  const capture = await sendContentScriptMessage(sourceTab, {
+    type: "tts-extension:get-library-page",
+    maxChars: MAX_LIBRARY_CAPTURE_CHARS,
+  });
+  if (!capture?.text?.trim()) {
+    return { ok: false, message: "No page text found." };
+  }
+  return saveCaptureToLibrary(sourceTab, capture, {
+    captureKind: "page",
+    addToQueue,
+    openInDesktop,
+  });
+}
+
+async function saveCaptureToLibrary(
+  tab,
+  capture,
+  { captureKind, addToQueue = false, openInDesktop = false }
+) {
+  const config = await getConfig();
+  if (!config.token) {
+    throw new Error("Missing token. Open the popup and save a service token first.");
+  }
+  const source = sanitizeBrowserSource(tab);
+  const blocks = sanitizeLibraryBlocks(capture.blocks, capture.text);
+  if (!blocks.length) {
+    return { ok: false, message: "No readable browser blocks were found." };
+  }
+  const result = await readerFetchJson(config, "/v1/reader/browser-captures", {
+    method: "POST",
+    body: {
+      title: source.title,
+      source_uri: source.uri,
+      source_name: source.name,
+      language_hint: sanitizeLanguageHint(capture.language),
+      blocks,
+      extraction_source: String(capture.meta?.source || captureKind).slice(0, 64),
+      truncated: Boolean(capture.meta?.truncated),
+      reuse_existing: true,
+      add_to_queue: addToQueue,
+      open_in_desktop: openInDesktop,
+    },
+  });
+  const action = openInDesktop
+    ? result.reused_existing
+      ? "Used the existing library copy and queued it for desktop opening"
+      : "Saved and queued for desktop opening"
+    : addToQueue
+      ? result.reused_existing
+        ? "Used the existing library copy and added it to the Reader queue"
+        : "Saved and added to the Reader queue"
+      : result.reused_existing
+        ? "This content is already in the Reader library"
+        : "Saved to the Reader library";
+  return {
+    ok: true,
+    message: `${action}.${capture.meta?.truncated ? " The captured page was truncated." : ""}`,
+    documentId: result.document.id,
+  };
+}
+
+function sanitizeBrowserSource(tab) {
+  const parsed = new URL(String(tab?.url || ""));
+  if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
+    throw new Error("Only normal HTTP or HTTPS pages can be saved to the Reader library.");
+  }
+  const title = String(tab?.title || parsed.hostname || "Browser capture").trim();
+  return {
+    title: title.slice(0, 500) || "Browser capture",
+    uri: parsed.href.slice(0, 4096),
+    name: parsed.hostname.slice(0, 500),
+  };
+}
+
+function sanitizeLibraryBlocks(blocks, fallbackText) {
+  const candidates = Array.isArray(blocks) && blocks.length
+    ? blocks
+    : [{ kind: "paragraph", text: fallbackText, headingLevel: null }];
+  return candidates
+    .map((block) => {
+      const kind = {
+        body: "paragraph",
+        paragraph: "paragraph",
+        heading: "heading",
+        listItem: "list_item",
+        list_item: "list_item",
+        quote: "quote",
+        code: "code",
+      }[block?.kind] || "paragraph";
+      const text = String(block?.text || "").trim().slice(0, MAX_LIBRARY_CAPTURE_CHARS);
+      return {
+        kind,
+        text,
+        heading_level:
+          kind === "heading"
+            ? Math.max(1, Math.min(6, Number(block?.headingLevel || block?.level || 1)))
+            : null,
+      };
+    })
+    .filter((block) => block.text)
+    .slice(0, 5000);
+}
+
+function sanitizeLanguageHint(value) {
+  const language = String(value || "").trim();
+  return language ? language.slice(0, 64) : null;
 }
 
 async function speakPage() {
@@ -550,6 +712,10 @@ async function getServiceSnapshot() {
     voices: [],
     defaultVoice: config.voice || "",
     authEnabled: true,
+    reader: null,
+    readerMessage: config.token
+      ? "Reader capabilities have not been checked yet."
+      : "Save the local token to check Reader library readiness.",
     textLimits: buildServiceTextLimits(null),
     message: "Service has not been contacted yet.",
   };
@@ -560,6 +726,18 @@ async function getServiceSnapshot() {
       fetchJson(config.baseUrl + "/v1/voices"),
     ]);
 
+    let reader = null;
+    let readerMessage = "Save the local token to check Reader library readiness.";
+    if (config.token) {
+      try {
+        reader = await readerFetchJson(config, "/v1/reader/capabilities");
+        readerMessage = reader.browser_capture?.available
+          ? "Reader browser capture is ready."
+          : "Reader browser capture is unavailable.";
+      } catch (error) {
+        readerMessage = error.message;
+      }
+    }
     const textLimits = buildServiceTextLimits(healthResponse);
     return {
       ...snapshot,
@@ -568,6 +746,8 @@ async function getServiceSnapshot() {
       voices: voicesResponse.voices ?? [],
       defaultVoice: voicesResponse.default_voice ?? "",
       authEnabled: Boolean(healthResponse.auth_enabled),
+      reader,
+      readerMessage,
       textLimits,
       message: `Connected to local service (${healthResponse.status}).`,
     };
@@ -1031,6 +1211,32 @@ async function fetchJson(url) {
   });
   if (!response.ok) {
     throw new Error(`Service request failed with ${response.status} ${response.statusText}.`);
+  }
+  return response.json();
+}
+
+async function readerFetchJson(config, path, { method = "GET", body = null } = {}) {
+  const response = await fetch(config.baseUrl + path, {
+    method,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${config.token}`,
+      ...(body === null ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(body === null ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    let errorType = "service request";
+    try {
+      const payload = await response.json();
+      errorType = payload?.error?.type || errorType;
+    } catch {
+      // The status remains sufficient and avoids reflecting private response data.
+    }
+    throw new Error(`Reader ${errorType} failed with status ${response.status}.`);
+  }
+  if (response.status === 204) {
+    return null;
   }
   return response.json();
 }

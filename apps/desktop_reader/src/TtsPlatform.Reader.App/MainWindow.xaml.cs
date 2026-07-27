@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
@@ -43,6 +44,11 @@ public partial class MainWindow : Window
     private string? _ephemeralReplayText;
     private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
+    private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
+    private readonly DispatcherTimer _desktopOpenTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(2),
+    };
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
         "Connection has not been checked.",
@@ -65,6 +71,7 @@ public partial class MainWindow : Window
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
         ApplySettingsToControls(settings);
         ReadingBlocksList.ItemsSource = _readingBlocks;
+        _desktopOpenTimer.Tick += DesktopOpenTimer_Tick;
         ContentRendered += MainWindow_ContentRendered;
         Loaded += MainWindow_Loaded;
         SourceInitialized += MainWindow_SourceInitialized;
@@ -354,6 +361,7 @@ public partial class MainWindow : Window
             _compactController.Close();
         }
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _desktopOpenTimer.Stop();
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
@@ -380,6 +388,12 @@ public partial class MainWindow : Window
             if (_onboarding.State is ConnectionState.Ready or ConnectionState.BackendDegraded)
             {
                 await RefreshLibraryAsync();
+                _desktopOpenTimer.Start();
+                await CheckDesktopOpenRequestAsync();
+            }
+            else
+            {
+                _desktopOpenTimer.Stop();
             }
         }
         catch (ReaderClientConfigurationException exception)
@@ -390,6 +404,55 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
+        }
+    }
+
+    private async void DesktopOpenTimer_Tick(object? sender, EventArgs e) =>
+        await CheckDesktopOpenRequestAsync();
+
+    private async Task CheckDesktopOpenRequestAsync()
+    {
+        if (_closed || !_desktopOpenLock.Wait(0))
+        {
+            return;
+        }
+        try
+        {
+            var openRequest = await GetClient().GetNextDesktopOpenRequestAsync();
+            if (openRequest is null)
+            {
+                return;
+            }
+            if (_editor?.HasUnsavedChanges == true)
+            {
+                FooterText.Text = "A browser document is waiting. Save or discard the current edit to open it.";
+                return;
+            }
+            if (_playback?.IsActive == true)
+            {
+                FooterText.Text = "A browser document is waiting and will open after playback stops.";
+                return;
+            }
+
+            var document = await GetClient().GetDocumentAsync(openRequest.DocumentId);
+            await RefreshLibraryAsync();
+            await LoadDocumentAsync(document);
+            if (_editor?.Document?.Id != document.Id)
+            {
+                return;
+            }
+            await GetClient().AcknowledgeDesktopOpenRequestAsync(openRequest.Id);
+            OpenMainWindow();
+            FooterText.Text = "Opened a document saved from the browser.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Browser handoff: {exception.Message}";
+        }
+        finally
+        {
+            _desktopOpenLock.Release();
         }
     }
 

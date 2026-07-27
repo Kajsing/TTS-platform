@@ -18,8 +18,9 @@ def test_extension_onboarding_check_validates_popup_service_and_origin_snippet()
     )
 
     assert summary["popup"] == {
-        "required_element_count": 13,
-        "checklist_items": 8,
+        "required_element_count": 18,
+        "checklist_items": 9,
+        "reader_library_actions": 4,
         "voice_selector": True,
         "copy_command": True,
         "copy_snippet": True,
@@ -39,6 +40,8 @@ def test_extension_onboarding_check_validates_popup_service_and_origin_snippet()
     assert summary["service_snapshot"]["max_chars_per_stream"] == 48000
     assert summary["service_snapshot"]["default_voice"] == "sherpa-en-debug"
     assert summary["service_snapshot"]["voice_count"] >= 1
+    assert summary["service_snapshot"]["reader_browser_capture"] is True
+    assert summary["service_snapshot"]["reader_desktop_handoff"] is True
 
 
 def test_extension_onboarding_allow_list_snippet_accepts_chrome_extension_origin() -> None:

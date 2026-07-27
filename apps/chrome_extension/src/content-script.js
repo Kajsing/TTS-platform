@@ -32,6 +32,7 @@ const MAX_READABLE_BLOCK_MATCHES = 2500;
 const MAX_STRUCTURE_HEADING_MATCHES = 1000;
 const MAX_FALLBACK_TEXT_NODES = 6000;
 const MAX_DOM_TRAVERSAL_NODES = 20000;
+const MAX_LIBRARY_CAPTURE_CHARS = 1_000_000;
 
 function getSelectedText() {
   const controlSelection = getControlSelection(document.activeElement);
@@ -58,8 +59,25 @@ function getSelectedText() {
   return extractReadableText(anchorElement, 1000).text;
 }
 
-function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar = 0) {
-  const requestedMaxChars = sanitizeMaxChars(maxChars);
+function getSelectionCapture() {
+  const text = getSelectedText();
+  return {
+    text,
+    blocks: text ? [{ kind: "paragraph", text, headingLevel: null }] : [],
+    language: document.documentElement.lang || null,
+  };
+}
+
+function getPageCapture(
+  maxChars = 24000,
+  startSectionIndex = 0,
+  startTextChar = 0,
+  libraryCapture = false
+) {
+  const requestedMaxChars = sanitizeMaxChars(
+    maxChars,
+    libraryCapture ? MAX_LIBRARY_CAPTURE_CHARS : 48000
+  );
   const requestedStartSectionIndex = sanitizeSectionIndex(startSectionIndex);
   const requestedStartTextChar = sanitizeTextCharOffset(startTextChar);
   const root = pickReadableRoot();
@@ -78,6 +96,7 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
       truncated: extracted.truncated,
       readableBlocks: extracted.readableBlocks,
       structure: extracted.structure,
+      blocks: extracted.blocks,
     });
   }
   if (requestedStartSectionIndex > 0) {
@@ -89,6 +108,7 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
       truncated: false,
       readableBlocks: 0,
       structure: extracted.structure || emptyStructureSummary(),
+      blocks: [],
     });
   }
 
@@ -114,6 +134,7 @@ function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar =
       fallback.limitReached || fallbackText.length > requestedStartTextChar + requestedMaxChars,
     readableBlocks: 0,
     structure,
+    blocks: text ? [{ kind: "paragraph", text, headingLevel: null }] : [],
   });
 }
 
@@ -254,16 +275,18 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
 
   const joined = joinBlockEntries(blockEntries).trim();
   if (joined) {
-    const text = joined.slice(0, maxChars).trim();
+    const capturedBlocks = limitBlockEntries(blockEntries, maxChars);
+    const text = joinBlockEntries(capturedBlocks).trim();
     const isTruncated = truncated || joined.length > maxChars;
-    structure.sections = buildCapturedSections(blockEntries, maxChars);
+    structure.sections = buildCapturedSections(capturedBlocks, maxChars);
     structure.nextTextCharStart = isTruncated ? startTextChar + text.length : null;
     return {
       text,
       source: "readable-blocks",
       truncated: isTruncated,
-      readableBlocks: blockEntries.length,
+      readableBlocks: capturedBlocks.length,
       structure,
+      blocks: capturedBlocks,
     };
   }
   const fallback = extractFallbackText(root);
@@ -280,6 +303,9 @@ function extractReadableText(root, maxChars, startSectionIndex = 0, startTextCha
     truncated: fallback.limitReached || fallbackText.length > startTextChar + maxChars,
     readableBlocks: 0,
     structure,
+    blocks: fallbackSlice
+      ? [{ kind: "paragraph", text: fallbackSlice, headingLevel: null }]
+      : [],
   };
 }
 
@@ -457,6 +483,28 @@ function joinBlockEntries(blockEntries) {
   return blockEntries.map((entry) => entry.text).join("\n\n");
 }
 
+function limitBlockEntries(blockEntries, maxChars) {
+  const captured = [];
+  let usedCharacters = 0;
+  for (const entry of blockEntries) {
+    const separatorLength = captured.length ? 2 : 0;
+    const remaining = maxChars - usedCharacters - separatorLength;
+    if (remaining <= 0) {
+      break;
+    }
+    const text = entry.text.slice(0, remaining).trimEnd();
+    if (!text) {
+      continue;
+    }
+    captured.push({ ...entry, text, headingLevel: entry.level });
+    usedCharacters += separatorLength + text.length;
+    if (text.length < entry.text.length) {
+      break;
+    }
+  }
+  return captured;
+}
+
 function buildCapturedSections(blockEntries, maxChars) {
   const sections = [];
   let textCharStart = 0;
@@ -473,12 +521,12 @@ function buildCapturedSections(blockEntries, maxChars) {
   return sections;
 }
 
-function sanitizeMaxChars(value) {
+function sanitizeMaxChars(value, maximum = 48000) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return 24000;
   }
-  return Math.max(200, Math.min(48000, Math.round(parsed)));
+  return Math.max(200, Math.min(maximum, Math.round(parsed)));
 }
 
 function sanitizeSectionIndex(value) {
@@ -505,6 +553,7 @@ function emptyCapture(source, maxChars) {
     readableBlocks: 0,
     maxChars,
     structure: emptyStructureSummary(),
+    blocks: [],
   };
 }
 
@@ -514,6 +563,8 @@ function buildCaptureResult(text, meta) {
   structure.startTextChar = meta.startTextChar || structure.startTextChar || 0;
   return {
     text,
+    blocks: Array.isArray(meta.blocks) ? meta.blocks : [],
+    language: document.documentElement.lang || null,
     meta: {
       source: meta.source,
       textChars: text.length,
@@ -529,7 +580,7 @@ function buildCaptureResult(text, meta) {
 
 chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
   if (message?.type === "tts-extension:get-selection") {
-    sendResponse({ text: getSelectedText() });
+    sendResponse(getSelectionCapture());
     return;
   }
 
@@ -537,5 +588,10 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
     sendResponse(
       getPageCapture(message.maxChars, message.startSectionIndex, message.startTextChar)
     );
+    return;
+  }
+
+  if (message?.type === "tts-extension:get-library-page") {
+    sendResponse(getPageCapture(message.maxChars, 0, 0, true));
   }
 });

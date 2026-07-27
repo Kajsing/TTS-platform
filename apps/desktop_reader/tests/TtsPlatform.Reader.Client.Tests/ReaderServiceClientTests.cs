@@ -233,6 +233,10 @@ public sealed class ReaderServiceClientTests
             "/v1/reader/queue/items" => Json(HttpStatusCode.Created, QueueItemJson),
             "/v1/reader/queue/items/item/activate" => Json(HttpStatusCode.OK, QueueItemJson),
             "/v1/reader/queue/advance/doc" => Json(HttpStatusCode.OK, "null"),
+            "/v1/reader/desktop/open-requests/next" =>
+                Json(HttpStatusCode.OK, DesktopOpenRequestJson),
+            "/v1/reader/desktop/open-requests/open" =>
+                new HttpResponseMessage(HttpStatusCode.NoContent),
             "/v1/reader/exports" when request.Method == HttpMethod.Get =>
                 Json(HttpStatusCode.OK, $"{{\"jobs\":[{ExportJobJson}]}}"),
             "/v1/reader/exports" => Json(HttpStatusCode.Accepted, ExportJobJson),
@@ -253,6 +257,8 @@ public sealed class ReaderServiceClientTests
         await client.AddQueueItemAsync("doc");
         await client.ActivateQueueItemAsync("item");
         var next = await client.AdvanceQueueAsync("doc");
+        var openRequest = await client.GetNextDesktopOpenRequestAsync();
+        await client.AcknowledgeDesktopOpenRequestAsync(openRequest!.Id);
         var export = await client.CreateExportAsync(new CreateExportRequest(DocumentIds: ["doc"]));
         var exports = await client.GetExportsAsync();
         await client.CancelExportAsync("job");
@@ -260,11 +266,12 @@ public sealed class ReaderServiceClientTests
         Assert.Equal("Mark", bookmark.Label);
         Assert.Single(queue.Items);
         Assert.Null(next);
+        Assert.Equal("doc", openRequest.DocumentId);
         Assert.Equal("job", export.Id);
         Assert.Single(exports.Jobs);
         Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
         Assert.Contains("\"state\":\"finished\"", handler.Requests[1].Body, StringComparison.Ordinal);
-        Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[7].Body, StringComparison.Ordinal);
+        Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[9].Body, StringComparison.Ordinal);
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
@@ -413,6 +420,12 @@ public sealed class ReaderServiceClientTests
         {
           "id":"item","document_id":"doc","ordinal":0,"status":"queued",
           "added_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z","row_version":1
+        }
+        """;
+
+    private const string DesktopOpenRequestJson = """
+        {
+          "id":"open","document_id":"doc","created_at":"2026-07-27T12:00:00Z"
         }
         """;
 

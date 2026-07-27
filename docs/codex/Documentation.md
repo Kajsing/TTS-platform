@@ -11,14 +11,67 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 9, browser-to-library
-  integration and prototype consolidation.
-- Current loop result: Milestone 8 is complete and validated. The user explicitly authorized autonomous
-  milestone-by-milestone work through Reader Milestone 9, with a decision check
-  before continuing whenever product direction, architecture, security,
-  licensing, or a material UX choice would change.
-- Reader Workstation resume point: execute and validate Milestone 9, then stop
-  before Milestone 10 unless the user explicitly continues the track.
+- Current loop target: Reader Workstation Milestone 9 is complete; stop before
+  Milestone 10 as requested.
+- Current loop result: Milestones 6 through 9 are complete and validated. No
+  product-direction, architecture, security, licensing, or material UX decision
+  required user input during Milestone 9.
+- Reader Workstation resume point: Milestone 10, PDF text extraction, only after
+  the user explicitly continues the track.
+- Reader Milestone 9 implementation details:
+  - the protected browser-capture API accepts bounded structured blocks and
+    HTTP(S)-only source metadata, writes through the Reader application layer,
+    detects/reuses existing captures, and can idempotently add an active queue
+    item plus a persistent desktop-open request;
+  - SQLite migration `004_browser_handoffs.sql` adds durable, one-per-document
+    pending handoffs. The desktop polls them only while connected, defers while
+    playback or unsaved edits make opening unsafe, and acknowledges only after
+    the document is loaded;
+  - the canonical extension exposes Save Selection, Save Page, Add Page to
+    Queue, and Open Page in Desktop. It preserves heading/paragraph/list/quote/
+    code structure and page source metadata while keeping raw capture text
+    transient and retaining the existing direct WebSocket playback path;
+  - the popup now reports protected Reader browser-capture and desktop-handoff
+    readiness alongside the existing service onboarding state;
+  - Reader contracts, source validators, the isolated live browser-library
+    flow, local-reader bundle validation, release checks, and the Windows bundle
+    include the new integration;
+  - the MIT-licensed `Kajsing/Chrome-TTS-plugin` prototype was evaluated at
+    `6e56ceb95d6e675e0d9d6139c97578f9be47372c`. Its brittle node-index ranges,
+    whole-ancestor highlighting, missing DOM-mutation recovery, and broad
+    manifest were not superior to the current implementation, so no code was
+    transplanted. README commit `2c547fe` and the repository description now
+    mark it superseded and point to `apps/chrome_extension/` here.
+- Reader Milestone 9 validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 391 passed; `py -3 -m ruff check .`, `git diff
+    --check`, and .NET format verification passed;
+  - `.NET Release` solution tests: 57 passed; the full WPF solution build
+    completed with zero warnings and zero errors;
+  - `py -3 scripts\check_reader_contracts.py` validated 13 fixtures;
+    `py -3 scripts\check_security_defaults.py` passed;
+  - strict extension JavaScript syntax, onboarding, the existing 2,963-word
+    direct reader flow, and the new isolated library flow passed. The latter
+    proves token/origin enforcement, structured persistence, desktop library
+    visibility, durable queue/open handoff, repeat-action idempotence, and
+    filesystem-source rejection;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live Reader regressions, Windows audio/integration, portable
+    packaging, WPF rendering, and source-level browser-handoff wiring;
+  - the complete `scripts\release_check.py` passed with strict JavaScript
+    syntax, extension and Windows bundle packaging/bootstrap/install, both
+    Windows launcher smokes, and the new library-flow gate. Its optional
+    branded-Chrome MV3 check remained skip-aware because that browser ignored
+    command-line unpacked-extension registration; no required check failed.
+- Reader Milestone 9 assumptions and deviations:
+  - browser saves reuse a content-identical existing Reader document from the
+    same source URL by default, so repeated Save, Queue, and Open actions remain
+    useful without discarding distinct source metadata; callers can explicitly
+    disable reuse or request an allowed duplicate;
+  - the old repository is marked superseded rather than archived, preserving a
+    reversible historical reference while making the supported product clear;
+  - no new dependency, filesystem-write authority, deployment exposure, or
+    security-model change was introduced. The user-owned
+    `models/MANIFEST.json` installation-state change remains excluded.
 - Reader Milestone 8 implementation details:
   - migration `003_search_and_exports.sql` adds persistent export jobs. The
     SQLite repository maintains an optional FTS5 title/source/content index and
@@ -1047,12 +1100,11 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Start Reader Workstation Milestone 1 from
-  `design_doc/reader_workstation_design_v1.md`: implement the backend-agnostic
-  Reader domain, explicit SQLite migrations, repositories, integrity/schema
-  reporting, stable block cursors, revisioned content edits, Undo/Redo, the
-  SQLite backup primitive, and `[reader]` per-user-home configuration without
-  adding HTTP or WPF code.
+- Stop at the completed Reader Workstation Milestone 9 boundary. If the user
+  explicitly continues, start Milestone 10 from
+  `design_doc/reader_workstation_design_v1.md`: add bounded, layout-aware PDF
+  text extraction, page/block coordinates, reading order, repeated
+  header/footer handling, page-range preview, and scanned-page warnings.
 - V1 remains complete at the repo/test-contract level and must stay green as a
   protected regression baseline throughout Reader work.
 - If the service is intentionally exposed beyond loopback in a future milestone,
@@ -1279,6 +1331,7 @@ tts extension-allow-origin <chrome-extension-origin>
 python3 scripts/check_model_management_flow.py
 python3 scripts/check_extension_onboarding.py
 python3 scripts/check_extension_reader_flow.py
+python3 scripts/check_extension_library_flow.py
 python3 scripts/check_chrome_extension_smoke.py
 python3 scripts/check_chrome_extension_smoke.py --require-browser --headed
 python3 scripts/smoke_service.py --token "$TTS_PLATFORM_TOKEN"
@@ -1361,9 +1414,9 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Resume at Reader Workstation Milestone 6 only after the user explicitly asks
-   to continue. Add structured offline import, preview/cancellation/warnings,
-   and book-scale virtualized reading; preserve the completed clipboard and
+4. Resume at Reader Workstation Milestone 10 only after the user explicitly
+   asks to continue. Add PDF text extraction and preview while preserving the
+   completed browser/library, import, rule, queue, export, clipboard, and
    playback behavior.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security

@@ -14,9 +14,12 @@ for source_root in (
     sys.path.insert(0, str(source_root))
 
 from tts_service.reader_schemas import (  # noqa: E402
+    CreateReaderBrowserCaptureRequest,
     CreateReaderDocumentRequest,
     CreateReaderExportRequest,
+    ReaderBrowserCaptureResponse,
     ReaderCapabilitiesResponse,
+    ReaderDesktopOpenRequestResponse,
     ReaderDocumentResponse,
     ReaderErrorResponse,
     ReaderExportJobResponse,
@@ -27,9 +30,12 @@ from tts_service.reader_schemas import (  # noqa: E402
 )
 
 FIXTURES = {
+    "browser_capture.request.json": CreateReaderBrowserCaptureRequest,
+    "browser_capture.response.json": ReaderBrowserCaptureResponse,
     "capabilities.response.json": ReaderCapabilitiesResponse,
     "create_document.request.json": CreateReaderDocumentRequest,
     "create_export.request.json": CreateReaderExportRequest,
+    "desktop_open_request.response.json": ReaderDesktopOpenRequestResponse,
     "document.response.json": ReaderDocumentResponse,
     "position.request.json": SaveReaderPositionRequest,
     "mutation.response.json": ReaderMutationResponse,

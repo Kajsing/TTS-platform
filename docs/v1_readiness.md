@@ -46,6 +46,11 @@ for long web-page text.
   capture for flat pages, bounded high-watermark offscreen audio scheduling,
   plus stop/restart recovery and popup reopen-state signals, then streams a
   generated thousand-word article through the local service WebSocket contract.
+  The same flow preserves direct playback after Reader library integration.
+- `python3 scripts/check_extension_library_flow.py` verifies protected
+  structured selection/page capture, Reader library visibility, queue and
+  desktop-open handoff persistence, repeat-action idempotence, HTTP(S)-only
+  source metadata, and the absence of raw-text extension persistence.
 - Manual page resume, continue, previous-section, and next-section actions now
   require that the active tab matches the original source tab for the stored
   page playback state, preventing old reader progress from being applied to a

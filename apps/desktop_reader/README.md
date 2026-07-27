@@ -6,7 +6,7 @@ of synthesis and the canonical Reader database.
 
 ## Current feature boundary
 
-The Milestone 8 Reader beta provides:
+The Milestone 9 Reader beta provides:
 
 - strict `http://localhost` or `http://127.0.0.1` service validation;
 - a token-file source (the bearer token is never copied into settings JSON);
@@ -63,6 +63,8 @@ The Milestone 8 Reader beta provides:
   safe output names, and service-owned completion after the desktop closes;
 - Reader diagnostics for database integrity, search capability, document states,
   stream leases, queue size, export states, and low-sensitivity metrics.
+- persistent browser-open handoffs polled from the protected local service; a
+  saved web document opens only after unsaved edits and active playback are clear.
 
 ## Project boundaries
 
@@ -95,8 +97,9 @@ source-mapped Reader streaming, position resume, immediate speech without
 document persistence, repeated clipboard append plus one-step Undo, a consistent
 preview snapshot, live safe structured import with durable warnings and an
 editable copy, source-mapped speech-rule preview plus the regex timeout guard,
-the Milestone 8 desktop queue/bookmark/export wiring,
-the default Windows audio endpoint, clipboard-listener and
+the Milestone 8 desktop queue/bookmark/export wiring and Milestone 9 protected
+browser-open handoff wiring, the default Windows audio endpoint,
+clipboard-listener and
 hotkey registration, tray lifecycle, a self-contained `win-x64` package, and a
 packaged WPF render. It does not read or write the current clipboard and does not
 use or alter the installed Reader library.

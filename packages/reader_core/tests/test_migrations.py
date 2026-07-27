@@ -17,7 +17,7 @@ def test_initial_migration_is_repeatable_and_reported(tmp_path: Path) -> None:
     report = repository.report()
 
     assert report.ready is True
-    assert report.schema_version == 3
+    assert report.schema_version == 4
     assert report.integrity_ok is True
     assert report.integrity_message == "ok"
     assert report.journal_mode == "wal"

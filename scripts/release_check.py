@@ -279,6 +279,10 @@ def _run_release_checks_with_package_path(
             [python_executable, "scripts/check_extension_reader_flow.py"],
         ),
         (
+            "extension_library_flow",
+            [python_executable, "scripts/check_extension_library_flow.py"],
+        ),
+        (
             "chrome_extension_smoke",
             _build_chrome_extension_smoke_command(
                 python_executable=python_executable,

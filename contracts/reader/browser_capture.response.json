@@ -1,0 +1,42 @@
+{
+  "document": {
+    "id": "11111111-2222-4333-8444-555555555555",
+    "title": "Example article",
+    "source_type": "browser",
+    "source_name": "example.test",
+    "source_uri": "https://example.test/article",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "language_hint": "en",
+    "state": "inbox",
+    "created_at": "2026-07-27T12:00:00Z",
+    "updated_at": "2026-07-27T12:00:00Z",
+    "imported_at": "2026-07-27T12:00:00Z",
+    "deleted_at": null,
+    "content_revision": 1,
+    "row_version": 1,
+    "total_sections": 1,
+    "total_blocks": 2,
+    "total_characters": 43,
+    "metadata": {
+      "browser_capture": {
+        "extraction_source": "readable-blocks",
+        "truncated": false
+      }
+    }
+  },
+  "queue_item": {
+    "id": "aaaaaaaa-2222-4333-8444-555555555555",
+    "document_id": "11111111-2222-4333-8444-555555555555",
+    "ordinal": 0,
+    "status": "queued",
+    "added_at": "2026-07-27T12:00:00Z",
+    "updated_at": "2026-07-27T12:00:00Z",
+    "row_version": 1
+  },
+  "desktop_open_request": {
+    "id": "f0f0f0f0-1111-4222-8333-444444444444",
+    "document_id": "11111111-2222-4333-8444-555555555555",
+    "created_at": "2026-07-27T12:00:00Z"
+  },
+  "reused_existing": false
+}

@@ -37,6 +37,7 @@ INCLUDED_FILES = (
     "scripts/check_chrome_extension_smoke.py",
     "scripts/check_extension_onboarding.py",
     "scripts/check_extension_reader_flow.py",
+    "scripts/check_extension_library_flow.py",
     "scripts/check_local_reader_bundle.py",
     "scripts/check_local_service_bootstrap.py",
     "scripts/check_model_management_flow.py",
@@ -347,7 +348,8 @@ do not install a machine-wide Windows Service or external service manager.
    ```
 
    The bundle check runs local service bootstrap, model-management,
-   extension-onboarding, reader-flow, and skip-aware Chrome/MV3 smoke checks.
+   extension-onboarding, direct reader-flow, browser-to-library flow, and
+   skip-aware Chrome/MV3 smoke checks.
    Use Chrome for Testing or Chromium when the installed browser ignores
    command-line unpacked extension loading; pass the strict browser flags to
    the bundle check too when strict browser evidence is required. The Chrome/MV3

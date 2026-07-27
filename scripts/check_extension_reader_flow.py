@@ -274,10 +274,10 @@ def _verify_extension_reader_contract() -> dict[str, object]:
             "chrome.action.setBadgeText",
         ],
         "content-script.js": [
-            "function getPageCapture(maxChars = 24000, startSectionIndex = 0, startTextChar = 0)",
+            "function getPageCapture(",
             "sanitizeMaxChars",
             "sanitizeTextCharOffset",
-            "Math.min(48000",
+            "Math.min(maximum",
             "function scoreReadableRootCandidate(candidate)",
             "collectMatchingElements",
             "MAX_READABLE_BLOCK_MATCHES",
