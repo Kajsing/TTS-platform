@@ -12,6 +12,21 @@ from ..errors import ReaderMigrationError
 
 _MIGRATION_NAME = re.compile(r"^(?P<version>[0-9]{3})_[a-z0-9_]+\.sql$")
 
+# A development Milestone 7 database could apply the first rule migration
+# before its pattern, replacement, and timeout constraints were tightened in
+# the canonical SQL. The service layer enforced those same bounds already.
+# Accept only that exact known predecessor so existing local libraries can
+# continue to later migrations while arbitrary checksum drift still fails.
+_COMPATIBLE_APPLIED_CHECKSUMS = {
+    (
+        2,
+        "002_rules_and_profiles.sql",
+        "8d7727ae6ff923f5fcc0831204f53b8ee04cadba82a2422581f1d97e8bb7c18c",
+    ): frozenset(
+        {"b952d4ff98accea6f6a5df1fa7ed628737d141b076a195edb17c090eba8a3da3"}
+    ),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Migration:
@@ -77,9 +92,14 @@ def apply_migrations(
             previous = applied.get(migration.version)
             if previous is not None:
                 if previous != (migration.name, migration.checksum):
-                    raise ReaderMigrationError(
-                        f"Reader migration {migration.name} does not match its applied checksum"
+                    compatible = _COMPATIBLE_APPLIED_CHECKSUMS.get(
+                        (migration.version, migration.name, migration.checksum),
+                        frozenset(),
                     )
+                    if previous[0] != migration.name or previous[1] not in compatible:
+                        raise ReaderMigrationError(
+                            f"Reader migration {migration.name} does not match its applied checksum"
+                        )
                 continue
             applied_at = datetime.now(timezone.utc).isoformat()
             try:

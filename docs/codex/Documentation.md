@@ -72,6 +72,12 @@ This file is the live status log and shared memory for future Codex loops.
   - no new dependency, filesystem-write authority, deployment exposure, or
     security-model change was introduced. The user-owned
     `models/MANIFEST.json` installation-state change remains excluded.
+  - the first real post-milestone launch exposed one pre-release Milestone 7
+    migration checksum whose SQL predates three database-level rule bounds.
+    Migration loading now accepts only that exact known predecessor checksum;
+    service/API validation already enforces the canonical bounds, arbitrary
+    checksum drift remains fail-closed, and a regression test upgrades the
+    legacy schema through the current browser-handoff migration.
 - Reader Milestone 8 implementation details:
   - migration `003_search_and_exports.sql` adds persistent export jobs. The
     SQLite repository maintains an optional FTS5 title/source/content index and
