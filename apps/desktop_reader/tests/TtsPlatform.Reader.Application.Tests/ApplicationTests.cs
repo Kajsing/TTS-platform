@@ -192,7 +192,10 @@ public sealed class ApplicationTests
     [Fact]
     public async Task Structured_document_is_read_only()
     {
-        var client = new StubClient { Blocks = new BlockPage([Block("book")], null) };
+        var client = new StubClient
+        {
+            Blocks = new BlockPage([Block("book", documentId: "book")], null),
+        };
         var editor = new DocumentEditor(client);
         await editor.LoadAsync(Document("book", 2, "epub"));
 
@@ -203,6 +206,43 @@ public sealed class ApplicationTests
         Assert.False(result.Saved);
         Assert.Equal("book", editor.WorkingText);
         Assert.Null(client.LastReplaceRequest);
+    }
+
+    [Fact]
+    public async Task Editor_can_select_a_later_visible_block_without_flattening_the_document()
+    {
+        var first = Block("first", 0);
+        var later = Block("later text", 7) with { Id = "later-block" };
+        var document = Document("doc", 3);
+        var client = new StubClient { Blocks = new BlockPage([first], null) };
+        var editor = new DocumentEditor(client);
+        await editor.LoadAsync(document);
+
+        editor.LoadBlock(document, later);
+        Assert.Equal("later text", editor.OriginalText);
+        editor.SetWorkingText("edited later text");
+        var result = await editor.SaveAsync();
+
+        Assert.True(result.Saved);
+        Assert.Equal("later-block", client.LastReplaceRequest?.BlockId);
+        Assert.Equal("edited later text", editor.OriginalText);
+        Assert.Equal("edited later text", editor.WorkingText);
+    }
+
+    [Fact]
+    public async Task Rename_trims_the_title_and_uses_the_document_row_version()
+    {
+        var document = Document("doc", 4);
+        var client = new StubClient { Blocks = new BlockPage([Block("text")], null) };
+        var editor = new DocumentEditor(client);
+        await editor.LoadAsync(document);
+
+        var result = await editor.RenameAsync("  A useful title  ");
+
+        Assert.True(result.Saved);
+        Assert.Equal("A useful title", editor.Document?.Title);
+        Assert.Equal(4, client.LastUpdateRequest?.ExpectedRowVersion);
+        Assert.Equal("A useful title", client.LastUpdateRequest?.Title);
     }
 
     private static HealthResponse Healthy(bool backendReady = true) => new(
@@ -243,9 +283,9 @@ public sealed class ApplicationTests
         8,
         EmptyMetadata());
 
-    private static ReaderBlock Block(string text, int ordinal = 0) => new(
+    private static ReaderBlock Block(string text, int ordinal = 0, string documentId = "doc") => new(
         "block",
-        "doc",
+        documentId,
         null,
         ordinal,
         "paragraph",
@@ -272,6 +312,7 @@ public sealed class ApplicationTests
         public Queue<BlockPage> BlockPages { get; init; } = new();
         public ReaderApiException? ReplaceException { get; init; }
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
+        public UpdateDocumentRequest? LastUpdateRequest { get; private set; }
         public List<string?> ReceivedCursors { get; } = [];
         public List<int> ReceivedBlockAfterOrdinals { get; } = [];
         public List<int> ReceivedBlockLimits { get; } = [];
@@ -302,6 +343,20 @@ public sealed class ApplicationTests
         {
             ReceivedCursors.Add(cursor);
             return PendingDocumentPage ?? Task.FromResult(DocumentPages.Dequeue());
+        }
+
+        public Task<ReaderDocument> UpdateDocumentAsync(
+            string documentId,
+            UpdateDocumentRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastUpdateRequest = request;
+            return Task.FromResult(
+                Document(documentId, request.ExpectedRowVersion + 1) with
+                {
+                    Title = request.Title ?? documentId,
+                    State = request.State ?? "inbox",
+                });
         }
 
         public Task<BlockPage> GetBlocksAsync(

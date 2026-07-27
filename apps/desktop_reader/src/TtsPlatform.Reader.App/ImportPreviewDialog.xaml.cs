@@ -44,7 +44,7 @@ public partial class ImportPreviewDialog : Window
         }
         await DiscardPreviewAsync();
         _operationCancellation = new CancellationTokenSource();
-        SetBusy(true, "Reading and checking the documentâ€¦");
+        SetBusy(true, "Reading and checking the document...");
         try
         {
             await using var input = new FileStream(
@@ -117,7 +117,7 @@ public partial class ImportPreviewDialog : Window
             return;
         }
         _operationCancellation = new CancellationTokenSource();
-        SetBusy(true, "Saving the imported documentâ€¦");
+        SetBusy(true, "Saving the imported document...");
         try
         {
             ImportedDocument = await _client.CommitImportAsync(

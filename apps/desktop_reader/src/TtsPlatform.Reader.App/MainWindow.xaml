@@ -116,7 +116,7 @@
         </Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,8">
           <Button DockPanel.Dock="Right" Content="Search" Click="SearchButton_Click" />
-          <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Importâ€¦"
+          <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Import..."
                   Click="ImportButton_Click" AutomationProperties.Name="Import document file" />
           <ComboBox DockPanel.Dock="Right" x:Name="LibraryStateComboBox" Width="105"
                     SelectedIndex="0" SelectionChanged="LibraryStateComboBox_SelectionChanged"
@@ -152,7 +152,13 @@
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <StackPanel>
-          <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="20" FontWeight="SemiBold" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="RenameDocumentButton" Content="Rename"
+                    Click="RenameDocumentButton_Click" IsEnabled="False"
+                    AutomationProperties.Name="Rename selected document" />
+            <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="20"
+                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
           <TextBlock x:Name="EditorHintText" Foreground="#555" Margin="0,3,0,8"
                      Text="Editable text will appear here." TextWrapping="Wrap" />
           <WrapPanel Margin="0,0,0,8">
@@ -178,6 +184,7 @@
           <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
                    BorderBrush="#CCC" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                    VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                   SelectionMode="Single" SelectionChanged="ReadingBlocksList_SelectionChanged"
                    AutomationProperties.Name="Document reading view">
             <ListBox.ItemTemplate>
               <DataTemplate>
@@ -196,6 +203,10 @@
                   Click="PreviousReadingPageButton_Click" IsEnabled="False" />
           <Button x:Name="NextReadingPageButton" Content="Next page"
                   Click="NextReadingPageButton_Click" IsEnabled="False" />
+          <Button x:Name="EditSelectedBlockButton" Content="Edit selected block"
+                  Click="EditSelectedBlockButton_Click" IsEnabled="False" />
+          <Button x:Name="BackToDocumentButton" Content="Back to document"
+                  Click="BackToDocumentButton_Click" Visibility="Collapsed" />
           <CheckBox x:Name="FollowReadingCheckBox" Content="Follow reading" IsChecked="True"
                     VerticalAlignment="Center" Margin="6,0" />
           <Button x:Name="DuplicateEditableButton" Content="Duplicate as editable text"

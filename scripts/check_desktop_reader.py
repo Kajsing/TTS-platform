@@ -117,6 +117,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardDuplicateDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardDuplicateDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "RenameDocumentDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "RenameDocumentDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
@@ -239,6 +241,24 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             "Clipboard duplicate or error-handling features are missing: "
             f"{missing_clipboard_duplicate_features}"
         )
+    document_display_features = [
+        "Edit selected block",
+        "Back to document",
+        "RenameDocumentDialog",
+        "Save title",
+        "RenameAsync",
+        "showReadingView = hasDocument",
+    ]
+    missing_document_display_features = [
+        value
+        for value in document_display_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_document_display_features:
+        raise DesktopReaderCheckError(
+            "Full-document display or title-editing features are missing: "
+            f"{missing_document_display_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
@@ -247,6 +267,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "library_workflow": "implemented",
         "browser_handoff": "implemented",
         "clipboard_duplicate_choice": "implemented",
+        "full_document_display": "implemented",
+        "title_editing": "implemented",
     }
 
 

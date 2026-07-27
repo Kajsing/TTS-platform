@@ -37,7 +37,7 @@
     </StackPanel>
 
     <Border Grid.Row="1" Background="#FFF4D6" Padding="10" Margin="0,12,0,10">
-      <TextBlock x:Name="StatusText" Text="Preparing previewâ€¦" TextWrapping="Wrap"
+      <TextBlock x:Name="StatusText" Text="Preparing preview..." TextWrapping="Wrap"
                  AutomationProperties.LiveSetting="Polite" />
     </Border>
 

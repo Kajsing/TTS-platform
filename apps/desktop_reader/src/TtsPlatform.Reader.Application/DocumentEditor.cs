@@ -16,13 +16,66 @@ public sealed class DocumentEditor(IReaderServiceClient client)
 
     public async Task LoadAsync(ReaderDocument document, CancellationToken cancellationToken = default)
     {
-        Document = document;
-        LastError = null;
         var page = await client.GetBlocksAsync(document.Id, limit: 1, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        Block = page.Blocks.FirstOrDefault();
+        LoadBlock(document, page.Blocks.FirstOrDefault());
+    }
+
+    public void LoadBlock(ReaderDocument document, ReaderBlock? block)
+    {
+        if (block is not null && !string.Equals(block.DocumentId, document.Id, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The selected block does not belong to the document.", nameof(block));
+        }
+
+        Document = document;
+        LastError = null;
+        Block = block;
         OriginalText = Block?.Text ?? string.Empty;
         WorkingText = OriginalText;
+    }
+
+    public async Task<EditorSaveResult> RenameAsync(
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        if (Document is null)
+        {
+            return new EditorSaveResult(false, false, "Select a document before renaming it.");
+        }
+
+        var normalized = title.Trim();
+        if (normalized.Length is < 1 or > 500)
+        {
+            return new EditorSaveResult(false, false, "The title must contain 1 to 500 characters.");
+        }
+        if (string.Equals(normalized, Document.Title, StringComparison.Ordinal))
+        {
+            return new EditorSaveResult(false, false);
+        }
+
+        try
+        {
+            Document = await client.UpdateDocumentAsync(
+                Document.Id,
+                new UpdateDocumentRequest(Document.RowVersion, Title: normalized),
+                cancellationToken).ConfigureAwait(false);
+            LastError = null;
+            return new EditorSaveResult(true, false);
+        }
+        catch (ReaderApiException exception) when (exception.ErrorType == "reader_revision_conflict")
+        {
+            LastError = "The document changed elsewhere. Reload it before renaming.";
+            return new EditorSaveResult(false, true, LastError);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            LastError = exception.Message;
+            return new EditorSaveResult(false, false, LastError);
+        }
     }
 
     public void SetWorkingText(string text)

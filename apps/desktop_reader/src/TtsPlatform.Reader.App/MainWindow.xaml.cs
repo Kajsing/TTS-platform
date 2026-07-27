@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     private bool _updatingEditor;
     private bool _copySelectionInProgress;
     private bool _clipboardPromptOpen;
+    private bool _editingBlock;
     private bool _ephemeralPlaying;
     private bool _exitRequested;
     private bool _shutdownInProgress;
@@ -1256,12 +1257,13 @@ public partial class MainWindow : Window
             }
             await _editor.LoadAsync(document);
             await LoadReadingWindowAsync(document, 0);
+            _editingBlock = false;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
             EditorTextBox.Text = _editor.WorkingText;
             EditorTextBox.IsReadOnly = !_editor.IsEditable;
             EditorHintText.Text = _editor.IsEditable
-                ? "Editing the selected text block. Save uses the document row version; conflicts preserve this local text."
+                ? "Showing the document in bounded pages. Select a block and choose Edit selected block to change its text."
                 : DescribeStructuredDocument(document);
             UpdateEditorButtons();
             UpdatePlaybackControls();
@@ -1334,6 +1336,32 @@ public partial class MainWindow : Window
 
     private async void RestoreDocumentButton_Click(object sender, RoutedEventArgs e) =>
         await UpdateDocumentStateAsync("inbox");
+
+    private async void RenameDocumentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editor?.Document is not ReaderDocument document)
+        {
+            return;
+        }
+
+        var dialog = new RenameDocumentDialog(document.Title) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.NewTitle is not string title)
+        {
+            return;
+        }
+
+        var result = await _editor.RenameAsync(title);
+        if (!result.Saved)
+        {
+            FooterText.Text = result.Message ?? "The title was not changed.";
+            return;
+        }
+
+        DocumentTitleText.Text = _editor.Document!.Title;
+        FooterText.Text = "Document title updated.";
+        await RefreshLibraryAfterMutationAsync();
+        UpdateEditorButtons();
+    }
 
     private async Task UpdateDocumentStateAsync(string state)
     {
@@ -1417,7 +1445,9 @@ public partial class MainWindow : Window
         UpdateEditorButtons();
         if (result.Saved)
         {
+            _editingBlock = false;
             await RefreshLibraryAfterMutationAsync();
+            UpdatePlaybackControls();
         }
     }
 
@@ -1451,10 +1481,12 @@ public partial class MainWindow : Window
         FooterText.Text = result.Saved ? (undo ? "Saved edit undone" : "Saved edit redone") : result.Message ?? "No history change";
         if (result.Saved)
         {
+            _editingBlock = false;
             _updatingEditor = true;
             EditorTextBox.Text = _editor.WorkingText;
             _updatingEditor = false;
             await RefreshLibraryAfterMutationAsync();
+            UpdatePlaybackControls();
         }
 
         UpdateEditorButtons();
@@ -1468,9 +1500,19 @@ public partial class MainWindow : Window
         }
 
         var selectedId = _editor.Document.Id;
-        await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
-        DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item => item.Id == selectedId);
-        LoadMoreButton.IsEnabled = _library.HasMore;
+        try
+        {
+            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+            DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item => item.Id == selectedId);
+            LoadMoreButton.IsEnabled = _library.HasMore;
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"The change was saved, but the library refresh is delayed: {exception.Message}";
+        }
     }
 
     private async void DuplicateEditableButton_Click(object sender, RoutedEventArgs e)
@@ -1509,6 +1551,58 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ReadingBlocksList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateEditorButtons();
+
+    private void EditSelectedBlockButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editor?.Document is not ReaderDocument document ||
+            !document.IsEditable ||
+            ReadingBlocksList.SelectedItem is not ReaderBlockDisplay selected ||
+            _playback?.IsActive == true)
+        {
+            return;
+        }
+
+        _editor.LoadBlock(document, selected.Block);
+        _editingBlock = true;
+        _updatingEditor = true;
+        EditorTextBox.Text = _editor.WorkingText;
+        _updatingEditor = false;
+        EditorHintText.Text =
+            $"Editing block {selected.Ordinal + 1:N0}. Save is revision-aware; conflicts preserve this local text.";
+        UpdatePlaybackControls();
+        UpdateEditorButtons();
+        EditorTextBox.Focus();
+    }
+
+    private void BackToDocumentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editor is null)
+        {
+            return;
+        }
+        if (_editor.HasUnsavedChanges)
+        {
+            var result = MessageBox.Show(
+                "Discard the unsaved local block edit and return to the document?",
+                "Unsaved edit",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+            _editor.RevertLocalChanges();
+        }
+
+        _editingBlock = false;
+        EditorHintText.Text =
+            "Showing the document in bounded pages. Select a block and choose Edit selected block to change its text.";
+        UpdatePlaybackControls();
+        UpdateEditorButtons();
+    }
+
     private void UpdateEditorButtons()
     {
         var editable = _editor?.IsEditable == true;
@@ -1519,6 +1613,11 @@ public partial class MainWindow : Window
         UndoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         var document = _editor?.Document;
+        RenameDocumentButton.IsEnabled = document is not null && !playbackActive;
+        EditSelectedBlockButton.IsEnabled = document?.IsEditable == true &&
+            !playbackActive &&
+            !_editingBlock &&
+            ReadingBlocksList.SelectedItem is ReaderBlockDisplay;
         FinishDocumentButton.IsEnabled = document is not null && document.State != "finished";
         ArchiveDocumentButton.IsEnabled = document is not null && document.State != "archived";
         RestoreDocumentButton.IsEnabled = document is not null &&
@@ -1548,6 +1647,7 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
+            _editingBlock = false;
             await _playback.PlayAsync(_editor.Document);
         }
         catch (Exception exception) when (
@@ -1648,11 +1748,12 @@ public partial class MainWindow : Window
         {
             _readingBlocks.Add(new ReaderBlockDisplay(block));
         }
+        ReadingBlocksList.SelectedItem = _readingBlocks.FirstOrDefault();
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
         NextReadingPageButton.IsEnabled = page.HasNext;
         FooterText.Text = page.Blocks.Count == 0
             ? "This document contains no readable blocks."
-            : $"Showing blocks {page.Blocks[0].Ordinal + 1:N0}â€“{page.Blocks[^1].Ordinal + 1:N0}.";
+            : $"Showing blocks {page.Blocks[0].Ordinal + 1:N0}-{page.Blocks[^1].Ordinal + 1:N0}.";
         return Task.CompletedTask;
     }
 
@@ -1770,13 +1871,20 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = hasPlayback;
         PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        var showReadingView = documentActive || structuredDocument;
+        var showReadingView = hasDocument && (documentActive || structuredDocument || !_editingBlock);
+        var showEditor = hasDocument && !showReadingView;
         ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = showReadingView ? Visibility.Collapsed : Visibility.Visible;
+        EditorTextBox.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
         FollowReadingCheckBox.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
         DuplicateEditableButton.IsEnabled = structuredDocument && !documentActive;
         PreviousReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
         NextReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        EditSelectedBlockButton.Visibility = showReadingView && !structuredDocument
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        BackToDocumentButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
+        SaveEditButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
+        RevertEditButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateCompactController()

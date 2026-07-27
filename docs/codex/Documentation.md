@@ -39,6 +39,29 @@ This file is the live status log and shared memory for future Codex loops.
     passed live Reader behavior, privacy-safe clipboard/Windows integration,
     audio, self-contained packaging, WPF rendering, and source checks for the
     duplicate-choice and rate-limit protections.
+- Completed post-Milestone 9 desktop usability follow-up: a real 98-block,
+  16,971-character clipboard article exposed that the stopped editable view
+  showed only the first block even though playback correctly switched to the
+  paged reading view. The bounded fix makes the existing virtualized 64-block
+  reading page the default before playback, adds explicit selected-block edit
+  and return-to-document actions, and keeps revision-aware block edits plus
+  durable Undo/Redo intact. Document titles gain a revision-aware Rename flow,
+  and visible mojibake in the Import UI is corrected without changing import
+  contracts or dependencies.
+- Post-Milestone 9 desktop usability validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 392 passed; `py -3 -m ruff check .`, `git diff
+    --check`, and .NET format verification passed;
+  - `.NET Release` solution tests: 61 passed; focused application tests cover
+    later-block editing and row-versioned title updates; the WPF application
+    build completed with zero warnings and zero errors;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live Reader behavior, clipboard privacy, audio, packaging, WPF
+    rendering, and the full-document/title source contract;
+  - live Windows UI Automation selected the reported 98-block article and
+    confirmed enabled Rename, Edit selected block, and Next page controls. The
+    edit action entered and returned from the first block without mutation, the
+    virtualized list materialized only the currently visible rows, and the
+    rebuilt Reader remained responsive against the healthy schema-4 service.
 - Reader Milestone 9 implementation details:
   - the protected browser-capture API accepts bounded structured blocks and
     HTTP(S)-only source metadata, writes through the Reader application layer,
