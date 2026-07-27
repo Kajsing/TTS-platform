@@ -15,9 +15,10 @@ SCRIPT_DIR = REPO_ROOT / "scripts"
 EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
+READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 SAMPLE_EXTENSION_ORIGIN = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
 
-for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC):
+for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC, READER_CORE_SRC):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -61,6 +62,7 @@ def check_extension_onboarding(
         temp_repo_root = Path(temp_dir) / "repo"
         service_bootstrap._seed_temp_repo(temp_repo_root)
         env = service_bootstrap._source_env()
+        service_bootstrap._configure_temp_reader_env(env, temp_repo_root)
         setup_payload = service_bootstrap._run_json_command(
             [
                 python_executable,

@@ -160,3 +160,28 @@ class ObservabilityState:
             "synthesis": self.synthesis_metrics.snapshot(),
             "jobs": self.job_metrics.snapshot(),
         }
+
+    def log_reader_operation(
+        self,
+        *,
+        operation: str,
+        document_id: str | None = None,
+        block_id: str | None = None,
+        character_count: int | None = None,
+        block_count: int | None = None,
+    ) -> None:
+        if not self.enabled:
+            return
+        payload: dict[str, object] = {
+            "event": "reader_operation",
+            "operation": operation,
+        }
+        if document_id is not None:
+            payload["document_id"] = document_id
+        if block_id is not None:
+            payload["block_id"] = block_id
+        if character_count is not None:
+            payload["character_count"] = character_count
+        if block_count is not None:
+            payload["block_count"] = block_count
+        self.logger.info(json.dumps(payload))

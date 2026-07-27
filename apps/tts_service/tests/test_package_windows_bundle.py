@@ -94,6 +94,11 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/models/MANIFEST.json" in names
     assert "tts-platform/apps/tts_service/src/tts_service/main.py" in names
     assert "tts-platform/packages/tts_core/src/tts_core/text.py" in names
+    assert (
+        "tts-platform/packages/reader_core/src/reader_core/"
+        "migrations/001_reader_library.sql"
+        in names
+    )
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
     assert "tts-platform/apps/chrome_extension/INSTALL.md" in names
     assert "tts-platform/apps/chrome_extension/TROUBLESHOOTING.md" in names

@@ -106,7 +106,10 @@ def build_test_bundle(
         """.strip(),
         encoding="utf-8",
     )
-    base_config = {"tts": {"default_voice": "manifest-voice"}}
+    base_config = {
+        "tts": {"default_voice": "manifest-voice"},
+        "reader": {"home_path": str(tmp_path / "reader")},
+    }
     if config_data:
         base_config.update(config_data)
     app = create_app(config=AppConfig.from_mapping(base_config), repo_root=tmp_path)
@@ -576,6 +579,7 @@ def test_websocket_stream_can_use_real_backend_runtime(
             {
                 "tts": {"default_voice": "manifest-voice"},
                 "backend": {"mode": "real"},
+                "reader": {"home_path": str(tmp_path / "reader")},
             }
         ),
         repo_root=tmp_path,

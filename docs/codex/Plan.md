@@ -571,7 +571,7 @@ scope.
 
 - [x] Reader Milestone 0: Activate the Reader Workstation track.
 - [x] Reader Milestone 1: Reader domain and SQLite library.
-- [ ] Reader Milestone 2: Protected Reader API and shared contracts.
+- [x] Reader Milestone 2: Protected Reader API and shared contracts.
 - [ ] Reader Milestone 3: WPF desktop shell and onboarding.
 - [ ] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
 - [ ] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
@@ -609,6 +609,7 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 2 is the next incomplete milestone. Add the protected Reader
-API and shared contracts described by the normative design without starting the
-WPF shell, importers, or speech-rule feature work from later milestones.
+Reader Milestone 3 is the next incomplete milestone. Build the testable .NET 10
+WPF shell, strict-localhost client, settings/token abstraction, onboarding, and
+library browsing described by the normative design without starting Reader
+audio playback or clipboard capture from later milestones.

@@ -16,6 +16,7 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
+READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 DEFAULT_STARTUP_TIMEOUT_S = 30.0
 DEFAULT_COMMAND_TIMEOUT_S = 60.0
 
@@ -65,6 +66,7 @@ def check_local_service_bootstrap(
         _seed_temp_repo(temp_repo_root)
 
         env = _source_env()
+        _configure_temp_reader_env(env, temp_repo_root)
         setup_payload = _run_json_command(
             [
                 python_executable,
@@ -153,13 +155,17 @@ def _source_env() -> dict[str, str]:
         for key, value in os.environ.items()
         if not key.startswith("TTS_PLATFORM")
     }
-    python_path_entries = [str(SERVICE_SRC), str(CORE_SRC)]
+    python_path_entries = [str(SERVICE_SRC), str(CORE_SRC), str(READER_CORE_SRC)]
     existing_python_path = env.get("PYTHONPATH")
     if existing_python_path:
         python_path_entries.append(existing_python_path)
     env["PYTHONPATH"] = os.pathsep.join(python_path_entries)
     env["PYTHONUNBUFFERED"] = "1"
     return env
+
+
+def _configure_temp_reader_env(env: dict[str, str], repo_root: Path) -> None:
+    env["TTS_PLATFORM__READER__HOME_PATH"] = str((repo_root / "reader-data").resolve())
 
 
 def _run_json_command(

@@ -1,0 +1,14 @@
+{
+  "cursor": {
+    "block_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "block_ordinal": 0,
+    "character_offset": 5,
+    "content_revision": 1,
+    "segment_index": null
+  },
+  "voice_profile_id": null,
+  "pipeline_version": 1,
+  "rules_version": 1,
+  "completed": false,
+  "expected_row_version": 0
+}

@@ -195,6 +195,7 @@ def _run_setup_local(*, bundle_root: Path, python_executable: str) -> dict[str, 
     python_paths = [
         str(bundle_root / "apps" / "tts_service" / "src"),
         str(bundle_root / "packages" / "tts_core" / "src"),
+        str(bundle_root / "packages" / "reader_core" / "src"),
     ]
     existing_python_path = env.get("PYTHONPATH")
     if existing_python_path:

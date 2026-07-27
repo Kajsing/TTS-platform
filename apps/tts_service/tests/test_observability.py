@@ -39,7 +39,12 @@ def build_test_bundle(tmp_path: Path) -> tuple[TestClient, dict[str, str]]:
         encoding="utf-8",
     )
     app = create_app(
-        config=AppConfig.from_mapping({"tts": {"default_voice": "manifest-voice"}}),
+        config=AppConfig.from_mapping(
+            {
+                "tts": {"default_voice": "manifest-voice"},
+                "reader": {"home_path": str(tmp_path / "reader")},
+            }
+        ),
         repo_root=tmp_path,
     )
     return TestClient(app), {"Authorization": f"Bearer {app.state.container.auth.token}"}

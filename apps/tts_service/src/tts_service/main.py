@@ -20,6 +20,7 @@ from .auth import rotate_auth_token
 from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
+from .reader_routes import build_reader_router
 from .schemas import SynthesizeRequestPayload
 from .security import (
     enforce_headers_access,
@@ -49,6 +50,7 @@ def create_app(
     _register_middleware(app)
     _register_exception_handlers(app)
     _register_routes(app)
+    app.include_router(build_reader_router())
     return app
 
 
@@ -164,6 +166,7 @@ def _register_routes(app: FastAPI) -> None:
                 "max_chars_per_request": container.config.tts.max_chars_per_request,
                 "max_chars_per_stream": container.config.tts.max_chars_per_stream,
             },
+            "reader": container.reader.health_payload(),
             "backend": container.backend.snapshot(),
             "streaming": container.streaming_metrics.snapshot(),
             "observability": container.observability.snapshot(),
@@ -439,6 +442,8 @@ def _enforce_protected_request(container: object, request: Request) -> None:
 def _requires_protected_http_access(request: Request) -> bool:
     path = request.url.path
     method = request.method.upper()
+    if path.startswith("/v1/reader"):
+        return True
     if path == "/v1/tts" and method == "POST":
         return True
     if path == "/v1/auth/rotate" and method == "POST":

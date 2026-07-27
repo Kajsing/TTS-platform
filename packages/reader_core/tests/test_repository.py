@@ -69,6 +69,20 @@ def test_document_crud_order_soft_delete_and_restore(repository, document) -> No
     assert repository.list_documents().items[0].id == document.id
 
 
+def test_document_listing_filters_title_and_finds_source_hash(repository, document) -> None:
+    second = ReaderLibrary(repository).create_plain_text_document(
+        title="A 100% literal underscore_ title",
+        text="Different",
+    )
+
+    assert [item.id for item in repository.list_documents(query="literal underscore_").items] == [
+        second.id
+    ]
+    assert repository.list_documents(query="missing").items == ()
+    assert repository.find_document_by_source_hash(document.source_sha256).id == document.id
+    assert repository.find_document_by_source_hash("0" * 64) is None
+
+
 def test_document_updates_detect_optimistic_concurrency_conflicts(repository, document) -> None:
     repository.update_document(document.id, expected_row_version=1, title="First")
 

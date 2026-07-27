@@ -12,9 +12,10 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 $ServiceSrc = Join-Path $RepoRoot "apps\tts_service\src"
 $CoreSrc = Join-Path $RepoRoot "packages\tts_core\src"
+$ReaderCoreSrc = Join-Path $RepoRoot "packages\reader_core\src"
 $ConfigPath = Join-Path $RepoRoot "config\config.toml"
 
-$PythonPathParts = @($ServiceSrc, $CoreSrc)
+$PythonPathParts = @($ServiceSrc, $CoreSrc, $ReaderCoreSrc)
 if ($env:PYTHONPATH) {
     $PythonPathParts += $env:PYTHONPATH
 }

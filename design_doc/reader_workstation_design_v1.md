@@ -14,7 +14,7 @@
 | Working product name | **TTS Platform Reader** |
 | Primary target | Windows desktop |
 | Primary implementation languages | Python, C#, JavaScript, existing C++ SAPI bridge |
-| Next Codex action | **Milestone 2 only** |
+| Next Codex action | **Milestone 3 only** |
 
 > **Codex directive**
 >
@@ -22,7 +22,7 @@
 > implement the whole document in one run. First read `AGENTS.md`,
 > `docs/codex/Prompt.md`, `docs/codex/Plan.md`,
 > `docs/codex/Implement.md`, and `docs/codex/Documentation.md`.
-> Milestones 0 and 1 are complete. Execute the next incomplete Reader milestone recorded
+> Milestones 0 through 2 are complete. Execute the next incomplete Reader milestone recorded
 > in `docs/codex/Plan.md`, then stop after its validation, documentation update,
 > commit, and push.
 >

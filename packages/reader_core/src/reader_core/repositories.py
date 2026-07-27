@@ -30,9 +30,12 @@ class ReaderRepository(Protocol):
         self,
         *,
         state: DocumentState | None = None,
+        query: str | None = None,
         limit: int = 50,
         cursor: str | None = None,
     ) -> DocumentPage: ...
+
+    def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None: ...
 
     def list_blocks(
         self,
@@ -112,6 +115,8 @@ class ReaderRepository(Protocol):
     ) -> PlaybackPosition: ...
 
     def create_bookmark(self, bookmark: Bookmark) -> Bookmark: ...
+
+    def get_bookmark(self, bookmark_id: str) -> Bookmark: ...
 
     def list_bookmarks(self, document_id: str) -> tuple[Bookmark, ...]: ...
 

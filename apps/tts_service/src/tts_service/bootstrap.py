@@ -18,6 +18,7 @@ from .auth import AuthState, initialize_auth
 from .config import AppConfig
 from .jobs import InMemoryJobManager
 from .observability import ObservabilityState, configure_structured_logging
+from .reader_service import ReaderRuntimeState, initialize_reader_runtime
 from .security import OriginPolicy, RateLimiter
 from .streaming import StreamingMetrics
 
@@ -35,6 +36,7 @@ class ApplicationState:
     job_manager: InMemoryJobManager
     streaming_metrics: StreamingMetrics
     observability: ObservabilityState
+    reader: ReaderRuntimeState
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -85,6 +87,7 @@ def build_application_state(
         enabled=config.metrics.enabled,
         logger=configure_structured_logging(config.server.log_level),
     )
+    reader = initialize_reader_runtime(config.reader, observability=observability)
     job_manager = InMemoryJobManager(
         max_workers=config.limits.max_concurrent_jobs,
         backend=backend,
@@ -114,6 +117,7 @@ def build_application_state(
         job_manager=job_manager,
         streaming_metrics=streaming_metrics,
         observability=observability,
+        reader=reader,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,

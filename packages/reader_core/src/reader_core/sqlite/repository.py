@@ -152,6 +152,7 @@ class SqliteReaderRepository:
         self,
         *,
         state: DocumentState | None = None,
+        query: str | None = None,
         limit: int = 50,
         cursor: str | None = None,
     ) -> DocumentPage:
@@ -163,6 +164,13 @@ class SqliteReaderRepository:
         if state is not None:
             clauses.append("state = ?")
             parameters.append(state.value)
+        if query is not None and query.strip():
+            escaped_query = _escape_like(query.strip())
+            clauses.append(
+                "(title LIKE ? ESCAPE '\\' OR COALESCE(source_name, '') LIKE ? ESCAPE '\\')"
+            )
+            pattern = f"%{escaped_query}%"
+            parameters.extend((pattern, pattern))
         if boundary is not None:
             clauses.append("(updated_at < ? OR (updated_at = ? AND id < ?))")
             parameters.extend((boundary[0], boundary[0], boundary[1]))
@@ -181,6 +189,20 @@ class SqliteReaderRepository:
         if has_more and selected:
             next_cursor = _encode_page_cursor(str(selected[-1]["updated_at"]), selected[-1]["id"])
         return DocumentPage(items=items, next_cursor=next_cursor)
+
+    def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None:
+        if not source_sha256.strip():
+            raise ReaderValidationError("source hash must not be empty")
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM reader_documents
+                WHERE source_sha256 = ? AND deleted_at IS NULL
+                ORDER BY created_at, id LIMIT 1
+                """,
+                (source_sha256,),
+            ).fetchone()
+            return _document_from_row(row) if row is not None else None
 
     def list_blocks(
         self,
@@ -601,6 +623,15 @@ class SqliteReaderRepository:
                 _bookmark_values(stored),
             )
             return stored
+
+    def get_bookmark(self, bookmark_id: str) -> Bookmark:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_bookmarks WHERE id = ?", (bookmark_id,)
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError(f"Reader bookmark not found: {bookmark_id}")
+            return _bookmark_from_row(row)
 
     def list_bookmarks(self, document_id: str) -> tuple[Bookmark, ...]:
         with self._connection() as connection:
@@ -1584,3 +1615,7 @@ def _time_load(value: str) -> datetime:
 
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

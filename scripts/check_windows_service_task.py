@@ -9,8 +9,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
+READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 
-for source_path in (SERVICE_SRC, CORE_SRC):
+for source_path in (SERVICE_SRC, CORE_SRC, READER_CORE_SRC):
     sys.path.insert(0, str(source_path))
 
 from tts_service import cli  # noqa: E402

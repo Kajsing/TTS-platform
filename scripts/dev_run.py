@@ -8,8 +8,9 @@ import uvicorn
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
+READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 
-for path in (SERVICE_SRC, CORE_SRC):
+for path in (SERVICE_SRC, CORE_SRC, READER_CORE_SRC):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

@@ -64,6 +64,7 @@ INCLUDED_DIRS = (
     "apps/chrome_extension",
     "apps/tts_service/src",
     "packages/tts_core/src",
+    "packages/reader_core/src",
 )
 
 EXCLUDED_PARTS = {

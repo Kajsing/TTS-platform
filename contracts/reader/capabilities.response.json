@@ -1,0 +1,27 @@
+{
+  "contract_version": 1,
+  "enabled": true,
+  "database": {
+    "ready": true,
+    "schema_version": 1,
+    "search_available": false
+  },
+  "imports": {
+    "formats": [],
+    "max_file_bytes": 0,
+    "ocr_available": false
+  },
+  "rules": {
+    "types": [],
+    "regex_timeout_supported": false
+  },
+  "playback": {
+    "stream_protocol_version": 0,
+    "source_offset_encoding": "utf-16",
+    "max_blocks_per_window": 64,
+    "max_source_chars_per_window": 32000
+  },
+  "exports": {
+    "formats": []
+  }
+}

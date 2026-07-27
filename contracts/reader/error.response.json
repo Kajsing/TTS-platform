@@ -1,0 +1,13 @@
+{
+  "error": {
+    "type": "reader_revision_conflict",
+    "message": "The Reader entity was changed by another operation.",
+    "param": null,
+    "request_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "details": {
+      "entity_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected_row_version": 1,
+      "actual_row_version": 2
+    }
+  }
+}

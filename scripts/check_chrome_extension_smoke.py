@@ -25,12 +25,13 @@ SCRIPT_DIR = REPO_ROOT / "scripts"
 EXTENSION_ROOT = REPO_ROOT / "apps" / "chrome_extension"
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
+READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 DEFAULT_MAX_CAPTURE_CHARS = 1600
 DEFAULT_SERVICE_MAX_CHARS_PER_REQUEST = 800
 DEFAULT_SERVICE_MAX_CHARS_PER_STREAM = 1200
 EXTENSION_POPUP_PATH = "src/popup.html"
 
-for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC):
+for path in (SCRIPT_DIR, SERVICE_SRC, CORE_SRC, READER_CORE_SRC):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

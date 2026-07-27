@@ -38,7 +38,12 @@ def test_create_app_bootstraps_registry_from_manifest(
         encoding="utf-8",
     )
 
-    config = AppConfig.from_mapping({"tts": {"default_voice": "manifest-voice"}})
+    config = AppConfig.from_mapping(
+        {
+            "tts": {"default_voice": "manifest-voice"},
+            "reader": {"home_path": str(tmp_path / "reader")},
+        }
+    )
     app = create_app(config=config, repo_root=tmp_path)
 
     assert app.state.container.voice_registry.default_voice is not None
@@ -83,6 +88,7 @@ def test_create_app_marks_backend_not_ready_when_real_assets_are_missing(
         {
             "tts": {"default_voice": "manifest-voice"},
             "backend": {"mode": "real"},
+            "reader": {"home_path": str(tmp_path / "reader")},
         }
     )
     app = create_app(config=config, repo_root=tmp_path)

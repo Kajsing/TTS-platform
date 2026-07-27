@@ -1,0 +1,20 @@
+{
+  "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "title": "Clipboard article",
+  "source_type": "clipboard",
+  "source_name": null,
+  "source_uri": null,
+  "source_sha256": "a155f1ea2dfd022fddd0019e52f6b6e4c2a372b4ad467cb3f7c36a2f9b5eb604",
+  "language_hint": "da",
+  "state": "inbox",
+  "created_at": "2026-07-27T12:00:00Z",
+  "updated_at": "2026-07-27T12:00:00Z",
+  "imported_at": "2026-07-27T12:00:00Z",
+  "deleted_at": null,
+  "content_revision": 1,
+  "row_version": 1,
+  "total_sections": 1,
+  "total_blocks": 1,
+  "total_characters": 11,
+  "metadata": {}
+}

@@ -11,23 +11,60 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 1, the backend-agnostic
-  Reader domain and service-owned SQLite library.
-- Current loop result: complete. `reader_core` now provides UUID/UTC domain
-  entities, repository protocols, deterministic plain-text blocks, stable
-  block cursors, revisioned edit and clipboard-append operations, persistent
-  bounded Undo/Redo, positions, bookmarks, queue operations, SQLite migration
-  and connection policy, integrity/schema reporting, and a consistent backup
-  primitive. No Reader HTTP routes or WPF code were added.
+- Current loop target: Reader Workstation Milestone 2, protected Reader HTTP
+  API and shared version-1 contracts.
+- Current loop result: complete. The service now initializes Reader storage in
+  an isolated runtime state, exposes authenticated `/v1/reader/*` routes for
+  capabilities, documents, revisioned content changes, blocks, positions,
+  bookmarks, and queue operations, and reports sanitized Reader readiness from
+  public health without changing backend readiness. No WPF, import parser,
+  speech-rule, export, or Reader-stream implementation was added.
 - Locked Reader Workstation architecture: preserve the existing Python TTS
   service as the single synthesis authority; use a thin WPF/.NET 10 Windows
   client; keep canonical reader persistence in service-owned SQLite through a
   new `reader_core` domain; add protected `/v1/reader/*` contracts rather than
   changing existing TTS endpoints; and preserve structured source mapping before
   reuse of the existing `tts_core` synthesis pipeline.
-- Reader Workstation resume point after this loop: Milestone 2, protected
-  Reader API and shared contracts. SAPI remains an optional compatibility
-  client and is not the active product track.
+- Reader Workstation resume point after this loop: Milestone 3, WPF desktop
+  shell and onboarding without audio playback. SAPI remains an optional
+  compatibility client and is not the active product track.
+- Reader Milestone 2 implementation details:
+  - every `/v1/reader/*` read and write passes through the existing bearer,
+    origin, and rate-limit middleware; public health remains unauthenticated;
+  - Reader startup failure is sanitized and disables Reader operations only;
+    it does not falsify or disable existing backend, voice, or TTS readiness;
+  - the additive version-1 API covers document create/get/list/search/update,
+    soft-delete/restore, block keyset paging, edit/append/Undo/Redo, idempotent
+    positions, bookmark CRUD, and transactional queue operations;
+  - content mutation responses intentionally omit original and replacement text;
+    structured Reader logs contain operation names, entity IDs, and sizes but
+    never document titles, document text, clipboard text, SQL, tokens, or paths;
+  - duplicate plain-text content is rejected by source hash unless the caller
+    explicitly sets `allow_duplicate`;
+  - typed failures include disabled/unavailable/busy storage, missing documents
+    and blocks, invalid/stale cursors, duplicates, state conflicts, and integer
+    row-version conflicts;
+  - capabilities truthfully advertise schema version 1 and the current text
+    library. Imports, Reader streaming, rules, search, and exports remain marked
+    unavailable until their planned milestones;
+  - six JSON fixtures in `contracts/reader/` round-trip through Python schemas;
+  - source launchers, smoke checks, Windows bundle source paths, and packaging
+    now include `packages/reader_core/src`. Temporary smoke repositories set an
+    explicit temporary Reader home instead of touching installed user data.
+- Reader Milestone 2 validation passed on 2026-07-27:
+  - `py -3 -m pytest apps\tts_service\tests packages\reader_core\tests -q`:
+    287 passed.
+  - `py -3 scripts\check_reader_contracts.py`: six fixtures ready.
+  - `py -3 -m pytest -q`: 318 passed.
+  - `py -3 -m ruff check .`: passed.
+  - `git diff --check`: passed; line-ending notices are informational.
+- Reader Milestone 2 assumptions and deviations:
+  - the capabilities route returns zero/empty values for not-yet-implemented
+    subsystems instead of promising the future example response early;
+  - file upload/import remains Milestone 6 even though the complete design lists
+    its eventual route alongside the broader API surface;
+  - existing test and smoke launchers gained the new source root as a necessary
+    packaging/runtime support change; no dependency or security model changed.
 - Reader Milestone 1 implementation details:
   - migration `001_reader_library.sql` creates the seven Reader tables and
     indexes plus version/checksum tracking in `schema_migrations`;
@@ -1010,9 +1047,9 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Resume at Reader Workstation Milestone 2. Add protected Reader API routes and
-   shared contracts over the completed repository layer; do not start the WPF
-   shell, document importers, or speech-rule work from later milestones.
+4. Resume at Reader Workstation Milestone 3. Add the .NET 10 WPF desktop shell,
+   strict-localhost service client, token/settings abstractions, onboarding, and
+   library browsing; do not start Reader audio or clipboard capture yet.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.
