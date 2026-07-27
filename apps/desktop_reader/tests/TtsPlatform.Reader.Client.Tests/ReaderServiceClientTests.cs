@@ -220,6 +220,53 @@ public sealed class ReaderServiceClientTests
         Assert.Equal("?expected_row_version=1", handler.Requests[6].Uri.Query);
     }
 
+    [Fact]
+    public async Task Queue_bookmark_state_and_export_workflows_use_protected_contracts()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/documents/doc" when request.Method == HttpMethod.Get =>
+                Json(HttpStatusCode.OK, DocumentJson),
+            "/v1/reader/documents/doc" => Json(HttpStatusCode.OK, DocumentJson),
+            "/v1/reader/documents/doc/bookmarks" => Json(HttpStatusCode.Created, BookmarkJson),
+            "/v1/reader/queue" => Json(HttpStatusCode.OK, $"{{\"items\":[{QueueItemJson}]}}"),
+            "/v1/reader/queue/items" => Json(HttpStatusCode.Created, QueueItemJson),
+            "/v1/reader/queue/items/item/activate" => Json(HttpStatusCode.OK, QueueItemJson),
+            "/v1/reader/queue/advance/doc" => Json(HttpStatusCode.OK, "null"),
+            "/v1/reader/exports" when request.Method == HttpMethod.Get =>
+                Json(HttpStatusCode.OK, $"{{\"jobs\":[{ExportJobJson}]}}"),
+            "/v1/reader/exports" => Json(HttpStatusCode.Accepted, ExportJobJson),
+            "/v1/reader/exports/job" => Json(HttpStatusCode.OK, ExportJobJson),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        await client.GetDocumentAsync("doc");
+        await client.UpdateDocumentAsync("doc", new UpdateDocumentRequest(1, State: "finished"));
+        var bookmark = await client.CreateBookmarkAsync(
+            "doc",
+            new CreateBookmarkRequest(new ReaderCursor("doc", "block", 0, 2, 1), "Mark"));
+        var queue = await client.GetQueueAsync();
+        await client.AddQueueItemAsync("doc");
+        await client.ActivateQueueItemAsync("item");
+        var next = await client.AdvanceQueueAsync("doc");
+        var export = await client.CreateExportAsync(new CreateExportRequest(DocumentIds: ["doc"]));
+        var exports = await client.GetExportsAsync();
+        await client.CancelExportAsync("job");
+
+        Assert.Equal("Mark", bookmark.Label);
+        Assert.Single(queue.Items);
+        Assert.Null(next);
+        Assert.Equal("job", export.Id);
+        Assert.Single(exports.Jobs);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"state\":\"finished\"", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[7].Body, StringComparison.Ordinal);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json"),
@@ -350,6 +397,33 @@ public sealed class ReaderServiceClientTests
         {
           "source_sha256":"abc","imported":0,"disabled":0,"duplicate":0,"invalid":0,
           "unsupported":0,"committed":false,"idempotent":false
+        }
+        """;
+
+    private const string BookmarkJson = """
+        {
+          "id":"bookmark","document_id":"doc",
+          "cursor":{"document_id":"doc","block_id":"block","block_ordinal":0,"character_offset":2,"content_revision":1,"segment_index":null},
+          "label":"Mark","note":"","created_at":"2026-07-27T12:00:00Z",
+          "updated_at":"2026-07-27T12:00:00Z","row_version":1
+        }
+        """;
+
+    private const string QueueItemJson = """
+        {
+          "id":"item","document_id":"doc","ordinal":0,"status":"queued",
+          "added_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z","row_version":1
+        }
+        """;
+
+    private const string ExportJobJson = """
+        {
+          "id":"job","status":"queued","document_ids":["doc"],"section_ids":[],
+          "voice_id":"voice","output_basename":null,"overwrite_existing":false,
+          "total_documents":1,"completed_documents":0,"current_document_id":null,
+          "output_files":[],"error_type":null,"error_message":null,"cancel_requested":false,
+          "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z",
+          "completed_at":null,"row_version":1
         }
         """;
 }

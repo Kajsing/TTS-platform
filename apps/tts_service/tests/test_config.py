@@ -161,6 +161,11 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
                 "max_regex_pattern_chars = 1024",
                 "max_replacement_chars = 2048",
                 "max_rule_time_per_block_ms = 100",
+                "[reader.exports]",
+                "enabled = true",
+                'output_directory = "audio"',
+                "max_concurrent_exports = 2",
+                'formats = ["wav"]',
             ]
         ),
         encoding="utf-8",
@@ -188,6 +193,30 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
     assert config.reader.rules.max_regex_pattern_chars == 1_024
     assert config.reader.rules.max_replacement_chars == 2_048
     assert config.reader.rules.max_rule_time_per_block_ms == 100
+    assert config.reader.exports.output_directory == "audio"
+    assert config.reader.exports.max_concurrent_exports == 2
+    assert config.reader.exports.formats == ("wav",)
+
+
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [
+        ("output_directory", '""'),
+        ("output_directory", '"../outside"'),
+        ("max_concurrent_exports", "0"),
+        ("formats", '["mp3"]'),
+    ],
+)
+def test_load_config_rejects_unsafe_reader_export_settings(
+    tmp_path: Path,
+    setting: str,
+    value: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f"[reader.exports]\n{setting} = {value}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader.exports"):
+        load_config(config_path, env={})
 
 
 @pytest.mark.parametrize(

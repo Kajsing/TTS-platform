@@ -53,6 +53,14 @@ class QueueStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class ExportStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class EditOperation(str, Enum):
     REPLACE = "replace"
     APPEND = "append"
@@ -79,6 +87,47 @@ class RuleScope(str, Enum):
     LANGUAGE = "language"
     VOICE_ENGINE = "voice_engine"
     DOCUMENT = "document"
+
+
+@dataclass(frozen=True, slots=True)
+class ReaderExportJob:
+    id: str
+    status: ExportStatus
+    document_ids: tuple[str, ...]
+    created_at: datetime
+    updated_at: datetime
+    section_ids: tuple[str, ...] = ()
+    start_cursor: ReaderCursor | None = None
+    end_cursor: ReaderCursor | None = None
+    voice_id: str | None = None
+    output_basename: str | None = None
+    overwrite_existing: bool = False
+    total_documents: int = 1
+    completed_documents: int = 0
+    current_document_id: str | None = None
+    output_files: tuple[str, ...] = ()
+    error_type: str | None = None
+    error_message: str | None = None
+    cancel_requested: bool = False
+    completed_at: datetime | None = None
+    row_version: int = 1
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "export job id")
+        _require_utc(self.created_at, "export created_at")
+        _require_utc(self.updated_at, "export updated_at")
+        if self.completed_at is not None:
+            _require_utc(self.completed_at, "export completed_at")
+        if not self.document_ids or any(not value.strip() for value in self.document_ids):
+            raise ReaderValidationError("export job requires document IDs")
+        if self.total_documents != len(self.document_ids):
+            raise ReaderValidationError("export document total must match document IDs")
+        if not 0 <= self.completed_documents <= self.total_documents:
+            raise ReaderValidationError("export progress is invalid")
+        if self.row_version <= 0:
+            raise ReaderValidationError("export row version must be positive")
+        if self.output_basename is not None and len(self.output_basename) > 200:
+            raise ReaderValidationError("export output name exceeds its limit")
 
 
 @dataclass(frozen=True, slots=True)

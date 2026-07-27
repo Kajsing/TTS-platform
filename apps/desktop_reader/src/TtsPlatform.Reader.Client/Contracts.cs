@@ -83,6 +83,13 @@ public interface IReaderServiceClient
         string? query = null,
         string? state = null,
         CancellationToken cancellationToken = default);
+    Task<ReaderDocument> GetDocumentAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> UpdateDocumentAsync(
+        string documentId,
+        UpdateDocumentRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<BlockPage> GetBlocksAsync(
         string documentId,
         int afterOrdinal = -1,
@@ -111,6 +118,46 @@ public interface IReaderServiceClient
         string documentId,
         SavePositionRequest request,
         CancellationToken cancellationToken = default);
+    Task<ReaderBookmarkPage> GetBookmarksAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderBookmark> CreateBookmarkAsync(
+        string documentId,
+        CreateBookmarkRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task DeleteBookmarkAsync(
+        string bookmarkId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderQueuePage> GetQueueAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+    Task<ReaderQueueItem> AddQueueItemAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderQueuePage> ReorderQueueAsync(
+        IReadOnlyList<string> itemIds,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderQueueItem> ActivateQueueItemAsync(
+        string itemId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderQueueItem?> AdvanceQueueAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task RemoveQueueItemAsync(
+        string itemId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderExportJobPage> GetExportsAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+    Task<ReaderExportJob> CreateExportAsync(
+        CreateExportRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderExportJob> GetExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderExportJob> CancelExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<byte[]> SynthesizeAsync(
         EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default);
@@ -151,7 +198,8 @@ public sealed record ReaderCapabilities(
     ReaderDatabaseCapability Database,
     ReaderPlaybackCapability Playback,
     ReaderImportCapability? Imports = null,
-    ReaderRuleCapability? Rules = null);
+    ReaderRuleCapability? Rules = null,
+    ReaderExportCapability? Exports = null);
 
 public sealed record ReaderDatabaseCapability(bool Ready, int SchemaVersion, bool SearchAvailable);
 
@@ -169,6 +217,8 @@ public sealed record ReaderImportCapability(
 public sealed record ReaderRuleCapability(
     IReadOnlyList<string> Types,
     bool RegexTimeoutSupported);
+
+public sealed record ReaderExportCapability(IReadOnlyList<string> Formats);
 
 public sealed record VoicePage(IReadOnlyList<VoiceDescriptor> Voices, string? DefaultVoice);
 
@@ -215,6 +265,11 @@ public sealed record ReaderDocument(
 {
     public bool IsEditable => SourceType is "plain_text" or "clipboard" or "selection" or "text_file";
 }
+
+public sealed record UpdateDocumentRequest(
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion,
+    string? Title = null,
+    string? State = null);
 
 public sealed record ImportDocumentRequest(
     string FileName,
@@ -407,6 +462,61 @@ public sealed record ReaderPosition(
     DateTimeOffset UpdatedAt,
     bool Completed,
     int RowVersion);
+
+public sealed record CreateBookmarkRequest(ReaderCursor Cursor, string Label = "", string Note = "");
+
+public sealed record ReaderBookmark(
+    string Id,
+    string DocumentId,
+    ReaderCursor Cursor,
+    string Label,
+    string Note,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    int RowVersion);
+
+public sealed record ReaderBookmarkPage(IReadOnlyList<ReaderBookmark> Bookmarks);
+
+public sealed record ReaderQueueItem(
+    string Id,
+    string DocumentId,
+    int Ordinal,
+    string Status,
+    DateTimeOffset AddedAt,
+    DateTimeOffset UpdatedAt,
+    int RowVersion);
+
+public sealed record ReaderQueuePage(IReadOnlyList<ReaderQueueItem> Items);
+
+public sealed record CreateExportRequest(
+    [property: JsonPropertyName("document_ids")] IReadOnlyList<string>? DocumentIds = null,
+    [property: JsonPropertyName("queue_item_ids")] IReadOnlyList<string>? QueueItemIds = null,
+    [property: JsonPropertyName("section_ids")] IReadOnlyList<string>? SectionIds = null,
+    [property: JsonPropertyName("voice_id")] string? VoiceId = null,
+    [property: JsonPropertyName("output_basename")] string? OutputBasename = null,
+    [property: JsonPropertyName("overwrite_existing")] bool OverwriteExisting = false);
+
+public sealed record ReaderExportJob(
+    string Id,
+    string Status,
+    IReadOnlyList<string> DocumentIds,
+    IReadOnlyList<string> SectionIds,
+    string? VoiceId,
+    string? OutputBasename,
+    bool OverwriteExisting,
+    int TotalDocuments,
+    int CompletedDocuments,
+    string? CurrentDocumentId,
+    IReadOnlyList<string> OutputFiles,
+    string? ErrorType,
+    string? ErrorMessage,
+    bool CancelRequested,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? CompletedAt,
+    int RowVersion);
+
+public sealed record ReaderExportJobPage(IReadOnlyList<ReaderExportJob> Jobs);
 
 public sealed record SavePositionRequest(
     ReaderCursor Cursor,

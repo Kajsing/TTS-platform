@@ -6,7 +6,7 @@ of synthesis and the canonical Reader database.
 
 ## Current feature boundary
 
-The Milestone 7 Reader MVP provides:
+The Milestone 8 Reader beta provides:
 
 - strict `http://localhost` or `http://127.0.0.1` service validation;
 - a token-file source (the bearer token is never copied into settings JSON);
@@ -54,6 +54,15 @@ The Milestone 7 Reader MVP provides:
   action for a warned preview rule;
 - WPF rule-set/rule management, Create rule from selection, and dry-run-first
   JSON import plus JSON export using the documented open Reader interchange.
+- title and content search with a transparent SQLite FTS5/portable fallback;
+- inbox, reading, finished, and archive filters with reversible state actions;
+- a durable, reorderable reading queue with single-item activation and optional
+  auto-advance;
+- bookmark creation, listing, deletion, and position jumps for the open document;
+- persistent single-document and queue WAV exports with progress, cancellation,
+  safe output names, and service-owned completion after the desktop closes;
+- Reader diagnostics for database integrity, search capability, document states,
+  stream leases, queue size, export states, and low-sensitivity metrics.
 
 ## Project boundaries
 
@@ -86,6 +95,7 @@ source-mapped Reader streaming, position resume, immediate speech without
 document persistence, repeated clipboard append plus one-step Undo, a consistent
 preview snapshot, live safe structured import with durable warnings and an
 editable copy, source-mapped speech-rule preview plus the regex timeout guard,
+the Milestone 8 desktop queue/bookmark/export wiring,
 the default Windows audio endpoint, clipboard-listener and
 hotkey registration, tray lifecycle, a self-contained `win-x64` package, and a
 packaged WPF render. It does not read or write the current clipboard and does not

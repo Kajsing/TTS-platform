@@ -58,6 +58,10 @@ DEFAULT_READER_RULE_REGEX_TIMEOUT_MS = 25
 DEFAULT_READER_RULE_MAX_PATTERN_CHARS = 2_048
 DEFAULT_READER_RULE_MAX_REPLACEMENT_CHARS = 4_096
 DEFAULT_READER_RULE_MAX_TIME_PER_BLOCK_MS = 250
+DEFAULT_READER_EXPORTS_ENABLED = True
+DEFAULT_READER_EXPORT_OUTPUT_DIRECTORY = "./data/exports"
+DEFAULT_READER_EXPORT_MAX_CONCURRENT = 1
+DEFAULT_READER_EXPORT_FORMATS = ("wav",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +326,43 @@ class ReaderRuleConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderExportConfig:
+    enabled: bool = DEFAULT_READER_EXPORTS_ENABLED
+    output_directory: str = DEFAULT_READER_EXPORT_OUTPUT_DIRECTORY
+    max_concurrent_exports: int = DEFAULT_READER_EXPORT_MAX_CONCURRENT
+    formats: tuple[str, ...] = DEFAULT_READER_EXPORT_FORMATS
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "ReaderExportConfig":
+        raw_formats = data.get("formats", DEFAULT_READER_EXPORT_FORMATS)
+        if not isinstance(raw_formats, (list, tuple)):
+            raise ValueError("reader.exports.formats must be an array")
+        formats = tuple(str(value).strip().lower() for value in raw_formats)
+        config = cls(
+            enabled=bool(data.get("enabled", DEFAULT_READER_EXPORTS_ENABLED)),
+            output_directory=str(
+                data.get("output_directory", DEFAULT_READER_EXPORT_OUTPUT_DIRECTORY)
+            ),
+            max_concurrent_exports=int(
+                data.get("max_concurrent_exports", DEFAULT_READER_EXPORT_MAX_CONCURRENT)
+            ),
+            formats=formats,
+        )
+        if not config.output_directory.strip():
+            raise ValueError("reader.exports.output_directory must not be empty")
+        output_path = Path(config.output_directory)
+        if not output_path.is_absolute() and ".." in output_path.parts:
+            raise ValueError(
+                "reader.exports.output_directory must stay within Reader home when relative"
+            )
+        if config.max_concurrent_exports <= 0:
+            raise ValueError("reader.exports.max_concurrent_exports must be positive")
+        if not config.formats or set(config.formats) != {"wav"}:
+            raise ValueError("reader.exports.formats currently supports only ['wav']")
+        return config
+
+
+@dataclass(frozen=True, slots=True)
 class ReaderConfig:
     enabled: bool = DEFAULT_READER_ENABLED
     home_path: str = DEFAULT_READER_HOME_PATH
@@ -336,6 +377,7 @@ class ReaderConfig:
     max_edit_history_bytes: int = DEFAULT_READER_MAX_EDIT_HISTORY_BYTES
     imports: ReaderImportConfig = ReaderImportConfig()
     rules: ReaderRuleConfig = ReaderRuleConfig()
+    exports: ReaderExportConfig = ReaderExportConfig()
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "ReaderConfig":
@@ -374,6 +416,7 @@ class ReaderConfig:
             ),
             imports=ReaderImportConfig.from_mapping(_section(data, "imports")),
             rules=ReaderRuleConfig.from_mapping(_section(data, "rules")),
+            exports=ReaderExportConfig.from_mapping(_section(data, "exports")),
         )
         if not config.database_path.strip():
             raise ValueError("reader.database_path must not be empty")

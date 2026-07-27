@@ -10,12 +10,14 @@ from reader_core import (
     DocumentEdit,
     DocumentState,
     EditOperation,
+    ExportStatus,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
     ReaderBlock,
     ReaderCursor,
     ReaderDocument,
+    ReaderExportJob,
     RuleScope,
     RuleStage,
     RuleType,
@@ -395,6 +397,77 @@ class ReaderQueueItemResponse(BaseModel):
 
 class ReaderQueueResponse(BaseModel):
     items: list[ReaderQueueItemResponse]
+
+
+class CreateReaderExportRequest(BaseModel):
+    document_ids: list[str] = Field(default_factory=list, max_length=100)
+    queue_item_ids: list[str] = Field(default_factory=list, max_length=100)
+    section_ids: list[str] = Field(default_factory=list, max_length=10_000)
+    start_cursor: ReaderCursorPayload | None = None
+    end_cursor: ReaderCursorPayload | None = None
+    voice_id: str | None = Field(default=None, max_length=200)
+    output_basename: str | None = Field(default=None, max_length=200)
+    overwrite_existing: bool = False
+
+
+class ReaderExportJobResponse(BaseModel):
+    id: str
+    status: ExportStatus
+    document_ids: list[str]
+    section_ids: list[str]
+    voice_id: str | None
+    output_basename: str | None
+    overwrite_existing: bool
+    total_documents: int
+    completed_documents: int
+    current_document_id: str | None
+    output_files: list[str]
+    error_type: str | None
+    error_message: str | None
+    cancel_requested: bool
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    row_version: int
+
+    @classmethod
+    def from_domain(cls, job: ReaderExportJob) -> "ReaderExportJobResponse":
+        return cls(
+            id=job.id,
+            status=job.status,
+            document_ids=list(job.document_ids),
+            section_ids=list(job.section_ids),
+            voice_id=job.voice_id,
+            output_basename=job.output_basename,
+            overwrite_existing=job.overwrite_existing,
+            total_documents=job.total_documents,
+            completed_documents=job.completed_documents,
+            current_document_id=job.current_document_id,
+            output_files=list(job.output_files),
+            error_type=job.error_type,
+            error_message=job.error_message,
+            cancel_requested=job.cancel_requested,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            completed_at=job.completed_at,
+            row_version=job.row_version,
+        )
+
+
+class ReaderExportJobListResponse(BaseModel):
+    jobs: list[ReaderExportJobResponse]
+
+
+class ReaderDiagnosticsResponse(BaseModel):
+    database_ready: bool
+    schema_version: int
+    integrity_message: str
+    search_available: bool
+    document_counts_by_state: dict[str, int]
+    queue_item_count: int
+    active_content_leases: int
+    export_status_counts: dict[str, int]
+    metrics: dict[str, Any]
 
 
 class CreateReaderRuleSetRequest(BaseModel):

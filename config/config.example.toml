@@ -65,3 +65,9 @@ default_regex_timeout_ms = 25
 max_regex_pattern_chars = 2048
 max_replacement_chars = 4096
 max_rule_time_per_block_ms = 250
+
+[reader.exports]
+enabled = true
+output_directory = "./data/exports"
+max_concurrent_exports = 1
+formats = ["wav"]

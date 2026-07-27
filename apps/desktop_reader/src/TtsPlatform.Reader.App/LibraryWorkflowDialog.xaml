@@ -1,0 +1,89 @@
+<Window x:Class="TtsPlatform.Reader.App.LibraryWorkflowDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Queue, bookmarks, and exports" Width="820" Height="560"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <TabControl x:Name="WorkflowTabs">
+      <TabItem Header="Queue">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <DataGrid x:Name="QueueGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    SelectionMode="Single" AutomationProperties.Name="Saved reading queue">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="#" Binding="{Binding Ordinal}" Width="45" />
+              <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+              <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="Add current" Click="AddCurrent_Click" />
+            <Button Content="Move up" Click="MoveUp_Click" />
+            <Button Content="Move down" Click="MoveDown_Click" />
+            <Button Content="Remove" Click="RemoveQueue_Click" />
+            <Button Content="Play selected" Click="PlayQueue_Click" />
+            <Button Content="Export queue" Click="ExportQueue_Click" />
+            <Button Content="Refresh" Click="Refresh_Click" />
+          </WrapPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Bookmarks">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <DataGrid x:Name="BookmarkGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    SelectionMode="Single" AutomationProperties.Name="Document bookmarks">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
+              <DataGridTextColumn Header="Block" Binding="{Binding Cursor.BlockOrdinal}" Width="80" />
+              <DataGridTextColumn Header="Offset" Binding="{Binding Cursor.CharacterOffset}" Width="80" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="Add at current position" Click="AddBookmark_Click" />
+            <Button Content="Jump to selected" Click="JumpBookmark_Click" />
+            <Button Content="Delete" Click="DeleteBookmark_Click" />
+            <Button Content="Refresh" Click="Refresh_Click" />
+          </WrapPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="WAV exports">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <DataGrid x:Name="ExportGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    SelectionMode="Single" AutomationProperties.Name="Persistent WAV exports">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="145" />
+              <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+              <DataGridTextColumn Header="Progress" Binding="{Binding Progress}" Width="90" />
+              <DataGridTextColumn Header="Files" Binding="{Binding OutputSummary}" Width="*" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="Export current" Click="ExportCurrent_Click" />
+            <Button Content="Export queue" Click="ExportQueue_Click" />
+            <Button Content="Cancel selected" Click="CancelExport_Click" />
+            <Button Content="Refresh" Click="Refresh_Click" />
+          </WrapPanel>
+        </Grid>
+      </TabItem>
+    </TabControl>
+    <DockPanel Grid.Row="1" Margin="0,10,0,0">
+      <Button DockPanel.Dock="Right" Content="Close" IsCancel="True" MinWidth="80" />
+      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Text="Loading..."
+                 TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+    </DockPanel>
+  </Grid>
+</Window>

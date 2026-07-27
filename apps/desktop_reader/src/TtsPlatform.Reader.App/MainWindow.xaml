@@ -118,8 +118,17 @@
           <Button DockPanel.Dock="Right" Content="Search" Click="SearchButton_Click" />
           <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Importâ€¦"
                   Click="ImportButton_Click" AutomationProperties.Name="Import document file" />
+          <ComboBox DockPanel.Dock="Right" x:Name="LibraryStateComboBox" Width="105"
+                    SelectedIndex="0" SelectionChanged="LibraryStateComboBox_SelectionChanged"
+                    AutomationProperties.Name="Library state filter">
+            <ComboBoxItem Content="All" Tag="" />
+            <ComboBoxItem Content="Inbox" Tag="inbox" />
+            <ComboBoxItem Content="Reading" Tag="active" />
+            <ComboBoxItem Content="Finished" Tag="finished" />
+            <ComboBoxItem Content="Archive" Tag="archived" />
+          </ComboBox>
           <TextBox x:Name="SearchTextBox" AutomationProperties.Name="Search library"
-                   ToolTip="Search document titles" />
+                   ToolTip="Search document titles and content" />
         </DockPanel>
         <DataGrid Grid.Row="1" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
                   SelectionMode="Single" SelectionChanged="DocumentsGrid_SelectionChanged"
@@ -155,6 +164,8 @@
                     IsEnabled="False" AutomationProperties.Name="Stop document playback" />
             <Button x:Name="NextSectionButton" Content="Next section" Click="NextSectionButton_Click"
                     IsEnabled="False" AutomationProperties.Name="Go to next section" />
+            <CheckBox x:Name="AutoAdvanceCheckBox" Content="Auto-advance queue"
+                      VerticalAlignment="Center" Margin="8,0" />
             <TextBlock x:Name="PlaybackStatusText" Text="Stopped" Margin="10,5,0,0"
                        AutomationProperties.LiveSetting="Polite" />
           </WrapPanel>
@@ -192,6 +203,14 @@
           <Button x:Name="CreateRuleFromSelectionButton" Content="Create rule from selection"
                   Click="CreateRuleFromSelectionButton_Click"
                   AutomationProperties.Name="Create speech rule from selected text" />
+          <Button x:Name="LibraryWorkflowButton" Content="Queue / bookmarks / WAV"
+                  Click="LibraryWorkflowButton_Click" />
+          <Button x:Name="FinishDocumentButton" Content="Mark finished"
+                  Click="FinishDocumentButton_Click" IsEnabled="False" />
+          <Button x:Name="ArchiveDocumentButton" Content="Archive"
+                  Click="ArchiveDocumentButton_Click" IsEnabled="False" />
+          <Button x:Name="RestoreDocumentButton" Content="Restore to inbox"
+                  Click="RestoreDocumentButton_Click" IsEnabled="False" />
           <Button x:Name="SaveEditButton" Content="Save edit" Click="SaveEditButton_Click" IsEnabled="False" />
           <Button x:Name="RevertEditButton" Content="Revert local" Click="RevertEditButton_Click" IsEnabled="False" />
           <Button x:Name="UndoButton" Content="Undo saved edit" Click="UndoButton_Click" IsEnabled="False" />

@@ -8,6 +8,7 @@ from .models import (
     DocumentEdit,
     DocumentPage,
     DocumentState,
+    ExportStatus,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -16,12 +17,16 @@ from .models import (
     ReaderDatabaseReport,
     ReaderDocument,
     ReaderDocumentBundle,
+    ReaderExportJob,
     SpeechRule,
     SpeechRuleSet,
 )
 
 
 class ReaderRepository(Protocol):
+    @property
+    def search_available(self) -> bool: ...
+
     def create_document(self, bundle: ReaderDocumentBundle) -> ReaderDocument: ...
 
     def get_document(self, document_id: str) -> ReaderDocument: ...
@@ -38,6 +43,8 @@ class ReaderRepository(Protocol):
     ) -> DocumentPage: ...
 
     def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None: ...
+
+    def document_counts_by_state(self) -> dict[DocumentState, int]: ...
 
     def list_blocks(
         self,
@@ -149,6 +156,46 @@ class ReaderRepository(Protocol):
     def remove_queue_item(self, item_id: str, *, expected_row_version: int) -> None: ...
 
     def reorder_queue(self, item_ids: tuple[str, ...]) -> tuple[QueueItem, ...]: ...
+
+    def activate_queue_item(self, item_id: str) -> QueueItem: ...
+
+    def advance_queue(self, document_id: str) -> QueueItem | None: ...
+
+    def create_export_job(self, job: ReaderExportJob) -> ReaderExportJob: ...
+
+    def get_export_job(self, job_id: str) -> ReaderExportJob: ...
+
+    def list_export_jobs(
+        self,
+        statuses: tuple[ExportStatus, ...] | None = None,
+        *,
+        limit: int = 100,
+    ) -> tuple[ReaderExportJob, ...]: ...
+
+    def claim_export_job(self, job_id: str) -> ReaderExportJob: ...
+
+    def update_export_progress(
+        self,
+        job_id: str,
+        *,
+        completed_documents: int,
+        current_document_id: str | None,
+        output_files: tuple[str, ...],
+    ) -> ReaderExportJob: ...
+
+    def finish_export_job(
+        self,
+        job_id: str,
+        *,
+        status: ExportStatus,
+        output_files: tuple[str, ...] = (),
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> ReaderExportJob: ...
+
+    def request_export_cancel(self, job_id: str) -> ReaderExportJob: ...
+
+    def recover_export_jobs(self) -> tuple[ReaderExportJob, ...]: ...
 
     def create_rule_set(self, rule_set: SpeechRuleSet) -> SpeechRuleSet: ...
 

@@ -24,6 +24,7 @@ from reader_core import (
 )
 from speech_rules import RuleContext, SpeechRuleError
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import FileResponse
 
 from .reader_errors import (
     reader_api_error,
@@ -39,6 +40,7 @@ from .reader_schemas import (
     AppendReaderContentRequest,
     CreateReaderBookmarkRequest,
     CreateReaderDocumentRequest,
+    CreateReaderExportRequest,
     CreateReaderRuleRequest,
     CreateReaderRuleSetRequest,
     ExpectedReaderVersionRequest,
@@ -49,10 +51,13 @@ from .reader_schemas import (
     ReaderCapabilitiesResponse,
     ReaderCursorPayload,
     ReaderDatabaseCapability,
+    ReaderDiagnosticsResponse,
     ReaderDocumentPageResponse,
     ReaderDocumentResponse,
     ReaderEditResponse,
     ReaderExportCapability,
+    ReaderExportJobListResponse,
+    ReaderExportJobResponse,
     ReaderImportBlockPreviewResponse,
     ReaderImportCapability,
     ReaderImportCommitRequest,
@@ -109,7 +114,11 @@ def build_reader_router() -> APIRouter:
             database=ReaderDatabaseCapability(
                 ready=runtime.database_ready,
                 schema_version=runtime.schema_version,
-                search_available=False,
+                search_available=(
+                    runtime.service.repository.search_available
+                    if runtime.service is not None
+                    else False
+                ),
             ),
             imports=ReaderImportCapability(
                 formats=["txt", "md", "html", "docx", "epub"],
@@ -133,7 +142,9 @@ def build_reader_router() -> APIRouter:
                 max_blocks_per_window=config.max_blocks_per_stream_window,
                 max_source_chars_per_window=config.max_source_chars_per_stream_window,
             ),
-            exports=ReaderExportCapability(formats=[]),
+            exports=ReaderExportCapability(
+                formats=list(config.exports.formats) if config.exports.enabled else []
+            ),
         )
 
     @router.post("/imports/preview", response_model=ReaderImportPreviewResponse)
@@ -750,6 +761,178 @@ def build_reader_router() -> APIRouter:
             items=[ReaderQueueItemResponse.from_domain(item) for item in items]
         )
 
+    @router.post(
+        "/queue/items/{item_id}/activate",
+        response_model=ReaderQueueItemResponse,
+    )
+    async def activate_queue_item(request: Request, item_id: str) -> ReaderQueueItemResponse:
+        service = _service(request)
+        item = _run_reader(
+            lambda: service.repository.activate_queue_item(item_id),
+            missing_entity="queue item",
+        )
+        service.observability.log_reader_operation(
+            operation="activate_queue_item",
+            document_id=item.document_id,
+        )
+        return ReaderQueueItemResponse.from_domain(item)
+
+    @router.post(
+        "/queue/advance/{document_id}",
+        response_model=ReaderQueueItemResponse | None,
+    )
+    async def advance_queue(
+        request: Request,
+        document_id: str,
+    ) -> ReaderQueueItemResponse | None:
+        service = _service(request)
+        item = _run_reader(lambda: service.repository.advance_queue(document_id))
+        service.observability.log_reader_operation(
+            operation="advance_queue",
+            document_id=document_id,
+        )
+        return ReaderQueueItemResponse.from_domain(item) if item is not None else None
+
+    @router.get("/exports", response_model=ReaderExportJobListResponse)
+    async def list_exports(request: Request) -> ReaderExportJobListResponse:
+        service = _service(request)
+        jobs = _run_reader(service.repository.list_export_jobs)
+        return ReaderExportJobListResponse(
+            jobs=[ReaderExportJobResponse.from_domain(job) for job in jobs]
+        )
+
+    @router.post(
+        "/exports",
+        response_model=ReaderExportJobResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def create_export(
+        request: Request,
+        payload: CreateReaderExportRequest,
+    ) -> ReaderExportJobResponse:
+        service = _service(request)
+        manager = _export_manager(request)
+        if payload.document_ids and payload.queue_item_ids:
+            raise reader_api_error(
+                "reader_conflict",
+                status_code=400,
+                message="Choose document IDs or queue item IDs, not both.",
+            )
+        document_ids = tuple(payload.document_ids)
+        if payload.queue_item_ids:
+            queue = {item.id: item for item in _run_reader(service.repository.list_queue)}
+            missing = next(
+                (item_id for item_id in payload.queue_item_ids if item_id not in queue),
+                None,
+            )
+            if missing is not None:
+                raise reader_api_error(
+                    "reader_not_found",
+                    status_code=404,
+                    message="Reader queue item was not found.",
+                )
+            document_ids = tuple(queue[item_id].document_id for item_id in payload.queue_item_ids)
+        if not document_ids:
+            raise reader_api_error(
+                "reader_conflict",
+                status_code=400,
+                message="At least one document or queue item is required.",
+            )
+        if payload.voice_id is not None and not request.app.state.container.voice_registry.has(
+            payload.voice_id
+        ):
+            raise reader_api_error(
+                "reader_voice_unavailable",
+                status_code=400,
+                message="The requested Reader voice is unavailable.",
+                param="voice_id",
+            )
+        start_cursor = (
+            _run_reader(
+                lambda: _api_cursor_to_domain(service, document_ids[0], payload.start_cursor),
+                cursor_input=True,
+            )
+            if payload.start_cursor is not None
+            else None
+        )
+        end_cursor = (
+            _run_reader(
+                lambda: _api_cursor_to_domain(service, document_ids[0], payload.end_cursor),
+                cursor_input=True,
+            )
+            if payload.end_cursor is not None
+            else None
+        )
+        job = _run_reader(
+            lambda: manager.create(
+                document_ids=document_ids,
+                section_ids=tuple(payload.section_ids),
+                start_cursor=start_cursor,
+                end_cursor=end_cursor,
+                voice_id=payload.voice_id,
+                output_basename=payload.output_basename,
+                overwrite_existing=payload.overwrite_existing,
+            )
+        )
+        return ReaderExportJobResponse.from_domain(job)
+
+    @router.get("/exports/{job_id}", response_model=ReaderExportJobResponse)
+    async def get_export(request: Request, job_id: str) -> ReaderExportJobResponse:
+        service = _service(request)
+        job = _run_reader(
+            lambda: service.repository.get_export_job(job_id),
+            missing_entity="export job",
+        )
+        return ReaderExportJobResponse.from_domain(job)
+
+    @router.delete("/exports/{job_id}", response_model=ReaderExportJobResponse)
+    async def cancel_export(request: Request, job_id: str) -> ReaderExportJobResponse:
+        job = _run_reader(
+            lambda: _export_manager(request).cancel(job_id),
+            missing_entity="export job",
+        )
+        return ReaderExportJobResponse.from_domain(job)
+
+    @router.get("/exports/{job_id}/result")
+    async def get_export_result(
+        request: Request,
+        job_id: str,
+        index: Annotated[int, Query(ge=0)] = 0,
+    ) -> FileResponse:
+        service = _service(request)
+        job = _run_reader(
+            lambda: service.repository.get_export_job(job_id),
+            missing_entity="export job",
+        )
+        path = _run_reader(lambda: _export_manager(request).result_path(job, index))
+        return FileResponse(path, filename=path.name, media_type="audio/wav")
+
+    @router.get("/diagnostics", response_model=ReaderDiagnosticsResponse)
+    async def reader_diagnostics(request: Request) -> ReaderDiagnosticsResponse:
+        service = _service(request)
+        report = _run_reader(service.repository.report)
+        queue = _run_reader(service.repository.list_queue)
+        jobs = _run_reader(service.repository.list_export_jobs)
+        counts: dict[str, int] = {}
+        for job in jobs:
+            counts[job.status.value] = counts.get(job.status.value, 0) + 1
+        return ReaderDiagnosticsResponse(
+            database_ready=report.ready,
+            schema_version=report.schema_version,
+            integrity_message=report.integrity_message,
+            search_available=service.repository.search_available,
+            document_counts_by_state={
+                state.value: count
+                for state, count in _run_reader(
+                    service.repository.document_counts_by_state
+                ).items()
+            },
+            queue_item_count=len(queue),
+            active_content_leases=service.content_leases.active_lease_count(),
+            export_status_counts=counts,
+            metrics=request.app.state.container.observability.snapshot(),
+        )
+
     @router.get("/rule-sets", response_model=ReaderRuleSetListResponse)
     async def list_rule_sets(request: Request) -> ReaderRuleSetListResponse:
         service = _service(request)
@@ -989,6 +1172,17 @@ def _service(request: Request) -> ReaderApplicationService:
     if runtime.service is None or not runtime.database_ready:
         raise reader_database_unavailable()
     return runtime.service
+
+
+def _export_manager(request: Request):
+    manager = request.app.state.container.reader_exports
+    if manager is None:
+        raise reader_api_error(
+            "reader_export_unavailable",
+            status_code=503,
+            message="Reader WAV export is disabled or unavailable.",
+        )
+    return manager
 
 
 def _run_reader(

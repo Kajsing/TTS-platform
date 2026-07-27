@@ -15,9 +15,11 @@ for source_root in (
 
 from tts_service.reader_schemas import (  # noqa: E402
     CreateReaderDocumentRequest,
+    CreateReaderExportRequest,
     ReaderCapabilitiesResponse,
     ReaderDocumentResponse,
     ReaderErrorResponse,
+    ReaderExportJobResponse,
     ReaderImportPreviewResponse,
     ReaderMutationResponse,
     ReaderRulePreviewResponse,
@@ -27,10 +29,12 @@ from tts_service.reader_schemas import (  # noqa: E402
 FIXTURES = {
     "capabilities.response.json": ReaderCapabilitiesResponse,
     "create_document.request.json": CreateReaderDocumentRequest,
+    "create_export.request.json": CreateReaderExportRequest,
     "document.response.json": ReaderDocumentResponse,
     "position.request.json": SaveReaderPositionRequest,
     "mutation.response.json": ReaderMutationResponse,
     "error.response.json": ReaderErrorResponse,
+    "export_job.response.json": ReaderExportJobResponse,
     "import_preview.response.json": ReaderImportPreviewResponse,
     "rule_preview.response.json": ReaderRulePreviewResponse,
 }

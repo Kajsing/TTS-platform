@@ -3,6 +3,9 @@ from __future__ import annotations
 import io
 import json
 import logging
+import threading
+import time
+import wave
 import zipfile
 from pathlib import Path
 
@@ -65,6 +68,24 @@ def cursor_for(block: dict[str, object], document: dict[str, object], offset: in
     }
 
 
+def wait_for_export(
+    client: TestClient,
+    headers: dict[str, str],
+    job_id: str,
+    *,
+    timeout_seconds: float = 5.0,
+) -> dict[str, object]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        response = client.get(f"/v1/reader/exports/{job_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        job = response.json()
+        if job["status"] in {"completed", "failed", "cancelled"}:
+            return job
+        time.sleep(0.02)
+    raise AssertionError("Reader export did not reach a terminal state")
+
+
 def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -> None:
     client, headers, _ = build_reader_bundle(tmp_path)
 
@@ -77,7 +98,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 2,
+        "schema_version": 3,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -86,8 +107,8 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 2,
-        "search_available": False,
+        "schema_version": 3,
+        "search_available": True,
     }
     assert payload["imports"] == {
         "formats": ["txt", "md", "html", "docx", "epub"],
@@ -106,7 +127,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
         "regex_timeout_supported": True,
     }
     assert payload["playback"]["stream_protocol_version"] == 1
-    assert payload["exports"]["formats"] == []
+    assert payload["exports"]["formats"] == ["wav"]
 
 
 @pytest.mark.parametrize(
@@ -484,7 +505,10 @@ def test_document_crud_search_keyset_and_block_paging(tmp_path: Path) -> None:
     assert not {
         item["id"] for item in page_one.json()["documents"]
     } & {item["id"] for item in page_two.json()["documents"]}
-    assert [item["id"] for item in search.json()["documents"]] == [second["id"]]
+    assert {item["id"] for item in search.json()["documents"]} == {
+        second["id"],
+        allowed_duplicate.json()["id"],
+    }
     assert [item["ordinal"] for item in blocks_one.json()["blocks"]] == [0, 1]
     assert blocks_one.json()["next_after_ordinal"] == 1
     assert [item["ordinal"] for item in blocks_two.json()["blocks"]] == [2]
@@ -871,3 +895,119 @@ def test_reader_logs_identifiers_and_sizes_without_titles_or_text(tmp_path: Path
     assert '"character_count": 21' in logs
     assert "PRIVATE TITLE" not in logs
     assert "PRIVATE DOCUMENT TEXT" not in logs
+
+
+def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> None:
+    client, headers, app = build_reader_bundle(tmp_path)
+    first = create_document(client, headers, title="First export", text="Hello world.")
+    second = create_document(client, headers, title="Second export", text="Goodbye world.")
+    first_queue = client.post(
+        "/v1/reader/queue/items",
+        headers=headers,
+        json={"document_id": first["id"]},
+    ).json()
+    second_queue = client.post(
+        "/v1/reader/queue/items",
+        headers=headers,
+        json={"document_id": second["id"]},
+    ).json()
+
+    activated = client.post(
+        f"/v1/reader/queue/items/{first_queue['id']}/activate",
+        headers=headers,
+    )
+    advanced = client.post(
+        f"/v1/reader/queue/advance/{first['id']}",
+        headers=headers,
+    )
+    assert activated.json()["status"] == "playing"
+    assert advanced.json()["id"] == second_queue["id"]
+    queue = client.get("/v1/reader/queue", headers=headers).json()["items"]
+    assert sum(item["status"] == "playing" for item in queue) == 1
+
+    created = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={
+            "queue_item_ids": [first_queue["id"], second_queue["id"]],
+            "output_basename": "../../ignored-for-batch",
+        },
+    )
+    assert created.status_code == 202, created.text
+    job = wait_for_export(client, headers, created.json()["id"])
+    assert job["status"] == "completed", job
+    assert len(job["output_files"]) == 2
+    export_directory = tmp_path / "reader" / "data" / "exports"
+    assert all((export_directory / name).is_file() for name in job["output_files"])
+    assert not (tmp_path / "ignored-for-batch.wav").exists()
+    with wave.open(str(export_directory / job["output_files"][0]), "rb") as exported:
+        assert exported.getnchannels() == 1
+        assert exported.getsampwidth() == 2
+        assert exported.getnframes() > 0
+
+    safe_name_job = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={"document_ids": [first["id"]], "output_basename": "../../CON"},
+    )
+    assert safe_name_job.status_code == 202
+    safe_name_result = wait_for_export(client, headers, safe_name_job.json()["id"])
+    assert safe_name_result["status"] == "completed"
+    assert safe_name_result["output_files"] == ["_CON.wav"]
+    assert (export_directory / "_CON.wav").is_file()
+    assert not (tmp_path / "CON.wav").exists()
+
+    result = client.get(
+        f"/v1/reader/exports/{job['id']}/result?index=0",
+        headers=headers,
+    )
+    diagnostics = client.get("/v1/reader/diagnostics", headers=headers)
+    assert result.status_code == 200
+    assert result.headers["content-type"] == "audio/wav"
+    assert diagnostics.status_code == 200
+    assert diagnostics.json()["schema_version"] == 3
+    assert diagnostics.json()["export_status_counts"]["completed"] == 2
+    assert diagnostics.json()["document_counts_by_state"] == {
+        "inbox": 2,
+        "active": 0,
+        "finished": 0,
+        "archived": 0,
+    }
+    assert app.state.container.reader.service.repository.search_available is True
+
+
+def test_cancelled_export_removes_temporary_and_final_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, headers, app = build_reader_bundle(tmp_path)
+    document = create_document(client, headers, title="Cancelled", text="Please stop now.")
+    backend = app.state.container.backend
+    original_synthesize = backend.synthesize
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_synthesize(_, request):
+        entered.set()
+        release.wait(timeout=3)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(backend), "synthesize", slow_synthesize)
+    created = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={"document_ids": [document["id"]], "output_basename": "cancelled"},
+    )
+    assert created.status_code == 202, created.text
+    assert entered.wait(timeout=2)
+    cancelled = client.delete(
+        f"/v1/reader/exports/{created.json()['id']}",
+        headers=headers,
+    )
+    assert cancelled.status_code == 200
+    release.set()
+    job = wait_for_export(client, headers, created.json()["id"])
+    assert job["status"] == "cancelled"
+    export_directory = tmp_path / "reader" / "data" / "exports"
+    assert not (export_directory / "cancelled.wav").exists()
+    assert list(export_directory.glob("*.part")) == []

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,7 +43,11 @@ def create_app(
     repo_root: Path | None = None,
 ) -> FastAPI:
     resolved_config = config or load_config(config_path)
-    app = FastAPI(title="Local TTS Service", version="0.1.0")
+    app = FastAPI(
+        title="Local TTS Service",
+        version="0.1.0",
+        lifespan=_application_lifespan,
+    )
     app.state.container = build_application_state(
         resolved_config,
         repo_root=repo_root or _repo_root(),
@@ -53,7 +57,18 @@ def create_app(
     _register_routes(app)
     app.include_router(build_reader_router())
     app.include_router(build_reader_stream_router())
+
     return app
+
+
+@asynccontextmanager
+async def _application_lifespan(app: FastAPI):
+    try:
+        yield
+    finally:
+        manager = app.state.container.reader_exports
+        if manager is not None:
+            manager.shutdown(wait=True)
 
 
 def _repo_root() -> Path:

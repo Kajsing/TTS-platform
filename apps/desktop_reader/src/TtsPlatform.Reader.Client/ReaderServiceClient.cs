@@ -289,6 +289,33 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task<ReaderDocument> GetDocumentAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Get,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ReaderDocument> UpdateDocumentAsync(
+        string documentId,
+        UpdateDocumentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Patch,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}",
+            true,
+            request,
+            cancellationToken);
+    }
+
     public Task<BlockPage> GetBlocksAsync(
         string documentId,
         int afterOrdinal = -1,
@@ -401,6 +428,159 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task<ReaderBookmarkPage> GetBookmarksAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderBookmarkPage>(
+            HttpMethod.Get,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/bookmarks",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ReaderBookmark> CreateBookmarkAsync(
+        string documentId,
+        CreateBookmarkRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderBookmark>(
+            HttpMethod.Post,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/bookmarks",
+            true,
+            request,
+            cancellationToken);
+    }
+
+    public Task DeleteBookmarkAsync(
+        string bookmarkId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
+        return SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/bookmarks/{Uri.EscapeDataString(bookmarkId)}?expected_row_version={expectedRowVersion}",
+            cancellationToken);
+    }
+
+    public Task<ReaderQueuePage> GetQueueAsync(CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderQueuePage>(
+            HttpMethod.Get,
+            "v1/reader/queue",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderQueueItem> AddQueueItemAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderQueueItem>(
+            HttpMethod.Post,
+            "v1/reader/queue/items",
+            true,
+            new { document_id = documentId, status = "queued" },
+            cancellationToken);
+    }
+
+    public Task<ReaderQueuePage> ReorderQueueAsync(
+        IReadOnlyList<string> itemIds,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderQueuePage>(
+            HttpMethod.Post,
+            "v1/reader/queue/reorder",
+            true,
+            new { item_ids = itemIds },
+            cancellationToken);
+
+    public Task<ReaderQueueItem> ActivateQueueItemAsync(
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        return SendAsync<ReaderQueueItem>(
+            HttpMethod.Post,
+            $"v1/reader/queue/items/{Uri.EscapeDataString(itemId)}/activate",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ReaderQueueItem?> AdvanceQueueAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendOptionalAsync<ReaderQueueItem>(
+            HttpMethod.Post,
+            $"v1/reader/queue/advance/{Uri.EscapeDataString(documentId)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task RemoveQueueItemAsync(
+        string itemId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        return SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/queue/items/{Uri.EscapeDataString(itemId)}?expected_row_version={expectedRowVersion}",
+            cancellationToken);
+    }
+
+    public Task<ReaderExportJobPage> GetExportsAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderExportJobPage>(
+            HttpMethod.Get,
+            "v1/reader/exports",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderExportJob> CreateExportAsync(
+        CreateExportRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderExportJob>(
+            HttpMethod.Post,
+            "v1/reader/exports",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<ReaderExportJob> GetExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
+        return SendAsync<ReaderExportJob>(
+            HttpMethod.Get,
+            $"v1/reader/exports/{Uri.EscapeDataString(jobId)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ReaderExportJob> CancelExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
+        return SendAsync<ReaderExportJob>(
+            HttpMethod.Delete,
+            $"v1/reader/exports/{Uri.EscapeDataString(jobId)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
     public async Task<byte[]> SynthesizeAsync(
         EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default)
@@ -509,6 +689,33 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             return result ?? throw new ReaderServiceUnavailableException(
                 "The local TTS service returned an empty response.");
         }
+    }
+
+    private async Task<T?> SendOptionalAsync<T>(
+        HttpMethod method,
+        string relativeUrl,
+        bool authenticated,
+        object? body,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        using var request = new HttpRequestMessage(method, relativeUrl);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (authenticated)
+        {
+            await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body, options: JsonOptions);
+        }
+        using var response = await SendHttpAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<T> SendMultipartAsync<T>(

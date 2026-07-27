@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private Task? _ephemeralTask;
     private string? _ephemeralReplayText;
     private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
+    private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
         "Connection has not been checked.",
@@ -353,6 +354,7 @@ public partial class MainWindow : Window
             _compactController.Close();
         }
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
         base.OnClosed(e);
@@ -726,7 +728,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        await _library.RefreshAsync(SearchTextBox.Text.Trim());
+        await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
         LoadMoreButton.IsEnabled = _library.HasMore;
         if (result.OpenDocument)
         {
@@ -968,6 +970,16 @@ public partial class MainWindow : Window
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e) => await RefreshLibraryAsync();
 
+    private async void LibraryStateComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e) => await RefreshLibraryAsync();
+
+    private string? SelectedLibraryState()
+    {
+        var value = (LibraryStateComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     private async void ImportButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -1046,7 +1058,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await _library.RefreshAsync(SearchTextBox.Text.Trim());
+            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
             LoadMoreButton.IsEnabled = _library.HasMore;
             FooterText.Text = $"{_library.Documents.Count} document(s) loaded";
         }
@@ -1096,6 +1108,15 @@ public partial class MainWindow : Window
             }
         }
 
+        await LoadDocumentAsync(document);
+    }
+
+    private async Task LoadDocumentAsync(ReaderDocument document)
+    {
+        if (_editor is null)
+        {
+            return;
+        }
         try
         {
             if (_playback?.IsActive == true)
@@ -1121,6 +1142,124 @@ public partial class MainWindow : Window
         finally
         {
             _updatingEditor = false;
+        }
+    }
+
+    private async void LibraryWorkflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        var document = _editor?.Document;
+        var cursor = _playback?.LastFullyPlayedCursor;
+        if (cursor is null && document is not null)
+        {
+            try
+            {
+                cursor = (await GetClient().GetPositionAsync(document.Id))?.Cursor;
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or ReaderServiceUnavailableException)
+            {
+                FooterText.Text = $"Position: {exception.Message}";
+            }
+        }
+
+        var dialog = new LibraryWorkflowDialog(GetClient(), document, cursor) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.SelectedDocumentId is string documentId)
+        {
+            await OpenQueuedOrBookmarkedDocumentAsync(documentId, dialog.SelectedCursor);
+        }
+    }
+
+    private async Task OpenQueuedOrBookmarkedDocumentAsync(
+        string documentId,
+        ReaderCursor? cursor)
+    {
+        try
+        {
+            var document = await GetClient().GetDocumentAsync(documentId);
+            await LoadDocumentAsync(document);
+            if (_playback is not null)
+            {
+                await _playback.PlayAsync(document, startCursor: cursor);
+            }
+            FooterText.Text = cursor is null
+                ? "Playing the selected queue item."
+                : "Playing from the selected bookmark.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Library workflow: {exception.Message}";
+        }
+    }
+
+    private async void FinishDocumentButton_Click(object sender, RoutedEventArgs e) =>
+        await UpdateDocumentStateAsync("finished");
+
+    private async void ArchiveDocumentButton_Click(object sender, RoutedEventArgs e) =>
+        await UpdateDocumentStateAsync("archived");
+
+    private async void RestoreDocumentButton_Click(object sender, RoutedEventArgs e) =>
+        await UpdateDocumentStateAsync("inbox");
+
+    private async Task UpdateDocumentStateAsync(string state)
+    {
+        if (_editor?.Document is not ReaderDocument current)
+        {
+            return;
+        }
+        try
+        {
+            var updated = await GetClient().UpdateDocumentAsync(
+                current.Id,
+                new UpdateDocumentRequest(current.RowVersion, State: state));
+            await _editor.LoadAsync(updated);
+            await RefreshLibraryAsync();
+            UpdateEditorButtons();
+            FooterText.Text = $"Document moved to {state}.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Document state: {exception.Message}";
+        }
+    }
+
+    private async Task AutoAdvanceAsync(string completedDocumentId)
+    {
+        if (!await _autoAdvanceLock.WaitAsync(0))
+        {
+            return;
+        }
+        try
+        {
+            var next = await GetClient().AdvanceQueueAsync(completedDocumentId);
+            if (next is null)
+            {
+                FooterText.Text = "Queue completed.";
+                return;
+            }
+            var document = await GetClient().GetDocumentAsync(next.DocumentId);
+            await LoadDocumentAsync(document);
+            if (_playback is not null)
+            {
+                await _playback.PlayAsync(document);
+            }
+            FooterText.Text = "Advanced to the next queue item.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Queue auto-advance: {exception.Message}";
+        }
+        finally
+        {
+            _autoAdvanceLock.Release();
         }
     }
 
@@ -1198,7 +1337,7 @@ public partial class MainWindow : Window
         }
 
         var selectedId = _editor.Document.Id;
-        await _library.RefreshAsync(SearchTextBox.Text.Trim());
+        await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
         DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item => item.Id == selectedId);
         LoadMoreButton.IsEnabled = _library.HasMore;
     }
@@ -1248,6 +1387,11 @@ public partial class MainWindow : Window
         RevertEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
         UndoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
+        var document = _editor?.Document;
+        FinishDocumentButton.IsEnabled = document is not null && document.State != "finished";
+        ArchiveDocumentButton.IsEnabled = document is not null && document.State != "archived";
+        RestoreDocumentButton.IsEnabled = document is not null &&
+            document.State is "archived" or "finished";
     }
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
@@ -1383,7 +1527,7 @@ public partial class MainWindow : Window
 
     private void Playback_StateChanged(object? sender, PlaybackStateChanged change)
     {
-        Dispatcher.BeginInvoke(new Action(() =>
+        Dispatcher.BeginInvoke(new Action(async () =>
         {
             PlaybackStatusText.Text = change.Message is null
                 ? change.State.ToString()
@@ -1393,6 +1537,12 @@ public partial class MainWindow : Window
             UpdatePlaybackControls();
             UpdateEditorButtons();
             UpdateCompactController();
+            if (change.State == ReaderPlaybackState.Completed &&
+                AutoAdvanceCheckBox.IsChecked == true &&
+                change.DocumentId is not null)
+            {
+                await AutoAdvanceAsync(change.DocumentId);
+            }
         }));
     }
 

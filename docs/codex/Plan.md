@@ -577,7 +577,7 @@ scope.
 - [x] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
 - [x] Reader Milestone 6: Structured import and virtualized reading.
 - [x] Reader Milestone 7: Speech-rule engine and open rule interchange.
-- [ ] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
+- [x] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
 - [ ] Reader Milestone 9: Browser-to-library integration and prototype consolidation.
 - [ ] Reader Milestone 10: PDF text extraction.
 - [ ] Reader Milestone 11: Backup, packaging, accessibility, security, and release candidate.
@@ -609,7 +609,6 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 8 is the next incomplete milestone. Complete library search and
-state workflows, saved queues/playlists, bookmarks, persistent WAV export jobs,
-batch export, cancellation, progress, and diagnostics described by the normative
-design.
+Reader Milestone 9 is the next incomplete milestone. Complete browser-to-library
+capture, queue handoff, desktop opening, extension onboarding status, and the
+old Chrome prototype consolidation described by the normative design.

@@ -5,6 +5,7 @@ import binascii
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ from ..models import (
     DocumentPage,
     DocumentState,
     EditOperation,
+    ExportStatus,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -37,6 +39,7 @@ from ..models import (
     ReaderDatabaseReport,
     ReaderDocument,
     ReaderDocumentBundle,
+    ReaderExportJob,
     ReaderSection,
     RuleScope,
     RuleStage,
@@ -57,6 +60,7 @@ class SqliteReaderRepository:
         *,
         max_edit_history_operations: int = 1000,
         max_edit_history_bytes: int = 10_485_760,
+        enable_fts: bool = True,
         initialize: bool = True,
     ) -> None:
         if max_edit_history_operations <= 0 or max_edit_history_bytes <= 0:
@@ -64,10 +68,16 @@ class SqliteReaderRepository:
         self.database_path = Path(database_path).resolve()
         self.max_edit_history_operations = max_edit_history_operations
         self.max_edit_history_bytes = max_edit_history_bytes
+        self._search_available = False
         if initialize:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
             with self._connection() as connection:
                 apply_migrations(connection)
+                self._search_available = enable_fts and _initialize_search_index(connection)
+
+    @property
+    def search_available(self) -> bool:
+        return self._search_available
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -170,12 +180,24 @@ class SqliteReaderRepository:
             clauses.append("state = ?")
             parameters.append(state.value)
         if query is not None and query.strip():
-            escaped_query = _escape_like(query.strip())
-            clauses.append(
-                "(title LIKE ? ESCAPE '\\' OR COALESCE(source_name, '') LIKE ? ESCAPE '\\')"
-            )
-            pattern = f"%{escaped_query}%"
-            parameters.extend((pattern, pattern))
+            cleaned_query = query.strip()
+            fts_query = _fts_query(cleaned_query) if self._search_available else None
+            if fts_query is not None:
+                clauses.append(
+                    "id IN (SELECT document_id FROM reader_document_search "
+                    "WHERE reader_document_search MATCH ?)"
+                )
+                parameters.append(fts_query)
+            else:
+                escaped_query = _escape_like(cleaned_query)
+                clauses.append(
+                    "(title LIKE ? ESCAPE '\\' OR COALESCE(source_name, '') LIKE ? "
+                    "ESCAPE '\\' OR EXISTS (SELECT 1 FROM reader_blocks AS search_block "
+                    "WHERE search_block.document_id = reader_documents.id "
+                    "AND search_block.text LIKE ? ESCAPE '\\'))"
+                )
+                pattern = f"%{escaped_query}%"
+                parameters.extend((pattern, pattern, pattern))
         if boundary is not None:
             clauses.append("(updated_at < ? OR (updated_at = ? AND id < ?))")
             parameters.extend((boundary[0], boundary[0], boundary[1]))
@@ -208,6 +230,18 @@ class SqliteReaderRepository:
                 (source_sha256,),
             ).fetchone()
             return _document_from_row(row) if row is not None else None
+
+    def document_counts_by_state(self) -> dict[DocumentState, int]:
+        counts = {state: 0 for state in DocumentState}
+        with self._connection() as connection:
+            for row in connection.execute(
+                """
+                SELECT state, COUNT(*) AS total FROM reader_documents
+                WHERE deleted_at IS NULL GROUP BY state
+                """
+            ):
+                counts[DocumentState(row["state"])] = int(row["total"])
+        return counts
 
     def list_blocks(
         self,
@@ -854,6 +888,297 @@ class SqliteReaderRepository:
             return tuple(
                 _queue_from_row(row)
                 for row in connection.execute("SELECT * FROM reader_queue_items ORDER BY ordinal")
+            )
+
+    def activate_queue_item(self, item_id: str) -> QueueItem:
+        with self._write() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_queue_items WHERE id = ?", (item_id,)
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError(f"Reader queue item not found: {item_id}")
+            now = _time_dump(utc_now())
+            connection.execute(
+                """
+                UPDATE reader_queue_items
+                SET status = 'queued', updated_at = ?, row_version = row_version + 1
+                WHERE status = 'playing' AND id <> ?
+                """,
+                (now, item_id),
+            )
+            connection.execute(
+                """
+                UPDATE reader_queue_items
+                SET status = 'playing', updated_at = ?, row_version = row_version + 1
+                WHERE id = ? AND status <> 'playing'
+                """,
+                (now, item_id),
+            )
+            refreshed = connection.execute(
+                "SELECT * FROM reader_queue_items WHERE id = ?", (item_id,)
+            ).fetchone()
+            assert refreshed is not None
+            return _queue_from_row(refreshed)
+
+    def advance_queue(self, document_id: str) -> QueueItem | None:
+        with self._write() as connection:
+            current_row = connection.execute(
+                """
+                SELECT * FROM reader_queue_items
+                WHERE document_id = ? AND status = 'playing'
+                ORDER BY ordinal LIMIT 1
+                """,
+                (document_id,),
+            ).fetchone()
+            if current_row is None:
+                return None
+            current = _queue_from_row(current_row)
+            now = _time_dump(utc_now())
+            connection.execute(
+                """
+                UPDATE reader_queue_items
+                SET status = 'completed', updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (now, current.id),
+            )
+            next_row = connection.execute(
+                """
+                SELECT queue.* FROM reader_queue_items AS queue
+                JOIN reader_documents AS document ON document.id = queue.document_id
+                WHERE queue.ordinal > ? AND queue.status = 'queued'
+                  AND document.deleted_at IS NULL
+                ORDER BY queue.ordinal LIMIT 1
+                """,
+                (current.ordinal,),
+            ).fetchone()
+            if next_row is None:
+                return None
+            connection.execute(
+                """
+                UPDATE reader_queue_items
+                SET status = 'playing', updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (now, next_row["id"]),
+            )
+            refreshed = connection.execute(
+                "SELECT * FROM reader_queue_items WHERE id = ?", (next_row["id"],)
+            ).fetchone()
+            assert refreshed is not None
+            return _queue_from_row(refreshed)
+
+    def create_export_job(self, job: ReaderExportJob) -> ReaderExportJob:
+        with self._write() as connection:
+            for document_id in job.document_ids:
+                document = self._require_document(connection, document_id)
+                if document.deleted_at is not None:
+                    raise ReaderValidationError("soft-deleted documents cannot be exported")
+            connection.execute(
+                """
+                INSERT INTO reader_export_jobs(
+                    id, status, document_ids_json, section_ids_json,
+                    start_cursor_json, end_cursor_json, voice_id, output_basename,
+                    overwrite_existing, total_documents, completed_documents,
+                    current_document_id, output_files_json, error_type,
+                    error_message, cancel_requested, created_at, updated_at,
+                    completed_at, row_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                _export_values(job),
+            )
+        return job
+
+    def get_export_job(self, job_id: str) -> ReaderExportJob:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_export_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError(f"Reader export job not found: {job_id}")
+            return _export_from_row(row)
+
+    def list_export_jobs(
+        self,
+        statuses: tuple[ExportStatus, ...] | None = None,
+        *,
+        limit: int = 100,
+    ) -> tuple[ReaderExportJob, ...]:
+        if limit <= 0 or limit > 1000:
+            raise ReaderValidationError("export job list limit is invalid")
+        parameters: list[object] = []
+        where = ""
+        if statuses:
+            placeholders = ",".join("?" for _ in statuses)
+            where = f"WHERE status IN ({placeholders})"
+            parameters.extend(status.value for status in statuses)
+        parameters.append(limit)
+        with self._connection() as connection:
+            return tuple(
+                _export_from_row(row)
+                for row in connection.execute(
+                    f"SELECT * FROM reader_export_jobs {where} "
+                    "ORDER BY created_at DESC, id DESC LIMIT ?",
+                    parameters,
+                )
+            )
+
+    def claim_export_job(self, job_id: str) -> ReaderExportJob:
+        with self._write() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_export_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError(f"Reader export job not found: {job_id}")
+            current = _export_from_row(row)
+            if current.status is not ExportStatus.QUEUED or current.cancel_requested:
+                return current
+            connection.execute(
+                """
+                UPDATE reader_export_jobs
+                SET status = 'running', updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (_time_dump(utc_now()), job_id),
+            )
+            return _require_export_job(connection, job_id)
+
+    def update_export_progress(
+        self,
+        job_id: str,
+        *,
+        completed_documents: int,
+        current_document_id: str | None,
+        output_files: tuple[str, ...],
+    ) -> ReaderExportJob:
+        with self._write() as connection:
+            current = _require_export_job(connection, job_id)
+            if current.status is not ExportStatus.RUNNING:
+                return current
+            if not 0 <= completed_documents <= current.total_documents:
+                raise ReaderValidationError("export progress is invalid")
+            connection.execute(
+                """
+                UPDATE reader_export_jobs
+                SET completed_documents = ?, current_document_id = ?,
+                    output_files_json = ?, updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (
+                    completed_documents,
+                    current_document_id,
+                    _json_dump(output_files),
+                    _time_dump(utc_now()),
+                    job_id,
+                ),
+            )
+            return _require_export_job(connection, job_id)
+
+    def finish_export_job(
+        self,
+        job_id: str,
+        *,
+        status: ExportStatus,
+        output_files: tuple[str, ...] = (),
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> ReaderExportJob:
+        if status not in {
+            ExportStatus.COMPLETED,
+            ExportStatus.FAILED,
+            ExportStatus.CANCELLED,
+        }:
+            raise ReaderValidationError("export terminal status is invalid")
+        with self._write() as connection:
+            current = _require_export_job(connection, job_id)
+            if current.status in {
+                ExportStatus.COMPLETED,
+                ExportStatus.FAILED,
+                ExportStatus.CANCELLED,
+            }:
+                return current
+            now = utc_now()
+            connection.execute(
+                """
+                UPDATE reader_export_jobs
+                SET status = ?, completed_documents = ?, current_document_id = NULL,
+                    output_files_json = ?, error_type = ?, error_message = ?,
+                    updated_at = ?, completed_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (
+                    status.value,
+                    (
+                        len(output_files)
+                        if status is ExportStatus.COMPLETED
+                        else current.completed_documents
+                    ),
+                    _json_dump(output_files),
+                    error_type,
+                    error_message,
+                    _time_dump(now),
+                    _time_dump(now),
+                    job_id,
+                ),
+            )
+            return _require_export_job(connection, job_id)
+
+    def request_export_cancel(self, job_id: str) -> ReaderExportJob:
+        with self._write() as connection:
+            current = _require_export_job(connection, job_id)
+            if current.status in {
+                ExportStatus.COMPLETED,
+                ExportStatus.FAILED,
+                ExportStatus.CANCELLED,
+            }:
+                return current
+            now = utc_now()
+            if current.status is ExportStatus.QUEUED:
+                connection.execute(
+                    """
+                    UPDATE reader_export_jobs
+                    SET status = 'cancelled', cancel_requested = 1,
+                        updated_at = ?, completed_at = ?, row_version = row_version + 1
+                    WHERE id = ?
+                    """,
+                    (_time_dump(now), _time_dump(now), job_id),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE reader_export_jobs
+                    SET cancel_requested = 1, updated_at = ?, row_version = row_version + 1
+                    WHERE id = ?
+                    """,
+                    (_time_dump(now), job_id),
+                )
+            return _require_export_job(connection, job_id)
+
+    def recover_export_jobs(self) -> tuple[ReaderExportJob, ...]:
+        with self._write() as connection:
+            connection.execute(
+                """
+                UPDATE reader_export_jobs
+                SET status = 'queued', current_document_id = NULL,
+                    updated_at = ?, row_version = row_version + 1
+                WHERE status = 'running' AND cancel_requested = 0
+                """,
+                (_time_dump(utc_now()),),
+            )
+            connection.execute(
+                """
+                UPDATE reader_export_jobs
+                SET status = 'cancelled', current_document_id = NULL,
+                    completed_at = ?, updated_at = ?, row_version = row_version + 1
+                WHERE status IN ('queued', 'running') AND cancel_requested = 1
+                """,
+                (_time_dump(utc_now()), _time_dump(utc_now())),
+            )
+            return tuple(
+                _export_from_row(row)
+                for row in connection.execute(
+                    "SELECT * FROM reader_export_jobs WHERE status = 'queued' ORDER BY created_at"
+                )
             )
 
     def create_rule_set(self, rule_set: SpeechRuleSet) -> SpeechRuleSet:
@@ -1822,6 +2147,103 @@ def _queue_from_row(row: sqlite3.Row) -> QueueItem:
     )
 
 
+def _cursor_dump(cursor: ReaderCursor | None) -> str | None:
+    if cursor is None:
+        return None
+    return _json_dump(
+        {
+            "document_id": cursor.document_id,
+            "block_id": cursor.block_id,
+            "block_ordinal": cursor.block_ordinal,
+            "character_offset": cursor.character_offset,
+            "content_revision": cursor.content_revision,
+            "segment_index": cursor.segment_index,
+        }
+    )
+
+
+def _cursor_load(value: str | None) -> ReaderCursor | None:
+    if value is None:
+        return None
+    payload = _json_load(value)
+    try:
+        return ReaderCursor(
+            document_id=str(payload["document_id"]),
+            block_id=str(payload["block_id"]),
+            block_ordinal=int(payload["block_ordinal"]),
+            character_offset=int(payload["character_offset"]),
+            content_revision=int(payload["content_revision"]),
+            segment_index=(
+                int(payload["segment_index"])
+                if payload.get("segment_index") is not None
+                else None
+            ),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReaderDatabaseError("Reader export cursor JSON is invalid") from exc
+
+
+def _export_from_row(row: sqlite3.Row) -> ReaderExportJob:
+    return ReaderExportJob(
+        id=str(row["id"]),
+        status=ExportStatus(row["status"]),
+        document_ids=_json_string_tuple_load(row["document_ids_json"]),
+        section_ids=_json_string_tuple_load(row["section_ids_json"]),
+        start_cursor=_cursor_load(row["start_cursor_json"]),
+        end_cursor=_cursor_load(row["end_cursor_json"]),
+        voice_id=row["voice_id"],
+        output_basename=row["output_basename"],
+        overwrite_existing=bool(row["overwrite_existing"]),
+        total_documents=int(row["total_documents"]),
+        completed_documents=int(row["completed_documents"]),
+        current_document_id=row["current_document_id"],
+        output_files=_json_string_tuple_load(row["output_files_json"]),
+        error_type=row["error_type"],
+        error_message=row["error_message"],
+        cancel_requested=bool(row["cancel_requested"]),
+        created_at=_time_load(row["created_at"]),
+        updated_at=_time_load(row["updated_at"]),
+        completed_at=(
+            _time_load(row["completed_at"]) if row["completed_at"] is not None else None
+        ),
+        row_version=int(row["row_version"]),
+    )
+
+
+def _export_values(job: ReaderExportJob) -> tuple[Any, ...]:
+    return (
+        job.id,
+        job.status.value,
+        _json_dump(job.document_ids),
+        _json_dump(job.section_ids),
+        _cursor_dump(job.start_cursor),
+        _cursor_dump(job.end_cursor),
+        job.voice_id,
+        job.output_basename,
+        int(job.overwrite_existing),
+        job.total_documents,
+        job.completed_documents,
+        job.current_document_id,
+        _json_dump(job.output_files),
+        job.error_type,
+        job.error_message,
+        int(job.cancel_requested),
+        _time_dump(job.created_at),
+        _time_dump(job.updated_at),
+        _time_dump(job.completed_at) if job.completed_at is not None else None,
+        job.row_version,
+    )
+
+
+def _require_export_job(connection: sqlite3.Connection, job_id: str) -> ReaderExportJob:
+    row = connection.execute(
+        "SELECT * FROM reader_export_jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    if row is None:
+        raise ReaderNotFoundError(f"Reader export job not found: {job_id}")
+    return _export_from_row(row)
+
+
 def _rule_set_from_row(row: sqlite3.Row) -> SpeechRuleSet:
     return SpeechRuleSet(
         id=str(row["id"]),
@@ -1978,9 +2400,9 @@ def _decode_page_cursor(cursor: str) -> tuple[str, str]:
         raise ReaderValidationError("document page cursor is invalid") from exc
 
 
-def _json_dump(value: Mapping[str, Any]) -> str:
+def _json_dump(value: Any) -> str:
     try:
-        encoded = json.dumps(dict(value), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     except (TypeError, ValueError) as exc:
         raise ReaderValidationError("Reader metadata must be JSON serializable") from exc
     if len(encoded.encode("utf-8")) > 65_536:
@@ -1993,6 +2415,13 @@ def _json_load(value: str) -> Mapping[str, Any]:
     if not isinstance(decoded, dict):
         raise ReaderDatabaseError("Reader metadata JSON must contain an object")
     return decoded
+
+
+def _json_string_tuple_load(value: str) -> tuple[str, ...]:
+    decoded = json.loads(value)
+    if not isinstance(decoded, list) or any(not isinstance(item, str) for item in decoded):
+        raise ReaderDatabaseError("Reader string-list JSON is invalid")
+    return tuple(decoded)
 
 
 def _time_dump(value: datetime) -> str:
@@ -2014,3 +2443,101 @@ def _sha256(text: str) -> str:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _fts_query(value: str) -> str | None:
+    tokens = re.findall(r"[^\W_]+", value, flags=re.UNICODE)
+    if not tokens:
+        return None
+    return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens[:32])
+
+
+def _initialize_search_index(connection: sqlite3.Connection) -> bool:
+    try:
+        existed = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            ("reader_document_search",),
+        ).fetchone() is not None
+        connection.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS reader_document_search USING fts5(
+                document_id UNINDEXED,
+                title,
+                source_name,
+                content,
+                tokenize = 'unicode61'
+            )
+            """
+        )
+        connection.executescript(
+            """
+            CREATE TRIGGER IF NOT EXISTS reader_search_document_insert
+            AFTER INSERT ON reader_documents BEGIN
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                VALUES (NEW.id, NEW.title, COALESCE(NEW.source_name, ''), '');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS reader_search_document_update
+            AFTER UPDATE OF title, source_name ON reader_documents BEGIN
+                DELETE FROM reader_document_search WHERE document_id = NEW.id;
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                SELECT NEW.id, NEW.title, COALESCE(NEW.source_name, ''),
+                       COALESCE(group_concat(block.text, ' '), '')
+                FROM reader_blocks AS block WHERE block.document_id = NEW.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS reader_search_document_delete
+            AFTER DELETE ON reader_documents BEGIN
+                DELETE FROM reader_document_search WHERE document_id = OLD.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS reader_search_block_insert
+            AFTER INSERT ON reader_blocks BEGIN
+                DELETE FROM reader_document_search WHERE document_id = NEW.document_id;
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                SELECT document.id, document.title, COALESCE(document.source_name, ''),
+                       COALESCE(group_concat(block.text, ' '), '')
+                FROM reader_documents AS document
+                LEFT JOIN reader_blocks AS block ON block.document_id = document.id
+                WHERE document.id = NEW.document_id GROUP BY document.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS reader_search_block_update
+            AFTER UPDATE OF text ON reader_blocks BEGIN
+                DELETE FROM reader_document_search WHERE document_id = NEW.document_id;
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                SELECT document.id, document.title, COALESCE(document.source_name, ''),
+                       COALESCE(group_concat(block.text, ' '), '')
+                FROM reader_documents AS document
+                LEFT JOIN reader_blocks AS block ON block.document_id = document.id
+                WHERE document.id = NEW.document_id GROUP BY document.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS reader_search_block_delete
+            AFTER DELETE ON reader_blocks BEGIN
+                DELETE FROM reader_document_search WHERE document_id = OLD.document_id;
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                SELECT document.id, document.title, COALESCE(document.source_name, ''),
+                       COALESCE(group_concat(block.text, ' '), '')
+                FROM reader_documents AS document
+                LEFT JOIN reader_blocks AS block ON block.document_id = document.id
+                WHERE document.id = OLD.document_id GROUP BY document.id;
+            END;
+            """
+        )
+        if not existed:
+            connection.execute(
+                """
+                INSERT INTO reader_document_search(document_id, title, source_name, content)
+                SELECT document.id, document.title, COALESCE(document.source_name, ''),
+                       COALESCE(group_concat(block.text, ' '), '')
+                FROM reader_documents AS document
+                LEFT JOIN reader_blocks AS block ON block.document_id = document.id
+                GROUP BY document.id
+                """
+            )
+        return True
+    except sqlite3.OperationalError as exc:
+        if "fts5" not in str(exc).lower() and "no such module" not in str(exc).lower():
+            raise
+        return False

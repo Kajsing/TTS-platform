@@ -3,8 +3,8 @@
   "enabled": true,
   "database": {
     "ready": true,
-    "schema_version": 2,
-    "search_available": false
+    "schema_version": 3,
+    "search_available": true
   },
   "imports": {
     "formats": ["txt", "md", "html", "docx", "epub"],
@@ -29,6 +29,6 @@
     "max_source_chars_per_window": 32000
   },
   "exports": {
-    "formats": []
+    "formats": ["wav"]
   }
 }

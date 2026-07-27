@@ -169,6 +169,7 @@ class ReaderApplicationService:
         *,
         config: ReaderConfig,
         observability: ObservabilityState,
+        reader_home_path: Path | None = None,
         managed_files_path: Path | None = None,
     ) -> None:
         self.repository = repository
@@ -176,6 +177,7 @@ class ReaderApplicationService:
         self.library = ReaderLibrary(repository)
         self.observability = observability
         self.content_leases = ReaderContentLeaseRegistry()
+        self.reader_home_path = reader_home_path or Path(config.home_path).expanduser()
         configured_managed_path = Path(config.managed_files_path).expanduser()
         self.managed_files_path = managed_files_path or (
             configured_managed_path
@@ -750,6 +752,7 @@ def initialize_reader_runtime(
                 repository,
                 config=config,
                 observability=observability,
+                reader_home_path=paths.home,
                 managed_files_path=paths.managed_files,
             ),
             database_report=report,

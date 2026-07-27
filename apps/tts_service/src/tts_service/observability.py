@@ -121,12 +121,39 @@ class JobMetrics:
 
 
 @dataclass(slots=True)
+class ReaderMetrics:
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    export_outcomes: dict[str, int] = field(default_factory=dict)
+    export_total_duration_ms: float = 0.0
+
+    def record_export(self, outcome: str, duration_ms: float) -> None:
+        with self._lock:
+            self.export_outcomes[outcome] = self.export_outcomes.get(outcome, 0) + 1
+            self.export_total_duration_ms += max(duration_ms, 0.0)
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            completed = sum(
+                count
+                for outcome, count in self.export_outcomes.items()
+                if outcome in {"completed", "failed", "cancelled"}
+            )
+            return {
+                "export_outcomes": dict(sorted(self.export_outcomes.items())),
+                "average_export_duration_ms": (
+                    self.export_total_duration_ms / completed if completed else None
+                ),
+            }
+
+
+@dataclass(slots=True)
 class ObservabilityState:
     enabled: bool
     logger: logging.Logger
     request_metrics: RequestMetrics = field(default_factory=RequestMetrics)
     synthesis_metrics: SynthesisMetrics = field(default_factory=SynthesisMetrics)
     job_metrics: JobMetrics = field(default_factory=JobMetrics)
+    reader_metrics: ReaderMetrics = field(default_factory=ReaderMetrics)
 
     def log_http_request(
         self,
@@ -159,6 +186,7 @@ class ObservabilityState:
             "requests": self.request_metrics.snapshot(),
             "synthesis": self.synthesis_metrics.snapshot(),
             "jobs": self.job_metrics.snapshot(),
+            "reader": self.reader_metrics.snapshot(),
         }
 
     def log_reader_operation(

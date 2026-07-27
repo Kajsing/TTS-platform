@@ -9,12 +9,14 @@ import pytest
 from reader_core import (
     Bookmark,
     DocumentState,
+    ExportStatus,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
     ReaderConflictError,
     ReaderCursor,
     ReaderEditHistoryError,
+    ReaderExportJob,
     ReaderLibrary,
     ReaderStaleCursorError,
     ReaderValidationError,
@@ -541,3 +543,94 @@ def test_invalid_append_and_soft_deleted_queue_are_rejected(repository, document
                 updated_at=now,
             )
         )
+
+
+@pytest.mark.parametrize("enable_fts", [True, False])
+def test_document_search_includes_content_with_fts_fallback(
+    tmp_path: Path,
+    enable_fts: bool,
+) -> None:
+    repository = SqliteReaderRepository(tmp_path / "reader.db", enable_fts=enable_fts)
+    library = ReaderLibrary(repository)
+    document = library.create_plain_text_document(
+        title="Ordinary title",
+        text="A paragraph containing ultramarine and nothing in the title.",
+    )
+
+    assert repository.list_documents(query="ultramarine").items == (document,)
+    assert repository.search_available is enable_fts
+
+    block = repository.list_blocks(document.id)[0]
+    updated, _ = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=23,
+        end_offset=34,
+        replacement_text="vermilion",
+        expected_row_version=document.row_version,
+    )
+    assert repository.list_documents(query="ultramarine").items == ()
+    assert repository.list_documents(query="vermilion").items == (updated,)
+
+
+def test_queue_activation_and_advance_are_atomic_and_durable(repository, document) -> None:
+    second = ReaderLibrary(repository).create_plain_text_document(title="Second", text="Two")
+    now = datetime.now(timezone.utc)
+    first_item = repository.add_queue_item(
+        QueueItem(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            ordinal=0,
+            status=QueueStatus.QUEUED,
+            added_at=now,
+            updated_at=now,
+        )
+    )
+    second_item = repository.add_queue_item(
+        QueueItem(
+            id=str(uuid.uuid4()),
+            document_id=second.id,
+            ordinal=1,
+            status=QueueStatus.QUEUED,
+            added_at=now,
+            updated_at=now,
+        )
+    )
+
+    assert repository.activate_queue_item(first_item.id).status is QueueStatus.PLAYING
+    advanced = repository.advance_queue(document.id)
+    assert advanced is not None
+    assert advanced.id == second_item.id
+    assert sum(item.status is QueueStatus.PLAYING for item in repository.list_queue()) == 1
+
+    reopened = SqliteReaderRepository(repository.database_path)
+    persisted = reopened.list_queue()
+    assert [item.document_id for item in persisted] == [document.id, second.id]
+    assert [item.status for item in persisted] == [QueueStatus.COMPLETED, QueueStatus.PLAYING]
+
+
+def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:
+    now = datetime.now(timezone.utc)
+    job = repository.create_export_job(
+        ReaderExportJob(
+            id=str(uuid.uuid4()),
+            status=ExportStatus.QUEUED,
+            document_ids=(document.id,),
+            total_documents=1,
+            output_basename="sample",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    running = repository.claim_export_job(job.id)
+    assert running.status is ExportStatus.RUNNING
+
+    reopened = SqliteReaderRepository(repository.database_path)
+    recovered = reopened.recover_export_jobs()
+    assert [item.id for item in recovered] == [job.id]
+    assert reopened.get_export_job(job.id).status is ExportStatus.QUEUED
+
+    cancelled = reopened.request_export_cancel(job.id)
+    assert cancelled.status is ExportStatus.CANCELLED
+    assert cancelled.cancel_requested is True
+    assert cancelled.completed_at is not None

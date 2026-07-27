@@ -11,15 +11,60 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 8, library workflow,
-  search, playlists, bookmarks, reversible state changes, and persistent WAV
-  export jobs.
-- Current loop result: Milestone 7 is complete and validated. The user explicitly authorized autonomous
+- Current loop target: Reader Workstation Milestone 9, browser-to-library
+  integration and prototype consolidation.
+- Current loop result: Milestone 8 is complete and validated. The user explicitly authorized autonomous
   milestone-by-milestone work through Reader Milestone 9, with a decision check
   before continuing whenever product direction, architecture, security,
   licensing, or a material UX choice would change.
-- Reader Workstation resume point: execute and validate Milestone 8, then repeat
-  the decision check before Milestone 9.
+- Reader Workstation resume point: execute and validate Milestone 9, then stop
+  before Milestone 10 unless the user explicitly continues the track.
+- Reader Milestone 8 implementation details:
+  - migration `003_search_and_exports.sql` adds persistent export jobs. The
+    SQLite repository maintains an optional FTS5 title/source/content index and
+    automatically falls back to escaped `LIKE` search when FTS5 is unavailable;
+  - library state filters and reversible Inbox/Reading/Finished/Archive actions,
+    bookmark management, queue reorder, transactional activation/advance, and
+    optional desktop auto-advance complete the daily library loop. Backend
+    transactions enforce at most one playing queue item;
+  - the saved reading queue is the design-approved playlist form for beta; it
+    persists order across restarts and feeds both auto-advance and batch export;
+  - service-owned WAV export jobs persist independently of the desktop, recover
+    queued/interrupted work on service restart, apply current speech rules,
+    synthesize bounded blocks, verify PCM format consistency, insert configured
+    pauses, report progress, and support cancellation;
+  - temporary files are removed after cancellation or failure. Finalization is
+    atomic and refuses overwrite unless the request explicitly allows it;
+    sanitized Windows-safe basenames remain inside the configured export root;
+  - the WPF workflow dialog manages queue items, bookmarks, current-document and
+    queue exports, live progress, and cancellation. Reader diagnostics expose
+    integrity, schema/search readiness, aggregate document/queue/lease/export
+    states, and low-sensitivity metrics without titles, text, or private paths.
+- Reader Milestone 8 validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 388 passed; the focused Reader/config/API suite passed
+    98 tests; `py -3 -m ruff check .` passed;
+  - `.NET Release` solution tests: 57 passed across Client, Application, and
+    Windows projects; app build and `dotnet format --verify-no-changes` passed;
+  - `py -3 scripts\check_reader_contracts.py` validated 10 fixtures;
+    `py -3 scripts\check_security_defaults.py`, Windows bundle bootstrap, and
+    `git diff --check` passed;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live paging/edit/stream/resume, clipboard, structured import, speech
+    rules, Windows audio/integration, portable packaging, WPF rendering, and
+    source-level Milestone 8 workflow wiring;
+  - API/repository tests cover FTS and fallback search, durable queue ordering,
+    atomic advance, export recovery, cancellation cleanup, filename confinement,
+    batch export, diagnostics, and WAV decoding through Python's standard
+    `wave` reader.
+- Reader Milestone 8 assumptions and deviations:
+  - the existing saved queue satisfies the normative “playlists or saved
+    queues” choice; separate named playlists were not added;
+  - beta exports only WAV through the existing synthesis stack. No external
+    encoder, cloud service, paid dependency, or security-model change was
+    introduced;
+  - no product decision was required. The existing uncommitted
+    `models/MANIFEST.json` installation-state change remains user-owned and is
+    excluded from the milestone commit.
 - Reader Milestone 7 implementation details:
   - migration `002_rules_and_profiles.sql` adds durable rule sets, six speech-rule
     types, scope/stage/priority/filter metadata, row and global rule versions,

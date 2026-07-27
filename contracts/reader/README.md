@@ -28,3 +28,7 @@ rule trace, typed warnings, elapsed time, and pipeline/rules versions. Request
 and response text is intentionally excluded from service logs. Preview input is
 limited to 4,096 characters so per-character mapping remains interactive;
 playback compilation retains its separate bounded-window limit.
+
+Milestone 8 adds `create_export.request.json` and `export_job.response.json`.
+WAV jobs persist in the Reader database, expose bounded progress without source
+text or output-directory paths, and continue while desktop clients disconnect.

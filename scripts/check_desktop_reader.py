@@ -117,6 +117,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
         repo_root / "docs" / "reader_milestone5_manual_checklist.md",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.en-US.resx",
@@ -180,11 +182,30 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         raise DesktopReaderCheckError(
             f"Milestone 7 speech-rule features are missing: {missing_rule_features}"
         )
+    library_features = [
+        "LibraryWorkflowDialog",
+        "LibraryStateComboBox",
+        "AutoAdvanceCheckBox",
+        "UpdateDocumentStateAsync",
+        "AdvanceQueueAsync",
+        "ReorderQueueAsync",
+        "CreateBookmarkAsync",
+        "CreateExportAsync",
+        "CancelExportAsync",
+    ]
+    missing_library_features = [
+        value for value in library_features if value.casefold() not in source_text.casefold()
+    ]
+    if missing_library_features:
+        raise DesktopReaderCheckError(
+            f"Milestone 8 library-workflow features are missing: {missing_library_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
         "structured_import": "implemented",
         "speech_rules": "implemented",
+        "library_workflow": "implemented",
     }
 
 

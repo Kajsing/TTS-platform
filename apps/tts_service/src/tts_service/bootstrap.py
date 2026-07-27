@@ -18,6 +18,7 @@ from .auth import AuthState, initialize_auth
 from .config import AppConfig
 from .jobs import InMemoryJobManager
 from .observability import ObservabilityState, configure_structured_logging
+from .reader_exports import ReaderExportManager, resolve_export_directory
 from .reader_service import ReaderRuntimeState, initialize_reader_runtime
 from .security import OriginPolicy, RateLimiter
 from .streaming import StreamingMetrics
@@ -37,6 +38,7 @@ class ApplicationState:
     streaming_metrics: StreamingMetrics
     observability: ObservabilityState
     reader: ReaderRuntimeState
+    reader_exports: ReaderExportManager | None
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -88,6 +90,19 @@ def build_application_state(
         logger=configure_structured_logging(config.server.log_level),
     )
     reader = initialize_reader_runtime(config.reader, observability=observability)
+    reader_exports = None
+    if reader.service is not None and config.reader.exports.enabled:
+        reader_exports = ReaderExportManager(
+            service=reader.service,
+            backend=backend,
+            voice_registry=registry,
+            normalizer=text_pipeline.normalizer,
+            segmenter=text_pipeline.segmenter,
+            chunk_planner=chunk_planner,
+            output_directory=resolve_export_directory(reader.service),
+            max_workers=config.reader.exports.max_concurrent_exports,
+            observability=observability,
+        )
     job_manager = InMemoryJobManager(
         max_workers=config.limits.max_concurrent_jobs,
         backend=backend,
@@ -118,6 +133,7 @@ def build_application_state(
         streaming_metrics=streaming_metrics,
         observability=observability,
         reader=reader,
+        reader_exports=reader_exports,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,
