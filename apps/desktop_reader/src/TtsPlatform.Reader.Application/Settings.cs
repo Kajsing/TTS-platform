@@ -10,6 +10,12 @@ public sealed record DesktopHotkeys(
     string PlayPause = "Ctrl+Alt+P",
     string Stop = "Ctrl+Alt+S");
 
+public sealed record CompactControllerSettings(
+    bool Enabled = false,
+    bool AlwaysOnTop = true,
+    double? Left = null,
+    double? Top = null);
+
 public sealed record DesktopSettings(
     string ServiceBaseUrl = "http://127.0.0.1:7777/",
     TokenSourceSettings? TokenSource = null,
@@ -17,13 +23,26 @@ public sealed record DesktopSettings(
     string ReadingFontFamily = "Segoe UI",
     double ReadingFontSize = 20,
     bool ClipboardMonitoringEnabled = false,
-    DesktopHotkeys? Hotkeys = null)
+    bool CopySelectionAndReadEnabled = false,
+    bool PrivacyMode = true,
+    bool MinimizeToTrayOnClose = false,
+    IReadOnlyList<string>? ClipboardBlockedApplications = null,
+    DesktopHotkeys? Hotkeys = null,
+    CompactControllerSettings? CompactController = null)
 {
     [JsonIgnore]
     public TokenSourceSettings EffectiveTokenSource => TokenSource ?? new TokenSourceSettings();
 
     [JsonIgnore]
     public DesktopHotkeys EffectiveHotkeys => Hotkeys ?? new DesktopHotkeys();
+
+    [JsonIgnore]
+    public IReadOnlyList<string> EffectiveClipboardBlockedApplications =>
+        ClipboardBlockedApplications ?? [];
+
+    [JsonIgnore]
+    public CompactControllerSettings EffectiveCompactController =>
+        CompactController ?? new CompactControllerSettings();
 }
 
 public interface IDesktopSettingsStore

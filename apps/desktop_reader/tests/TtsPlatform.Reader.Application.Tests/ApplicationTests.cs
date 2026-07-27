@@ -224,6 +224,10 @@ public sealed class ApplicationTests
         public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(Voices);
 
+        public Task<ReaderDocument> CreateDocumentAsync(
+            CreateDocumentRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<DocumentPage> GetDocumentsAsync(
             int limit = 50,
             string? cursor = null,
@@ -274,6 +278,10 @@ public sealed class ApplicationTests
         public Task<ReaderPosition> SavePositionAsync(
             string documentId,
             SavePositionRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<byte[]> SynthesizeAsync(
+            EphemeralSynthesisRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

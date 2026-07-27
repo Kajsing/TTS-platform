@@ -195,6 +195,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             if (CursorAdvanced(packet.CursorStart, packet.CursorEnd))
                             {
                                 await _audioOutput.DrainAsync(cancellationToken).ConfigureAwait(false);
+                                cancellationToken.ThrowIfCancellationRequested();
                                 _lastFullyPlayedCursor = packet.CursorEnd;
                                 if (saveTimer.Elapsed >= PositionSaveInterval)
                                 {
@@ -300,6 +301,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             _desiredState = requestedState;
             runTask = _runTask;
             session = _activeSession;
+            _runCancellation?.Cancel();
             if (session is not null)
             {
                 try
@@ -313,7 +315,6 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                 }
             }
             await _audioOutput.StopAsync(cancellationToken).ConfigureAwait(false);
-            _runCancellation?.Cancel();
         }
         finally
         {

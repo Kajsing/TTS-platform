@@ -24,6 +24,16 @@ if (second.Documents.Count != 1 || second.Documents[0].Id == first.Documents[0].
     return 4;
 }
 
+var documentCountBeforeImmediateSpeech = (await client.GetDocumentsAsync(limit: 50)).Documents.Count;
+var immediateWave = await client.SynthesizeAsync(
+    new EphemeralSynthesisRequest("Immediate clipboard smoke."));
+var documentCountAfterImmediateSpeech = (await client.GetDocumentsAsync(limit: 50)).Documents.Count;
+if (immediateWave.Length == 0 || documentCountAfterImmediateSpeech != documentCountBeforeImmediateSpeech)
+{
+    Console.Error.WriteLine("Immediate clipboard speech persisted a document or returned no audio.");
+    return 9;
+}
+
 var document = first.Documents[0];
 var blocks = await client.GetBlocksAsync(document.Id);
 var block = blocks.Blocks.Single();
@@ -94,6 +104,42 @@ if (loadedPosition?.Cursor != savedPosition.Cursor)
     return 8;
 }
 
+var clipboardDocument = await client.CreateDocumentAsync(
+    new CreateDocumentRequest(
+        "Clipboard append smoke",
+        "clipboard",
+        "Initial paragraph",
+        AllowDuplicate: true));
+var selections = new[] { "First selected excerpt", "Second selected excerpt", "Latest selected excerpt" };
+foreach (var selection in selections)
+{
+    var appended = await client.AppendContentAsync(
+        clipboardDocument.Id,
+        new AppendContentRequest(clipboardDocument.RowVersion, selection));
+    clipboardDocument = appended.Document;
+}
+var appendedBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
+if (appendedBlocks.Blocks.Count != 4 ||
+    !appendedBlocks.Blocks.Skip(1).Select(item => item.Text).SequenceEqual(selections) ||
+    appendedBlocks.Blocks.Skip(1).Any(item => item.Kind != "paragraph"))
+{
+    Console.Error.WriteLine("Repeated clipboard appends did not create separate paragraph operations.");
+    return 10;
+}
+
+var undone = await client.UndoAsync(
+    clipboardDocument.Id,
+    new ExpectedVersionRequest(clipboardDocument.RowVersion));
+var undoneBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
+if (undoneBlocks.Blocks.Count != 3 ||
+    undoneBlocks.Blocks.Any(item => item.Text == selections[^1]) ||
+    !undoneBlocks.Blocks.Skip(1).Select(item => item.Text).SequenceEqual(selections[..^1]) ||
+    undone.Document.RowVersion <= clipboardDocument.RowVersion)
+{
+    Console.Error.WriteLine("One Undo did not remove exactly the latest clipboard append.");
+    return 11;
+}
+
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
@@ -102,9 +148,13 @@ Console.WriteLine(JsonSerializer.Serialize(new
     second_page_count = second.Documents.Count,
     live_reader_stream = true,
     live_position_resume = true,
+    live_clipboard_no_persist = true,
+    live_clipboard_append_undo = true,
     pcm_frames = pcmFrames,
     pcm_bytes = pcmBytes,
     source_spans = sourceSpans,
+    clipboard_paragraphs_before_undo = appendedBlocks.Blocks.Count,
+    clipboard_paragraphs_after_undo = undoneBlocks.Blocks.Count,
 }));
 return 0;
 

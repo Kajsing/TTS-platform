@@ -31,6 +31,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Require a real Windows shared-mode audio endpoint smoke.",
     )
+    parser.add_argument(
+        "--require-windows-integration",
+        action="store_true",
+        help="Require Windows clipboard-listener, hotkey, tray, and audio smoke checks.",
+    )
     parser.add_argument("--dotnet", type=Path)
     parser.add_argument("--skip-build", action="store_true")
     return parser
@@ -101,9 +106,16 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Onboarding.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "JsonDesktopSettingsStore.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "WasapiAudioOutput.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "ClipboardIntegration.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "GlobalHotkeys.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderTrayIcon.cs",
         reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderStreamClient.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
+        repo_root / "docs" / "reader_milestone5_manual_checklist.md",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.en-US.resx",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.da-DK.resx",
     ]
@@ -116,21 +128,26 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         for path in reader_root.rglob("*")
         if path.is_file() and path.suffix.lower() in {".cs", ".csproj", ".xaml"}
     )
-    forbidden = [
+    clipboard_features = [
         "AddClipboardFormatListener",
-        "WM_HOTKEY",
-        "System.Windows.Forms.Clipboard",
+        "RegisterHotKey(",
+        "Forms.Clipboard",
+        "CopySelectionHelper",
+        "ReaderTrayIcon",
+        "ClipboardCaptureAction.AppendToOpenDocument",
     ]
-    found = [value for value in forbidden if value.casefold() in source_text.casefold()]
-    if found:
+    missing_features = [
+        value for value in clipboard_features if value.casefold() not in source_text.casefold()
+    ]
+    if missing_features:
         raise DesktopReaderCheckError(
-            f"Milestone 4 must not contain clipboard capture code: {found}"
+            f"Milestone 5 Windows capture features are missing: {missing_features}"
         )
     if "<TargetFramework>net10.0-windows</TargetFramework>" not in source_text:
         raise DesktopReaderCheckError("The WPF application does not target net10.0-windows.")
     if "NAudio" not in source_text or "ReaderStreamProtocolParser" not in source_text:
         raise DesktopReaderCheckError("Milestone 4 audio or stream protocol code is missing.")
-    return {"required_files": len(required), "clipboard_features": "absent"}
+    return {"required_files": len(required), "clipboard_features": "implemented"}
 
 
 def _free_port() -> int:
@@ -236,6 +253,13 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         raise DesktopReaderCheckError(
             "The .NET client did not confirm Reader WebSocket streaming and durable resume."
         )
+    if (
+        payload.get("live_clipboard_no_persist") is not True
+        or payload.get("live_clipboard_append_undo") is not True
+    ):
+        raise DesktopReaderCheckError(
+            "The .NET client did not confirm private immediate speech and clipboard append/undo."
+        )
     return payload
 
 
@@ -284,6 +308,47 @@ def _check_windows_audio(
     payload = json.loads(_run([str(dotnet), str(smoke_dll)], cwd=repo_root))
     if payload.get("windows_audio") is not True:
         raise DesktopReaderCheckError("NAudio did not confirm the default Windows audio endpoint.")
+    return {"status": "passed", **payload}
+
+
+def _check_windows_integration(
+    repo_root: Path,
+    dotnet: Path,
+    *,
+    required: bool,
+) -> dict[str, object]:
+    if os.name != "nt":
+        if required:
+            raise DesktopReaderCheckError(
+                "The required Windows integration smoke cannot run off Windows."
+            )
+        return {"status": "skipped", "reason": "Windows integration requires Windows"}
+    if not required:
+        return {"status": "skipped", "reason": "pass --require-windows-integration"}
+
+    smoke_dll = (
+        repo_root
+        / "apps"
+        / "desktop_reader"
+        / "tools"
+        / "TtsPlatform.Reader.WindowsIntegration.Smoke"
+        / "bin"
+        / "Release"
+        / "net10.0-windows"
+        / "TtsPlatform.Reader.WindowsIntegration.Smoke.dll"
+    )
+    payload = json.loads(_run([str(dotnet), str(smoke_dll)], cwd=repo_root))
+    if (
+        payload.get("windows_integration") is not True
+        or payload.get("clipboard_listener_registered") is not True
+        or payload.get("monitoring_off_unregistered") is not True
+        or payload.get("monitoring_restart") is not True
+        or payload.get("invalid_hotkey_nonfatal") is not True
+        or payload.get("clipboard_read_or_write_performed") is not False
+    ):
+        raise DesktopReaderCheckError(
+            "Windows did not confirm the privacy-safe clipboard/hotkey/tray lifecycle."
+        )
     return {"status": "passed", **payload}
 
 
@@ -358,7 +423,10 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     try:
         source = _check_source_shape(repo_root)
-        dotnet = _resolve_dotnet(args.dotnet, required=args.require_dotnet)
+        dotnet = _resolve_dotnet(
+            args.dotnet,
+            required=args.require_dotnet or args.require_windows_integration,
+        )
         if dotnet is None:
             print(json.dumps({"source": source, "dotnet": "skipped"}, indent=2))
             return 0
@@ -380,7 +448,12 @@ def main() -> int:
             windows_audio = _check_windows_audio(
                 repo_root,
                 dotnet,
-                required=args.require_windows_audio,
+                required=args.require_windows_audio or args.require_windows_integration,
+            )
+            windows_integration = _check_windows_integration(
+                repo_root,
+                dotnet,
+                required=args.require_windows_integration,
             )
             archive, package = _build_development_package(repo_root, dotnet, temporary)
             wpf = _check_wpf_render(archive, temporary)
@@ -392,6 +465,7 @@ def main() -> int:
                     "live_paging": live_paging,
                     "preview_snapshot": preview_snapshot,
                     "windows_audio": windows_audio,
+                    "windows_integration": windows_integration,
                     "portable_package": package,
                     "wpf_render": wpf,
                 },

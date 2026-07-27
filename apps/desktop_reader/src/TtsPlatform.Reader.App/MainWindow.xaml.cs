@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Microsoft.Win32;
 using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
@@ -18,16 +20,38 @@ public partial class MainWindow : Window
     private readonly bool _smokeTest;
     private DesktopSettings _settings;
     private HttpClient? _httpClient;
+    private HttpClient? _synthesisHttpClient;
     private IReaderServiceClient? _client;
+    private IReaderServiceClient? _synthesisClient;
     private LibraryPager? _library;
     private DocumentEditor? _editor;
     private ReaderPlaybackCoordinator? _playback;
+    private ClipboardDocumentCapture? _clipboardCapture;
+    private readonly WindowsClipboardAdapter _clipboard = new();
+    private readonly ForegroundApplicationReader _foregroundApplication = new();
+    private readonly DefaultDesktopSecurityGuard _desktopSecurity = new();
+    private ClipboardListener? _clipboardListener;
+    private CopySelectionHelper? _copySelection;
+    private GlobalHotkeyManager? _hotkeys;
+    private ReaderTrayIcon? _trayIcon;
+    private CompactControllerWindow? _compactController;
+    private HwndSource? _windowSource;
+    private WasapiAudioOutput? _ephemeralAudio;
+    private CancellationTokenSource? _ephemeralCancellation;
+    private Task? _ephemeralTask;
+    private string? _ephemeralReplayText;
     private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
         "Connection has not been checked.",
         SuggestedAction.Retry);
     private bool _updatingEditor;
+    private bool _copySelectionInProgress;
+    private bool _clipboardPromptOpen;
+    private bool _ephemeralPlaying;
+    private bool _exitRequested;
+    private bool _shutdownInProgress;
+    private bool _closed;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -37,9 +61,12 @@ public partial class MainWindow : Window
         InitializeComponent();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
+        ApplySettingsToControls(settings);
         ReadingBlocksList.ItemsSource = _readingBlocks;
         ContentRendered += MainWindow_ContentRendered;
         Loaded += MainWindow_Loaded;
+        SourceInitialized += MainWindow_SourceInitialized;
+        Closing += MainWindow_Closing;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -74,10 +101,259 @@ public partial class MainWindow : Window
         System.Windows.Application.Current.Shutdown();
     }
 
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        if (_smokeTest)
+        {
+            return;
+        }
+
+        var handle = new WindowInteropHelper(this).Handle;
+        _windowSource = HwndSource.FromHwnd(handle);
+        _windowSource?.AddHook(WindowMessageHook);
+
+        _clipboardListener = new ClipboardListener(_foregroundApplication);
+        _clipboardListener.ClipboardChanged += ClipboardListener_ClipboardChanged;
+        var clipboardRegistered = !_settings.ClipboardMonitoringEnabled ||
+            _clipboardListener.Register(handle);
+        _copySelection = new CopySelectionHelper(
+            _clipboard,
+            new WindowsCopyKeySender(),
+            _foregroundApplication,
+            _desktopSecurity);
+
+        _hotkeys = new GlobalHotkeyManager();
+        _hotkeys.Pressed += Hotkeys_Pressed;
+        RegisterHotkeys(handle);
+
+        _trayIcon = new ReaderTrayIcon();
+        _trayIcon.Command += TrayIcon_Command;
+        _trayIcon.SetClipboardMonitoring(_settings.ClipboardMonitoringEnabled);
+        _trayIcon.SetStatus("Stopped");
+
+        if (_settings.ClipboardMonitoringEnabled && !clipboardRegistered)
+        {
+            HotkeyStatusText.Text = string.Join(
+                " ",
+                HotkeyStatusText.Text,
+                _clipboardListener.RegistrationError);
+        }
+        UpdateClipboardStatus();
+        if (_settings.EffectiveCompactController.Enabled)
+        {
+            ShowCompactController();
+        }
+    }
+
+    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (!_exitRequested && _settings.MinimizeToTrayOnClose)
+        {
+            e.Cancel = true;
+            Hide();
+            if (_settings.EffectiveCompactController.Enabled)
+            {
+                ShowCompactController();
+            }
+            return;
+        }
+        if (!_exitRequested)
+        {
+            e.Cancel = true;
+            await ExitApplicationAsync();
+        }
+    }
+
+    private IntPtr WindowMessageHook(
+        IntPtr window,
+        int message,
+        IntPtr wordParameter,
+        IntPtr longParameter,
+        ref bool handled)
+    {
+        _ = window;
+        _ = longParameter;
+        if (_hotkeys?.ProcessWindowMessage(message, wordParameter) == true)
+        {
+            handled = true;
+        }
+        if (_clipboardListener?.ProcessWindowMessage(message) == true)
+        {
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
+    private void RegisterHotkeys(IntPtr handle)
+    {
+        if (_hotkeys is null)
+        {
+            return;
+        }
+        var configured = _settings.EffectiveHotkeys;
+        var bindings = new List<GlobalHotkeyBinding>
+        {
+            new(GlobalHotkeyCommand.ReadClipboard, configured.ReadClipboard),
+            new(GlobalHotkeyCommand.PlayPause, configured.PlayPause),
+            new(GlobalHotkeyCommand.Stop, configured.Stop),
+        };
+        if (_settings.CopySelectionAndReadEnabled)
+        {
+            bindings.Add(new(
+                GlobalHotkeyCommand.CopySelectionAndRead,
+                configured.CopySelectionAndRead));
+        }
+        var results = _hotkeys.Register(handle, bindings);
+        var failures = results.Where(item => !item.Registered).ToArray();
+        HotkeyStatusText.Text = failures.Length == 0
+            ? $"{results.Count} global hotkey(s) registered."
+            : $"{failures.Length} hotkey(s) unavailable: {string.Join(", ", failures.Select(item => item.Gesture))}. Other controls remain available.";
+    }
+
+    private async void Hotkeys_Pressed(object? sender, GlobalHotkeyCommand command)
+    {
+        switch (command)
+        {
+            case GlobalHotkeyCommand.ReadClipboard:
+                await ReadClipboardAsync();
+                break;
+            case GlobalHotkeyCommand.CopySelectionAndRead:
+                await CopySelectionAndReadAsync();
+                break;
+            case GlobalHotkeyCommand.PlayPause:
+                await ToggleUnifiedPlaybackAsync();
+                break;
+            case GlobalHotkeyCommand.Stop:
+                await StopUnifiedPlaybackAsync();
+                break;
+        }
+    }
+
+    private async void TrayIcon_Command(object? sender, ReaderTrayCommand command)
+    {
+        switch (command)
+        {
+            case ReaderTrayCommand.OpenReader:
+                OpenMainWindow();
+                break;
+            case ReaderTrayCommand.OpenCompactController:
+                ShowCompactController();
+                break;
+            case ReaderTrayCommand.PlayPause:
+                await ToggleUnifiedPlaybackAsync();
+                break;
+            case ReaderTrayCommand.Stop:
+                await StopUnifiedPlaybackAsync();
+                break;
+            case ReaderTrayCommand.ReadClipboard:
+                await ReadClipboardAsync();
+                break;
+            case ReaderTrayCommand.ToggleClipboardMonitoring:
+                await SetClipboardMonitoringAsync(!_settings.ClipboardMonitoringEnabled);
+                break;
+            case ReaderTrayCommand.ServiceStatus:
+                OpenMainWindow();
+                await RefreshConnectionAsync();
+                break;
+            case ReaderTrayCommand.Exit:
+                await ExitApplicationAsync();
+                break;
+        }
+    }
+
+    private void OpenMainWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ShowCompactController()
+    {
+        if (_compactController is null)
+        {
+            var compactSettings = _settings.EffectiveCompactController;
+            _compactController = new CompactControllerWindow
+            {
+                Owner = this,
+                Topmost = compactSettings.AlwaysOnTop,
+            };
+            if (compactSettings.Left is double left && compactSettings.Top is double top)
+            {
+                _compactController.WindowStartupLocation = WindowStartupLocation.Manual;
+                _compactController.Left = left;
+                _compactController.Top = top;
+            }
+            _compactController.PlayPauseRequested += async (_, _) =>
+                await ToggleUnifiedPlaybackAsync();
+            _compactController.StopRequested += async (_, _) =>
+                await StopUnifiedPlaybackAsync();
+            _compactController.OpenReaderRequested += (_, _) => OpenMainWindow();
+        }
+        UpdateCompactController();
+        _compactController.Show();
+        _compactController.Activate();
+    }
+
+    private async Task ExitApplicationAsync()
+    {
+        if (_shutdownInProgress)
+        {
+            return;
+        }
+        _shutdownInProgress = true;
+        _exitRequested = true;
+        try
+        {
+            await StopUnifiedPlaybackAsync();
+            if (_compactController is not null)
+            {
+                var compact = _settings.EffectiveCompactController;
+                _settings = _settings with
+                {
+                    CompactController = compact with
+                    {
+                        Left = _compactController.Left,
+                        Top = _compactController.Top,
+                    },
+                };
+                try
+                {
+                    await _settingsStore.SaveAsync(_settings);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    FooterText.Text = $"Compact position was not saved: {exception.Message}";
+                }
+            }
+        }
+        finally
+        {
+            System.Windows.Application.Current.Shutdown();
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        if (_closed)
+        {
+            return;
+        }
+        _closed = true;
+        _windowSource?.RemoveHook(WindowMessageHook);
+        _hotkeys?.Dispose();
+        _clipboardListener?.Dispose();
+        _trayIcon?.Dispose();
+        StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
+        _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        if (_compactController is not null)
+        {
+            _compactController.AllowClose = true;
+            _compactController.Close();
+        }
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _httpClient?.Dispose();
+        _synthesisHttpClient?.Dispose();
         base.OnClosed(e);
     }
 
@@ -89,6 +365,11 @@ public partial class MainWindow : Window
         SetBusy(true, "Checking the local service…");
         try
         {
+            await StopEphemeralAsync(clearReplay: true);
+            if (_playback is not null)
+            {
+                await _playback.StopAsync();
+            }
             RebuildClient();
             var coordinator = new OnboardingCoordinator(GetClient());
             _onboarding = await coordinator.CheckAsync();
@@ -111,16 +392,26 @@ public partial class MainWindow : Window
 
     private void RebuildClient()
     {
+        StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
+        _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _httpClient?.Dispose();
+        _synthesisHttpClient?.Dispose();
         _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        _synthesisHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         var tokenProvider = new FileTokenProvider(_settings.EffectiveTokenSource.Path);
         _client = new ReaderServiceClient(
             _httpClient,
             _settings.ServiceBaseUrl,
             tokenProvider);
+        _synthesisClient = new ReaderServiceClient(
+            _synthesisHttpClient,
+            _settings.ServiceBaseUrl,
+            tokenProvider);
         _library = new LibraryPager(_client);
         _editor = new DocumentEditor(_client);
+        _clipboardCapture = new ClipboardDocumentCapture(_client);
+        _ephemeralAudio = new WasapiAudioOutput();
         _playback = new ReaderPlaybackCoordinator(
             _client,
             new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider),
@@ -215,15 +506,461 @@ public partial class MainWindow : Window
             {
                 ServiceBaseUrl = normalizedUrl,
                 TokenSource = new TokenSourceSettings("file", TokenPathTextBox.Text.Trim()),
+                ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
+                CopySelectionAndReadEnabled = CopySelectionCheckBox.IsChecked == true,
+                PrivacyMode = PrivacyModeCheckBox.IsChecked == true,
+                MinimizeToTrayOnClose = MinimizeToTrayCheckBox.IsChecked == true,
+                ClipboardBlockedApplications = ParseBlockedApplications(
+                    BlockedApplicationsTextBox.Text),
+                Hotkeys = new DesktopHotkeys(
+                    ReadClipboardHotkeyTextBox.Text.Trim(),
+                    CopySelectionHotkeyTextBox.Text.Trim(),
+                    PlayPauseHotkeyTextBox.Text.Trim(),
+                    StopHotkeyTextBox.Text.Trim()),
+                CompactController = _settings.EffectiveCompactController with
+                {
+                    Enabled = CompactEnabledCheckBox.IsChecked == true,
+                },
             };
             await _settingsStore.SaveAsync(_settings);
             FooterText.Text = $"Settings saved to {_settingsStore.SettingsPath}";
             await RefreshConnectionAsync();
+            if (_windowSource is not null)
+            {
+                RegisterHotkeys(new WindowInteropHelper(this).Handle);
+            }
+            if (_clipboardListener is not null)
+            {
+                if (_settings.ClipboardMonitoringEnabled)
+                {
+                    _ = _clipboardListener.Register(new WindowInteropHelper(this).Handle);
+                }
+                else
+                {
+                    _clipboardListener.Unregister();
+                }
+            }
+            _trayIcon?.SetClipboardMonitoring(_settings.ClipboardMonitoringEnabled);
+            UpdateClipboardStatus();
         }
         catch (Exception exception) when (exception is ReaderClientConfigurationException or IOException or UnauthorizedAccessException)
         {
             StatusText.Text = $"Settings were not saved: {exception.Message}";
         }
+    }
+
+    private void ApplySettingsToControls(DesktopSettings settings)
+    {
+        ClipboardMonitoringCheckBox.IsChecked = settings.ClipboardMonitoringEnabled;
+        CopySelectionCheckBox.IsChecked = settings.CopySelectionAndReadEnabled;
+        PrivacyModeCheckBox.IsChecked = settings.PrivacyMode;
+        MinimizeToTrayCheckBox.IsChecked = settings.MinimizeToTrayOnClose;
+        CompactEnabledCheckBox.IsChecked = settings.EffectiveCompactController.Enabled;
+        BlockedApplicationsTextBox.Text = string.Join(", ", settings.EffectiveClipboardBlockedApplications);
+        ReadClipboardHotkeyTextBox.Text = settings.EffectiveHotkeys.ReadClipboard;
+        CopySelectionHotkeyTextBox.Text = settings.EffectiveHotkeys.CopySelectionAndRead;
+        PlayPauseHotkeyTextBox.Text = settings.EffectiveHotkeys.PlayPause;
+        StopHotkeyTextBox.Text = settings.EffectiveHotkeys.Stop;
+        UpdateClipboardStatus();
+    }
+
+    private static IReadOnlyList<string> ParseBlockedApplications(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private async void ClipboardMonitoringCheckBox_Click(object sender, RoutedEventArgs e) =>
+        await SetClipboardMonitoringAsync(ClipboardMonitoringCheckBox.IsChecked == true);
+
+    private async Task SetClipboardMonitoringAsync(bool enabled)
+    {
+        _settings = _settings with { ClipboardMonitoringEnabled = enabled };
+        ClipboardMonitoringCheckBox.IsChecked = enabled;
+        if (_clipboardListener is not null)
+        {
+            if (enabled)
+            {
+                _ = _clipboardListener.Register(new WindowInteropHelper(this).Handle);
+            }
+            else
+            {
+                _clipboardListener.Unregister();
+            }
+        }
+        _trayIcon?.SetClipboardMonitoring(enabled);
+        UpdateClipboardStatus();
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            FooterText.Text = $"Clipboard monitoring preference was not saved: {exception.Message}";
+        }
+    }
+
+    private void UpdateClipboardStatus()
+    {
+        var state = !_settings.ClipboardMonitoringEnabled
+            ? "Off"
+            : _clipboardListener?.IsRegistered == false
+                ? "Unavailable"
+                : "On";
+        var privacy = _settings.PrivacyMode ? " · Privacy" : string.Empty;
+        ClipboardStatusText.Text = $"Clipboard prompt: {state}{privacy}";
+    }
+
+    private async void ReadClipboardButton_Click(object sender, RoutedEventArgs e) =>
+        await ReadClipboardAsync();
+
+    private void CompactButton_Click(object sender, RoutedEventArgs e) =>
+        ShowCompactController();
+
+    private async void ClipboardListener_ClipboardChanged(
+        object? sender,
+        ClipboardChangedEventArgs change)
+    {
+        if (!_settings.ClipboardMonitoringEnabled ||
+            _copySelectionInProgress ||
+            _clipboardPromptOpen ||
+            IsBlockedApplication(change.SourceExecutable))
+        {
+            return;
+        }
+
+        var clipboard = _clipboard.ReadText();
+        if (!clipboard.Succeeded || clipboard.Text is not string text)
+        {
+            FooterText.Text = clipboard.Message;
+            return;
+        }
+
+        _clipboardPromptOpen = true;
+        try
+        {
+            var dialog = new ClipboardCaptureDialog(
+                text,
+                change.SourceExecutable,
+                _settings.PrivacyMode)
+            {
+                Owner = IsVisible ? this : null,
+            };
+            _ = dialog.ShowDialog();
+            await HandleClipboardActionAsync(
+                dialog.SelectedAction,
+                text,
+                change.SourceExecutable);
+        }
+        finally
+        {
+            _clipboardPromptOpen = false;
+        }
+    }
+
+    private async Task HandleClipboardActionAsync(
+        ClipboardCaptureAction action,
+        string text,
+        string? sourceExecutable)
+    {
+        switch (action)
+        {
+            case ClipboardCaptureAction.ReadNow:
+                await StartEphemeralPlaybackAsync(text);
+                return;
+            case ClipboardCaptureAction.AppendToOpenDocument:
+                if (_clipboardCapture is null)
+                {
+                    FooterText.Text = "Connect to the local Reader before appending.";
+                    return;
+                }
+                await ApplyClipboardCaptureResultAsync(
+                    await _clipboardCapture.AppendAsync(text, _editor?.Document));
+                return;
+            case ClipboardCaptureAction.CreateNewDocument:
+            case ClipboardCaptureAction.SaveToInbox:
+                if (_clipboardCapture is null)
+                {
+                    FooterText.Text = "Connect to the local Reader before saving.";
+                    return;
+                }
+                await ApplyClipboardCaptureResultAsync(
+                    await _clipboardCapture.CreateAsync(
+                        text,
+                        openDocument: action == ClipboardCaptureAction.CreateNewDocument));
+                return;
+            case ClipboardCaptureAction.AlwaysIgnoreApplication:
+                if (!string.IsNullOrWhiteSpace(sourceExecutable))
+                {
+                    var blocked = _settings.EffectiveClipboardBlockedApplications
+                        .Append(sourceExecutable)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    _settings = _settings with { ClipboardBlockedApplications = blocked };
+                    BlockedApplicationsTextBox.Text = string.Join(", ", blocked);
+                    try
+                    {
+                        await _settingsStore.SaveAsync(_settings);
+                        FooterText.Text = $"Clipboard prompts disabled for {sourceExecutable}.";
+                    }
+                    catch (Exception exception) when (
+                        exception is IOException or UnauthorizedAccessException)
+                    {
+                        FooterText.Text = $"The application block was not saved: {exception.Message}";
+                    }
+                }
+                return;
+            case ClipboardCaptureAction.Ignore:
+            default:
+                FooterText.Text = "Clipboard text ignored.";
+                return;
+        }
+    }
+
+    private async Task ApplyClipboardCaptureResultAsync(ClipboardCaptureResult result)
+    {
+        FooterText.Text = result.Message;
+        if (!result.Succeeded || result.Document is null || _library is null)
+        {
+            return;
+        }
+
+        await _library.RefreshAsync(SearchTextBox.Text.Trim());
+        LoadMoreButton.IsEnabled = _library.HasMore;
+        if (result.OpenDocument)
+        {
+            var current = _library.Documents.FirstOrDefault(item => item.Id == result.Document.Id)
+                ?? result.Document;
+            DocumentsGrid.SelectedItem = current;
+            if (_editor is not null &&
+                (DocumentsGrid.SelectedItem as ReaderDocument)?.Id == _editor.Document?.Id)
+            {
+                await _editor.LoadAsync(current);
+                _updatingEditor = true;
+                EditorTextBox.Text = _editor.WorkingText;
+                _updatingEditor = false;
+                UpdateEditorButtons();
+            }
+        }
+    }
+
+    private bool IsBlockedApplication(string? executable)
+    {
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            return false;
+        }
+        var baseName = Path.GetFileNameWithoutExtension(executable);
+        return _settings.EffectiveClipboardBlockedApplications.Any(item =>
+            string.Equals(item, executable, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                Path.GetFileNameWithoutExtension(item),
+                baseName,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task ReadClipboardAsync()
+    {
+        var result = _clipboard.ReadText();
+        if (!result.Succeeded || result.Text is not string text)
+        {
+            FooterText.Text = result.Message;
+            return;
+        }
+        await StartEphemeralPlaybackAsync(text);
+    }
+
+    private async Task CopySelectionAndReadAsync()
+    {
+        if (!_settings.CopySelectionAndReadEnabled)
+        {
+            FooterText.Text = "Enable Copy Selection and Read in settings before using its hotkey.";
+            return;
+        }
+        if (_copySelection is null || _clipboardListener is null)
+        {
+            FooterText.Text = "Windows selection capture is not initialized.";
+            return;
+        }
+
+        _copySelectionInProgress = true;
+        try
+        {
+            var result = await _copySelection.CaptureAsync(
+                _settings.EffectiveClipboardBlockedApplications);
+            _clipboardListener.SuppressSequence(_clipboard.SequenceNumber);
+            if (!result.Succeeded || result.Text is not string text)
+            {
+                FooterText.Text = result.Message;
+                return;
+            }
+            await StartEphemeralPlaybackAsync(text);
+        }
+        finally
+        {
+            _copySelectionInProgress = false;
+        }
+    }
+
+    private async Task StartEphemeralPlaybackAsync(string text)
+    {
+        if (_synthesisClient is null || _ephemeralAudio is null)
+        {
+            FooterText.Text = "Connect to the local service before reading clipboard text.";
+            return;
+        }
+        if (_playback?.IsActive == true)
+        {
+            await _playback.StopAsync();
+        }
+        await StopEphemeralAsync(clearReplay: false);
+        _ephemeralReplayText = text;
+        _ephemeralCancellation = new CancellationTokenSource();
+        _ephemeralPlaying = true;
+        SetEphemeralState("Reading clipboard text", playing: true);
+        if (_settings.EffectiveCompactController.Enabled)
+        {
+            ShowCompactController();
+        }
+        _ephemeralTask = RunEphemeralPlaybackAsync(
+            text,
+            _ephemeralCancellation,
+            _synthesisClient,
+            _ephemeralAudio);
+    }
+
+    private async Task RunEphemeralPlaybackAsync(
+        string text,
+        CancellationTokenSource cancellation,
+        IReaderServiceClient client,
+        WasapiAudioOutput audio)
+    {
+        var completed = false;
+        try
+        {
+            foreach (var chunk in EphemeralTextChunker.Chunk(text))
+            {
+                var wave = await client.SynthesizeAsync(
+                    new EphemeralSynthesisRequest(chunk),
+                    cancellation.Token);
+                var decoded = WavePcmDecoder.Decode(wave);
+                var frameBytes = Math.Max(
+                    2,
+                    decoded.Format.SampleRateHz * decoded.Format.Channels * 2 * 40 / 1_000);
+                frameBytes -= frameBytes % 2;
+                for (var offset = 0; offset < decoded.Bytes.Length; offset += frameBytes)
+                {
+                    var length = Math.Min(frameBytes, decoded.Bytes.Length - offset);
+                    await audio.PlayAsync(
+                        decoded.Bytes.AsMemory(offset, length),
+                        decoded.Format,
+                        cancellation.Token);
+                }
+                await audio.DrainAsync(cancellation.Token);
+            }
+            completed = true;
+            SetEphemeralState("Clipboard reading completed", playing: false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            SetEphemeralState("Clipboard reading paused", playing: false);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException or
+                InvalidDataException or
+                ArgumentOutOfRangeException or
+                InvalidOperationException or
+                NotSupportedException)
+        {
+            SetEphemeralState($"Clipboard playback failed: {exception.Message}", playing: false);
+        }
+        finally
+        {
+            if (ReferenceEquals(_ephemeralCancellation, cancellation))
+            {
+                _ephemeralPlaying = false;
+                if (completed)
+                {
+                    _ephemeralReplayText = null;
+                }
+            }
+        }
+    }
+
+    private async Task StopEphemeralAsync(bool clearReplay)
+    {
+        var cancellation = _ephemeralCancellation;
+        var task = _ephemeralTask;
+        cancellation?.Cancel();
+        if (_ephemeralAudio is not null)
+        {
+            await _ephemeralAudio.StopAsync();
+        }
+        if (task is not null)
+        {
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+                // The requested pause/stop owns the resulting state.
+            }
+        }
+        if (ReferenceEquals(_ephemeralCancellation, cancellation))
+        {
+            _ephemeralCancellation = null;
+            _ephemeralTask = null;
+            cancellation?.Dispose();
+        }
+        _ephemeralPlaying = false;
+        if (clearReplay)
+        {
+            _ephemeralReplayText = null;
+        }
+    }
+
+    private void SetEphemeralState(string state, bool playing)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            PlaybackStatusText.Text = state;
+            FooterText.Text = state;
+            _trayIcon?.SetStatus(playing ? "Reading Clipboard" : "Paused");
+            UpdatePlaybackControls();
+            UpdateCompactController();
+        }));
+    }
+
+    private async Task ToggleUnifiedPlaybackAsync()
+    {
+        if (_ephemeralPlaying)
+        {
+            await StopEphemeralAsync(clearReplay: false);
+            SetEphemeralState("Clipboard reading paused", playing: false);
+            return;
+        }
+        if (_playback?.IsActive == true)
+        {
+            await _playback.PauseAsync();
+            return;
+        }
+        if (_ephemeralReplayText is string replay)
+        {
+            await StartEphemeralPlaybackAsync(replay);
+            return;
+        }
+        await TogglePlaybackAsync();
+    }
+
+    private async Task StopUnifiedPlaybackAsync()
+    {
+        await StopEphemeralAsync(clearReplay: true);
+        if (_playback is not null)
+        {
+            await _playback.StopAsync();
+        }
+        SetEphemeralState("Stopped", playing: false);
     }
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e) => await RefreshLibraryAsync();
@@ -406,7 +1143,7 @@ public partial class MainWindow : Window
     }
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
-        await TogglePlaybackAsync();
+        await ToggleUnifiedPlaybackAsync();
 
     private async Task TogglePlaybackAsync()
     {
@@ -427,6 +1164,7 @@ public partial class MainWindow : Window
 
         try
         {
+            await StopEphemeralAsync(clearReplay: true);
             await _playback.PlayAsync(_editor.Document);
         }
         catch (Exception exception) when (
@@ -439,13 +1177,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void StopButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_playback is not null)
-        {
-            await _playback.StopAsync();
-        }
-    }
+    private async void StopButton_Click(object sender, RoutedEventArgs e) =>
+        await StopUnifiedPlaybackAsync();
 
     private async void PreviousSectionButton_Click(object sender, RoutedEventArgs e) =>
         await NavigateSectionAsync(next: false);
@@ -541,8 +1274,10 @@ public partial class MainWindow : Window
                 ? change.State.ToString()
                 : $"{change.State}: {change.Message}";
             FooterText.Text = change.Message ?? $"Playback {change.State.ToString().ToLowerInvariant()}";
+            _trayIcon?.SetStatus(change.State.ToString());
             UpdatePlaybackControls();
             UpdateEditorButtons();
+            UpdateCompactController();
         }));
     }
 
@@ -591,28 +1326,53 @@ public partial class MainWindow : Window
     private void UpdatePlaybackControls()
     {
         var hasDocument = _editor?.Document is not null;
-        var active = _playback?.IsActive == true;
-        PlayPauseButton.Content = active ? "Pause" : "Play";
-        PlayPauseButton.IsEnabled = hasDocument;
-        StopButton.IsEnabled = hasDocument && _playback?.State is not ReaderPlaybackState.Stopped;
-        PreviousSectionButton.IsEnabled = hasDocument;
-        NextSectionButton.IsEnabled = hasDocument;
-        ReadingBlocksList.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = active ? Visibility.Collapsed : Visibility.Visible;
+        var documentActive = _playback?.IsActive == true;
+        var ephemeralPaused = !_ephemeralPlaying && _ephemeralReplayText is not null;
+        var hasPlayback = _ephemeralPlaying || ephemeralPaused ||
+            (hasDocument && _playback?.State is not ReaderPlaybackState.Stopped);
+        PlayPauseButton.Content = _ephemeralPlaying || documentActive ? "Pause" : "Play";
+        PlayPauseButton.IsEnabled = hasDocument || _ephemeralPlaying || ephemeralPaused;
+        StopButton.IsEnabled = hasPlayback;
+        PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
+        NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
+        ReadingBlocksList.Visibility = documentActive ? Visibility.Visible : Visibility.Collapsed;
+        EditorTextBox.Visibility = documentActive ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void UpdateCompactController()
+    {
+        if (_compactController is null)
+        {
+            return;
+        }
+
+        var documentActive = _playback?.IsActive == true;
+        var playing = _ephemeralPlaying || documentActive;
+        var state = _ephemeralPlaying
+            ? "Reading clipboard"
+            : _ephemeralReplayText is not null
+                ? "Clipboard paused"
+                : _playback?.State.ToString() ?? "Stopped";
+        var context = _ephemeralPlaying || _ephemeralReplayText is not null
+            ? (_settings.PrivacyMode ? "Private clipboard text" : "Clipboard text")
+            : _editor?.Document?.Title ?? "No document selected";
+        _compactController.SetState(state, context, playing);
     }
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _playback?.State is not ReaderPlaybackState.Stopped)
+        if (e.Key == Key.Escape &&
+            (_ephemeralPlaying || _ephemeralReplayText is not null ||
+                _playback?.State is not ReaderPlaybackState.Stopped))
         {
             e.Handled = true;
-            await _playback!.StopAsync();
+            await StopUnifiedPlaybackAsync();
             return;
         }
         if (e.Key == Key.Space && Keyboard.FocusedElement is not TextBox)
         {
             e.Handled = true;
-            await TogglePlaybackAsync();
+            await ToggleUnifiedPlaybackAsync();
         }
     }
 

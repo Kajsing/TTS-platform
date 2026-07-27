@@ -13,6 +13,9 @@ public interface IReaderServiceClient
     Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default);
     Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default);
     Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default);
+    Task<ReaderDocument> CreateDocumentAsync(
+        CreateDocumentRequest request,
+        CancellationToken cancellationToken = default);
     Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
         string? cursor = null,
@@ -46,6 +49,9 @@ public interface IReaderServiceClient
     Task<ReaderPosition> SavePositionAsync(
         string documentId,
         SavePositionRequest request,
+        CancellationToken cancellationToken = default);
+    Task<byte[]> SynthesizeAsync(
+        EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default);
 }
 
@@ -107,6 +113,13 @@ public sealed record VoiceDescriptor(
     string LatencyTier);
 
 public sealed record DocumentPage(IReadOnlyList<ReaderDocument> Documents, string? NextCursor);
+
+public sealed record CreateDocumentRequest(
+    string Title,
+    [property: JsonPropertyName("source_type")] string SourceType,
+    string Text,
+    [property: JsonPropertyName("language_hint")] string? LanguageHint = null,
+    [property: JsonPropertyName("allow_duplicate")] bool AllowDuplicate = false);
 
 public sealed record ReaderDocument(
     string Id,
@@ -198,6 +211,12 @@ public sealed record SavePositionRequest(
     [property: JsonPropertyName("rules_version")] int RulesVersion = 1,
     bool Completed = false,
     [property: JsonPropertyName("expected_row_version")] int? ExpectedRowVersion = null);
+
+public sealed record EphemeralSynthesisRequest(
+    string Text,
+    string? Voice = null,
+    string Format = "wav",
+    [property: JsonPropertyName("language_hint")] string? LanguageHint = null);
 
 public sealed record ReaderProsody(
     double Rate = 1.0,

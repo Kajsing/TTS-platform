@@ -30,6 +30,16 @@ public sealed class ReaderServiceClient : IReaderServiceClient
     public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) =>
         SendAsync<VoicePage>(HttpMethod.Get, "v1/voices", true, null, cancellationToken);
 
+    public Task<ReaderDocument> CreateDocumentAsync(
+        CreateDocumentRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderDocument>(
+            HttpMethod.Post,
+            "v1/reader/documents",
+            true,
+            request,
+            cancellationToken);
+
     public Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
         string? cursor = null,
@@ -166,6 +176,65 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public async Task<byte[]> SynthesizeAsync(
+        EphemeralSynthesisRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.Text))
+        {
+            throw new ArgumentException("Immediate speech text must not be empty.", nameof(request));
+        }
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, "v1/tts");
+        message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/wav"));
+        await AttachBearerAsync(message, cancellationToken).ConfigureAwait(false);
+        message.Content = JsonContent.Create(request, options: JsonOptions);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(
+                message,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service could not be reached. Start the service and try again.",
+                exception);
+        }
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service did not respond in time. Check the service and try again.",
+                exception);
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+            }
+            const int maximumAudioBytes = 64 * 1024 * 1024;
+            if (response.Content.Headers.ContentLength > maximumAudioBytes)
+            {
+                throw new ReaderServiceUnavailableException(
+                    "The local TTS service returned an oversized audio response.");
+            }
+            var audio = await response.Content.ReadAsByteArrayAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (audio.Length is 0 or > maximumAudioBytes)
+            {
+                throw new ReaderServiceUnavailableException(
+                    "The local TTS service returned invalid audio data.");
+            }
+            return audio;
+        }
+    }
+
     private async Task<T> SendAsync<T>(
         HttpMethod method,
         string relativeUrl,
@@ -177,14 +246,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (authenticated)
         {
-            var token = (await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false))?.Trim();
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                throw new ReaderTokenUnavailableException(
-                    "Choose the service token file before connecting to protected Reader operations.");
-            }
-
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
         if (body is not null)
@@ -222,6 +284,20 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             return result ?? throw new ReaderServiceUnavailableException(
                 "The local TTS service returned an empty response.");
         }
+    }
+
+    private async Task AttachBearerAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var token = (await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false))?.Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ReaderTokenUnavailableException(
+                "Choose the service token file before connecting to protected Reader operations.");
+        }
+
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
     private static async Task ThrowApiExceptionAsync(

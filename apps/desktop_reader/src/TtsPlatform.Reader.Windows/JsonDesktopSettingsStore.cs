@@ -80,6 +80,18 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
             throw new ReaderClientConfigurationException("Reading font size must be between 10 and 72.");
         }
 
-        return settings with { TokenSource = tokenSource, Hotkeys = settings.EffectiveHotkeys };
+        var blockedApplications = settings.EffectiveClipboardBlockedApplications
+            .Select(item => item.Trim())
+            .Where(item => item.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return settings with
+        {
+            TokenSource = tokenSource,
+            Hotkeys = settings.EffectiveHotkeys,
+            ClipboardBlockedApplications = blockedApplications,
+            CompactController = settings.EffectiveCompactController,
+        };
     }
 }

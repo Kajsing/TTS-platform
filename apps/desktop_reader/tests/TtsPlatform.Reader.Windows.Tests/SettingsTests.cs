@@ -30,6 +30,8 @@ public sealed class SettingsTests : IDisposable
         Assert.DoesNotContain("effectiveHotkeys", json, StringComparison.Ordinal);
         Assert.Equal(@"C:\safe\token.txt", loaded.EffectiveTokenSource.Path);
         Assert.False(loaded.ClipboardMonitoringEnabled);
+        Assert.True(loaded.PrivacyMode);
+        Assert.False(loaded.CopySelectionAndReadEnabled);
     }
 
     [Fact]

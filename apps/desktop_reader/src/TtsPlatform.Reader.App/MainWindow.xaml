@@ -20,6 +20,12 @@
         <TextBlock Foreground="White" FontSize="22" FontWeight="SemiBold"
                    Text="TTS Platform Reader" VerticalAlignment="Center" />
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <TextBlock x:Name="ClipboardStatusText" Foreground="White" Margin="0,5,10,0"
+                     Text="Clipboard prompt: Off" AutomationProperties.LiveSetting="Polite" />
+          <Button x:Name="ReadClipboardButton" Content="Read Clipboard" Click="ReadClipboardButton_Click"
+                  AutomationProperties.Name="Read clipboard without saving" />
+          <Button x:Name="CompactButton" Content="Compact" Click="CompactButton_Click"
+                  AutomationProperties.Name="Open compact playback controller" />
           <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
                   AutomationProperties.Name="Check local service connection" />
           <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
@@ -33,23 +39,61 @@
         <TextBlock x:Name="StatusText" Text="Connection has not been checked." FontWeight="SemiBold"
                    TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
         <Expander Header="Connection settings" Margin="0,8,0,0">
-          <Grid Margin="0,4,0,0">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="2*" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="3*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Service URL" VerticalAlignment="Center" Margin="0,0,5,0" />
-            <TextBox Grid.Column="1" x:Name="ServiceUrlTextBox" AutomationProperties.Name="Service URL" />
-            <TextBlock Grid.Column="2" Text="Token file" VerticalAlignment="Center" Margin="12,0,5,0" />
-            <TextBox Grid.Column="3" x:Name="TokenPathTextBox" AutomationProperties.Name="Token file path" />
-            <StackPanel Grid.Column="4" Orientation="Horizontal">
-              <Button Content="Browse…" Click="BrowseTokenButton_Click" />
-              <Button Content="Save" Click="SaveSettingsButton_Click" />
-            </StackPanel>
-          </Grid>
+          <StackPanel Margin="0,4,0,0">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Service URL" VerticalAlignment="Center" Margin="0,0,5,0" />
+              <TextBox Grid.Column="1" x:Name="ServiceUrlTextBox" AutomationProperties.Name="Service URL" />
+              <TextBlock Grid.Column="2" Text="Token file" VerticalAlignment="Center" Margin="12,0,5,0" />
+              <TextBox Grid.Column="3" x:Name="TokenPathTextBox" AutomationProperties.Name="Token file path" />
+              <StackPanel Grid.Column="4" Orientation="Horizontal">
+                <Button Content="Browse…" Click="BrowseTokenButton_Click" />
+                <Button Content="Save" Click="SaveSettingsButton_Click" />
+              </StackPanel>
+            </Grid>
+            <WrapPanel Margin="0,8,0,0">
+              <CheckBox x:Name="ClipboardMonitoringCheckBox" Content="Clipboard prompt mode"
+                        Click="ClipboardMonitoringCheckBox_Click" />
+              <CheckBox x:Name="CopySelectionCheckBox" Content="Enable Copy Selection and Read" />
+              <CheckBox x:Name="PrivacyModeCheckBox" Content="Privacy mode" />
+              <CheckBox x:Name="MinimizeToTrayCheckBox" Content="Minimize to tray on close" />
+              <CheckBox x:Name="CompactEnabledCheckBox" Content="Remember compact controller" />
+            </WrapPanel>
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Blocked apps" VerticalAlignment="Center" Margin="0,0,5,0" />
+              <TextBox Grid.Column="1" x:Name="BlockedApplicationsTextBox"
+                       ToolTip="Comma-separated executable names" />
+              <TextBlock Grid.Column="2" Text="Read" VerticalAlignment="Center" Margin="8,0,4,0" />
+              <TextBox Grid.Column="3" x:Name="ReadClipboardHotkeyTextBox" Width="95" />
+              <TextBlock Grid.Column="4" Text="Selection" VerticalAlignment="Center" Margin="8,0,4,0" />
+              <TextBox Grid.Column="5" x:Name="CopySelectionHotkeyTextBox" Width="95" />
+              <TextBlock Grid.Column="6" Text="Play/Pause" VerticalAlignment="Center" Margin="8,0,4,0" />
+              <TextBox Grid.Column="7" x:Name="PlayPauseHotkeyTextBox" Width="85" />
+              <TextBlock Grid.Column="8" Text="Stop" VerticalAlignment="Center" Margin="8,0,4,0" />
+              <TextBox Grid.Column="9" x:Name="StopHotkeyTextBox" Width="85" />
+            </Grid>
+            <TextBlock x:Name="HotkeyStatusText" Margin="0,6,0,0" Foreground="#555"
+                       Text="Global hotkeys are not registered yet." TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite" />
+          </StackPanel>
         </Expander>
       </StackPanel>
     </Border>

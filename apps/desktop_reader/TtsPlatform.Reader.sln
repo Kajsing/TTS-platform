@@ -22,6 +22,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TtsPlatform.Reader.Audio.Sm
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TtsPlatform.Reader.Playback.Smoke", "tools\TtsPlatform.Reader.Playback.Smoke\TtsPlatform.Reader.Playback.Smoke.csproj", "{6D3BA83A-38BD-4D86-A067-B6C3CBB7AA5F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TtsPlatform.Reader.WindowsIntegration.Smoke", "tools\TtsPlatform.Reader.WindowsIntegration.Smoke\TtsPlatform.Reader.WindowsIntegration.Smoke.csproj", "{90D8C37E-7241-4705-AE9C-B028A0C405D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -68,5 +70,9 @@ Global
 		{6D3BA83A-38BD-4D86-A067-B6C3CBB7AA5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6D3BA83A-38BD-4D86-A067-B6C3CBB7AA5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6D3BA83A-38BD-4D86-A067-B6C3CBB7AA5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{90D8C37E-7241-4705-AE9C-B028A0C405D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90D8C37E-7241-4705-AE9C-B028A0C405D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90D8C37E-7241-4705-AE9C-B028A0C405D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90D8C37E-7241-4705-AE9C-B028A0C405D5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

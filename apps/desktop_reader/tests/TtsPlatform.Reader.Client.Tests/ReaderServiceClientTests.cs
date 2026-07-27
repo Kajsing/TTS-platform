@@ -60,6 +60,38 @@ public sealed class ReaderServiceClientTests
     }
 
     [Fact]
+    public async Task Clipboard_document_and_immediate_speech_use_distinct_protected_routes()
+    {
+        var wave = new byte[] { 82, 73, 70, 70, 1, 2, 3, 4 };
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/documents" => Json(HttpStatusCode.Created, DocumentJson),
+            "/v1/tts" => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(wave),
+            },
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var document = await client.CreateDocumentAsync(
+            new CreateDocumentRequest("Clipboard", "clipboard", "Saved", AllowDuplicate: true));
+        var audio = await client.SynthesizeAsync(new EphemeralSynthesisRequest("Read only"));
+
+        Assert.Equal("clipboard", document.SourceType);
+        Assert.Equal(wave, audio);
+        Assert.Equal(["/v1/reader/documents", "/v1/tts"],
+            handler.Requests.Select(item => item.Uri.AbsolutePath));
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"source_type\":\"clipboard\"", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("\"allow_duplicate\":true", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("\"text\":\"Read only\"", handler.Requests[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Typed_api_error_preserves_conflict_details()
     {
         var handler = new RecordingHandler(_ => Json(HttpStatusCode.Conflict, ErrorJson));
@@ -156,6 +188,15 @@ public sealed class ReaderServiceClientTests
             "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:01:00Z","imported_at":"2026-07-27T12:00:00Z",
             "deleted_at":null,"content_revision":2,"row_version":8,"total_sections":1,"total_blocks":1,"total_characters":3,"metadata":{}
           },"edit":null
+        }
+        """;
+
+    private const string DocumentJson = """
+        {
+          "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","title":"Clipboard","source_type":"clipboard",
+          "source_name":null,"source_uri":null,"source_sha256":null,"language_hint":null,"state":"inbox",
+          "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z","imported_at":"2026-07-27T12:00:00Z",
+          "deleted_at":null,"content_revision":1,"row_version":1,"total_sections":1,"total_blocks":1,"total_characters":5,"metadata":{}
         }
         """;
 

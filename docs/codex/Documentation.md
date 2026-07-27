@@ -11,17 +11,75 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 4, protected source-mapped
-  streaming, bounded Windows playback, durable resume, highlighting, controls,
-  content leases, and developer-preview validation.
-- Current loop result: complete. The Python service now streams bounded Reader
-  windows as strict mark/binary PCM pairs with stable UTF-16 source cursors. The
-  layered desktop client validates the protocol, plays through NAudio/WASAPI,
-  persists only fully heard positions, highlights bounded source blocks, and
-  exposes Play/Pause/Stop plus section controls. Clipboard capture, global
-  hotkeys, tray behavior, and the compact controller were not added.
-- Reader Workstation resume point: Milestone 5, clipboard capture, append-to-open
-  workflow, tray, compact controller, privacy mode, and global playback controls.
+- Current loop target: Reader Workstation Milestone 5, privacy-safe clipboard
+  capture, repeated append/Undo, global controls, tray, compact controller, and
+  Windows integration validation.
+- Current loop result: complete. Monitoring is genuinely unregistered and Off
+  by default, explicit Read Clipboard remains independent, Copy Selection and
+  Read is opt-in and bounded, prompt actions cover read/append/create/Inbox/
+  ignore/block, and clipboard text is not persisted unless the user chooses a
+  save action. Repeated appends are separate paragraph operations, tray and
+  compact controls share playback state, and clean Exit stops desktop playback
+  without stopping the shared service.
+- Reader Workstation resume point: Milestone 6, structured offline import,
+  import preview/cancellation/warnings, and book-scale virtualized reading. Do
+  not start it until the user explicitly continues beyond the requested
+  Milestone 5 stop.
+- Reader Milestone 5 implementation details:
+  - `AddClipboardFormatListener` is registered only while prompt monitoring is
+    enabled. Clipboard text is never read while monitoring is Off; the explicit
+    Read Clipboard command and hotkey do not depend on monitoring;
+  - immediate clipboard speech uses authenticated synchronous `/v1/tts` in
+    bounded 800-character requests, a separately cancellable two-minute local
+    synthesis client, in-memory WAV decode, and WASAPI output. It creates no
+    Reader document and clears replay text on completion or Stop;
+  - Copy Selection and Read sends `Ctrl+C` once, waits at most one second for a
+    sequence change, refuses the secure desktop and blocked executables, never
+    retries, suppresses its own clipboard notifications, and restores prior
+    string/byte/stream formats only when they fit safe bounded serialization;
+  - the prompt offers Read now, Append to open document, Create new document,
+    Save to Inbox, Ignore, and Always ignore this app. Privacy mode hides the
+    preview, and prompt state retains no text after the action completes;
+  - append calls the existing revisioned Reader append endpoint once. Each copy
+    is a separate paragraph/edit, one Undo removes exactly the newest selection,
+    and `reader_document_locked` becomes an actionable pause-or-stop message;
+  - tray, main-window, compact-controller, local keyboard, and configurable
+    global hotkey controls share Play/Pause/Stop. Hotkey conflicts are reported
+    without disabling other controls; tray Exit performs async playback stop and
+    resource shutdown while leaving the local service running;
+  - the compact controller is optional, always-on-top by default, remembers its
+    position when enabled, and uses a neutral private-text label rather than raw
+    clipboard content. The main header and tray menu visibly expose monitoring;
+  - a Milestone 4 pause race was fixed while testing this slice: cancellation is
+    now signaled before releasing audio output, and a cancelled frame cannot
+    advance the durable last-heard cursor;
+  - `docs/reader_milestone5_manual_checklist.md` covers Notepad, Chrome/Edge,
+    Word when installed, unsupported/no-selection behavior, repeated append,
+    privacy, hotkeys, tray, and shutdown.
+- Reader Milestone 5 validation passed on 2026-07-27:
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`:
+    live paging/edit/stream/resume, immediate speech without document creation,
+    three separate clipboard appends plus one exact Undo, preview snapshot,
+    real Windows audio, listener stop/restart, nonfatal hotkey failure, tray
+    lifecycle, self-contained package, and packaged WPF render passed;
+  - `dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release`: 51
+    passed across Client, Application, and Windows test projects;
+  - the pause timing regression passed ten consecutive focused runs;
+  - `py -3 -m pytest -q`: 339 passed;
+  - `py -3 scripts\check_reader_contracts.py`: six version-1 fixtures passed;
+  - `py -3 -m ruff check .`, `dotnet format --verify-no-changes`, and
+    `git diff --check`: passed.
+- Reader Milestone 5 assumptions and deviations:
+  - no cloud, paid, backend-specific, or new third-party runtime dependency was
+    introduced. Windows Forms is used only from the .NET Windows desktop
+    framework for clipboard/tray integration;
+  - unattended integration smoke intentionally registers infrastructure but
+    never reads or writes the installed clipboard. A visible application-matrix
+    attempt was aborted when another running application took foreground focus;
+    no Notepad/browser/Word result is claimed. The documented matrix remains a
+    human pre-alpha check on an idle desktop;
+  - the existing uncommitted `models/MANIFEST.json` installation-state change
+    remains user-owned and excluded from this milestone.
 - Reader Milestone 4 implementation details:
   - `WS /v1/reader/stream` requires the existing loopback, origin, rate-limit,
     and bearer protections; desktop tokens are sent only in the Authorization
@@ -1049,6 +1107,7 @@ python3 scripts/release_check.py --require-browser --browser-executable <path-to
 python3 scripts/package_windows_bundle.py
 python3 scripts/check_local_reader_bundle.py
 python3 scripts/check_v1_readiness.py
+py -3 scripts/check_desktop_reader.py --require-windows-integration
 python3 scripts/check_windows_bundle_bootstrap.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_launchers.py --bundle dist/windows/tts-platform-local-reader.zip
 python3 scripts/check_windows_bundle_install.py --bundle dist/windows/tts-platform-local-reader.zip
@@ -1170,9 +1229,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Resume at Reader Workstation Milestone 3. Add the .NET 10 WPF desktop shell,
-   strict-localhost service client, token/settings abstractions, onboarding, and
-   library browsing; do not start Reader audio or clipboard capture yet.
+4. Resume at Reader Workstation Milestone 6 only after the user explicitly asks
+   to continue. Add structured offline import, preview/cancellation/warnings,
+   and book-scale virtualized reading; preserve the completed clipboard and
+   playback behavior.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

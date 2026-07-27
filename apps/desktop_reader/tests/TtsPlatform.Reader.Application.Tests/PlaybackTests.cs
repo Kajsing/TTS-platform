@@ -196,11 +196,13 @@ public sealed class PlaybackTests
         public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ReaderDocument> CreateDocumentAsync(CreateDocumentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<DocumentPage> GetDocumentsAsync(int limit = 50, string? cursor = null, string? query = null, string? state = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<MutationResponse> ReplaceContentAsync(string documentId, ReplaceContentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<MutationResponse> AppendContentAsync(string documentId, AppendContentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<MutationResponse> UndoAsync(string documentId, ExpectedVersionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<MutationResponse> RedoAsync(string documentId, ExpectedVersionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<byte[]> SynthesizeAsync(EphemeralSynthesisRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeStreamClient(params Func<ReaderStreamStartRequest, FakeStreamSession>[] factories)

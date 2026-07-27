@@ -6,7 +6,7 @@ of synthesis and the canonical Reader database.
 
 ## Current feature boundary
 
-The Milestone 4 developer preview provides:
+The Milestone 5 Reader provides:
 
 - strict `http://localhost` or `http://127.0.0.1` service validation;
 - a token-file source (the bearer token is never copied into settings JSON);
@@ -23,10 +23,22 @@ The Milestone 4 developer preview provides:
   UTF-16 cursor;
 - active-stream content leases, next-window continuation, and a consistent
   SQLite preview-snapshot command;
+- explicit Read Clipboard without monitoring or document persistence;
+- clipboard prompt mode, off by default, with Read, append, create, Inbox,
+  ignore, and executable-block actions;
+- opt-in Copy Selection and Read with a one-second timeout, secure-desktop
+  refusal, one-shot `Ctrl+C`, loop prevention, and best-effort safe clipboard
+  restoration;
+- one-operation paragraph append with durable Undo/Redo and an actionable
+  playback-lock refusal;
+- configurable nonfatal global hotkeys, a tray menu with clean Exit, and an
+  optional always-on-top compact controller;
+- privacy mode enabled by default, with monitoring state kept visible and raw
+  clipboard text excluded from logs, tray text, compact controls, and taskbar;
 - English and Danish resource files.
 
-Clipboard monitoring, global hotkeys, tray behavior, and the compact controller
-are Milestone 5 and are not present in this preview.
+Structured document import and full book-scale virtualized reading remain
+Milestone 6 and are not part of this slice.
 
 ## Project boundaries
 
@@ -51,13 +63,19 @@ With a .NET 10 SDK on `PATH`:
 dotnet restore apps\desktop_reader\TtsPlatform.Reader.sln
 dotnet build apps\desktop_reader\TtsPlatform.Reader.sln -c Release --no-restore
 dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release --no-build
-py -3 scripts\check_desktop_reader.py --require-dotnet --require-windows-audio
+py -3 scripts\check_desktop_reader.py --require-windows-integration
 ```
 
 The check starts an isolated Python service, verifies paging, UTF-16 edits,
-source-mapped Reader streaming, position resume, a consistent preview snapshot,
-the default Windows audio endpoint, a self-contained `win-x64` package, and a
-packaged WPF render. It does not use or alter the installed Reader library.
+source-mapped Reader streaming, position resume, immediate speech without
+document persistence, repeated clipboard append plus one-step Undo, a consistent
+preview snapshot, the default Windows audio endpoint, clipboard-listener and
+hotkey registration, tray lifecycle, a self-contained `win-x64` package, and a
+packaged WPF render. It does not read or write the current clipboard and does not
+use or alter the installed Reader library.
+
+The application-level Notepad/browser/Word/no-selection verification is kept in
+[`docs/reader_milestone5_manual_checklist.md`](../../docs/reader_milestone5_manual_checklist.md).
 
 When a real local voice is installed in the project `.venv`, the short audible
 end-to-end check is:
