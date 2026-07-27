@@ -1,0 +1,47 @@
+{
+  "preview_id": "90909090-9090-4090-8090-909090909090",
+  "title": "Imported article",
+  "source_type": "html",
+  "source_name": "article.html",
+  "total_sections": 2,
+  "total_blocks": 2,
+  "total_characters": 27,
+  "warnings": [
+    {
+      "code": "html_active_content_ignored",
+      "message": "Active or non-reading HTML content was ignored.",
+      "count": 1
+    }
+  ],
+  "sections": [
+    {
+      "ordinal": 0,
+      "level": 1,
+      "heading": "Imported article",
+      "first_block_ordinal": 0
+    },
+    {
+      "ordinal": 1,
+      "level": 1,
+      "heading": "Chapter",
+      "first_block_ordinal": 0
+    }
+  ],
+  "sample_blocks": [
+    {
+      "ordinal": 0,
+      "kind": "heading",
+      "text": "Chapter",
+      "section_ordinal": 1
+    },
+    {
+      "ordinal": 1,
+      "kind": "paragraph",
+      "text": "Readable paragraph.",
+      "section_ordinal": 1
+    }
+  ],
+  "preview_truncated": false,
+  "duplicate_document_id": null,
+  "expires_in_seconds": 600
+}

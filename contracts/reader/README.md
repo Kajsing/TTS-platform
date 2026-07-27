@@ -16,3 +16,8 @@ JSON control-event and binary PCM pairing is frozen in
 `design_doc/reader_workstation_design_v1.md`; deterministic Python service and
 .NET parser tests enforce identity, byte counts, monotonic UTF-16 cursors,
 source spans, cancellation, and continuation.
+
+Milestone 6 adds `import_preview.response.json`. Import preview payloads are
+bounded: section summaries and sample blocks may be truncated while total
+counts and all structured warnings remain explicit. Committing the opaque
+preview ID persists those warnings in document metadata.

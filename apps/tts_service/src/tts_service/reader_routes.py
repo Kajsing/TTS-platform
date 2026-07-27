@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
+from functools import partial
+from threading import Event
 from typing import Annotated, TypeVar
 
-from fastapi import APIRouter, Query, Request, Response, status
+from document_import import DocumentImportError, ImportOptions, ImportSource
+from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile, status
 from reader_core import (
     Bookmark,
     DocumentState,
@@ -16,11 +20,13 @@ from reader_core import (
     ReaderStaleCursorError,
     ReaderValidationError,
 )
+from starlette.concurrency import run_in_threadpool
 
 from .reader_errors import (
     reader_api_error,
     reader_database_unavailable,
     reader_disabled,
+    translate_import_error,
     translate_reader_error,
 )
 from .reader_offsets import ReaderOffsetError, utf16_offset_to_python
@@ -41,7 +47,12 @@ from .reader_schemas import (
     ReaderDocumentResponse,
     ReaderEditResponse,
     ReaderExportCapability,
+    ReaderImportBlockPreviewResponse,
     ReaderImportCapability,
+    ReaderImportCommitRequest,
+    ReaderImportPreviewResponse,
+    ReaderImportSectionPreviewResponse,
+    ReaderImportWarningResponse,
     ReaderMutationResponse,
     ReaderPlaybackCapability,
     ReaderPositionEnvelope,
@@ -56,7 +67,12 @@ from .reader_schemas import (
     UpdateReaderDocumentRequest,
     UpdateReaderQueueItemRequest,
 )
-from .reader_service import ReaderApplicationService
+from .reader_service import (
+    ReaderApplicationService,
+    ReaderImportPreview,
+    ReaderImportPreviewCapacityError,
+    ReaderImportPreviewNotFoundError,
+)
 
 T = TypeVar("T")
 
@@ -77,8 +93,8 @@ def build_reader_router() -> APIRouter:
                 search_available=False,
             ),
             imports=ReaderImportCapability(
-                formats=[],
-                max_file_bytes=0,
+                formats=["txt", "md", "html", "docx", "epub"],
+                max_file_bytes=config.imports.max_file_bytes,
                 ocr_available=False,
             ),
             rules=ReaderRuleCapability(types=[], regex_timeout_supported=False),
@@ -90,6 +106,80 @@ def build_reader_router() -> APIRouter:
             ),
             exports=ReaderExportCapability(formats=[]),
         )
+
+    @router.post("/imports/preview", response_model=ReaderImportPreviewResponse)
+    async def preview_import(
+        request: Request,
+        file: Annotated[UploadFile, File()],
+        title: Annotated[str | None, Form(max_length=500)] = None,
+        language_hint: Annotated[str | None, Form(max_length=64)] = None,
+        copy_source_file: Annotated[bool | None, Form()] = None,
+    ) -> ReaderImportPreviewResponse:
+        service = _service(request)
+        source = await _read_import_source(file, service.config.imports.max_file_bytes)
+        preview = await _run_import_async(
+            lambda cancellation: service.create_import_preview(
+                source=source,
+                options=ImportOptions(title=title, language_hint=language_hint),
+                copy_source_file=copy_source_file,
+                cancellation=cancellation,
+            )
+        )
+        return _import_preview_response(preview)
+
+    @router.post(
+        "/imports/{preview_id}/commit",
+        response_model=ReaderDocumentResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def commit_import(
+        request: Request,
+        preview_id: str,
+        payload: ReaderImportCommitRequest,
+    ) -> ReaderDocumentResponse:
+        service = _service(request)
+        document = await _run_import_async(
+            lambda _: service.commit_import_preview(
+                preview_id,
+                allow_duplicate=payload.allow_duplicate,
+            )
+        )
+        return ReaderDocumentResponse.from_domain(document)
+
+    @router.delete(
+        "/imports/{preview_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def cancel_import(request: Request, preview_id: str) -> Response:
+        service = _service(request)
+        await _run_import_async(lambda _: service.cancel_import_preview(preview_id))
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post(
+        "/imports",
+        response_model=ReaderDocumentResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def import_file(
+        request: Request,
+        file: Annotated[UploadFile, File()],
+        title: Annotated[str | None, Form(max_length=500)] = None,
+        language_hint: Annotated[str | None, Form(max_length=64)] = None,
+        copy_source_file: Annotated[bool | None, Form()] = None,
+        allow_duplicate: Annotated[bool, Form()] = False,
+    ) -> ReaderDocumentResponse:
+        service = _service(request)
+        source = await _read_import_source(file, service.config.imports.max_file_bytes)
+        document = await _run_import_async(
+            lambda cancellation: service.import_source(
+                source=source,
+                options=ImportOptions(title=title, language_hint=language_hint),
+                copy_source_file=copy_source_file,
+                allow_duplicate=allow_duplicate,
+                cancellation=cancellation,
+            )
+        )
+        return ReaderDocumentResponse.from_domain(document)
 
     @router.get("/documents", response_model=ReaderDocumentPageResponse)
     async def list_documents(
@@ -141,6 +231,19 @@ def build_reader_router() -> APIRouter:
                 allow_duplicate=payload.allow_duplicate,
             )
         )
+        return ReaderDocumentResponse.from_domain(document)
+
+    @router.post(
+        "/documents/{document_id}/duplicate-as-editable",
+        response_model=ReaderDocumentResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def duplicate_as_editable(
+        request: Request,
+        document_id: str,
+    ) -> ReaderDocumentResponse:
+        service = _service(request)
+        document = _run_reader(lambda: service.duplicate_as_editable_text(document_id))
         return ReaderDocumentResponse.from_domain(document)
 
     @router.get("/documents/{document_id}", response_model=ReaderDocumentResponse)
@@ -644,6 +747,101 @@ def _run_reader(
             missing_entity=missing_entity,
             cursor_input=cursor_input,
         ) from exc
+
+
+async def _run_import_async(operation: Callable[[Event], T]) -> T:
+    cancellation = Event()
+    try:
+        return await run_in_threadpool(partial(operation, cancellation))
+    except asyncio.CancelledError:
+        cancellation.set()
+        raise
+    except (
+        DocumentImportError,
+        ReaderImportPreviewCapacityError,
+        ReaderImportPreviewNotFoundError,
+    ) as exc:
+        raise translate_import_error(exc) from exc
+    except ReaderError as exc:
+        raise translate_reader_error(exc) from exc
+
+
+async def _read_import_source(upload: UploadFile, max_file_bytes: int) -> ImportSource:
+    chunks: list[bytes] = []
+    total = 0
+    try:
+        while True:
+            chunk = await upload.read(min(1_048_576, max_file_bytes - total + 1))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_file_bytes:
+                raise reader_api_error(
+                    "reader_import_too_large",
+                    status_code=413,
+                    message="The imported file exceeds the configured size limit.",
+                    details={"max_file_bytes": max_file_bytes},
+                )
+            chunks.append(chunk)
+    finally:
+        await upload.close()
+    return ImportSource(
+        filename=upload.filename or "imported-document",
+        content_type=upload.content_type,
+        data=b"".join(chunks),
+    )
+
+
+def _import_preview_response(preview: ReaderImportPreview) -> ReaderImportPreviewResponse:
+    imported = preview.imported
+    source_type = {
+        "txt": "text_file",
+        "md": "markdown",
+        "html": "html",
+        "docx": "docx",
+        "epub": "epub",
+    }[imported.source_format]
+    section_limit = 100
+    block_limit = 20
+    return ReaderImportPreviewResponse(
+        preview_id=preview.id,
+        title=imported.title,
+        source_type=source_type,
+        source_name=imported.source_name,
+        total_sections=len(imported.sections),
+        total_blocks=len(imported.blocks),
+        total_characters=imported.total_characters,
+        warnings=[
+            ReaderImportWarningResponse(
+                code=warning.code,
+                message=warning.message,
+                count=warning.count,
+            )
+            for warning in imported.warnings
+        ],
+        sections=[
+            ReaderImportSectionPreviewResponse(
+                ordinal=section.ordinal,
+                level=section.level,
+                heading=section.heading,
+                first_block_ordinal=section.first_block_ordinal,
+            )
+            for section in imported.sections[:section_limit]
+        ],
+        sample_blocks=[
+            ReaderImportBlockPreviewResponse(
+                ordinal=block.ordinal,
+                kind=block.kind,
+                text=block.text[:1_000],
+                section_ordinal=block.section_ordinal,
+            )
+            for block in imported.blocks[:block_limit]
+        ],
+        preview_truncated=(
+            len(imported.sections) > section_limit or len(imported.blocks) > block_limit
+        ),
+        duplicate_document_id=preview.duplicate_document_id,
+    )
 
 
 def _run_content_mutation(

@@ -47,6 +47,12 @@ DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW = 64
 DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW = 32000
 DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS = 1000
 DEFAULT_READER_MAX_EDIT_HISTORY_BYTES = 10_485_760
+DEFAULT_READER_IMPORT_MAX_FILE_BYTES = 52_428_800
+DEFAULT_READER_IMPORT_MAX_EXPANDED_ARCHIVE_BYTES = 209_715_200
+DEFAULT_READER_IMPORT_MAX_ARCHIVE_MEMBERS = 10_000
+DEFAULT_READER_IMPORT_MAX_DOCUMENT_CHARACTERS = 10_000_000
+DEFAULT_READER_IMPORT_MAX_BLOCKS = 250_000
+DEFAULT_READER_IMPORT_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +230,54 @@ class BackendConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderImportConfig:
+    max_file_bytes: int = DEFAULT_READER_IMPORT_MAX_FILE_BYTES
+    max_expanded_archive_bytes: int = DEFAULT_READER_IMPORT_MAX_EXPANDED_ARCHIVE_BYTES
+    max_archive_members: int = DEFAULT_READER_IMPORT_MAX_ARCHIVE_MEMBERS
+    max_document_characters: int = DEFAULT_READER_IMPORT_MAX_DOCUMENT_CHARACTERS
+    max_blocks: int = DEFAULT_READER_IMPORT_MAX_BLOCKS
+    timeout_seconds: int = DEFAULT_READER_IMPORT_TIMEOUT_SECONDS
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "ReaderImportConfig":
+        config = cls(
+            max_file_bytes=int(
+                data.get("max_file_bytes", DEFAULT_READER_IMPORT_MAX_FILE_BYTES)
+            ),
+            max_expanded_archive_bytes=int(
+                data.get(
+                    "max_expanded_archive_bytes",
+                    DEFAULT_READER_IMPORT_MAX_EXPANDED_ARCHIVE_BYTES,
+                )
+            ),
+            max_archive_members=int(
+                data.get("max_archive_members", DEFAULT_READER_IMPORT_MAX_ARCHIVE_MEMBERS)
+            ),
+            max_document_characters=int(
+                data.get(
+                    "max_document_characters",
+                    DEFAULT_READER_IMPORT_MAX_DOCUMENT_CHARACTERS,
+                )
+            ),
+            max_blocks=int(data.get("max_blocks", DEFAULT_READER_IMPORT_MAX_BLOCKS)),
+            timeout_seconds=int(
+                data.get("timeout_seconds", DEFAULT_READER_IMPORT_TIMEOUT_SECONDS)
+            ),
+        )
+        for name in (
+            "max_file_bytes",
+            "max_expanded_archive_bytes",
+            "max_archive_members",
+            "max_document_characters",
+            "max_blocks",
+            "timeout_seconds",
+        ):
+            if getattr(config, name) <= 0:
+                raise ValueError(f"reader.imports.{name} must be positive")
+        return config
+
+
+@dataclass(frozen=True, slots=True)
 class ReaderConfig:
     enabled: bool = DEFAULT_READER_ENABLED
     home_path: str = DEFAULT_READER_HOME_PATH
@@ -236,6 +290,7 @@ class ReaderConfig:
     max_source_chars_per_stream_window: int = DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW
     max_edit_history_operations: int = DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS
     max_edit_history_bytes: int = DEFAULT_READER_MAX_EDIT_HISTORY_BYTES
+    imports: ReaderImportConfig = ReaderImportConfig()
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "ReaderConfig":
@@ -272,6 +327,7 @@ class ReaderConfig:
             max_edit_history_bytes=int(
                 data.get("max_edit_history_bytes", DEFAULT_READER_MAX_EDIT_HISTORY_BYTES)
             ),
+            imports=ReaderImportConfig.from_mapping(_section(data, "imports")),
         )
         if not config.database_path.strip():
             raise ValueError("reader.database_path must not be empty")

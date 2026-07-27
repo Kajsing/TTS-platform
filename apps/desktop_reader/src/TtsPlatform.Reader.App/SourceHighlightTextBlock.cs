@@ -98,6 +98,22 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
     public string? SectionId => Block.SectionId;
     public int Ordinal => Block.Ordinal;
     public string Text => Block.Text;
+    public double DisplayFontSize => Block.Kind is "title" ? 24 : Block.Kind is "heading" ? 21 : 18;
+    public FontWeight DisplayFontWeight =>
+        Block.Kind is "title" or "heading" ? FontWeights.SemiBold : FontWeights.Normal;
+    public FontStyle DisplayFontStyle =>
+        Block.Kind is "quote" ? FontStyles.Italic : FontStyles.Normal;
+    public FontFamily DisplayFontFamily =>
+        Block.Kind is "code" ? new FontFamily("Consolas") : new FontFamily("Segoe UI");
+    public Thickness DisplayMargin => Block.Kind switch
+    {
+        "title" => new Thickness(8, 16, 8, 8),
+        "heading" => new Thickness(8, 14, 8, 5),
+        "list_item" => new Thickness(28, 4, 8, 4),
+        "quote" => new Thickness(24, 6, 16, 6),
+        "code" => new Thickness(16, 8, 8, 8),
+        _ => new Thickness(8, 5, 8, 5),
+    };
 
     public int HighlightStart
     {

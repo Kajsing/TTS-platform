@@ -13,9 +13,10 @@ $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 $ServiceSrc = Join-Path $RepoRoot "apps\tts_service\src"
 $CoreSrc = Join-Path $RepoRoot "packages\tts_core\src"
 $ReaderCoreSrc = Join-Path $RepoRoot "packages\reader_core\src"
+$DocumentImportSrc = Join-Path $RepoRoot "packages\document_import\src"
 $ConfigPath = Join-Path $RepoRoot "config\config.toml"
 
-$PythonPathParts = @($ServiceSrc, $CoreSrc, $ReaderCoreSrc)
+$PythonPathParts = @($ServiceSrc, $CoreSrc, $ReaderCoreSrc, $DocumentImportSrc)
 if ($env:PYTHONPATH) {
     $PythonPathParts += $env:PYTHONPATH
 }

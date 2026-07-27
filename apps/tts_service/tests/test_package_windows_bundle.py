@@ -99,6 +99,10 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
         "migrations/001_reader_library.sql"
         in names
     )
+    assert (
+        "tts-platform/packages/document_import/src/document_import/importers.py"
+        in names
+    )
     assert "tts-platform/apps/chrome_extension/manifest.json" in names
     assert "tts-platform/apps/chrome_extension/INSTALL.md" in names
     assert "tts-platform/apps/chrome_extension/TROUBLESHOOTING.md" in names

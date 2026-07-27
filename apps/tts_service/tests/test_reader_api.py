@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -87,7 +88,11 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
         "schema_version": 1,
         "search_available": False,
     }
-    assert payload["imports"]["formats"] == []
+    assert payload["imports"] == {
+        "formats": ["txt", "md", "html", "docx", "epub"],
+        "max_file_bytes": 52_428_800,
+        "ocr_available": False,
+    }
     assert payload["rules"]["types"] == []
     assert payload["playback"]["stream_protocol_version"] == 1
     assert payload["exports"]["formats"] == []
@@ -100,6 +105,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
         ("POST", "/v1/reader/documents"),
         ("GET", "/v1/reader/queue"),
         ("POST", "/v1/reader/queue/reorder"),
+        ("POST", "/v1/reader/imports"),
     ],
 )
 def test_reader_reads_and_writes_require_authentication(
@@ -113,6 +119,141 @@ def test_reader_reads_and_writes_require_authentication(
 
     assert response.status_code == 401
     assert response.json()["error"]["type"] == "unauthorized"
+
+
+def test_import_preview_commit_duplicate_cancel_and_editable_copy(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    html = b"""
+    <html><head><title>Imported article</title><script>PRIVATE SCRIPT</script></head>
+    <body><h1>Chapter</h1><p>Readable paragraph.</p><p hidden>PRIVATE HIDDEN</p></body></html>
+    """
+
+    preview = client.post(
+        "/v1/reader/imports/preview",
+        headers=headers,
+        files={"file": ("article.html", html, "text/html")},
+    )
+    assert preview.status_code == 200, preview.text
+    preview_body = preview.json()
+    assert preview_body["title"] == "Imported article"
+    assert preview_body["source_type"] == "html"
+    assert preview_body["total_blocks"] == 2
+    assert {warning["code"] for warning in preview_body["warnings"]} == {
+        "html_active_content_ignored",
+        "html_hidden_content_ignored",
+    }
+    assert "PRIVATE" not in preview.text
+
+    committed = client.post(
+        f"/v1/reader/imports/{preview_body['preview_id']}/commit",
+        headers=headers,
+        json={"allow_duplicate": False},
+    )
+    assert committed.status_code == 201, committed.text
+    document = committed.json()
+    assert document["source_type"] == "html"
+    assert document["metadata"]["import"]["network_requests"] == 0
+    assert len(document["metadata"]["import"]["warnings"]) == 2
+
+    duplicate_preview = client.post(
+        "/v1/reader/imports/preview",
+        headers=headers,
+        files={"file": ("article.html", html, "text/html")},
+    ).json()
+    assert duplicate_preview["duplicate_document_id"] == document["id"]
+    duplicate_conflict = client.post(
+        f"/v1/reader/imports/{duplicate_preview['preview_id']}/commit",
+        headers=headers,
+        json={"allow_duplicate": False},
+    )
+    assert duplicate_conflict.status_code == 409
+    assert duplicate_conflict.json()["error"]["type"] == "reader_duplicate_document"
+    duplicate_allowed = client.post(
+        f"/v1/reader/imports/{duplicate_preview['preview_id']}/commit",
+        headers=headers,
+        json={"allow_duplicate": True},
+    )
+    assert duplicate_allowed.status_code == 201
+
+    cancelled_preview = client.post(
+        "/v1/reader/imports/preview",
+        headers=headers,
+        files={"file": ("cancel.txt", b"Cancel me", "text/plain")},
+    ).json()
+    cancelled = client.delete(
+        f"/v1/reader/imports/{cancelled_preview['preview_id']}",
+        headers=headers,
+    )
+    missing = client.post(
+        f"/v1/reader/imports/{cancelled_preview['preview_id']}/commit",
+        headers=headers,
+        json={"allow_duplicate": False},
+    )
+    assert cancelled.status_code == 204
+    assert missing.status_code == 404
+    assert missing.json()["error"]["type"] == "reader_import_invalid"
+
+    editable = client.post(
+        f"/v1/reader/documents/{document['id']}/duplicate-as-editable",
+        headers=headers,
+    )
+    assert editable.status_code == 201
+    assert editable.json()["source_type"] == "plain_text"
+    editable_blocks = client.get(
+        f"/v1/reader/documents/{editable.json()['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+    assert [block["text"] for block in editable_blocks] == [
+        "Chapter",
+        "Readable paragraph.",
+    ]
+
+
+def test_direct_import_can_copy_source_into_managed_library(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+
+    response = client.post(
+        "/v1/reader/imports",
+        headers=headers,
+        files={"file": ("notes.txt", b"Heading\n\nParagraph.", "text/plain")},
+        data={"copy_source_file": "true"},
+    )
+
+    assert response.status_code == 201, response.text
+    document = response.json()
+    assert document["source_uri"].startswith("managed/")
+    managed = tmp_path / "reader" / "library" / Path(document["source_uri"]).name
+    assert managed.read_bytes() == b"Heading\n\nParagraph."
+
+
+def test_import_rejects_unsafe_archive_and_file_quota(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(
+        tmp_path,
+        reader_config={"imports": {"max_file_bytes": 2_048}},
+    )
+    archive_bytes = io.BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+        )
+        archive.writestr("../outside", "unsafe")
+
+    unsafe = client.post(
+        "/v1/reader/imports",
+        headers=headers,
+        files={"file": ("unsafe.docx", archive_bytes.getvalue(), "application/octet-stream")},
+    )
+    too_large = client.post(
+        "/v1/reader/imports",
+        headers=headers,
+        files={"file": ("large.txt", b"x" * 2_049, "text/plain")},
+    )
+
+    assert unsafe.status_code == 400
+    assert unsafe.json()["error"]["type"] == "reader_archive_unsafe"
+    assert too_large.status_code == 413
+    assert too_large.json()["error"]["type"] == "reader_import_too_large"
 
 
 def test_reader_routes_enforce_origin_policy(tmp_path: Path) -> None:

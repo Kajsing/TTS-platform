@@ -6,7 +6,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="TTS Platform Reader" Height="760" Width="1180" MinHeight="560" MinWidth="860"
-        WindowStartupLocation="CenterScreen" PreviewKeyDown="MainWindow_PreviewKeyDown">
+        WindowStartupLocation="CenterScreen" PreviewKeyDown="MainWindow_PreviewKeyDown"
+        AllowDrop="True" DragOver="MainWindow_DragOver" Drop="MainWindow_Drop">
   <Grid Background="White">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -113,6 +114,8 @@
         </Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,8">
           <Button DockPanel.Dock="Right" Content="Search" Click="SearchButton_Click" />
+          <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Importâ€¦"
+                  Click="ImportButton_Click" AutomationProperties.Name="Import document file" />
           <TextBox x:Name="SearchTextBox" AutomationProperties.Name="Search library"
                    ToolTip="Search document titles" />
         </DockPanel>
@@ -168,13 +171,22 @@
                 <local:SourceHighlightTextBlock SourceText="{Binding Text}"
                     HighlightStart="{Binding HighlightStart}"
                     HighlightLength="{Binding HighlightLength}"
-                    TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="18"
-                    Margin="8,5" />
+                    TextWrapping="Wrap" FontFamily="{Binding DisplayFontFamily}"
+                    FontSize="{Binding DisplayFontSize}" FontWeight="{Binding DisplayFontWeight}"
+                    FontStyle="{Binding DisplayFontStyle}" Margin="{Binding DisplayMargin}" />
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
         </Grid>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
+          <Button x:Name="PreviousReadingPageButton" Content="Previous page"
+                  Click="PreviousReadingPageButton_Click" IsEnabled="False" />
+          <Button x:Name="NextReadingPageButton" Content="Next page"
+                  Click="NextReadingPageButton_Click" IsEnabled="False" />
+          <CheckBox x:Name="FollowReadingCheckBox" Content="Follow reading" IsChecked="True"
+                    VerticalAlignment="Center" Margin="6,0" />
+          <Button x:Name="DuplicateEditableButton" Content="Duplicate as editable text"
+                  Click="DuplicateEditableButton_Click" IsEnabled="False" />
           <Button x:Name="SaveEditButton" Content="Save edit" Click="SaveEditButton_Click" IsEnabled="False" />
           <Button x:Name="RevertEditButton" Content="Revert local" Click="RevertEditButton_Click" IsEnabled="False" />
           <Button x:Name="UndoButton" Content="Undo saved edit" Click="UndoButton_Click" IsEnabled="False" />

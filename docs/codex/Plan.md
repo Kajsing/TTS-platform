@@ -573,9 +573,9 @@ scope.
 - [x] Reader Milestone 1: Reader domain and SQLite library.
 - [x] Reader Milestone 2: Protected Reader API and shared contracts.
 - [x] Reader Milestone 3: WPF desktop shell and onboarding.
-- [ ] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
-- [ ] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
-- [ ] Reader Milestone 6: Structured import and virtualized reading.
+- [x] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
+- [x] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
+- [x] Reader Milestone 6: Structured import and virtualized reading.
 - [ ] Reader Milestone 7: Speech-rule engine and open rule interchange.
 - [ ] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
 - [ ] Reader Milestone 9: Browser-to-library integration and prototype consolidation.
@@ -609,8 +609,7 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 4 is the next incomplete milestone. Add the protected Reader
-stream, bounded source-mapped windows, NAudio PCM output, highlighting, durable
-resume, playback controls, content leases, and deterministic protocol tests
-described by the normative design. Do not start clipboard capture, global
-hotkeys, tray behavior, or the compact controller from Milestone 5.
+Reader Milestone 7 is the next incomplete milestone. Add the engine-independent
+speech-rule model, deterministic compiler and preview, safe regex limits,
+versioned import/export, WPF rule management, and playback integration described
+by the normative design.

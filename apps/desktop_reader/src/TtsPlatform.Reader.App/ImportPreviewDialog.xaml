@@ -1,0 +1,72 @@
+<Window x:Class="TtsPlatform.Reader.App.ImportPreviewDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Import document" Height="650" Width="900" MinHeight="520" MinWidth="720"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel>
+      <TextBlock Text="Import preview" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock x:Name="FileNameText" Margin="0,4,0,10" Foreground="#555"
+                 TextWrapping="Wrap" AutomationProperties.Name="Selected import file" />
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="2*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="Title" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <TextBox Grid.Column="1" x:Name="TitleTextBox" MaxLength="500" />
+        <TextBlock Grid.Column="2" Text="Language" VerticalAlignment="Center" Margin="12,0,6,0" />
+        <TextBox Grid.Column="3" x:Name="LanguageTextBox" MaxLength="64"
+                 ToolTip="Optional language hint, for example da or en" />
+      </Grid>
+      <WrapPanel Margin="0,8,0,0">
+        <CheckBox x:Name="KeepSourceCheckBox" Content="Keep a managed copy of the original file" />
+        <CheckBox x:Name="AllowDuplicateCheckBox" Content="Import identical content anyway"
+                  Visibility="Collapsed" Margin="14,0,0,0"
+                  Click="AllowDuplicateCheckBox_Click" />
+      </WrapPanel>
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#FFF4D6" Padding="10" Margin="0,12,0,10">
+      <TextBlock x:Name="StatusText" Text="Preparing previewâ€¦" TextWrapping="Wrap"
+                 AutomationProperties.LiveSetting="Polite" />
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="3*" />
+      </Grid.ColumnDefinitions>
+      <GroupBox Header="Structure and warnings">
+        <ListBox x:Name="StructureList" VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling" />
+      </GroupBox>
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
+      <GroupBox Grid.Column="2" Header="Text sample">
+        <ListBox x:Name="SampleList" VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling" />
+      </GroupBox>
+    </Grid>
+
+    <DockPanel Grid.Row="3" Margin="0,12,0,0">
+      <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Import to Inbox"
+              Click="ImportButton_Click" IsEnabled="False" MinWidth="120" />
+      <Button DockPanel.Dock="Right" x:Name="CancelButton" Content="Cancel"
+              Click="CancelButton_Click" MinWidth="90" />
+      <Button DockPanel.Dock="Right" x:Name="PreviewButton" Content="Refresh preview"
+              Click="PreviewButton_Click" MinWidth="110" />
+      <ProgressBar x:Name="Progress" Height="8" IsIndeterminate="True" Visibility="Collapsed"
+                   VerticalAlignment="Center" />
+    </DockPanel>
+  </Grid>
+</Window>

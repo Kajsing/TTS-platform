@@ -6,7 +6,7 @@ of synthesis and the canonical Reader database.
 
 ## Current feature boundary
 
-The Milestone 5 Reader provides:
+The Milestone 6 Reader provides:
 
 - strict `http://localhost` or `http://127.0.0.1` service validation;
 - a token-file source (the bearer token is never copied into settings JSON);
@@ -36,9 +36,17 @@ The Milestone 5 Reader provides:
 - privacy mode enabled by default, with monitoring state kept visible and raw
   clipboard text excluded from logs, tray text, compact controls, and taskbar;
 - English and Danish resource files.
+- offline TXT, Markdown, HTML/HTM, DOCX, and EPUB import with a bounded preview,
+  cancellation, duplicate detection, durable warnings, and optional managed
+  source-file copies;
+- non-fetching HTML import, archive/XML safety limits, and active-content
+  removal before anything reaches the Reader library;
+- structure-aware read-only rendering with 64-block pages, recycling WPF
+  virtualization, optional follow-reading scroll, and duplicate-as-editable
+  plain text.
 
-Structured document import and full book-scale virtualized reading remain
-Milestone 6 and are not part of this slice.
+Speech-rule authoring and interchange remain Milestone 7 and are not part of
+this slice.
 
 ## Project boundaries
 
@@ -69,7 +77,8 @@ py -3 scripts\check_desktop_reader.py --require-windows-integration
 The check starts an isolated Python service, verifies paging, UTF-16 edits,
 source-mapped Reader streaming, position resume, immediate speech without
 document persistence, repeated clipboard append plus one-step Undo, a consistent
-preview snapshot, the default Windows audio endpoint, clipboard-listener and
+preview snapshot, live safe structured import with durable warnings and an
+editable copy, the default Windows audio endpoint, clipboard-listener and
 hotkey registration, tray lifecycle, a self-contained `win-x64` package, and a
 packaged WPF render. It does not read or write the current clipboard and does not
 use or alter the installed Reader library.

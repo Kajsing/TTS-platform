@@ -16,8 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
+DOCUMENT_IMPORT_SRC = REPO_ROOT / "packages" / "document_import" / "src"
 
-for path in (SERVICE_SRC, CORE_SRC, READER_CORE_SRC):
+for path in (SERVICE_SRC, CORE_SRC, READER_CORE_SRC, DOCUMENT_IMPORT_SRC):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -551,7 +552,12 @@ def _stop_process_tree(process: subprocess.Popen) -> None:
 
 def _source_env() -> dict[str, str]:
     env = os.environ.copy()
-    paths = [str(SERVICE_SRC), str(CORE_SRC), str(READER_CORE_SRC)]
+    paths = [
+        str(SERVICE_SRC),
+        str(CORE_SRC),
+        str(READER_CORE_SRC),
+        str(DOCUMENT_IMPORT_SRC),
+    ]
     existing_pythonpath = env.get("PYTHONPATH")
     if existing_pythonpath:
         paths.append(existing_pythonpath)

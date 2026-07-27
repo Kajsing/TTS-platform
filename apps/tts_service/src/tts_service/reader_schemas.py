@@ -177,6 +177,46 @@ class ReaderBlockPageResponse(BaseModel):
     next_after_ordinal: int | None
 
 
+class ReaderImportWarningResponse(BaseModel):
+    code: str
+    message: str
+    count: int
+
+
+class ReaderImportSectionPreviewResponse(BaseModel):
+    ordinal: int
+    level: int
+    heading: str | None
+    first_block_ordinal: int
+
+
+class ReaderImportBlockPreviewResponse(BaseModel):
+    ordinal: int
+    kind: str
+    text: str
+    section_ordinal: int
+
+
+class ReaderImportPreviewResponse(BaseModel):
+    preview_id: str
+    title: str
+    source_type: SourceType
+    source_name: str
+    total_sections: int
+    total_blocks: int
+    total_characters: int
+    warnings: list[ReaderImportWarningResponse]
+    sections: list[ReaderImportSectionPreviewResponse]
+    sample_blocks: list[ReaderImportBlockPreviewResponse]
+    preview_truncated: bool
+    duplicate_document_id: str | None
+    expires_in_seconds: int = 600
+
+
+class ReaderImportCommitRequest(BaseModel):
+    allow_duplicate: bool = False
+
+
 class ReaderEditResponse(BaseModel):
     id: str
     document_id: str

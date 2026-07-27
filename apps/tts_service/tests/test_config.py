@@ -148,6 +148,13 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
                 "max_source_chars_per_stream_window = 16000",
                 "max_edit_history_operations = 200",
                 "max_edit_history_bytes = 2097152",
+                "[reader.imports]",
+                "max_file_bytes = 1048576",
+                "max_expanded_archive_bytes = 4194304",
+                "max_archive_members = 500",
+                "max_document_characters = 200000",
+                "max_blocks = 10000",
+                "timeout_seconds = 15",
             ]
         ),
         encoding="utf-8",
@@ -164,6 +171,34 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
     assert config.reader.max_page_size == 250
     assert config.reader.max_edit_history_operations == 200
     assert config.reader.max_edit_history_bytes == 2_097_152
+    assert config.reader.imports.max_file_bytes == 1_048_576
+    assert config.reader.imports.max_expanded_archive_bytes == 4_194_304
+    assert config.reader.imports.max_archive_members == 500
+    assert config.reader.imports.max_document_characters == 200_000
+    assert config.reader.imports.max_blocks == 10_000
+    assert config.reader.imports.timeout_seconds == 15
+
+
+@pytest.mark.parametrize(
+    "setting",
+    [
+        "max_file_bytes",
+        "max_expanded_archive_bytes",
+        "max_archive_members",
+        "max_document_characters",
+        "max_blocks",
+        "timeout_seconds",
+    ],
+)
+def test_load_config_rejects_invalid_reader_import_limits(
+    tmp_path: Path,
+    setting: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f"[reader.imports]\n{setting} = 0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=setting):
+        load_config(config_path, env={})
 
 
 @pytest.mark.parametrize(

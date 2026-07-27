@@ -16,6 +16,25 @@ public interface IReaderServiceClient
     Task<ReaderDocument> CreateDocumentAsync(
         CreateDocumentRequest request,
         CancellationToken cancellationToken = default);
+    Task<ReaderImportPreview> PreviewImportAsync(
+        ImportDocumentRequest request,
+        Stream content,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> ImportDocumentAsync(
+        ImportDocumentRequest request,
+        Stream content,
+        bool allowDuplicate = false,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> CommitImportAsync(
+        string previewId,
+        bool allowDuplicate = false,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task CancelImportAsync(
+        string previewId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> DuplicateAsEditableTextAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
         string? cursor = null,
@@ -88,7 +107,8 @@ public sealed record ReaderCapabilities(
     int ContractVersion,
     bool Enabled,
     ReaderDatabaseCapability Database,
-    ReaderPlaybackCapability Playback);
+    ReaderPlaybackCapability Playback,
+    ReaderImportCapability? Imports = null);
 
 public sealed record ReaderDatabaseCapability(bool Ready, int SchemaVersion, bool SearchAvailable);
 
@@ -97,6 +117,11 @@ public sealed record ReaderPlaybackCapability(
     string SourceOffsetEncoding,
     int MaxBlocksPerWindow,
     int MaxSourceCharsPerWindow);
+
+public sealed record ReaderImportCapability(
+    IReadOnlyList<string> Formats,
+    int MaxFileBytes,
+    bool OcrAvailable);
 
 public sealed record VoicePage(IReadOnlyList<VoiceDescriptor> Voices, string? DefaultVoice);
 
@@ -143,6 +168,42 @@ public sealed record ReaderDocument(
 {
     public bool IsEditable => SourceType is "plain_text" or "clipboard" or "selection" or "text_file";
 }
+
+public sealed record ImportDocumentRequest(
+    string FileName,
+    string? ContentType = null,
+    string? Title = null,
+    string? LanguageHint = null,
+    bool? CopySourceFile = null);
+
+public sealed record ReaderImportWarning(string Code, string Message, int Count);
+
+public sealed record ReaderImportSectionPreview(
+    int Ordinal,
+    int Level,
+    string? Heading,
+    int FirstBlockOrdinal);
+
+public sealed record ReaderImportBlockPreview(
+    int Ordinal,
+    string Kind,
+    string Text,
+    int SectionOrdinal);
+
+public sealed record ReaderImportPreview(
+    string PreviewId,
+    string Title,
+    string SourceType,
+    string SourceName,
+    int TotalSections,
+    int TotalBlocks,
+    int TotalCharacters,
+    IReadOnlyList<ReaderImportWarning> Warnings,
+    IReadOnlyList<ReaderImportSectionPreview> Sections,
+    IReadOnlyList<ReaderImportBlockPreview> SampleBlocks,
+    bool PreviewTruncated,
+    string? DuplicateDocumentId,
+    int ExpiresInSeconds);
 
 public sealed record BlockPage(IReadOnlyList<ReaderBlock> Blocks, int? NextAfterOrdinal);
 

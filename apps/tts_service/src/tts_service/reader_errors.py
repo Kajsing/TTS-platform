@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from document_import import (
+    ImportArchiveUnsafeError,
+    ImportCancelledError,
+    ImportInvalidError,
+    ImportTooLargeError,
+    ImportUnsupportedError,
+)
 from reader_core import (
     ReaderConflictError,
     ReaderDatabaseError,
@@ -11,7 +18,12 @@ from reader_core import (
 )
 
 from .errors import APIError, ErrorBody
-from .reader_service import ReaderDocumentLockedError, ReaderDuplicateDocumentError
+from .reader_service import (
+    ReaderDocumentLockedError,
+    ReaderDuplicateDocumentError,
+    ReaderImportPreviewCapacityError,
+    ReaderImportPreviewNotFoundError,
+)
 
 
 def reader_api_error(
@@ -129,4 +141,52 @@ def translate_reader_error(
         "reader_database_unavailable",
         status_code=503,
         message="Reader storage is unavailable.",
+    )
+
+
+def translate_import_error(error: Exception) -> APIError:
+    if isinstance(error, ImportUnsupportedError):
+        return reader_api_error(
+            "reader_import_unsupported",
+            status_code=415,
+            message="The selected document format is not supported.",
+        )
+    if isinstance(error, ImportTooLargeError):
+        return reader_api_error(
+            "reader_import_too_large",
+            status_code=413,
+            message="The imported document exceeds a configured safety limit.",
+        )
+    if isinstance(error, ImportArchiveUnsafeError):
+        return reader_api_error(
+            "reader_archive_unsafe",
+            status_code=400,
+            message="The imported archive contains unsafe content or paths.",
+        )
+    if isinstance(error, ImportCancelledError):
+        return reader_api_error(
+            "reader_import_cancelled",
+            status_code=409,
+            message="The document import was cancelled.",
+        )
+    if isinstance(error, (ImportInvalidError, ReaderImportPreviewNotFoundError)):
+        return reader_api_error(
+            "reader_import_invalid",
+            status_code=404 if isinstance(error, ReaderImportPreviewNotFoundError) else 400,
+            message=(
+                "The import preview no longer exists. Preview the file again."
+                if isinstance(error, ReaderImportPreviewNotFoundError)
+                else "The imported document is invalid or contains no readable text."
+            ),
+        )
+    if isinstance(error, ReaderImportPreviewCapacityError):
+        return reader_api_error(
+            "reader_conflict",
+            status_code=409,
+            message="Another large import preview is still active. Cancel or finish it first.",
+        )
+    return reader_api_error(
+        "reader_import_invalid",
+        status_code=400,
+        message="The document could not be imported.",
     )

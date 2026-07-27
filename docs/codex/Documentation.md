@@ -11,20 +11,56 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 5, privacy-safe clipboard
-  capture, repeated append/Undo, global controls, tray, compact controller, and
-  Windows integration validation.
-- Current loop result: complete. Monitoring is genuinely unregistered and Off
-  by default, explicit Read Clipboard remains independent, Copy Selection and
-  Read is opt-in and bounded, prompt actions cover read/append/create/Inbox/
-  ignore/block, and clipboard text is not persisted unless the user chooses a
-  save action. Repeated appends are separate paragraph operations, tray and
-  compact controls share playback state, and clean Exit stops desktop playback
-  without stopping the shared service.
-- Reader Workstation resume point: Milestone 6, structured offline import,
-  import preview/cancellation/warnings, and book-scale virtualized reading. Do
-  not start it until the user explicitly continues beyond the requested
-  Milestone 5 stop.
+- Current loop target: Reader Workstation Milestone 7, engine-independent
+  speech rules, deterministic compilation and preview, safe rule interchange,
+  and playback integration.
+- Current loop result: Milestone 6 is complete and validated. The user explicitly authorized autonomous
+  milestone-by-milestone work through Reader Milestone 9, with a decision check
+  before continuing whenever product direction, architecture, security,
+  licensing, or a material UX choice would change.
+- Reader Workstation resume point: execute and validate Milestone 7, then repeat
+  the decision check before Milestone 8.
+- Reader Milestone 6 implementation details:
+  - `packages/document_import` now parses TXT, Markdown, HTML/HTM, DOCX, and
+    EPUB into ordered Reader sections and blocks using the Python standard
+    library. HTML never fetches remote resources and removes scripts, styles,
+    navigation, forms, hidden content, and other non-reading/active elements;
+  - ZIP/XML imports enforce file, expanded-byte, member, character, block, and
+    timeout quotas. Traversal and absolute paths, backslashes, links,
+    encryption, duplicate members, DTD/entities, and excessive expansion are
+    rejected with typed failures;
+  - protected multipart preview/direct-import/commit/cancel endpoints expose
+    bounded previews, typed duplicate handling, optional managed source copies,
+    durable structured warnings, and privacy-safe operation metrics;
+  - the .NET client and WPF app support file selection and drag/drop, automatic
+    cancellable preview, title/language/source-copy choices, duplicate consent,
+    import warnings, and duplicate-as-editable plain text;
+  - structured documents render read-only through recycling WPF virtualization
+    and explicit 64-block pages. Heading/list/quote/code styles survive import,
+    playback can optionally follow the active source span, and users can turn
+    follow scrolling off;
+  - `python-multipart` 0.0.32 is the only new direct runtime dependency. Its
+    Apache-2.0 license is recorded in `THIRD_PARTY_NOTICES.md`; DOCX, EPUB,
+    Markdown, and HTML parsing add no third-party parser dependencies;
+  - the Windows source launchers and bundle now include `document_import`.
+    The existing unresolved repository-license choice still prevents claiming
+    external-distribution readiness but does not block Milestones 7 through 9.
+- Reader Milestone 6 validation passed on 2026-07-27:
+  - `py -3 -m pytest packages\document_import\tests packages\reader_core\tests apps\tts_service\tests -q`: 329 passed;
+  - `py -3 -m pytest -q`: 361 passed;
+  - `.NET Release` build: 0 warnings, 0 errors; solution tests: 54 passed;
+  - `py -3 -m ruff check .`, `dotnet format ... --verify-no-changes`,
+    `git diff --check`, and `py -3 scripts\check_reader_contracts.py` passed;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration --skip-build`
+    passed live paging/edit/stream/resume, clipboard regressions, safe live HTML
+    import and editable copy, WASAPI, privacy-safe Windows integration,
+    self-contained packaging, and packaged WPF rendering;
+  - `py -3 scripts\check_windows_bundle_bootstrap.py` passed with the importer
+    package present and the isolated service setup healthy;
+  - the required post-archive security review found zero open Milestone 6
+    findings. Representative/adversarial fixtures cover all supported formats,
+    archive attacks, active HTML, durable warnings, cancellation/limits, and a
+    20,000-block book-scale document.
 - Reader Milestone 5 implementation details:
   - `AddClipboardFormatListener` is registered only while prompt monitoring is
     enabled. Clipboard text is never read while monitoring is Off; the explicit

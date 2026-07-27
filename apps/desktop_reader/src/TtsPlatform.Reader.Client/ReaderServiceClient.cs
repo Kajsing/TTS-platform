@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace TtsPlatform.Reader.Client;
@@ -39,6 +40,67 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             true,
             request,
             cancellationToken);
+
+    public Task<ReaderImportPreview> PreviewImportAsync(
+        ImportDocumentRequest request,
+        Stream content,
+        CancellationToken cancellationToken = default) =>
+        SendMultipartAsync<ReaderImportPreview>(
+            "v1/reader/imports/preview",
+            request,
+            content,
+            allowDuplicate: null,
+            cancellationToken);
+
+    public Task<ReaderDocument> ImportDocumentAsync(
+        ImportDocumentRequest request,
+        Stream content,
+        bool allowDuplicate = false,
+        CancellationToken cancellationToken = default) =>
+        SendMultipartAsync<ReaderDocument>(
+            "v1/reader/imports",
+            request,
+            content,
+            allowDuplicate,
+            cancellationToken);
+
+    public Task<ReaderDocument> CommitImportAsync(
+        string previewId,
+        bool allowDuplicate = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(previewId);
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Post,
+            $"v1/reader/imports/{Uri.EscapeDataString(previewId)}/commit",
+            true,
+            new { allow_duplicate = allowDuplicate },
+            cancellationToken);
+    }
+
+    public Task CancelImportAsync(
+        string previewId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(previewId);
+        return SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/imports/{Uri.EscapeDataString(previewId)}",
+            cancellationToken);
+    }
+
+    public Task<ReaderDocument> DuplicateAsEditableTextAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Post,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/duplicate-as-editable",
+            true,
+            null,
+            cancellationToken);
+    }
 
     public Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
@@ -283,6 +345,95 @@ public sealed class ReaderServiceClient : IReaderServiceClient
                 .ConfigureAwait(false);
             return result ?? throw new ReaderServiceUnavailableException(
                 "The local TTS service returned an empty response.");
+        }
+    }
+
+    private async Task<T> SendMultipartAsync<T>(
+        string relativeUrl,
+        ImportDocumentRequest import,
+        Stream content,
+        bool? allowDuplicate,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(import);
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(import.FileName);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, relativeUrl);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        var multipart = new MultipartFormDataContent();
+        var fileContent = new StreamContent(content);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.TryParse(
+            import.ContentType,
+            out var mediaType)
+            ? mediaType
+            : new MediaTypeHeaderValue("application/octet-stream");
+        multipart.Add(fileContent, "file", import.FileName);
+        AddFormValue(multipart, "title", import.Title);
+        AddFormValue(multipart, "language_hint", import.LanguageHint);
+        if (import.CopySourceFile is not null)
+        {
+            AddFormValue(multipart, "copy_source_file", import.CopySourceFile.Value ? "true" : "false");
+        }
+        if (allowDuplicate is not null)
+        {
+            AddFormValue(multipart, "allow_duplicate", allowDuplicate.Value ? "true" : "false");
+        }
+        request.Content = multipart;
+
+        using var response = await SendHttpAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+        var result = await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
+        return result ?? throw new ReaderServiceUnavailableException(
+            "The local TTS service returned an empty response.");
+    }
+
+    private async Task SendNoContentAsync(
+        HttpMethod method,
+        string relativeUrl,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, relativeUrl);
+        await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await SendHttpAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendHttpAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service could not be reached. Start the service and try again.",
+                exception);
+        }
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service did not respond in time. Check the service and try again.",
+                exception);
+        }
+    }
+
+    private static void AddFormValue(MultipartFormDataContent multipart, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            multipart.Add(new StringContent(value, Encoding.UTF8), name);
         }
     }
 

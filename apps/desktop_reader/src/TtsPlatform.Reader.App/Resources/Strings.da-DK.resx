@@ -10,4 +10,7 @@
   <data name="SaveEdit" xml:space="preserve"><value>Gem rettelse</value></data>
   <data name="Undo" xml:space="preserve"><value>Fortryd gemt rettelse</value></data>
   <data name="Redo" xml:space="preserve"><value>Gentag gemt rettelse</value></data>
+  <data name="ImportDocument" xml:space="preserve"><value>Importér dokument</value></data>
+  <data name="DuplicateEditable" xml:space="preserve"><value>Duplikér som redigerbar tekst</value></data>
+  <data name="FollowReading" xml:space="preserve"><value>Følg oplæsningen</value></data>
 </root>

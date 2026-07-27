@@ -10,4 +10,7 @@
   <data name="SaveEdit" xml:space="preserve"><value>Save edit</value></data>
   <data name="Undo" xml:space="preserve"><value>Undo saved edit</value></data>
   <data name="Redo" xml:space="preserve"><value>Redo saved edit</value></data>
+  <data name="ImportDocument" xml:space="preserve"><value>Import document</value></data>
+  <data name="DuplicateEditable" xml:space="preserve"><value>Duplicate as editable text</value></data>
+  <data name="FollowReading" xml:space="preserve"><value>Follow reading</value></data>
 </root>

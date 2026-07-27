@@ -7,8 +7,8 @@
     "search_available": false
   },
   "imports": {
-    "formats": [],
-    "max_file_bytes": 0,
+    "formats": ["txt", "md", "html", "docx", "epub"],
+    "max_file_bytes": 52428800,
     "ocr_available": false
   },
   "rules": {

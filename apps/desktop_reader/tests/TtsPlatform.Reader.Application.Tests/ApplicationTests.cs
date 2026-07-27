@@ -140,6 +140,33 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Reading_window_pages_book_scale_content_without_materializing_the_document()
+    {
+        var first = Enumerable.Range(0, 64).Select(index => Block($"Block {index}", index)).ToArray();
+        var second = Enumerable.Range(64, 64).Select(index => Block($"Block {index}", index)).ToArray();
+        var client = new StubClient
+        {
+            BlockPages = new Queue<BlockPage>(
+            [
+                new BlockPage(first, 63),
+                new BlockPage(second, 127),
+                new BlockPage(first, 63),
+            ]),
+        };
+        var pager = new ReadingWindowPager(client);
+
+        var initial = await pager.LoadAsync("document", 0);
+        var next = await pager.LoadNextAsync("document");
+        var previous = await pager.LoadPreviousAsync("document");
+
+        Assert.Equal(64, initial.Blocks.Count);
+        Assert.Equal(64, next.StartOrdinal);
+        Assert.Equal(0, previous.StartOrdinal);
+        Assert.Equal([-1, 63, -1], client.ReceivedBlockAfterOrdinals);
+        Assert.All(client.ReceivedBlockLimits, limit => Assert.Equal(64, limit));
+    }
+
+    [Fact]
     public async Task Editor_preserves_unsaved_text_when_row_version_conflicts()
     {
         var client = new StubClient
@@ -216,11 +243,11 @@ public sealed class ApplicationTests
         8,
         EmptyMetadata());
 
-    private static ReaderBlock Block(string text) => new(
+    private static ReaderBlock Block(string text, int ordinal = 0) => new(
         "block",
         "doc",
         null,
-        0,
+        ordinal,
         "paragraph",
         text,
         text.Length,
@@ -242,9 +269,12 @@ public sealed class ApplicationTests
         public Queue<DocumentPage> DocumentPages { get; init; } = new();
         public Task<DocumentPage>? PendingDocumentPage { get; init; }
         public BlockPage Blocks { get; init; } = new([], null);
+        public Queue<BlockPage> BlockPages { get; init; } = new();
         public ReaderApiException? ReplaceException { get; init; }
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
         public List<string?> ReceivedCursors { get; } = [];
+        public List<int> ReceivedBlockAfterOrdinals { get; } = [];
+        public List<int> ReceivedBlockLimits { get; } = [];
 
         public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
             HealthException is null
@@ -278,7 +308,12 @@ public sealed class ApplicationTests
             string documentId,
             int afterOrdinal = -1,
             int limit = 200,
-            CancellationToken cancellationToken = default) => Task.FromResult(Blocks);
+            CancellationToken cancellationToken = default)
+        {
+            ReceivedBlockAfterOrdinals.Add(afterOrdinal);
+            ReceivedBlockLimits.Add(limit);
+            return Task.FromResult(BlockPages.Count > 0 ? BlockPages.Dequeue() : Blocks);
+        }
 
         public Task<MutationResponse> ReplaceContentAsync(
             string documentId,

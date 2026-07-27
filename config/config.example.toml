@@ -50,3 +50,11 @@ max_blocks_per_stream_window = 64
 max_source_chars_per_stream_window = 32000
 max_edit_history_operations = 1000
 max_edit_history_bytes = 10485760
+
+[reader.imports]
+max_file_bytes = 52428800
+max_expanded_archive_bytes = 209715200
+max_archive_members = 10000
+max_document_characters = 10000000
+max_blocks = 250000
+timeout_seconds = 60

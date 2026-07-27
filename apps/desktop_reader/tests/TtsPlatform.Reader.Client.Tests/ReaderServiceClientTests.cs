@@ -131,6 +131,46 @@ public sealed class ReaderServiceClientTests
         Assert.DoesNotContain("document_id", handler.Requests[1].Body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Import_preview_commit_cancel_and_duplicate_use_protected_routes()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/imports/preview" => Json(HttpStatusCode.OK, ImportPreviewJson),
+            "/v1/reader/imports/preview-id/commit" => Json(HttpStatusCode.Created, DocumentJson),
+            "/v1/reader/imports/preview-id" => new HttpResponseMessage(HttpStatusCode.NoContent),
+            "/v1/reader/documents/doc-id/duplicate-as-editable" => Json(HttpStatusCode.Created, DocumentJson),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+        await using var input = new MemoryStream(Encoding.UTF8.GetBytes("# Heading"));
+
+        var preview = await client.PreviewImportAsync(
+            new ImportDocumentRequest(
+                "book.md",
+                "text/markdown",
+                Title: "Book",
+                LanguageHint: "da",
+                CopySourceFile: true),
+            input);
+        var committed = await client.CommitImportAsync("preview-id", allowDuplicate: true);
+        await client.CancelImportAsync("preview-id");
+        await client.DuplicateAsEditableTextAsync("doc-id");
+
+        Assert.Equal("Imported", preview.Title);
+        Assert.Equal("clipboard", committed.SourceType);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("# Heading", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("name=title", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("Book", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("true", handler.Requests[0].Body, StringComparison.Ordinal);
+        Assert.Contains("\"allow_duplicate\":true", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.Equal(HttpMethod.Delete, handler.Requests[2].Method);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json"),
@@ -157,12 +197,17 @@ public sealed class ReaderServiceClientTests
             Requests.Add(new RecordedRequest(
                 request.RequestUri!,
                 request.Headers.Authorization?.ToString(),
-                body));
+                body,
+                request.Method));
             return responseFactory(request);
         }
     }
 
-    private sealed record RecordedRequest(Uri Uri, string? Authorization, string Body);
+    private sealed record RecordedRequest(
+        Uri Uri,
+        string? Authorization,
+        string Body,
+        HttpMethod Method);
 
     private const string HealthJson = """
         {
@@ -210,6 +255,16 @@ public sealed class ReaderServiceClientTests
           "cursor":{"document_id":"doc","block_id":"block","block_ordinal":0,"character_offset":3,"content_revision":1,"segment_index":null},
           "voice_profile_id":null,"pipeline_version":1,"rules_version":1,
           "updated_at":"2026-07-27T12:00:00Z","completed":false,"row_version":2
+        }
+        """;
+
+    private const string ImportPreviewJson = """
+        {
+          "preview_id":"preview-id","title":"Imported","source_type":"markdown","source_name":"book.md",
+          "total_sections":1,"total_blocks":1,"total_characters":9,"warnings":[],
+          "sections":[{"ordinal":0,"level":1,"heading":"Imported","first_block_ordinal":0}],
+          "sample_blocks":[{"ordinal":0,"kind":"heading","text":"Heading","section_ordinal":0}],
+          "preview_truncated":false,"duplicate_document_id":null,"expires_in_seconds":600
         }
         """;
 }

@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
+DOCUMENT_IMPORT_SRC = REPO_ROOT / "packages" / "document_import" / "src"
 MODEL_ID = "local-flow-voice"
 DEFAULT_STARTUP_TIMEOUT_S = 30.0
 DEFAULT_COMMAND_TIMEOUT_S = 60.0
@@ -383,7 +384,12 @@ def _source_env() -> dict[str, str]:
         for key, value in os.environ.items()
         if not key.startswith("TTS_PLATFORM")
     }
-    python_path_entries = [str(SERVICE_SRC), str(CORE_SRC), str(READER_CORE_SRC)]
+    python_path_entries = [
+        str(SERVICE_SRC),
+        str(CORE_SRC),
+        str(READER_CORE_SRC),
+        str(DOCUMENT_IMPORT_SRC),
+    ]
     existing_python_path = env.get("PYTHONPATH")
     if existing_python_path:
         python_path_entries.append(existing_python_path)

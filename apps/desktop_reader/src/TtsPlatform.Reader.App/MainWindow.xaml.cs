@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private IReaderServiceClient? _client;
     private IReaderServiceClient? _synthesisClient;
     private LibraryPager? _library;
+    private ReadingWindowPager? _readingWindow;
     private DocumentEditor? _editor;
     private ReaderPlaybackCoordinator? _playback;
     private ClipboardDocumentCapture? _clipboardCapture;
@@ -409,6 +410,7 @@ public partial class MainWindow : Window
             _settings.ServiceBaseUrl,
             tokenProvider);
         _library = new LibraryPager(_client);
+        _readingWindow = new ReadingWindowPager(_client);
         _editor = new DocumentEditor(_client);
         _clipboardCapture = new ClipboardDocumentCapture(_client);
         _ephemeralAudio = new WasapiAudioOutput();
@@ -965,6 +967,75 @@ public partial class MainWindow : Window
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e) => await RefreshLibraryAsync();
 
+    private async void ImportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import a document",
+            Filter = "Reader documents (*.txt;*.md;*.markdown;*.html;*.htm;*.docx;*.epub)|*.txt;*.md;*.markdown;*.html;*.htm;*.docx;*.epub|All files (*.*)|*.*",
+            Multiselect = false,
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            await ShowImportDialogAsync(dialog.FileName);
+        }
+    }
+
+    private void MainWindow_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = TryGetSingleImportPath(e.Data, out _)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void MainWindow_Drop(object sender, DragEventArgs e)
+    {
+        if (TryGetSingleImportPath(e.Data, out var path))
+        {
+            await ShowImportDialogAsync(path);
+        }
+        else
+        {
+            FooterText.Text = "Drop one TXT, Markdown, HTML, DOCX, or EPUB file.";
+        }
+        e.Handled = true;
+    }
+
+    private async Task ShowImportDialogAsync(string filePath)
+    {
+        if (_onboarding.State is not (ConnectionState.Ready or ConnectionState.BackendDegraded))
+        {
+            FooterText.Text = "Connect to the local Reader service before importing.";
+            return;
+        }
+        var dialog = new ImportPreviewDialog(GetClient(), filePath) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.ImportedDocument is ReaderDocument imported)
+        {
+            await RefreshLibraryAsync();
+            DocumentsGrid.SelectedItem = _library?.Documents.FirstOrDefault(item => item.Id == imported.Id);
+            FooterText.Text = $"Imported {imported.TotalBlocks:N0} block(s) to Inbox.";
+        }
+    }
+
+    private static bool TryGetSingleImportPath(IDataObject data, out string path)
+    {
+        path = string.Empty;
+        if (!data.GetDataPresent(DataFormats.FileDrop) ||
+            data.GetData(DataFormats.FileDrop) is not string[] { Length: 1 } files)
+        {
+            return false;
+        }
+        var extension = Path.GetExtension(files[0]).ToLowerInvariant();
+        if (extension is not (".txt" or ".md" or ".markdown" or ".html" or ".htm" or ".docx" or ".epub"))
+        {
+            return false;
+        }
+        path = files[0];
+        return File.Exists(path);
+    }
+
     private async Task RefreshLibraryAsync()
     {
         if (_library is null)
@@ -1038,7 +1109,7 @@ public partial class MainWindow : Window
             EditorTextBox.IsReadOnly = !_editor.IsEditable;
             EditorHintText.Text = _editor.IsEditable
                 ? "Editing the selected text block. Save uses the document row version; conflicts preserve this local text."
-                : "Structured imports are read-only. A later milestone can duplicate them as editable text.";
+                : DescribeStructuredDocument(document);
             UpdateEditorButtons();
             UpdatePlaybackControls();
         }
@@ -1129,6 +1200,42 @@ public partial class MainWindow : Window
         await _library.RefreshAsync(SearchTextBox.Text.Trim());
         DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item => item.Id == selectedId);
         LoadMoreButton.IsEnabled = _library.HasMore;
+    }
+
+    private async void DuplicateEditableButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_client is null || _editor?.Document is not ReaderDocument document || document.IsEditable)
+        {
+            return;
+        }
+        try
+        {
+            var editable = await _client.DuplicateAsEditableTextAsync(document.Id);
+            await RefreshLibraryAsync();
+            DocumentsGrid.SelectedItem = _library?.Documents.FirstOrDefault(item => item.Id == editable.Id);
+            FooterText.Text = "Created an editable plain-text copy.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Duplicate: {exception.Message}";
+        }
+    }
+
+    private async void PreviousReadingPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
+        {
+            await ShowReadingPageAsync(await _readingWindow.LoadPreviousAsync(document.Id));
+        }
+    }
+
+    private async void NextReadingPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
+        {
+            await ShowReadingPageAsync(await _readingWindow.LoadNextAsync(document.Id));
+        }
     }
 
     private void UpdateEditorButtons()
@@ -1250,20 +1357,27 @@ public partial class MainWindow : Window
 
     private async Task LoadReadingWindowAsync(ReaderDocument document, int startOrdinal)
     {
-        if (_client is null)
+        if (_readingWindow is null)
         {
             return;
         }
+        var page = await _readingWindow.LoadAsync(document.Id, Math.Max(0, startOrdinal));
+        await ShowReadingPageAsync(page);
+    }
 
-        var page = await _client.GetBlocksAsync(
-            document.Id,
-            afterOrdinal: Math.Max(-1, startOrdinal - 1),
-            limit: 64);
+    private Task ShowReadingPageAsync(ReadingWindowPage page)
+    {
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
             _readingBlocks.Add(new ReaderBlockDisplay(block));
         }
+        PreviousReadingPageButton.IsEnabled = page.HasPrevious;
+        NextReadingPageButton.IsEnabled = page.HasNext;
+        FooterText.Text = page.Blocks.Count == 0
+            ? "This document contains no readable blocks."
+            : $"Showing blocks {page.Blocks[0].Ordinal + 1:N0}â€“{page.Blocks[^1].Ordinal + 1:N0}.";
+        return Task.CompletedTask;
     }
 
     private void Playback_StateChanged(object? sender, PlaybackStateChanged change)
@@ -1318,14 +1432,18 @@ public partial class MainWindow : Window
             var end = group.Max(item => item.EndOffset);
             block.HighlightStart = start;
             block.HighlightLength = Math.Max(0, end - start);
-            ReadingBlocksList.SelectedItem = block;
-            ReadingBlocksList.ScrollIntoView(block);
+            if (FollowReadingCheckBox.IsChecked == true)
+            {
+                ReadingBlocksList.SelectedItem = block;
+                ReadingBlocksList.ScrollIntoView(block);
+            }
         }
     }
 
     private void UpdatePlaybackControls()
     {
         var hasDocument = _editor?.Document is not null;
+        var structuredDocument = hasDocument && _editor?.IsEditable != true;
         var documentActive = _playback?.IsActive == true;
         var ephemeralPaused = !_ephemeralPlaying && _ephemeralReplayText is not null;
         var hasPlayback = _ephemeralPlaying || ephemeralPaused ||
@@ -1335,8 +1453,13 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = hasPlayback;
         PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        ReadingBlocksList.Visibility = documentActive ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = documentActive ? Visibility.Collapsed : Visibility.Visible;
+        var showReadingView = documentActive || structuredDocument;
+        ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        EditorTextBox.Visibility = showReadingView ? Visibility.Collapsed : Visibility.Visible;
+        FollowReadingCheckBox.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        DuplicateEditableButton.IsEnabled = structuredDocument && !documentActive;
+        PreviousReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        NextReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateCompactController()
@@ -1384,5 +1507,25 @@ public partial class MainWindow : Window
         {
             StatusText.Text = text;
         }
+    }
+
+    private static string DescribeStructuredDocument(ReaderDocument document)
+    {
+        const string baseline = "Structured imports are read-only. Duplicate this document to edit a plain-text copy.";
+        if (document.Metadata.ValueKind != JsonValueKind.Object ||
+            !document.Metadata.TryGetProperty("import", out var import) ||
+            !import.TryGetProperty("warnings", out var warnings) ||
+            warnings.ValueKind != JsonValueKind.Array ||
+            warnings.GetArrayLength() == 0)
+        {
+            return baseline;
+        }
+        var messages = warnings.EnumerateArray()
+            .Take(3)
+            .Select(item => item.TryGetProperty("message", out var message)
+                ? message.GetString()
+                : null)
+            .Where(message => !string.IsNullOrWhiteSpace(message));
+        return $"{baseline} Import warnings: {string.Join(" ", messages)}";
     }
 }

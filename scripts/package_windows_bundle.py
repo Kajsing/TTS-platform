@@ -65,6 +65,7 @@ INCLUDED_DIRS = (
     "apps/tts_service/src",
     "packages/tts_core/src",
     "packages/reader_core/src",
+    "packages/document_import/src",
 )
 
 EXCLUDED_PARTS = {

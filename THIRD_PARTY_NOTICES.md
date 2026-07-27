@@ -3,6 +3,16 @@
 This file records direct runtime dependencies added by TTS Platform Reader.
 Transitive package notices remain available in their respective distributions.
 
+## python-multipart 0.0.32
+
+- Purpose: bounded streaming `multipart/form-data` parsing for Reader imports.
+- Source: <https://github.com/Kludex/python-multipart>
+- Package: <https://pypi.org/project/python-multipart/0.0.32/>
+- License: Apache-2.0.
+
+The Apache License 2.0 text is available from the upstream source and package.
+The dependency is independently maintained and is not modified by this project.
+
 ## NAudio 2.3.0
 
 - Purpose: shared-mode Windows audio output for Reader PCM playback.

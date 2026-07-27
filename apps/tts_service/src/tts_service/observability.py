@@ -169,6 +169,7 @@ class ObservabilityState:
         block_id: str | None = None,
         character_count: int | None = None,
         block_count: int | None = None,
+        extra: dict[str, object] | None = None,
     ) -> None:
         if not self.enabled:
             return
@@ -184,4 +185,6 @@ class ObservabilityState:
             payload["character_count"] = character_count
         if block_count is not None:
             payload["block_count"] = block_count
+        if extra:
+            payload.update(extra)
         self.logger.info(json.dumps(payload))

@@ -112,8 +112,10 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderStreamClient.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "ReadingWindowPager.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
         repo_root / "docs" / "reader_milestone5_manual_checklist.md",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.en-US.resx",
@@ -147,7 +149,27 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         raise DesktopReaderCheckError("The WPF application does not target net10.0-windows.")
     if "NAudio" not in source_text or "ReaderStreamProtocolParser" not in source_text:
         raise DesktopReaderCheckError("Milestone 4 audio or stream protocol code is missing.")
-    return {"required_files": len(required), "clipboard_features": "implemented"}
+    import_features = [
+        "PreviewImportAsync",
+        "DuplicateAsEditableTextAsync",
+        "ImportPreviewDialog",
+        "ReadingWindowPager",
+        "VirtualizingPanel.IsVirtualizing",
+        "FollowReadingCheckBox",
+    ]
+    missing_import_features = [
+        value for value in import_features if value.casefold() not in source_text.casefold()
+    ]
+    if missing_import_features:
+        raise DesktopReaderCheckError(
+            f"Milestone 6 import or virtualized-reading features are missing: "
+            f"{missing_import_features}"
+        )
+    return {
+        "required_files": len(required),
+        "clipboard_features": "implemented",
+        "structured_import": "implemented",
+    }
 
 
 def _free_port() -> int:
@@ -162,6 +184,7 @@ def _live_reader_service(repo_root: Path, temporary: Path) -> Iterator[tuple[str
         repo_root / "apps" / "tts_service" / "src",
         repo_root / "packages" / "tts_core" / "src",
         repo_root / "packages" / "reader_core" / "src",
+        repo_root / "packages" / "document_import" / "src",
     ):
         sys.path.insert(0, str(source_root))
 
@@ -241,6 +264,7 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
             [str(dotnet), str(smoke_dll), base_url, str(token_path)],
             cwd=repo_root,
         )
+        structured_import = _check_live_structured_import(base_url, token_path)
     payload = json.loads(output)
     if payload.get("live_reader_paging") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm live Reader paging.")
@@ -260,7 +284,75 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         raise DesktopReaderCheckError(
             "The .NET client did not confirm private immediate speech and clipboard append/undo."
         )
+    payload["live_structured_import"] = structured_import
     return payload
+
+
+def _check_live_structured_import(base_url: str, token_path: Path) -> bool:
+    token = token_path.read_text(encoding="utf-8").strip()
+    boundary = "----tts-platform-reader-smoke"
+    html = (
+        b"<html><head><title>Structured smoke</title><script>PRIVATE()</script></head>"
+        b"<body><h1>Chapter</h1><p>Readable paragraph.</p></body></html>"
+    )
+    body = b"".join(
+        [
+            f"--{boundary}\r\n".encode(),
+            b'Content-Disposition: form-data; name="file"; filename="article.htm"\r\n',
+            b"Content-Type: text/html\r\n\r\n",
+            html,
+            f"\r\n--{boundary}--\r\n".encode(),
+        ]
+    )
+    preview_request = urllib.request.Request(
+        f"{base_url}v1/reader/imports/preview",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(preview_request, timeout=10) as response:
+        preview = json.load(response)
+    warning_codes = {warning["code"] for warning in preview["warnings"]}
+    if (
+        preview["source_type"] != "html"
+        or preview["total_blocks"] != 2
+        or "html_active_content_ignored" not in warning_codes
+        or "PRIVATE" in json.dumps(preview)
+    ):
+        raise DesktopReaderCheckError("The live structured-import preview was unsafe or invalid.")
+
+    commit_request = urllib.request.Request(
+        f"{base_url}v1/reader/imports/{preview['preview_id']}/commit",
+        data=b'{"allow_duplicate":false}',
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(commit_request, timeout=10) as response:
+        document = json.load(response)
+    if (
+        document["source_type"] != "html"
+        or not document["metadata"]["import"]["warnings"]
+        or document["metadata"]["import"]["network_requests"] != 0
+    ):
+        raise DesktopReaderCheckError("Structured import warnings were not durable.")
+
+    editable_request = urllib.request.Request(
+        f"{base_url}v1/reader/documents/{document['id']}/duplicate-as-editable",
+        data=b"",
+        headers={"Authorization": f"Bearer {token}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(editable_request, timeout=10) as response:
+        editable = json.load(response)
+    if editable["source_type"] != "plain_text":
+        raise DesktopReaderCheckError("Structured import did not produce an editable copy.")
+    return True
 
 
 def _check_preview_snapshot(repo_root: Path, temporary: Path) -> dict[str, object]:
