@@ -554,3 +554,42 @@ Constraints:
 - Preserve localhost security defaults and token auth.
 - Do not commit downloaded model assets, installed voice directories, local
   token files, or machine registry exports.
+
+## Post-v1: Reader Workstation Track
+
+The Reader Workstation is the active post-v1 product track. Preserve the
+completed v1 service, Chrome reader, model-management, Windows setup, security,
+release gates, and optional SAPI compatibility bridge as protected baselines.
+
+Normative design, architecture decisions, detailed work items, acceptance
+criteria, validations, release boundaries, and the 1.0 end-to-end scenario:
+`design_doc/reader_workstation_design_v1.md`.
+
+Execute these milestones in order. The status markers here control the next
+Codex resume point; the design document controls each milestone's detailed
+scope.
+
+- [x] Reader Milestone 0: Activate the Reader Workstation track.
+- [ ] Reader Milestone 1: Reader domain and SQLite library.
+- [ ] Reader Milestone 2: Protected Reader API and shared contracts.
+- [ ] Reader Milestone 3: WPF desktop shell and onboarding.
+- [ ] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
+- [ ] Reader Milestone 5: Clipboard, selected text, tray, and compact controller.
+- [ ] Reader Milestone 6: Structured import and virtualized reading.
+- [ ] Reader Milestone 7: Speech-rule engine and TextAloud migration.
+- [ ] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
+- [ ] Reader Milestone 9: Browser-to-library integration and prototype consolidation.
+- [ ] Reader Milestone 10: PDF text extraction and optional OCR.
+- [ ] Reader Milestone 11: Backup, packaging, accessibility, security, and release candidate.
+
+Release boundaries:
+
+- Developer preview after Reader Milestone 4.
+- Alpha after Reader Milestone 6.
+- MVP after Reader Milestone 7.
+- Beta after Reader Milestone 8.
+- Release candidate after Reader Milestone 11.
+
+Reader Milestone 1 is the next incomplete milestone. Do not create HTTP routes,
+WPF code, importers, or speech-rule feature code during that milestone; follow
+its domain-and-SQLite boundary in the normative design.

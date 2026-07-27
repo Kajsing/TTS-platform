@@ -8,6 +8,9 @@ This file is the Codex runbook for day-to-day work in this repository.
 - Follow `Plan.md` milestone by milestone. Since v1 is complete, choose
   post-v1 tracks only when the user explicitly asks for that track or
   `Documentation.md` records it as the active follow-up.
+- When the Reader Workstation track is active, also read and follow
+  `design_doc/reader_workstation_design_v1.md`; it is the normative product,
+  architecture, acceptance, and release specification for that track.
 - Keep diffs tightly scoped.
 - Do not expand scope without recording why in `Documentation.md`.
 - Run validation after every milestone.
@@ -18,8 +21,9 @@ This file is the Codex runbook for day-to-day work in this repository.
 - After validation passes, commit and push the completed slice by default.
 - Before finishing, verify every "done when" criterion in `Prompt.md` or mark what remains in `Documentation.md`.
 - For post-v1 optional integrations, verify the track-specific acceptance
-  criteria in the relevant doc, such as `docs/sapi_bridge.md`, instead of
-  reopening completed v1 criteria.
+  criteria in the relevant doc, such as
+  `design_doc/reader_workstation_design_v1.md` or `docs/sapi_bridge.md`, instead
+  of reopening completed v1 criteria.
 
 ## Repo Rules To Preserve
 

@@ -81,3 +81,55 @@ Reasoning:
 - Standard browser WebSocket clients cannot attach arbitrary `Authorization` headers in the same way as non-browser clients.
 - The Chrome extension prototype should reuse the existing streaming endpoint instead of introducing a separate browser-only transport.
 - Keeping this compromise scoped to localhost preserves the public contract while acknowledging a browser platform constraint.
+
+## 2026-07-27: Use WPF on .NET 10 for the Reader desktop client
+
+The Reader Workstation desktop client will use C#, XAML, WPF, and
+`net10.0-windows`. It remains a thin client for presentation, Windows
+integration, and local audio playback; the existing Python service remains the
+single synthesis authority.
+
+Reasoning:
+
+- WPF provides mature Windows hotkey, clipboard, tray, accessibility, scaling,
+  and desktop integration behavior.
+- Keeping synthesis and canonical reader behavior in the service prevents a
+  second TTS implementation.
+
+## 2026-07-27: Keep canonical Reader persistence in service-owned SQLite
+
+The Python service will own the Reader library through a new `reader_core`
+package, standard-library `sqlite3`, explicit migrations, repository protocols,
+and dataclass domain models. The first Reader milestones will not add an ORM.
+
+Reasoning:
+
+- Chrome, desktop, and future automation clients can share one canonical local
+  library.
+- Explicit SQL and migrations fit the repository's deterministic domain style.
+
+## 2026-07-27: Add protected Reader contracts without changing TTS contracts
+
+Reader functionality will use additive, bearer-token-protected
+`/v1/reader/*` HTTP and WebSocket contracts. Existing TTS, job, voice, health,
+and raw streaming contracts retain their current semantics.
+
+Reasoning:
+
+- Private local documents require the same localhost security baseline as TTS.
+- Additive contracts protect the completed v1 clients from Reader-specific
+  behavior.
+
+## 2026-07-27: Preserve structured source mapping before synthesis
+
+Reader documents will be persisted as ordered sections and blocks with stable
+source cursors. Reader speech planning must preserve source spans before it
+reuses normalization, segmentation, chunk planning, and synthesis from
+`tts_core`.
+
+Reasoning:
+
+- Reliable highlighting and resume depend on what the user actually heard,
+  not on positions in a flattened or transformed string.
+- Structure-first storage supports imports, rules, bookmarks, and bounded
+  long-document playback without coupling them to a backend.

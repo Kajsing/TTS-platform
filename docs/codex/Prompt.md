@@ -8,8 +8,10 @@ Use these sources in this order when documents disagree:
 
 1. Current repository behavior, tests, config, and code.
 2. `AGENTS.md` hard rules.
-3. `TASKS.md`, `design_doc/phase_7_plan.md`, `design_doc/thoughts_log.md`, `design_doc/backend_status_note.md`, and `design_doc/implementation_phase_additions.md`.
-4. Background design intent in `design_doc/tts_platform_design_v_2.md`.
+3. For Reader Workstation work,
+   `design_doc/reader_workstation_design_v1.md`.
+4. `TASKS.md`, `design_doc/phase_7_plan.md`, `design_doc/thoughts_log.md`, `design_doc/backend_status_note.md`, and `design_doc/implementation_phase_additions.md`.
+5. Background design intent in `design_doc/tts_platform_design_v_2.md`.
 
 When older summaries disagree with later phase notes, preserve the later phase notes and record the conflict in `Documentation.md`.
 
@@ -26,15 +28,17 @@ web reading on Windows. The v1 product goal is:
 - offline-first operation once models are installed
 - security defaults suitable for a localhost reader that talks to a browser
 
-The current long-horizon objective is to finish v1, not to keep expanding the
-platform. Prefer closeout work: release validation, Windows install polish,
-operator documentation, model-flow safety, extension installability, and a
-final security-focused pass before calling v1 done.
+V1 is complete at the repo/test-contract level and remains a protected
+baseline. The active post-v1 product goal is TTS Platform Reader: a
+Windows-first, offline-first reading workstation with a durable document
+library, structure-aware import, source-mapped long-form playback, user-owned
+speech rules, and a thin WPF desktop client over the existing localhost
+service. Its normative design and milestone sequence are in
+`design_doc/reader_workstation_design_v1.md`.
 
-V1 is now complete at the repo/test-contract level. New work should be treated
-as post-v1 unless it fixes a regression or release blocker in the completed
-local reader. The first recorded post-v1 exploration is an optional Windows
-SAPI 5/TextAloud bridge; its durable plan is `docs/sapi_bridge.md`.
+The Windows SAPI 5 bridge remains an optional compatibility client. Its durable
+plan is `docs/sapi_bridge.md`; it must not dictate the Reader Workstation
+architecture or reopen completed v1 scope.
 
 ## Non-Goals
 
@@ -90,6 +94,11 @@ v1 local-reader flow:
 - run a final security-focused pass before declaring v1 complete; use Codex
   Security workflows and subagents when they improve repository-wide or
   cross-cutting coverage
+
+These v1 deliverables are complete and remain regression requirements. Active
+Reader Workstation deliverables, milestone acceptance criteria, release
+boundaries, and the 1.0 end-to-end scenario are defined in
+`design_doc/reader_workstation_design_v1.md`.
 
 ## Done When
 
@@ -159,4 +168,6 @@ Optional browser prototype validation keeps the service running on a localhost U
   reject command-line unpacked extension loading; strict evidence can be
   required with the browser flags documented in `Documentation.md`.
 - `docs/codex/Prompt.md`, `docs/codex/Plan.md`, `docs/codex/Implement.md`, and `docs/codex/Documentation.md` are now the Codex-oriented workflow source of truth.
+- `design_doc/reader_workstation_design_v1.md` is the normative product and
+  architecture source for the active Reader Workstation track.
 - `docs/sapi_bridge.md` records the post-v1 Windows SAPI/TextAloud bridge plan.

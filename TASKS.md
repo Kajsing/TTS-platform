@@ -103,3 +103,22 @@ For ongoing Codex execution order, use `docs/codex/Plan.md` as the source of tru
 - [x] Add optional Chrome/MV3 browser smoke harness
 - [x] Add CLI helper for Chrome extension origin allow-list setup
 - [x] Add popup copy command for extension origin allow-list setup
+
+## Post-v1 Reader Workstation
+
+Detailed scope and acceptance criteria live in
+`design_doc/reader_workstation_design_v1.md`; execution order is mirrored in
+`docs/codex/Plan.md`.
+
+- [x] Milestone 0: Activate the Reader Workstation track
+- [ ] Milestone 1: Reader domain and SQLite library
+- [ ] Milestone 2: Protected Reader API and shared contracts
+- [ ] Milestone 3: WPF desktop shell and onboarding
+- [ ] Milestone 4: Reader stream, PCM playback, highlighting, and resume
+- [ ] Milestone 5: Clipboard, selected text, tray, and compact controller
+- [ ] Milestone 6: Structured import and virtualized reading
+- [ ] Milestone 7: Speech-rule engine and TextAloud migration
+- [ ] Milestone 8: Library workflow, search, playlists, and WAV export
+- [ ] Milestone 9: Browser-to-library integration and prototype consolidation
+- [ ] Milestone 10: PDF text extraction and optional OCR
+- [ ] Milestone 11: Backup, packaging, accessibility, security, and release candidate

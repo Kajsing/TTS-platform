@@ -4,19 +4,36 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-06-15
+- Date: 2026-07-27
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
-- Project status: Phases 1 through 7 are complete at the repository behavior and
-  test-contract level. The active long-horizon implementation target is now the
-  v1 local reader flow: robust long-document orchestration, model-management
-  UX, Windows-friendly service setup, and Chrome extension installability.
+- Project status: Phases 1 through 7 and the v1 local reader are complete at the
+  repository behavior and test-contract level. The active post-v1 product track
+  is now the Reader Workstation defined in
+  `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: post-v1 Windows SAPI/TextAloud feasibility spike.
-- Current loop result: the first SAPI spike adds an isolated
-  `apps/sapi_bridge/` skeleton, reversible Windows install/remove/check scripts
-  for a dummy machine-scope SAPI voice alias, and repo-native structural
-  validation. It does not implement the final localhost `ISpTTSEngine` bridge
-  yet.
+- Current loop target: Reader Workstation Milestone 0, activating the new track
+  without changing product behavior.
+- Current loop result: complete. This loop imported the approved design,
+  updated the Codex workflow sources, recorded the locked architecture
+  decisions, and created only the minimal ownership README files required by
+  Milestone 0. It added no runtime dependencies or product feature code.
+- Locked Reader Workstation architecture: preserve the existing Python TTS
+  service as the single synthesis authority; use a thin WPF/.NET 10 Windows
+  client; keep canonical reader persistence in service-owned SQLite through a
+  new `reader_core` domain; add protected `/v1/reader/*` contracts rather than
+  changing existing TTS endpoints; and preserve structured source mapping before
+  reuse of the existing `tts_core` synthesis pipeline.
+- Reader Workstation resume point after this loop: Milestone 1, Reader domain
+  and SQLite library. SAPI remains an optional compatibility client and is not
+  the active product track.
+- Reader Milestone 0 validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 261 passed.
+  - `py -3 -m ruff check .`: passed.
+  - `py -3 scripts\check_v1_completion.py --require-complete`: passed with all
+    nine v1 criteria ready and `can_mark_v1_complete: true`.
+  - `git diff --check`: passed; line-ending conversion notices are informational.
+- The pre-existing local `models/MANIFEST.json` change records installed voice
+  state and is intentionally excluded from the Reader Milestone 0 commit.
 - Post-v1 exploration: the user asked whether TextAloud can use this platform
   through a Windows SAPI 5 voice. The agreed direction is an optional
   `apps/sapi_bridge/` Windows integration that registers a SAPI voice and
@@ -618,22 +635,27 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- V1 is complete at the repo/test-contract level. Prefer release packaging,
-  real-machine smoke, or post-v1 polish over new core feature tracks unless the
-  user asks for a new milestone.
+- Start Reader Workstation Milestone 1 from
+  `design_doc/reader_workstation_design_v1.md`: implement the backend-agnostic
+  Reader domain, explicit SQLite migrations, repositories, integrity/schema
+  reporting, and `[reader]` core configuration without adding HTTP or WPF code.
+- V1 remains complete at the repo/test-contract level and must stay green as a
+  protected regression baseline throughout Reader work.
 - If the service is intentionally exposed beyond loopback in a future milestone,
   run a new scoped security pass for origin, token, rate-limit, and WebSocket
   controls under that changed deployment model.
 - If third-party remote catalogs become a supported end-user feature instead of
   an operator-controlled escape hatch, add signed catalog or pinned-host policy
   work before treating that channel as trusted.
-- Optional post-v1 feature track: implement the Windows SAPI 5/TextAloud bridge
-  described in `docs/sapi_bridge.md`. Start with a feasibility spike that proves
-  TextAloud can enumerate a dummy custom SAPI voice before integrating the TTS
-  service.
+- The Windows SAPI bridge in `docs/sapi_bridge.md` remains an optional
+  compatibility client. It is not the active product track and must not shape
+  Reader domain or desktop architecture.
 
 ## Decisions Made And Why
 
+- The Reader Workstation design is now the active post-v1 product direction.
+  It adds a service-owned local library and thin WPF client while preserving the
+  existing TTS service as the single synthesis authority.
 - `docs/codex/` is now the Codex-oriented source of truth so future loops do not have to rediscover scattered instructions.
 - `AGENTS.md` remains the entry point for repo rules, but it now points directly to the four Codex workflow files.
 - Later phase trackers were treated as stronger than older summary docs when they conflicted.
@@ -907,18 +929,18 @@ python3 scripts/package_windows_bundle.py
   default in this environment because `node` is not installed on `PATH`, but it
   now supports `--require-js-syntax`, `--node-executable`, and
   `TTS_PLATFORM_NODE` for strict validation when Node.js is available elsewhere.
-- TextAloud/SAPI integration is not implemented yet. It is a post-v1 plan in
-  `docs/sapi_bridge.md`. Main unknowns are TextAloud 3.x bitness, SAPI COM
-  registration shape, per-user vs machine-wide registration permissions, and
-  long-text responsiveness through synchronous SAPI calls.
+- The SAPI bridge has a working X86 native registration and verified localhost
+  synthesis path, but it remains an optional compatibility client. X64
+  registration and product hardening are not active Reader Workstation gates.
 
 ## Resume Instructions For The Next Codex Loop
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
-2. Check this file for current status and any newly recorded blockers.
+2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
+   current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. For follow-up work, prefer release packaging, real-machine smoke, or post-v1
-   polish over reopening the completed v1 scope.
+4. Resume at Reader Workstation Milestone 1. Keep the slice limited to the
+   Reader domain and SQLite library; do not add HTTP routes or WPF code yet.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.
