@@ -28,8 +28,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
         LastError = null;
         try
         {
-            var page = await client.GetDocumentsAsync(pageSize, null, query, state, cancellationToken)
-                .ConfigureAwait(false);
+            var page = await client.GetDocumentsAsync(pageSize, null, query, state, cancellationToken);
             Documents.Clear();
             foreach (var document in page.Documents)
             {
@@ -62,8 +61,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
         LastError = null;
         try
         {
-            var page = await client.GetDocumentsAsync(pageSize, _nextCursor, _query, _state, cancellationToken)
-                .ConfigureAwait(false);
+            var page = await client.GetDocumentsAsync(pageSize, _nextCursor, _query, _state, cancellationToken);
             foreach (var document in page.Documents)
             {
                 Documents.Add(document);

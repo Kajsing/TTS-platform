@@ -57,12 +57,21 @@ This file is the live status log and shared memory for future Codex loops.
     Word when installed, unsupported/no-selection behavior, repeated append,
     privacy, hotkeys, tray, and shutdown.
 - Reader Milestone 5 validation passed on 2026-07-27:
+  - a real local launch used `.venv\Scripts\python.exe scripts\dev_run.py`, the
+    configured token file, and the per-user .NET 10 runtime. Service health was
+    `ok`, the real voice backend and Reader database were ready, authenticated
+    capabilities/document requests succeeded, and the WPF window remained open;
+  - that launch exposed and fixed a WPF startup crash: `LibraryPager` now retains
+    the caller synchronization context before mutating its UI-bound
+    `ObservableCollection`, with a regression test that forces asynchronous page
+    completion and verifies collection notifications remain on the calling
+    thread;
   - `py -3 scripts\check_desktop_reader.py --require-windows-integration`:
     live paging/edit/stream/resume, immediate speech without document creation,
     three separate clipboard appends plus one exact Undo, preview snapshot,
     real Windows audio, listener stop/restart, nonfatal hotkey failure, tray
     lifecycle, self-contained package, and packaged WPF render passed;
-  - `dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release`: 51
+  - `dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release`: 52
     passed across Client, Application, and Windows test projects;
   - the pause timing regression passed ten consecutive focused runs;
   - `py -3 -m pytest -q`: 339 passed;

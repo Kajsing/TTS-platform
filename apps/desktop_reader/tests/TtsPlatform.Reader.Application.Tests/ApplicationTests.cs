@@ -106,6 +106,40 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public void Library_updates_observable_collection_on_calling_synchronization_context()
+    {
+        var previousContext = SynchronizationContext.Current;
+        using var context = new PumpSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+
+        try
+        {
+            var pageCompletion = new TaskCompletionSource<DocumentPage>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var client = new StubClient { PendingDocumentPage = pageCompletion.Task };
+            var pager = new LibraryPager(client, 1);
+            var callingThreadId = Environment.CurrentManagedThreadId;
+            var notificationThreadId = 0;
+            pager.Documents.CollectionChanged += (_, _) =>
+                notificationThreadId = Environment.CurrentManagedThreadId;
+
+            var refresh = pager.RefreshAsync();
+            ThreadPool.QueueUserWorkItem(
+                _ => pageCompletion.SetResult(new DocumentPage([Document("one", 1)], null)));
+
+            context.RunUntil(refresh);
+
+            Assert.True(refresh.IsCompletedSuccessfully, refresh.Exception?.ToString());
+            Assert.Equal(callingThreadId, notificationThreadId);
+            Assert.True(context.PostCount > 0);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+    }
+
+    [Fact]
     public async Task Editor_preserves_unsaved_text_when_row_version_conflicts()
     {
         var client = new StubClient
@@ -206,6 +240,7 @@ public sealed class ApplicationTests
             "voice");
         public Exception? CapabilitiesException { get; init; }
         public Queue<DocumentPage> DocumentPages { get; init; } = new();
+        public Task<DocumentPage>? PendingDocumentPage { get; init; }
         public BlockPage Blocks { get; init; } = new([], null);
         public ReaderApiException? ReplaceException { get; init; }
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
@@ -236,7 +271,7 @@ public sealed class ApplicationTests
             CancellationToken cancellationToken = default)
         {
             ReceivedCursors.Add(cursor);
-            return Task.FromResult(DocumentPages.Dequeue());
+            return PendingDocumentPage ?? Task.FromResult(DocumentPages.Dequeue());
         }
 
         public Task<BlockPage> GetBlocksAsync(
@@ -283,5 +318,60 @@ public sealed class ApplicationTests
         public Task<byte[]> SynthesizeAsync(
             EphemeralSynthesisRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PumpSynchronizationContext : SynchronizationContext, IDisposable
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+        private readonly AutoResetEvent _callbackAvailable = new(false);
+
+        public int PostCount { get; private set; }
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            lock (_callbacks)
+            {
+                _callbacks.Enqueue((callback, state));
+                PostCount++;
+            }
+
+            _callbackAvailable.Set();
+        }
+
+        public void RunUntil(Task task)
+        {
+            while (!task.IsCompleted)
+            {
+                if (TryRunOne())
+                {
+                    continue;
+                }
+
+                _callbackAvailable.WaitOne(TimeSpan.FromSeconds(1));
+            }
+
+            while (TryRunOne())
+            {
+            }
+        }
+
+        public void Dispose() => _callbackAvailable.Dispose();
+
+        private bool TryRunOne()
+        {
+            (SendOrPostCallback Callback, object? State) workItem;
+            lock (_callbacks)
+            {
+                if (_callbacks.Count == 0)
+                {
+                    return false;
+                }
+
+                workItem = _callbacks.Dequeue();
+            }
+
+            workItem.Callback(workItem.State);
+            return true;
+        }
     }
 }
