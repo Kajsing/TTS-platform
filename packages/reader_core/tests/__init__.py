@@ -1,0 +1,1 @@
+"""Reader Core tests."""

@@ -36,6 +36,17 @@ DEFAULT_BACKEND_PROVIDER = "cpu"
 DEFAULT_BACKEND_NUM_THREADS = 1
 DEFAULT_BACKEND_DEBUG = False
 DEFAULT_BACKEND_MAX_NUM_SENTENCES = 1
+DEFAULT_READER_ENABLED = True
+DEFAULT_READER_HOME_PATH = ""
+DEFAULT_READER_DATABASE_PATH = "reader.db"
+DEFAULT_READER_MANAGED_FILES_PATH = "library"
+DEFAULT_READER_COPY_IMPORTED_FILES = False
+DEFAULT_READER_PAGE_SIZE = 50
+DEFAULT_READER_MAX_PAGE_SIZE = 500
+DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW = 64
+DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW = 32000
+DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS = 1000
+DEFAULT_READER_MAX_EDIT_HISTORY_BYTES = 10_485_760
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +224,76 @@ class BackendConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderConfig:
+    enabled: bool = DEFAULT_READER_ENABLED
+    home_path: str = DEFAULT_READER_HOME_PATH
+    database_path: str = DEFAULT_READER_DATABASE_PATH
+    managed_files_path: str = DEFAULT_READER_MANAGED_FILES_PATH
+    copy_imported_files: bool = DEFAULT_READER_COPY_IMPORTED_FILES
+    default_page_size: int = DEFAULT_READER_PAGE_SIZE
+    max_page_size: int = DEFAULT_READER_MAX_PAGE_SIZE
+    max_blocks_per_stream_window: int = DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW
+    max_source_chars_per_stream_window: int = DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW
+    max_edit_history_operations: int = DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS
+    max_edit_history_bytes: int = DEFAULT_READER_MAX_EDIT_HISTORY_BYTES
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "ReaderConfig":
+        config = cls(
+            enabled=bool(data.get("enabled", DEFAULT_READER_ENABLED)),
+            home_path=str(data.get("home_path", DEFAULT_READER_HOME_PATH)),
+            database_path=str(data.get("database_path", DEFAULT_READER_DATABASE_PATH)),
+            managed_files_path=str(
+                data.get("managed_files_path", DEFAULT_READER_MANAGED_FILES_PATH)
+            ),
+            copy_imported_files=bool(
+                data.get("copy_imported_files", DEFAULT_READER_COPY_IMPORTED_FILES)
+            ),
+            default_page_size=int(data.get("default_page_size", DEFAULT_READER_PAGE_SIZE)),
+            max_page_size=int(data.get("max_page_size", DEFAULT_READER_MAX_PAGE_SIZE)),
+            max_blocks_per_stream_window=int(
+                data.get(
+                    "max_blocks_per_stream_window",
+                    DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW,
+                )
+            ),
+            max_source_chars_per_stream_window=int(
+                data.get(
+                    "max_source_chars_per_stream_window",
+                    DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW,
+                )
+            ),
+            max_edit_history_operations=int(
+                data.get(
+                    "max_edit_history_operations",
+                    DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS,
+                )
+            ),
+            max_edit_history_bytes=int(
+                data.get("max_edit_history_bytes", DEFAULT_READER_MAX_EDIT_HISTORY_BYTES)
+            ),
+        )
+        if not config.database_path.strip():
+            raise ValueError("reader.database_path must not be empty")
+        if not config.managed_files_path.strip():
+            raise ValueError("reader.managed_files_path must not be empty")
+        positive_limits = {
+            "default_page_size": config.default_page_size,
+            "max_page_size": config.max_page_size,
+            "max_blocks_per_stream_window": config.max_blocks_per_stream_window,
+            "max_source_chars_per_stream_window": config.max_source_chars_per_stream_window,
+            "max_edit_history_operations": config.max_edit_history_operations,
+            "max_edit_history_bytes": config.max_edit_history_bytes,
+        }
+        for name, value in positive_limits.items():
+            if value <= 0:
+                raise ValueError(f"reader.{name} must be positive")
+        if config.default_page_size > config.max_page_size:
+            raise ValueError("reader.default_page_size must not exceed max_page_size")
+        return config
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     server: ServerConfig = ServerConfig()
     auth: AuthConfig = AuthConfig()
@@ -222,6 +303,7 @@ class AppConfig:
     security: SecurityConfig = SecurityConfig()
     limits: LimitsConfig = LimitsConfig()
     backend: BackendConfig = BackendConfig()
+    reader: ReaderConfig = ReaderConfig()
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "AppConfig":
@@ -234,6 +316,7 @@ class AppConfig:
             security=SecurityConfig.from_mapping(_section(data, "security")),
             limits=LimitsConfig.from_mapping(_section(data, "limits")),
             backend=BackendConfig.from_mapping(_section(data, "backend")),
+            reader=ReaderConfig.from_mapping(_section(data, "reader")),
         )
 
 

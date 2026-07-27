@@ -41,6 +41,8 @@ def test_load_config_applies_environment_overrides(tmp_path: Path) -> None:
             "TTS_PLATFORM__STREAMING__ENABLED": "false",
             "TTS_PLATFORM__LIMITS__MAX_CONCURRENT_JOBS": "5",
             "TTS_PLATFORM__BACKEND__MODE": "real",
+            "TTS_PLATFORM__READER__ENABLED": "false",
+            "TTS_PLATFORM__READER__DEFAULT_PAGE_SIZE": "75",
         },
     )
 
@@ -48,6 +50,8 @@ def test_load_config_applies_environment_overrides(tmp_path: Path) -> None:
     assert config.streaming.enabled is False
     assert config.limits.max_concurrent_jobs == 5
     assert config.backend.mode == "real"
+    assert config.reader.enabled is False
+    assert config.reader.default_page_size == 75
 
 
 def test_load_config_rejects_invalid_values(tmp_path: Path) -> None:
@@ -125,6 +129,75 @@ def test_load_config_reads_backend_section(tmp_path: Path) -> None:
     assert config.backend.num_threads == 2
     assert config.backend.debug is True
     assert config.backend.max_num_sentences == 3
+
+
+def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[reader]",
+                "enabled = true",
+                'home_path = "D:/Portable/Reader"',
+                'database_path = "data/library.db"',
+                'managed_files_path = "documents"',
+                "copy_imported_files = true",
+                "default_page_size = 25",
+                "max_page_size = 250",
+                "max_blocks_per_stream_window = 32",
+                "max_source_chars_per_stream_window = 16000",
+                "max_edit_history_operations = 200",
+                "max_edit_history_bytes = 2097152",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path, env={})
+
+    assert config.reader.enabled is True
+    assert config.reader.home_path == "D:/Portable/Reader"
+    assert config.reader.database_path == "data/library.db"
+    assert config.reader.managed_files_path == "documents"
+    assert config.reader.copy_imported_files is True
+    assert config.reader.default_page_size == 25
+    assert config.reader.max_page_size == 250
+    assert config.reader.max_edit_history_operations == 200
+    assert config.reader.max_edit_history_bytes == 2_097_152
+
+
+@pytest.mark.parametrize(
+    ("setting", "value", "message"),
+    [
+        ("database_path", '""', "database_path"),
+        ("managed_files_path", '""', "managed_files_path"),
+        ("default_page_size", "0", "default_page_size"),
+        ("max_edit_history_operations", "0", "max_edit_history_operations"),
+        ("max_edit_history_bytes", "-1", "max_edit_history_bytes"),
+    ],
+)
+def test_load_config_rejects_invalid_reader_settings(
+    tmp_path: Path,
+    setting: str,
+    value: str,
+    message: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f"[reader]\n{setting} = {value}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_config(config_path, env={})
+
+
+def test_load_config_rejects_reader_default_page_above_maximum(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[reader]\ndefault_page_size = 501\nmax_page_size = 500\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must not exceed"):
+        load_config(config_path, env={})
 
 
 def test_load_config_normalizes_allowed_origins(tmp_path: Path) -> None:

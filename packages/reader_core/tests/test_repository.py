@@ -1,0 +1,477 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+from reader_core import (
+    Bookmark,
+    DocumentState,
+    PlaybackPosition,
+    QueueItem,
+    QueueStatus,
+    ReaderConflictError,
+    ReaderCursor,
+    ReaderEditHistoryError,
+    ReaderLibrary,
+    ReaderStaleCursorError,
+    ReaderValidationError,
+    SqliteReaderRepository,
+    initialize_reader_repository,
+)
+from reader_core.sqlite.connection import connect_sqlite
+
+from .synthetic_library import populate_synthetic_documents
+
+
+def _cursor(document, block, offset: int) -> ReaderCursor:
+    return ReaderCursor(
+        document_id=document.id,
+        block_id=block.id,
+        block_ordinal=block.ordinal,
+        character_offset=offset,
+        content_revision=document.content_revision,
+    )
+
+
+def test_document_crud_order_soft_delete_and_restore(repository, document) -> None:
+    bundle = repository.get_document_bundle(document.id)
+
+    assert bundle.document == document
+    assert [section.ordinal for section in bundle.sections] == [0]
+    assert [block.ordinal for block in bundle.blocks] == [0, 1]
+    assert [block.text for block in bundle.blocks] == ["Alpha beta gamma.", "Second paragraph."]
+
+    updated = repository.update_document(
+        document.id,
+        expected_row_version=document.row_version,
+        title="Renamed",
+        state=DocumentState.ACTIVE,
+    )
+    assert updated.title == "Renamed"
+    assert updated.state is DocumentState.ACTIVE
+    assert updated.row_version == 2
+    assert updated.content_revision == 1
+
+    deleted = repository.soft_delete_document(
+        document.id,
+        expected_row_version=updated.row_version,
+    )
+    assert deleted.deleted_at is not None
+    assert repository.list_documents().items == ()
+
+    restored = repository.restore_document(
+        document.id,
+        expected_row_version=deleted.row_version,
+    )
+    assert restored.deleted_at is None
+    assert repository.list_documents().items[0].id == document.id
+
+
+def test_document_updates_detect_optimistic_concurrency_conflicts(repository, document) -> None:
+    repository.update_document(document.id, expected_row_version=1, title="First")
+
+    with pytest.raises(ReaderConflictError) as error:
+        repository.update_document(document.id, expected_row_version=1, title="Stale")
+
+    assert error.value.expected == 1
+    assert error.value.actual == 2
+
+
+def test_replace_remaps_saved_and_external_cursors(repository, document) -> None:
+    block = repository.list_blocks(document.id)[0]
+    now = datetime.now(timezone.utc)
+    position = repository.save_position(
+        PlaybackPosition(
+            document_id=document.id,
+            cursor=_cursor(document, block, 12),
+            updated_at=now,
+        )
+    )
+    bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(document, block, 12),
+            label="After beta",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    updated, edit = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=6,
+        end_offset=10,
+        replacement_text="wonderful",
+        expected_row_version=document.row_version,
+    )
+
+    assert edit.original_text == "beta"
+    assert updated.content_revision == 2
+    assert updated.row_version == 2
+    assert repository.list_blocks(document.id)[0].text == "Alpha wonderful gamma."
+    assert repository.get_position(document.id).cursor.character_offset == 17
+    assert repository.get_position(document.id).row_version == position.row_version + 1
+    stored_bookmark = repository.list_bookmarks(document.id)[0]
+    assert stored_bookmark.cursor.character_offset == 17
+    assert stored_bookmark.row_version == bookmark.row_version + 1
+    assert repository.resolve_cursor(_cursor(document, block, 12)).character_offset == 17
+
+
+def test_edit_append_undo_redo_are_atomic_and_persistent(repository, document) -> None:
+    block = repository.list_blocks(document.id)[0]
+    edited, _ = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=6,
+        end_offset=10,
+        replacement_text="great",
+        expected_row_version=document.row_version,
+    )
+    appended, append_edit = repository.append_text(
+        document.id,
+        "Copied forum selection.\nWith an intentional line.",
+        expected_row_version=edited.row_version,
+    )
+    assert append_edit.replacement_text == "Copied forum selection.\nWith an intentional line."
+    assert appended.content_revision == 3
+    assert appended.row_version == 3
+    assert appended.total_blocks == 3
+
+    after_undo_append = repository.undo(document.id, expected_row_version=appended.row_version)
+    assert after_undo_append.content_revision == 4
+    assert after_undo_append.row_version == 4
+    assert after_undo_append.total_blocks == 2
+    assert repository.list_blocks(document.id)[-1].text == "Second paragraph."
+
+    after_undo_edit = repository.undo(
+        document.id,
+        expected_row_version=after_undo_append.row_version,
+    )
+    assert after_undo_edit.content_revision == 5
+    assert repository.list_blocks(document.id)[0].text == "Alpha beta gamma."
+
+    after_redo_edit = repository.redo(
+        document.id,
+        expected_row_version=after_undo_edit.row_version,
+    )
+    assert after_redo_edit.content_revision == 6
+    assert repository.list_blocks(document.id)[0].text == "Alpha great gamma."
+
+    after_redo_append = repository.redo(
+        document.id,
+        expected_row_version=after_redo_edit.row_version,
+    )
+    assert after_redo_append.content_revision == 7
+    assert repository.list_blocks(document.id)[-1].id == append_edit.block_id
+
+    reopened = SqliteReaderRepository(repository.database_path)
+    assert reopened.get_document(document.id).content_revision == 7
+    assert reopened.list_blocks(document.id)[-1].text.startswith("Copied forum")
+
+
+def test_new_edit_after_undo_discards_redo_branch(repository, document) -> None:
+    block = repository.list_blocks(document.id)[0]
+    edited, _ = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=0,
+        end_offset=5,
+        replacement_text="First",
+        expected_row_version=document.row_version,
+    )
+    undone = repository.undo(document.id, expected_row_version=edited.row_version)
+    changed, _ = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=0,
+        end_offset=5,
+        replacement_text="Other",
+        expected_row_version=undone.row_version,
+    )
+
+    with pytest.raises(ReaderEditHistoryError):
+        repository.redo(document.id, expected_row_version=changed.row_version)
+
+
+def test_cursor_after_undo_returns_typed_stale_conflict(repository, document) -> None:
+    block = repository.list_blocks(document.id)[0]
+    old_cursor = _cursor(document, block, 12)
+    edited, _ = repository.replace_block_text(
+        document.id,
+        block.id,
+        start_offset=6,
+        end_offset=10,
+        replacement_text="wonderful",
+        expected_row_version=document.row_version,
+    )
+    repository.undo(document.id, expected_row_version=edited.row_version)
+
+    with pytest.raises(ReaderStaleCursorError):
+        repository.resolve_cursor(old_cursor)
+
+
+def test_edit_history_is_bounded_and_can_be_cleared(tmp_path: Path) -> None:
+    repository = SqliteReaderRepository(
+        tmp_path / "reader.db",
+        max_edit_history_operations=2,
+        max_edit_history_bytes=100,
+    )
+    document = ReaderLibrary(repository).create_plain_text_document(title="Test", text="abc")
+    block = repository.list_blocks(document.id)[0]
+    for replacement in ("A", "B", "C"):
+        document, _ = repository.replace_block_text(
+            document.id,
+            block.id,
+            start_offset=0,
+            end_offset=1,
+            replacement_text=replacement,
+            expected_row_version=document.row_version,
+        )
+
+    repository.undo(document.id, expected_row_version=document.row_version)
+    current = repository.get_document(document.id)
+    repository.undo(document.id, expected_row_version=current.row_version)
+    current = repository.get_document(document.id)
+    with pytest.raises(ReaderEditHistoryError):
+        repository.undo(document.id, expected_row_version=current.row_version)
+
+    repository.clear_edit_history(document.id)
+    current = repository.get_document(document.id)
+    with pytest.raises(ReaderEditHistoryError):
+        repository.redo(document.id, expected_row_version=current.row_version)
+
+
+def test_positions_bookmarks_and_queue_are_durable(repository, document) -> None:
+    second = ReaderLibrary(repository).create_plain_text_document(title="Second", text="Two")
+    block = repository.list_blocks(document.id)[0]
+    now = datetime.now(timezone.utc)
+    position = repository.save_position(
+        PlaybackPosition(
+            document_id=document.id,
+            cursor=_cursor(document, block, 3),
+            updated_at=now,
+            completed=False,
+        )
+    )
+    bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(document, block, 5),
+            label="Useful",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    first_item = QueueItem(
+        id=str(uuid.uuid4()),
+        document_id=document.id,
+        ordinal=0,
+        status=QueueStatus.QUEUED,
+        added_at=now,
+        updated_at=now,
+    )
+    second_item = QueueItem(
+        id=str(uuid.uuid4()),
+        document_id=second.id,
+        ordinal=1,
+        status=QueueStatus.QUEUED,
+        added_at=now,
+        updated_at=now,
+    )
+    repository.add_queue_item(first_item)
+    repository.add_queue_item(second_item)
+    reordered = repository.reorder_queue((second_item.id, first_item.id))
+
+    reopened = SqliteReaderRepository(repository.database_path)
+    assert reopened.get_position(document.id) == position
+    assert reopened.list_bookmarks(document.id) == (bookmark,)
+    assert [item.id for item in reordered] == [second_item.id, first_item.id]
+    assert [item.id for item in reopened.list_queue()] == [second_item.id, first_item.id]
+
+
+def test_position_retry_is_idempotent(repository, document) -> None:
+    block = repository.list_blocks(document.id)[0]
+    now = datetime.now(timezone.utc)
+    requested = PlaybackPosition(
+        document_id=document.id,
+        cursor=_cursor(document, block, 4),
+        updated_at=now,
+    )
+
+    first = repository.save_position(requested, expected_row_version=0)
+    retried = repository.save_position(requested, expected_row_version=0)
+
+    assert retried == first
+    assert retried.row_version == 1
+
+
+def test_bookmark_and_queue_mutations_use_row_versions(repository, document) -> None:
+    second = ReaderLibrary(repository).create_plain_text_document(title="Second", text="Two")
+    block = repository.list_blocks(document.id)[0]
+    now = datetime.now(timezone.utc)
+    bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(document, block, 2),
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    updated_bookmark = repository.update_bookmark(
+        bookmark.id,
+        expected_row_version=bookmark.row_version,
+        label="Renamed",
+        note="Remember this",
+    )
+    assert updated_bookmark.label == "Renamed"
+    assert updated_bookmark.row_version == 2
+    with pytest.raises(ReaderConflictError):
+        repository.delete_bookmark(bookmark.id, expected_row_version=1)
+    repository.delete_bookmark(bookmark.id, expected_row_version=2)
+    assert repository.list_bookmarks(document.id) == ()
+
+    first_item = QueueItem(
+        id=str(uuid.uuid4()),
+        document_id=document.id,
+        ordinal=0,
+        status=QueueStatus.QUEUED,
+        added_at=now,
+        updated_at=now,
+    )
+    second_item = QueueItem(
+        id=str(uuid.uuid4()),
+        document_id=second.id,
+        ordinal=1,
+        status=QueueStatus.QUEUED,
+        added_at=now,
+        updated_at=now,
+    )
+    repository.add_queue_item(first_item)
+    repository.add_queue_item(second_item)
+    playing = repository.update_queue_item(
+        first_item.id,
+        expected_row_version=1,
+        status=QueueStatus.PLAYING,
+    )
+    with pytest.raises(ReaderValidationError, match="only one"):
+        repository.update_queue_item(
+            second_item.id,
+            expected_row_version=1,
+            status=QueueStatus.PLAYING,
+        )
+    repository.remove_queue_item(first_item.id, expected_row_version=playing.row_version)
+    remaining = repository.list_queue()
+    assert len(remaining) == 1
+    assert remaining[0].id == second_item.id
+    assert remaining[0].ordinal == 0
+    assert remaining[0].row_version == 2
+
+
+def test_wal_allows_reader_while_an_uncommitted_writer_exists(repository, document) -> None:
+    reader = connect_sqlite(repository.database_path)
+    writer = connect_sqlite(repository.database_path)
+    try:
+        reader.execute("BEGIN")
+        assert reader.execute("SELECT COUNT(*) FROM reader_documents").fetchone()[0] == 1
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute(
+            "UPDATE reader_documents SET title = 'Uncommitted' WHERE id = ?",
+            (document.id,),
+        )
+        assert reader.execute("SELECT title FROM reader_documents").fetchone()[0] == "Test document"
+        writer.commit()
+        reader.commit()
+        assert reader.execute("SELECT title FROM reader_documents").fetchone()[0] == "Uncommitted"
+    finally:
+        if reader.in_transaction:
+            reader.rollback()
+        if writer.in_transaction:
+            writer.rollback()
+        reader.close()
+        writer.close()
+
+
+def test_backup_is_consistent_and_does_not_overwrite_by_default(
+    repository,
+    document,
+    tmp_path,
+) -> None:
+    backup = repository.backup_to(tmp_path / "backups" / "reader.db")
+    restored = SqliteReaderRepository(backup)
+
+    assert restored.get_document(document.id).title == document.title
+    assert restored.report().integrity_ok is True
+    with pytest.raises(FileExistsError):
+        repository.backup_to(backup)
+    assert repository.backup_to(backup, overwrite=True) == backup
+
+
+def test_disabled_repository_initialization_has_no_filesystem_side_effect(tmp_path: Path) -> None:
+    database = tmp_path / "missing" / "reader.db"
+
+    result = initialize_reader_repository(enabled=False, database_path=database)
+
+    assert result is None
+    assert not database.parent.exists()
+
+
+def test_ten_thousand_document_pages_use_keyset_pagination(tmp_path: Path) -> None:
+    repository = SqliteReaderRepository(tmp_path / "reader.db")
+    populate_synthetic_documents(repository.database_path, count=10_000)
+
+    first = repository.list_documents(limit=73)
+    second = repository.list_documents(limit=73, cursor=first.next_cursor)
+
+    assert len(first.items) == 73
+    assert len(second.items) == 73
+    assert first.items[-1].id != second.items[0].id
+    assert first.next_cursor is not None
+    assert second.next_cursor is not None
+    assert not set(item.id for item in first.items) & set(item.id for item in second.items)
+
+    with connect_sqlite(repository.database_path) as connection:
+        plan = connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT * FROM reader_documents
+            WHERE deleted_at IS NULL AND state = ?
+              AND (updated_at < ? OR (updated_at = ? AND id < ?))
+            ORDER BY updated_at DESC, id DESC LIMIT ?
+            """,
+            ("inbox", "9999", "9999", "z", 50),
+        ).fetchall()
+    assert any("INDEX" in str(row[3]).upper() for row in plan)
+
+
+@pytest.mark.parametrize("cursor", ["%%%", "bm90LWpzb24", "WzFd"])
+def test_document_listing_rejects_invalid_page_cursors(repository, cursor: str) -> None:
+    with pytest.raises(ReaderValidationError, match="cursor is invalid"):
+        repository.list_documents(cursor=cursor)
+
+
+def test_invalid_append_and_soft_deleted_queue_are_rejected(repository, document) -> None:
+    with pytest.raises(ReaderValidationError, match="must not be empty"):
+        repository.append_text(document.id, " ", expected_row_version=document.row_version)
+
+    deleted = repository.soft_delete_document(
+        document.id,
+        expected_row_version=document.row_version,
+    )
+    now = datetime.now(timezone.utc)
+    with pytest.raises(ReaderValidationError, match="cannot be queued"):
+        repository.add_queue_item(
+            QueueItem(
+                id=str(uuid.uuid4()),
+                document_id=deleted.id,
+                ordinal=0,
+                status=QueueStatus.QUEUED,
+                added_at=now,
+                updated_at=now,
+            )
+        )

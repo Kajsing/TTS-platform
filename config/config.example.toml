@@ -37,3 +37,16 @@ provider = "cpu"
 num_threads = 1
 debug = false
 max_num_sentences = 1
+
+[reader]
+enabled = true
+home_path = ""
+database_path = "reader.db"
+managed_files_path = "library"
+copy_imported_files = false
+default_page_size = 50
+max_page_size = 500
+max_blocks_per_stream_window = 64
+max_source_chars_per_stream_window = 32000
+max_edit_history_operations = 1000
+max_edit_history_bytes = 10485760

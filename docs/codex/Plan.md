@@ -570,7 +570,7 @@ Codex resume point; the design document controls each milestone's detailed
 scope.
 
 - [x] Reader Milestone 0: Activate the Reader Workstation track.
-- [ ] Reader Milestone 1: Reader domain and SQLite library.
+- [x] Reader Milestone 1: Reader domain and SQLite library.
 - [ ] Reader Milestone 2: Protected Reader API and shared contracts.
 - [ ] Reader Milestone 3: WPF desktop shell and onboarding.
 - [ ] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
@@ -609,7 +609,6 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 1 is the next incomplete milestone. Do not create HTTP routes,
-WPF code, importers, or speech-rule feature code during that milestone; follow
-its revised domain-and-SQLite boundary in the normative design, including
-stable cursors, revisioned edits, Undo/Redo, and the per-user Reader home.
+Reader Milestone 2 is the next incomplete milestone. Add the protected Reader
+API and shared contracts described by the normative design without starting the
+WPF shell, importers, or speech-rule feature work from later milestones.

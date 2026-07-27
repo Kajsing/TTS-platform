@@ -11,22 +11,60 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: refine the active Reader Workstation plan from the
-  user's product answers before Milestone 1 locks the persistence model.
-- Current loop result: complete. This documentation-only refinement records
-  editable documents with persistent Undo/Redo, stable block/revision cursors,
-  a per-user Reader home, clipboard append as a primary workflow, open rule
-  interchange, post-1.0 OCR, and a future public-distribution path. It changes
-  no runtime code or dependencies.
+- Current loop target: Reader Workstation Milestone 1, the backend-agnostic
+  Reader domain and service-owned SQLite library.
+- Current loop result: complete. `reader_core` now provides UUID/UTC domain
+  entities, repository protocols, deterministic plain-text blocks, stable
+  block cursors, revisioned edit and clipboard-append operations, persistent
+  bounded Undo/Redo, positions, bookmarks, queue operations, SQLite migration
+  and connection policy, integrity/schema reporting, and a consistent backup
+  primitive. No Reader HTTP routes or WPF code were added.
 - Locked Reader Workstation architecture: preserve the existing Python TTS
   service as the single synthesis authority; use a thin WPF/.NET 10 Windows
   client; keep canonical reader persistence in service-owned SQLite through a
   new `reader_core` domain; add protected `/v1/reader/*` contracts rather than
   changing existing TTS endpoints; and preserve structured source mapping before
   reuse of the existing `tts_core` synthesis pipeline.
-- Reader Workstation resume point after this loop: Milestone 1, Reader domain
-  and SQLite library. SAPI remains an optional compatibility client and is not
-  the active product track.
+- Reader Workstation resume point after this loop: Milestone 2, protected
+  Reader API and shared contracts. SAPI remains an optional compatibility
+  client and is not the active product track.
+- Reader Milestone 1 implementation details:
+  - migration `001_reader_library.sql` creates the seven Reader tables and
+    indexes plus version/checksum tracking in `schema_migrations`;
+  - every repository connection enables foreign keys, WAL, normal synchronous
+    mode, and a 5-second busy timeout; writes use short immediate transactions;
+  - document content mutations compare integer `row_version`, increment both
+    row and content revisions, and update blocks plus edit history atomically;
+  - one clipboard append creates one paragraph block and one undo entry;
+  - edit history is bounded by configurable operation and UTF-8 byte limits and
+    can be explicitly cleared; this is ordinary deletion, not a secure-erasure
+    guarantee;
+  - persisted positions and bookmarks remap inside the content transaction;
+    external old cursors remap over intact monotonic edit history or return the
+    typed `ReaderStaleCursorError` after a branch or trimmed history;
+  - list operations use `(updated_at, id)` keyset cursors and indexed queries;
+    the 10,000-document test does not use SQL `OFFSET`;
+  - resolving Reader paths has no filesystem side effect. Explicit repository
+    initialization creates the database parent and runs migrations, while
+    disabled initialization returns without touching storage;
+  - the SQLite backup API writes a temporary consistent snapshot and atomically
+    installs it at the requested destination. User-facing restore remains a
+    later milestone.
+- Reader Milestone 1 validation passed on 2026-07-27:
+  - `py -3 -m pytest packages\reader_core\tests -q`: 36 passed.
+  - focused Reader/config/disabled-mode tests: 55 passed.
+  - `py -3 -m pytest -q`: 305 passed.
+  - `py -3 -m ruff check .`: passed.
+  - `py -3 scripts\check_v1_completion.py --require-complete`: passed with
+    all nine protected v1 criteria ready.
+  - `git diff --check`: passed; line-ending notices are informational.
+- Reader Milestone 1 assumptions and deviations:
+  - editable source types at this layer are plain text, clipboard, selection,
+    and text files; structured-format snapshot editing remains with import work;
+  - operation and byte limits were added to `[reader]` because the approved
+    persistent Undo/Redo design requires bounded retention;
+  - no product, architecture, security, licensing, deployment, or dependency
+    direction changed. Only Python standard-library modules were added.
 - Reader product clarifications approved on 2026-07-27:
   - plain-text, clipboard, and selection documents are directly editable;
   - active playback locks content, while edit operations provide persistent
@@ -972,10 +1010,9 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Resume at Reader Workstation Milestone 1. Keep the slice limited to the
-   Reader domain and SQLite library, including stable cursors, content
-   revisions, edit history, Undo/Redo, backup primitive, and per-user Reader
-   home; do not add HTTP routes or WPF code yet.
+4. Resume at Reader Workstation Milestone 2. Add protected Reader API routes and
+   shared contracts over the completed repository layer; do not start the WPF
+   shell, document importers, or speech-rule work from later milestones.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.
