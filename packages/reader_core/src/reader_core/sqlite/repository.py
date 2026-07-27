@@ -38,7 +38,12 @@ from ..models import (
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderSection,
+    RuleScope,
+    RuleStage,
+    RuleType,
     SourceType,
+    SpeechRule,
+    SpeechRuleSet,
     utc_now,
 )
 from .connection import connect_sqlite
@@ -851,6 +856,314 @@ class SqliteReaderRepository:
                 for row in connection.execute("SELECT * FROM reader_queue_items ORDER BY ordinal")
             )
 
+    def create_rule_set(self, rule_set: SpeechRuleSet) -> SpeechRuleSet:
+        with self._write() as connection:
+            connection.execute(
+                """
+                INSERT INTO reader_rule_sets(
+                    id, name, description, enabled, scope, source_sha256,
+                    version, row_version, created_at, updated_at,
+                    raw_import_metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                _rule_set_values(rule_set),
+            )
+            self._bump_rules_version(connection)
+        return rule_set
+
+    def get_rule_set(self, rule_set_id: str) -> SpeechRuleSet:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_rule_sets WHERE id = ?",
+                (rule_set_id,),
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError("rule set", rule_set_id)
+            return _rule_set_from_row(row)
+
+    def list_rule_sets(self) -> tuple[SpeechRuleSet, ...]:
+        with self._connection() as connection:
+            return tuple(
+                _rule_set_from_row(row)
+                for row in connection.execute(
+                    "SELECT * FROM reader_rule_sets ORDER BY scope, created_at, id"
+                )
+            )
+
+    def update_rule_set(
+        self,
+        rule_set: SpeechRuleSet,
+        *,
+        expected_row_version: int,
+    ) -> SpeechRuleSet:
+        with self._write() as connection:
+            current = connection.execute(
+                "SELECT * FROM reader_rule_sets WHERE id = ?",
+                (rule_set.id,),
+            ).fetchone()
+            if current is None:
+                raise ReaderNotFoundError("rule set", rule_set.id)
+            if int(current["row_version"]) != expected_row_version:
+                raise ReaderConflictError(
+                    rule_set.id,
+                    expected=expected_row_version,
+                    actual=int(current["row_version"]),
+                )
+            updated = replace(
+                rule_set,
+                created_at=_time_load(current["created_at"]),
+                version=int(current["version"]) + 1,
+                row_version=expected_row_version + 1,
+                updated_at=utc_now(),
+            )
+            connection.execute(
+                """
+                UPDATE reader_rule_sets SET
+                    name = ?, description = ?, enabled = ?, scope = ?,
+                    source_sha256 = ?, version = ?, row_version = ?,
+                    updated_at = ?, raw_import_metadata_json = ?
+                WHERE id = ?
+                """,
+                (
+                    updated.name,
+                    updated.description,
+                    int(updated.enabled),
+                    updated.scope.value,
+                    updated.source_sha256,
+                    updated.version,
+                    updated.row_version,
+                    _time_dump(updated.updated_at),
+                    _json_dump(updated.raw_import_metadata),
+                    updated.id,
+                ),
+            )
+            self._bump_rules_version(connection)
+            return updated
+
+    def delete_rule_set(self, rule_set_id: str, *, expected_row_version: int) -> None:
+        with self._write() as connection:
+            result = connection.execute(
+                "DELETE FROM reader_rule_sets WHERE id = ? AND row_version = ?",
+                (rule_set_id, expected_row_version),
+            )
+            if result.rowcount == 0:
+                exists = connection.execute(
+                    "SELECT 1 FROM reader_rule_sets WHERE id = ?", (rule_set_id,)
+                ).fetchone()
+                if exists is None:
+                    raise ReaderNotFoundError("rule set", rule_set_id)
+                actual = connection.execute(
+                    "SELECT row_version FROM reader_rule_sets WHERE id = ?", (rule_set_id,)
+                ).fetchone()
+                raise ReaderConflictError(
+                    rule_set_id,
+                    expected=expected_row_version,
+                    actual=int(actual["row_version"]),
+                )
+            self._bump_rules_version(connection)
+
+    def create_rule(self, rule: SpeechRule) -> SpeechRule:
+        with self._write() as connection:
+            connection.execute(
+                """
+                INSERT INTO reader_speech_rules(
+                    id, rule_set_id, name, enabled, stage, rule_type, pattern,
+                    replacement, case_sensitive, whole_word, language_filter,
+                    engine_filter, voice_filter, document_filter, priority,
+                    regex_timeout_ms, row_version, created_at, updated_at,
+                    raw_import_metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                _rule_values(rule),
+            )
+            self._touch_rule_set(connection, rule.rule_set_id)
+            self._bump_rules_version(connection)
+        return rule
+
+    def get_rule(self, rule_id: str) -> SpeechRule:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM reader_speech_rules WHERE id = ?", (rule_id,)
+            ).fetchone()
+            if row is None:
+                raise ReaderNotFoundError("speech rule", rule_id)
+            return _rule_from_row(row)
+
+    def list_rules(self, rule_set_ids: tuple[str, ...] | None = None) -> tuple[SpeechRule, ...]:
+        with self._connection() as connection:
+            if rule_set_ids is None:
+                rows = connection.execute(
+                    """
+                    SELECT r.* FROM reader_speech_rules r
+                    JOIN reader_rule_sets s ON s.id = r.rule_set_id
+                    ORDER BY CASE s.scope
+                        WHEN 'system' THEN 0 WHEN 'global' THEN 1
+                        WHEN 'language' THEN 2 WHEN 'voice_engine' THEN 3 ELSE 4 END,
+                        r.stage, r.priority, r.created_at, r.id
+                    """
+                )
+            elif not rule_set_ids:
+                return ()
+            else:
+                placeholders = ",".join("?" for _ in rule_set_ids)
+                rows = connection.execute(
+                    f"""
+                    SELECT r.* FROM reader_speech_rules r
+                    JOIN reader_rule_sets s ON s.id = r.rule_set_id
+                    WHERE r.rule_set_id IN ({placeholders}) AND s.enabled = 1
+                    ORDER BY CASE s.scope
+                        WHEN 'system' THEN 0 WHEN 'global' THEN 1
+                        WHEN 'language' THEN 2 WHEN 'voice_engine' THEN 3 ELSE 4 END,
+                        r.stage, r.priority, r.created_at, r.id
+                    """,
+                    rule_set_ids,
+                )
+            return tuple(_rule_from_row(row) for row in rows)
+
+    def update_rule(
+        self,
+        rule: SpeechRule,
+        *,
+        expected_row_version: int,
+    ) -> SpeechRule:
+        with self._write() as connection:
+            current = connection.execute(
+                "SELECT * FROM reader_speech_rules WHERE id = ?", (rule.id,)
+            ).fetchone()
+            if current is None:
+                raise ReaderNotFoundError("speech rule", rule.id)
+            if int(current["row_version"]) != expected_row_version:
+                raise ReaderConflictError(
+                    rule.id,
+                    expected=expected_row_version,
+                    actual=int(current["row_version"]),
+                )
+            updated = replace(
+                rule,
+                rule_set_id=str(current["rule_set_id"]),
+                created_at=_time_load(current["created_at"]),
+                updated_at=utc_now(),
+                row_version=expected_row_version + 1,
+            )
+            connection.execute(
+                """
+                UPDATE reader_speech_rules SET
+                    name = ?, enabled = ?, stage = ?, rule_type = ?, pattern = ?,
+                    replacement = ?, case_sensitive = ?, whole_word = ?,
+                    language_filter = ?, engine_filter = ?, voice_filter = ?,
+                    document_filter = ?, priority = ?, regex_timeout_ms = ?,
+                    row_version = ?, updated_at = ?, raw_import_metadata_json = ?
+                WHERE id = ?
+                """,
+                (
+                    updated.name,
+                    int(updated.enabled),
+                    updated.stage.value,
+                    updated.rule_type.value,
+                    updated.pattern,
+                    updated.replacement,
+                    int(updated.case_sensitive),
+                    int(updated.whole_word),
+                    updated.language_filter,
+                    updated.engine_filter,
+                    updated.voice_filter,
+                    updated.document_filter,
+                    updated.priority,
+                    updated.regex_timeout_ms,
+                    updated.row_version,
+                    _time_dump(updated.updated_at),
+                    _json_dump(updated.raw_import_metadata),
+                    updated.id,
+                ),
+            )
+            self._touch_rule_set(connection, updated.rule_set_id)
+            self._bump_rules_version(connection)
+            return updated
+
+    def delete_rule(self, rule_id: str, *, expected_row_version: int) -> None:
+        with self._write() as connection:
+            current = connection.execute(
+                "SELECT rule_set_id, row_version FROM reader_speech_rules WHERE id = ?",
+                (rule_id,),
+            ).fetchone()
+            if current is None:
+                raise ReaderNotFoundError("speech rule", rule_id)
+            if int(current["row_version"]) != expected_row_version:
+                raise ReaderConflictError(
+                    rule_id,
+                    expected=expected_row_version,
+                    actual=int(current["row_version"]),
+                )
+            connection.execute("DELETE FROM reader_speech_rules WHERE id = ?", (rule_id,))
+            self._touch_rule_set(connection, str(current["rule_set_id"]))
+            self._bump_rules_version(connection)
+
+    def get_rules_version(self) -> int:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT rules_version FROM reader_rule_state WHERE singleton_id = 1"
+            ).fetchone()
+            return int(row["rules_version"])
+
+    def get_rule_import_report(
+        self, target_rule_set_id: str, source_sha256: str
+    ) -> Mapping[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT report_json FROM reader_rule_imports
+                WHERE target_rule_set_id = ? AND source_sha256 = ?
+                """,
+                (target_rule_set_id, source_sha256),
+            ).fetchone()
+            return _json_load(row["report_json"]) if row is not None else None
+
+    def record_rule_import(
+        self,
+        target_rule_set_id: str,
+        source_sha256: str,
+        report: Mapping[str, Any],
+    ) -> None:
+        with self._write() as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO reader_rule_imports(
+                    id, target_rule_set_id, source_sha256, imported_at, report_json
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    target_rule_set_id,
+                    source_sha256,
+                    _time_dump(utc_now()),
+                    _json_dump(report),
+                ),
+            )
+
+    @staticmethod
+    def _touch_rule_set(connection: sqlite3.Connection, rule_set_id: str) -> None:
+        result = connection.execute(
+            """
+            UPDATE reader_rule_sets
+            SET version = version + 1, row_version = row_version + 1, updated_at = ?
+            WHERE id = ?
+            """,
+            (_time_dump(utc_now()), rule_set_id),
+        )
+        if result.rowcount == 0:
+            raise ReaderNotFoundError("rule set", rule_set_id)
+
+    @staticmethod
+    def _bump_rules_version(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            UPDATE reader_rule_state
+            SET rules_version = rules_version + 1, updated_at = ?
+            WHERE singleton_id = 1
+            """,
+            (_time_dump(utc_now()),),
+        )
+
     def report(self) -> ReaderDatabaseReport:
         with self._connection() as connection:
             row = connection.execute(
@@ -1506,6 +1819,88 @@ def _queue_from_row(row: sqlite3.Row) -> QueueItem:
         added_at=_time_load(row["added_at"]),
         updated_at=_time_load(row["updated_at"]),
         row_version=int(row["row_version"]),
+    )
+
+
+def _rule_set_from_row(row: sqlite3.Row) -> SpeechRuleSet:
+    return SpeechRuleSet(
+        id=str(row["id"]),
+        name=str(row["name"]),
+        description=str(row["description"]),
+        enabled=bool(row["enabled"]),
+        scope=RuleScope(row["scope"]),
+        source_sha256=row["source_sha256"],
+        version=int(row["version"]),
+        row_version=int(row["row_version"]),
+        created_at=_time_load(row["created_at"]),
+        updated_at=_time_load(row["updated_at"]),
+        raw_import_metadata=_json_load(row["raw_import_metadata_json"]),
+    )
+
+
+def _rule_set_values(rule_set: SpeechRuleSet) -> tuple[Any, ...]:
+    return (
+        rule_set.id,
+        rule_set.name,
+        rule_set.description,
+        int(rule_set.enabled),
+        rule_set.scope.value,
+        rule_set.source_sha256,
+        rule_set.version,
+        rule_set.row_version,
+        _time_dump(rule_set.created_at),
+        _time_dump(rule_set.updated_at),
+        _json_dump(rule_set.raw_import_metadata),
+    )
+
+
+def _rule_from_row(row: sqlite3.Row) -> SpeechRule:
+    return SpeechRule(
+        id=str(row["id"]),
+        rule_set_id=str(row["rule_set_id"]),
+        name=str(row["name"]),
+        enabled=bool(row["enabled"]),
+        stage=RuleStage(row["stage"]),
+        rule_type=RuleType(row["rule_type"]),
+        pattern=str(row["pattern"]),
+        replacement=str(row["replacement"]),
+        case_sensitive=bool(row["case_sensitive"]),
+        whole_word=bool(row["whole_word"]),
+        language_filter=row["language_filter"],
+        engine_filter=row["engine_filter"],
+        voice_filter=row["voice_filter"],
+        document_filter=row["document_filter"],
+        priority=int(row["priority"]),
+        regex_timeout_ms=int(row["regex_timeout_ms"]),
+        row_version=int(row["row_version"]),
+        created_at=_time_load(row["created_at"]),
+        updated_at=_time_load(row["updated_at"]),
+        raw_import_metadata=_json_load(row["raw_import_metadata_json"]),
+    )
+
+
+def _rule_values(rule: SpeechRule) -> tuple[Any, ...]:
+    return (
+        rule.id,
+        rule.rule_set_id,
+        rule.name,
+        int(rule.enabled),
+        rule.stage.value,
+        rule.rule_type.value,
+        rule.pattern,
+        rule.replacement,
+        int(rule.case_sensitive),
+        int(rule.whole_word),
+        rule.language_filter,
+        rule.engine_filter,
+        rule.voice_filter,
+        rule.document_filter,
+        rule.priority,
+        rule.regex_timeout_ms,
+        rule.row_version,
+        _time_dump(rule.created_at),
+        _time_dump(rule.updated_at),
+        _json_dump(rule.raw_import_metadata),
     )
 
 

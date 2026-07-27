@@ -14,9 +14,10 @@ $ServiceSrc = Join-Path $RepoRoot "apps\tts_service\src"
 $CoreSrc = Join-Path $RepoRoot "packages\tts_core\src"
 $ReaderCoreSrc = Join-Path $RepoRoot "packages\reader_core\src"
 $DocumentImportSrc = Join-Path $RepoRoot "packages\document_import\src"
+$SpeechRulesSrc = Join-Path $RepoRoot "packages\speech_rules\src"
 $ConfigPath = Join-Path $RepoRoot "config\config.toml"
 
-$PythonPathParts = @($ServiceSrc, $CoreSrc, $ReaderCoreSrc, $DocumentImportSrc)
+$PythonPathParts = @($ServiceSrc, $CoreSrc, $ReaderCoreSrc, $DocumentImportSrc, $SpeechRulesSrc)
 if ($env:PYTHONPATH) {
     $PythonPathParts += $env:PYTHONPATH
 }

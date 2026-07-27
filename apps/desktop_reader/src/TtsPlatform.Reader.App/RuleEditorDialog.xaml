@@ -1,0 +1,153 @@
+<Window x:Class="TtsPlatform.Reader.App.RuleEditorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Speech rules" Height="760" Width="1120" MinHeight="620" MinWidth="900"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Grid Margin="14">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="280" />
+      <ColumnDefinition Width="10" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <Grid Grid.Column="0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <TextBlock Text="Speech rule sets" FontSize="21" FontWeight="SemiBold" />
+      <StackPanel Grid.Row="1" Margin="0,8,0,8">
+        <TextBox x:Name="RuleSetNameTextBox" AutomationProperties.Name="Rule set name" />
+        <TextBox x:Name="RuleSetDescriptionTextBox" Margin="0,5,0,0"
+                 ToolTip="Optional rule set description"
+                 AutomationProperties.Name="Rule set description" />
+        <DockPanel Margin="0,5,0,0">
+          <ComboBox x:Name="ScopeComboBox" SelectedIndex="1" Width="130"
+                    AutomationProperties.Name="Rule set scope">
+            <ComboBoxItem Content="System" Tag="system" />
+            <ComboBoxItem Content="Global" Tag="global" />
+            <ComboBoxItem Content="Language" Tag="language" />
+            <ComboBoxItem Content="Voice or engine" Tag="voice_engine" />
+            <ComboBoxItem Content="Document" Tag="document" />
+          </ComboBox>
+          <CheckBox x:Name="RuleSetEnabledCheckBox" Content="Enabled" IsChecked="True"
+                    VerticalAlignment="Center" Margin="8,0" />
+        </DockPanel>
+        <WrapPanel Margin="0,5,0,0">
+          <Button Content="New set" Click="NewRuleSetButton_Click" />
+          <Button Content="Save set" Click="SaveRuleSetButton_Click" />
+          <Button Content="Delete set" Click="DeleteRuleSetButton_Click" />
+        </WrapPanel>
+      </StackPanel>
+      <ListBox Grid.Row="2" x:Name="RuleSetsList" DisplayMemberPath="Name"
+               SelectionChanged="RuleSetsList_SelectionChanged"
+               AutomationProperties.Name="Rule sets" />
+      <WrapPanel Grid.Row="3" Margin="0,8,0,0">
+        <Button Content="Import JSON" Click="ImportButton_Click" />
+        <Button Content="Export JSON" Click="ExportButton_Click" />
+      </WrapPanel>
+    </Grid>
+
+    <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
+
+    <Grid Grid.Column="2">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="2*" />
+        <RowDefinition Height="10" />
+        <RowDefinition Height="3*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="220" />
+          <ColumnDefinition Width="10" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ListBox x:Name="RulesList" DisplayMemberPath="Name"
+                 SelectionChanged="RulesList_SelectionChanged"
+                 AutomationProperties.Name="Rules" />
+        <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
+        <Grid Grid.Column="2">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBox x:Name="RuleNameTextBox" AutomationProperties.Name="Rule name" />
+          <WrapPanel Grid.Row="1" Margin="0,5,0,0">
+            <ComboBox x:Name="StageComboBox" SelectedIndex="1" Width="140">
+              <ComboBoxItem Content="Cleanup" Tag="cleanup" />
+              <ComboBoxItem Content="Pronunciation" Tag="pronunciation" />
+              <ComboBoxItem Content="Markup" Tag="markup" />
+            </ComboBox>
+            <ComboBox x:Name="TypeComboBox" SelectedIndex="0" Width="155">
+              <ComboBoxItem Content="Literal replace" Tag="literal_replace" />
+              <ComboBoxItem Content="Regex replace" Tag="regex_replace" />
+              <ComboBoxItem Content="Skip" Tag="skip" />
+              <ComboBoxItem Content="Spell" Tag="spell" />
+              <ComboBoxItem Content="Pause" Tag="pause" />
+              <ComboBoxItem Content="Phoneme" Tag="phoneme" />
+            </ComboBox>
+            <CheckBox x:Name="RuleEnabledCheckBox" Content="Enabled" IsChecked="True"
+                      VerticalAlignment="Center" Margin="8,0" />
+          </WrapPanel>
+          <TextBox Grid.Row="2" x:Name="PatternTextBox" Margin="0,5,0,0"
+                   ToolTip="Match pattern" AutomationProperties.Name="Rule pattern" />
+          <TextBox Grid.Row="3" x:Name="ReplacementTextBox" Margin="0,5,0,0"
+                   ToolTip="Spoken replacement or pause milliseconds"
+                   AutomationProperties.Name="Rule replacement" />
+          <WrapPanel Grid.Row="4" Margin="0,5,0,0">
+            <CheckBox x:Name="CaseSensitiveCheckBox" Content="Case sensitive" />
+            <CheckBox x:Name="WholeWordCheckBox" Content="Whole word" />
+            <TextBox x:Name="LanguageTextBox" Width="80" ToolTip="Language filter" />
+            <TextBox x:Name="EngineTextBox" Width="80" ToolTip="Engine filter" />
+            <TextBox x:Name="VoiceTextBox" Width="80" ToolTip="Voice filter" />
+            <TextBox x:Name="DocumentTextBox" Width="100" ToolTip="Document ID filter" />
+            <TextBox x:Name="PriorityTextBox" Width="70" Text="100" ToolTip="Priority" />
+            <TextBox x:Name="TimeoutTextBox" Width="70" Text="25" ToolTip="Regex timeout ms" />
+          </WrapPanel>
+          <WrapPanel Grid.Row="5" Margin="0,7,0,0">
+            <Button Content="New rule" Click="NewRuleButton_Click" />
+            <Button Content="Save rule" Click="SaveRuleButton_Click" />
+            <Button Content="Delete rule" Click="DeleteRuleButton_Click" />
+          </WrapPanel>
+        </Grid>
+      </Grid>
+
+      <GridSplitter Grid.Row="1" Height="10" HorizontalAlignment="Stretch" />
+
+      <Grid Grid.Row="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="10" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <GroupBox Header="Preview input">
+          <TextBox x:Name="PreviewInputTextBox" AcceptsReturn="True" TextWrapping="Wrap"
+                   VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Rule preview input" />
+        </GroupBox>
+        <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" />
+        <GroupBox Grid.Column="2" Header="Spoken result and trace">
+          <TextBox x:Name="PreviewResultTextBox" IsReadOnly="True" AcceptsReturn="True"
+                   TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                   AutomationProperties.Name="Rule preview result" />
+        </GroupBox>
+      </Grid>
+
+      <DockPanel Grid.Row="3" Margin="0,8,0,0">
+        <Button DockPanel.Dock="Right" Content="Close" Click="CloseButton_Click" />
+        <Button DockPanel.Dock="Right" Content="Preview rules" Click="PreviewButton_Click" />
+        <Button DockPanel.Dock="Right" x:Name="DisableWarningRuleButton"
+                Content="Disable warned rule" Click="DisableWarningRuleButton_Click"
+                IsEnabled="False" />
+        <TextBlock x:Name="StatusText" Text="Ready" TextWrapping="Wrap"
+                   VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+      </DockPanel>
+    </Grid>
+  </Grid>
+</Window>

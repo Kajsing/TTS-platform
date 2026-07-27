@@ -21,3 +21,10 @@ Milestone 6 adds `import_preview.response.json`. Import preview payloads are
 bounded: section summaries and sample blocks may be truncated while total
 counts and all structured warnings remain explicit. Committing the opaque
 preview ID persists those warnings in document metadata.
+
+Milestone 7 adds `rule_preview.response.json`. Rule previews return the explicit
+input and transformed speech text, per-character UTF-16 source spans, an ordered
+rule trace, typed warnings, elapsed time, and pipeline/rules versions. Request
+and response text is intentionally excluded from service logs. Preview input is
+limited to 4,096 characters so per-character mapping remains interactive;
+playback compilation retains its separate bounded-window limit.

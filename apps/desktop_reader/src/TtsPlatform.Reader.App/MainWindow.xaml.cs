@@ -420,6 +420,7 @@ public partial class MainWindow : Window
             new WasapiAudioOutput());
         _playback.StateChanged += Playback_StateChanged;
         _playback.HighlightChanged += Playback_HighlightChanged;
+        _playback.RuleWarning += Playback_RuleWarning;
         DocumentsGrid.ItemsSource = _library.Documents;
         UpdatePlaybackControls();
     }
@@ -1398,6 +1399,41 @@ public partial class MainWindow : Window
     private void Playback_HighlightChanged(object? sender, PlaybackHighlight highlight)
     {
         Dispatcher.BeginInvoke(new Action(async () => await ShowHighlightAsync(highlight)));
+    }
+
+    private void Playback_RuleWarning(object? sender, ReaderStreamWarning warning)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            FooterText.Text = $"Speech rule warning: {warning.Message}";
+            PlaybackStatusText.Text = "Playing with a skipped speech rule";
+        }));
+    }
+
+    private void SpeechRulesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new RuleEditorDialog(GetClient()) { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    private void CreateRuleFromSelectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selection = EditorTextBox.SelectedText;
+        if (string.IsNullOrWhiteSpace(selection))
+        {
+            FooterText.Text = "Select text in an editable document before creating a speech rule.";
+            return;
+        }
+
+        var dialog = new RuleEditorDialog(
+            GetClient(),
+            selection,
+            _editor?.Document?.LanguageHint,
+            _editor?.Document?.Id)
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
     }
 
     private async Task ShowHighlightAsync(PlaybackHighlight highlight)

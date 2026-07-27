@@ -24,6 +24,7 @@ SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 DOCUMENT_IMPORT_SRC = REPO_ROOT / "packages" / "document_import" / "src"
+SPEECH_RULES_SRC = REPO_ROOT / "packages" / "speech_rules" / "src"
 MODEL_ID = "local-flow-voice"
 DEFAULT_STARTUP_TIMEOUT_S = 30.0
 DEFAULT_COMMAND_TIMEOUT_S = 60.0
@@ -389,6 +390,7 @@ def _source_env() -> dict[str, str]:
         str(CORE_SRC),
         str(READER_CORE_SRC),
         str(DOCUMENT_IMPORT_SRC),
+        str(SPEECH_RULES_SRC),
     ]
     existing_python_path = env.get("PYTHONPATH")
     if existing_python_path:

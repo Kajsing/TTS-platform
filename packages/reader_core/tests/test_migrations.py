@@ -17,7 +17,7 @@ def test_initial_migration_is_repeatable_and_reported(tmp_path: Path) -> None:
     report = repository.report()
 
     assert report.ready is True
-    assert report.schema_version == 1
+    assert report.schema_version == 2
     assert report.integrity_ok is True
     assert report.integrity_message == "ok"
     assert report.journal_mode == "wal"
@@ -26,7 +26,8 @@ def test_initial_migration_is_repeatable_and_reported(tmp_path: Path) -> None:
 def test_applied_migration_checksum_mismatch_is_typed(tmp_path: Path) -> None:
     database = tmp_path / "reader.db"
     SqliteReaderRepository(database)
-    original = load_migrations()[0]
+    migrations = load_migrations()
+    original = migrations[0]
     changed = Migration(
         version=original.version,
         name=original.name,
@@ -36,7 +37,7 @@ def test_applied_migration_checksum_mismatch_is_typed(tmp_path: Path) -> None:
 
     with connect_sqlite(database) as connection:
         with pytest.raises(ReaderMigrationError, match="checksum"):
-            apply_migrations(connection, (changed,))
+            apply_migrations(connection, (changed, *migrations[1:]))
 
 
 def test_invalid_migration_rolls_back_and_is_typed(tmp_path: Path) -> None:

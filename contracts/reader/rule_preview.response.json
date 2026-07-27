@@ -1,0 +1,29 @@
+{
+  "original_text": "API test",
+  "spoken_text": "A P I test",
+  "source_spans": [
+    {"start_offset": 0, "end_offset": 3},
+    {"start_offset": 0, "end_offset": 3},
+    {"start_offset": 0, "end_offset": 3},
+    {"start_offset": 0, "end_offset": 3},
+    {"start_offset": 0, "end_offset": 3},
+    {"start_offset": 3, "end_offset": 4},
+    {"start_offset": 4, "end_offset": 5},
+    {"start_offset": 5, "end_offset": 6},
+    {"start_offset": 6, "end_offset": 7},
+    {"start_offset": 7, "end_offset": 8}
+  ],
+  "trace": [
+    {
+      "rule_id": "71717171-7171-4171-8171-717171717171",
+      "rule_type": "literal_replace",
+      "start_offset": 0,
+      "end_offset": 3,
+      "replacement_length": 5
+    }
+  ],
+  "warnings": [],
+  "elapsed_ms": 0.5,
+  "pipeline_version": 1,
+  "rules_version": 2
+}

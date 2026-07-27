@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, ValidationError
 from reader_core import ReaderError
+from speech_rules import RuleContext
 from tts_core.backends.base import BackendError
 from tts_core.models import AudioFormat, ProsodySettings, SynthesisOptions, SynthesisRequest
 
@@ -58,7 +59,7 @@ class ReaderStreamStartPayload(BaseModel):
     voice: str | None = None
     language_hint: str | None = Field(default=None, max_length=64)
     prosody: ProsodyPayload = Field(default_factory=ProsodyPayload)
-    rule_set_ids: list[str] = Field(default_factory=list)
+    rule_set_ids: list[str] = Field(default_factory=list, max_length=100)
     window: ReaderStreamWindowPayload = Field(default_factory=ReaderStreamWindowPayload)
 
 
@@ -92,13 +93,6 @@ def build_reader_stream_router() -> APIRouter:
                 )
             payload = ReaderStreamStartPayload.model_validate(initial.get("payload", {}))
             service = _reader_service(websocket)
-            if payload.rule_set_ids:
-                raise reader_api_error(
-                    "reader_rule_invalid",
-                    status_code=400,
-                    message="Reader speech rules are not available in this service version.",
-                    param="rule_set_ids",
-                )
             stream_id = str(uuid4())
             await _run_reader_stream(
                 websocket,
@@ -180,10 +174,23 @@ async def _run_reader_stream(
             param="window.max_source_characters",
         )
 
+    try:
+        rules = service.ordered_rules(tuple(payload.rule_set_ids))
+        rules_version = service.repository.get_rules_version()
+    except ReaderError as error:
+        raise translate_reader_error(error, missing_entity="rule set") from error
     compiler = ReaderSpeechCompiler(
         container.text_pipeline.normalizer,
         container.text_pipeline.segmenter,
         container.chunk_planner,
+        rule_engine=service.rule_engine() if rules else None,
+        rules=rules,
+        rule_context=RuleContext(
+            language=payload.language_hint,
+            engine=container.backend.__class__.__name__,
+            voice=voice_id,
+            document_id=payload.document_id,
+        ),
     )
     builder = ReaderStreamWindowBuilder(service, compiler)
     started_at = monotonic()
@@ -199,6 +206,7 @@ async def _run_reader_stream(
                 max_blocks=max_blocks,
                 max_source_characters=max_source_characters,
                 language_hint=payload.language_hint,
+                rules_version=rules_version,
             )
         except ReaderError as error:
             await _send_error(
@@ -230,7 +238,7 @@ async def _run_reader_stream(
                 "channels": 1,
                 "sample_format": "pcm16le",
                 "pipeline_version": 1,
-                "rules_version": 1,
+                "rules_version": window.rules_version,
                 "source_offset_encoding": "utf-16",
                 "cursor": _cursor_payload(window, window.start_cursor),
             }
@@ -241,6 +249,18 @@ async def _run_reader_stream(
             block_count=len(window.blocks),
             character_count=window.source_character_count,
         )
+        for warning in window.rule_warnings:
+            await websocket.send_json(
+                {
+                    "type": "warning",
+                    "stream_id": stream_id,
+                    "warning": {
+                        "type": warning.code,
+                        "message": warning.message,
+                        "rule_id": warning.rule_id,
+                    },
+                }
+            )
 
         chunks_sent = 0
         latest_cursor = window.start_cursor
@@ -399,7 +419,7 @@ def _synthesis_request(
             volume=prosody.volume,
             pitch=prosody.pitch,
             pause_strategy=prosody.pause_strategy,
-            sentence_pause_ms=prosody.sentence_pause_ms,
+            sentence_pause_ms=max(prosody.sentence_pause_ms, fragment.pause_ms_hint),
             comma_pause_ms=prosody.comma_pause_ms,
             emphasis=tuple(prosody.emphasis),
         ),

@@ -11,15 +11,57 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 7, engine-independent
-  speech rules, deterministic compilation and preview, safe rule interchange,
-  and playback integration.
-- Current loop result: Milestone 6 is complete and validated. The user explicitly authorized autonomous
+- Current loop target: Reader Workstation Milestone 8, library workflow,
+  search, playlists, bookmarks, reversible state changes, and persistent WAV
+  export jobs.
+- Current loop result: Milestone 7 is complete and validated. The user explicitly authorized autonomous
   milestone-by-milestone work through Reader Milestone 9, with a decision check
   before continuing whenever product direction, architecture, security,
   licensing, or a material UX choice would change.
-- Reader Workstation resume point: execute and validate Milestone 7, then repeat
-  the decision check before Milestone 8.
+- Reader Workstation resume point: execute and validate Milestone 8, then repeat
+  the decision check before Milestone 9.
+- Reader Milestone 7 implementation details:
+  - migration `002_rules_and_profiles.sql` adds durable rule sets, six speech-rule
+    types, scope/stage/priority/filter metadata, row and global rule versions,
+    idempotent import records, and the future voice-profile storage boundary;
+  - `packages/speech_rules` applies literal and regex replacement, skip, spell,
+    pause, and preserved phoneme rules in deterministic order without changing
+    stored source text. Generated speech retains per-character source mapping;
+  - untrusted regex uses `regex` 2026.7.19 with hard per-operation timeouts,
+    a 250 ms block budget, bounded patterns, replacements, matches, output, and
+    a 4,096-character interactive preview limit. The dependency's
+    Apache-2.0/CNRI-Python license expression is recorded in
+    `THIRD_PARTY_NOTICES.md`;
+  - protected CRUD, preview/trace, JSON import/export, version, and capability
+    contracts are implemented. Import is dry-run-first and byte-hash idempotent;
+    unknown provider rules and fields survive as bounded disabled metadata;
+  - Reader playback composes speech-rule mapping with the existing language
+    normalizer, advances across fully skipped blocks without audio, emits typed
+    rule warnings, carries the current rules version, and applies pause hints;
+  - the WPF app now manages rule sets and rules, previews source-mapped output,
+    disables a warned rule directly, imports/exports the open Reader JSON format,
+    and creates a prefilled document/language-scoped rule from selected text;
+  - Windows source launchers and bundles include `speech_rules`. The unresolved
+    repository-license choice still prevents claiming external-distribution
+    readiness but does not block Milestones 8 or 9.
+- Reader Milestone 7 validation passed on 2026-07-27:
+  - the milestone Python suite passed after the final correction as part of the
+    378-test full suite; the earlier isolated milestone run covered 334 tests;
+  - `py -3 -m pytest -q`: 378 passed; `py -3 -m ruff check .` passed;
+  - `.NET Release` solution tests: 56 passed; build and `dotnet format
+    --verify-no-changes` passed with zero warnings/errors;
+  - `py -3 scripts\check_reader_contracts.py` validated 8 fixtures and
+    `git diff --check` passed;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration
+    --skip-build` passed live rule mapping, a catastrophic-regex timeout,
+    paging/edit/stream/resume, clipboard, import, WASAPI, Windows integration,
+    portable packaging, and packaged WPF rendering;
+  - `py -3 scripts\check_windows_bundle_bootstrap.py` and
+    `py -3 scripts\check_security_defaults.py` passed;
+  - the required regex-focused security review found zero open Milestone 7
+    findings. Auth/origin controls remain inherited by all Reader routes,
+    preview content is absent from logs, validation errors are sanitized, and
+    adversarial timeout/expansion/match/response-amplification cases are tested.
 - Reader Milestone 6 implementation details:
   - `packages/document_import` now parses TXT, Markdown, HTML/HTM, DOCX, and
     EPUB into ordered Reader sections and blocks using the Python standard

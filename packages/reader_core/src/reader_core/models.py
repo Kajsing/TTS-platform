@@ -58,6 +58,29 @@ class EditOperation(str, Enum):
     APPEND = "append"
 
 
+class RuleStage(str, Enum):
+    CLEANUP = "cleanup"
+    PRONUNCIATION = "pronunciation"
+    MARKUP = "markup"
+
+
+class RuleType(str, Enum):
+    LITERAL_REPLACE = "literal_replace"
+    REGEX_REPLACE = "regex_replace"
+    SKIP = "skip"
+    SPELL = "spell"
+    PAUSE = "pause"
+    PHONEME = "phoneme"
+
+
+class RuleScope(str, Enum):
+    SYSTEM = "system"
+    GLOBAL = "global"
+    LANGUAGE = "language"
+    VOICE_ENGINE = "voice_engine"
+    DOCUMENT = "document"
+
+
 @dataclass(frozen=True, slots=True)
 class ReaderDocument:
     id: str
@@ -221,6 +244,84 @@ class QueueItem:
             raise ReaderValidationError("queue ordinal must not be negative")
         if self.row_version <= 0:
             raise ReaderValidationError("queue row_version must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechRuleSet:
+    id: str
+    name: str
+    scope: RuleScope
+    created_at: datetime
+    updated_at: datetime
+    description: str = ""
+    enabled: bool = True
+    source_sha256: str | None = None
+    version: int = 1
+    row_version: int = 1
+    raw_import_metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "rule-set id")
+        _require_utc(self.created_at, "rule-set created_at")
+        _require_utc(self.updated_at, "rule-set updated_at")
+        if not self.name.strip():
+            raise ReaderValidationError("rule-set name must not be empty")
+        if len(self.name) > 200 or len(self.description) > 2000:
+            raise ReaderValidationError("rule-set text exceeds its limit")
+        if min(self.version, self.row_version) <= 0:
+            raise ReaderValidationError("rule-set versions must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechRule:
+    id: str
+    rule_set_id: str
+    name: str
+    stage: RuleStage
+    rule_type: RuleType
+    pattern: str
+    replacement: str
+    created_at: datetime
+    updated_at: datetime
+    enabled: bool = True
+    case_sensitive: bool = False
+    whole_word: bool = False
+    language_filter: str | None = None
+    engine_filter: str | None = None
+    voice_filter: str | None = None
+    document_filter: str | None = None
+    priority: int = 100
+    regex_timeout_ms: int = 25
+    row_version: int = 1
+    raw_import_metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "rule id")
+        _require_id(self.rule_set_id, "rule-set id")
+        _require_utc(self.created_at, "rule created_at")
+        _require_utc(self.updated_at, "rule updated_at")
+        if not self.name.strip() or not self.pattern:
+            raise ReaderValidationError("rule name and pattern must not be empty")
+        if len(self.name) > 200:
+            raise ReaderValidationError("rule name exceeds its limit")
+        if not 1 <= self.regex_timeout_ms <= 1_000 or self.row_version <= 0:
+            raise ReaderValidationError(
+                "rule timeout must be from 1 through 1000 ms and row version must be positive"
+            )
+        if not -100_000 <= self.priority <= 100_000:
+            raise ReaderValidationError("rule priority is outside the supported range")
+        if len(self.pattern) > 2_048 or len(self.replacement) > 4_096:
+            raise ReaderValidationError("rule pattern or replacement exceeds its limit")
+        if any(
+            value is not None and len(value) > 200
+            for value in (
+                self.language_filter,
+                self.engine_filter,
+                self.voice_filter,
+                self.document_filter,
+            )
+        ):
+            raise ReaderValidationError("rule filter exceeds its limit")
 
 
 @dataclass(frozen=True, slots=True)

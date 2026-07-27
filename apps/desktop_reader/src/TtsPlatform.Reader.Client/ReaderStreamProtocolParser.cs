@@ -40,6 +40,7 @@ public sealed class ReaderStreamProtocolParser
             "mark" => ParseMark(json),
             "done" => ParseDone(json),
             "cancelled" => ParseCancelled(json),
+            "warning" => ParseWarning(json),
             "error" => ParseError(json),
             _ => throw Invalid($"Reader stream returned an unknown event type '{envelope.Type}'."),
         };
@@ -187,6 +188,19 @@ public sealed class ReaderStreamProtocolParser
             wire.Error?.Message ?? "The Reader stream failed.");
     }
 
+    private ReaderStreamWarning ParseWarning(string json)
+    {
+        EnsureActive();
+        EnsureNoPendingPcm();
+        var wire = Deserialize<WireWarningEnvelope>(json);
+        ValidateStreamId(wire.StreamId);
+        return new ReaderStreamWarning(
+            RequiredStreamId(),
+            wire.Warning?.Type ?? "reader_rule_warning",
+            wire.Warning?.Message ?? "A speech rule was skipped.",
+            wire.Warning?.RuleId);
+    }
+
     private static ReaderSourceSpan ToSourceSpan(WireSourceSpan wire)
     {
         if (string.IsNullOrWhiteSpace(wire.BlockId) ||
@@ -331,6 +345,8 @@ public sealed class ReaderStreamProtocolParser
         bool DocumentComplete,
         bool NextWindowAvailable);
     private sealed record WireCancelled(string? StreamId, WireCursor? GeneratedCursor);
+    private sealed record WireWarning(string? Type, string? Message, string? RuleId);
+    private sealed record WireWarningEnvelope(string? StreamId, WireWarning? Warning);
     private sealed record WireError(string? Type, string? Message);
     private sealed record WireErrorEnvelope(WireError? Error);
 }

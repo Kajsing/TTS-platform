@@ -53,6 +53,11 @@ DEFAULT_READER_IMPORT_MAX_ARCHIVE_MEMBERS = 10_000
 DEFAULT_READER_IMPORT_MAX_DOCUMENT_CHARACTERS = 10_000_000
 DEFAULT_READER_IMPORT_MAX_BLOCKS = 250_000
 DEFAULT_READER_IMPORT_TIMEOUT_SECONDS = 60
+DEFAULT_READER_RULES_ENABLED = True
+DEFAULT_READER_RULE_REGEX_TIMEOUT_MS = 25
+DEFAULT_READER_RULE_MAX_PATTERN_CHARS = 2_048
+DEFAULT_READER_RULE_MAX_REPLACEMENT_CHARS = 4_096
+DEFAULT_READER_RULE_MAX_TIME_PER_BLOCK_MS = 250
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +283,45 @@ class ReaderImportConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderRuleConfig:
+    enabled: bool = DEFAULT_READER_RULES_ENABLED
+    default_regex_timeout_ms: int = DEFAULT_READER_RULE_REGEX_TIMEOUT_MS
+    max_regex_pattern_chars: int = DEFAULT_READER_RULE_MAX_PATTERN_CHARS
+    max_replacement_chars: int = DEFAULT_READER_RULE_MAX_REPLACEMENT_CHARS
+    max_rule_time_per_block_ms: int = DEFAULT_READER_RULE_MAX_TIME_PER_BLOCK_MS
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "ReaderRuleConfig":
+        config = cls(
+            enabled=bool(data.get("enabled", DEFAULT_READER_RULES_ENABLED)),
+            default_regex_timeout_ms=int(
+                data.get("default_regex_timeout_ms", DEFAULT_READER_RULE_REGEX_TIMEOUT_MS)
+            ),
+            max_regex_pattern_chars=int(
+                data.get("max_regex_pattern_chars", DEFAULT_READER_RULE_MAX_PATTERN_CHARS)
+            ),
+            max_replacement_chars=int(
+                data.get("max_replacement_chars", DEFAULT_READER_RULE_MAX_REPLACEMENT_CHARS)
+            ),
+            max_rule_time_per_block_ms=int(
+                data.get(
+                    "max_rule_time_per_block_ms",
+                    DEFAULT_READER_RULE_MAX_TIME_PER_BLOCK_MS,
+                )
+            ),
+        )
+        for name in (
+            "default_regex_timeout_ms",
+            "max_regex_pattern_chars",
+            "max_replacement_chars",
+            "max_rule_time_per_block_ms",
+        ):
+            if getattr(config, name) <= 0:
+                raise ValueError(f"reader.rules.{name} must be positive")
+        return config
+
+
+@dataclass(frozen=True, slots=True)
 class ReaderConfig:
     enabled: bool = DEFAULT_READER_ENABLED
     home_path: str = DEFAULT_READER_HOME_PATH
@@ -291,6 +335,7 @@ class ReaderConfig:
     max_edit_history_operations: int = DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS
     max_edit_history_bytes: int = DEFAULT_READER_MAX_EDIT_HISTORY_BYTES
     imports: ReaderImportConfig = ReaderImportConfig()
+    rules: ReaderRuleConfig = ReaderRuleConfig()
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "ReaderConfig":
@@ -328,6 +373,7 @@ class ReaderConfig:
                 data.get("max_edit_history_bytes", DEFAULT_READER_MAX_EDIT_HISTORY_BYTES)
             ),
             imports=ReaderImportConfig.from_mapping(_section(data, "imports")),
+            rules=ReaderRuleConfig.from_mapping(_section(data, "rules")),
         )
         if not config.database_path.strip():
             raise ValueError("reader.database_path must not be empty")

@@ -58,6 +58,7 @@ def test_local_service_bootstrap_env_strips_existing_tokens(
     assert str(check_module.SERVICE_SRC) in env["PYTHONPATH"]
     assert str(check_module.CORE_SRC) in env["PYTHONPATH"]
     assert str(check_module.DOCUMENT_IMPORT_SRC) in env["PYTHONPATH"]
+    assert str(check_module.SPEECH_RULES_SRC) in env["PYTHONPATH"]
 
 
 def _load_check_module():

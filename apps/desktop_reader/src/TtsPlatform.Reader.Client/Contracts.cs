@@ -35,6 +35,48 @@ public interface IReaderServiceClient
     Task<ReaderDocument> DuplicateAsEditableTextAsync(
         string documentId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRuleSetPage> GetRuleSetsAsync(
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRuleSet> CreateRuleSetAsync(
+        CreateRuleSetRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRuleSet> UpdateRuleSetAsync(
+        string ruleSetId,
+        CreateRuleSetRequest request,
+        bool enabled,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task DeleteRuleSetAsync(
+        string ruleSetId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRulePage> GetRulesAsync(
+        string ruleSetId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRule> CreateRuleAsync(
+        string ruleSetId,
+        SaveRuleRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRule> UpdateRuleAsync(
+        string ruleId,
+        SaveRuleRequest request,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task DeleteRuleAsync(
+        string ruleId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRulePreview> PreviewRulesAsync(
+        RulePreviewRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderRuleImportReport> ImportRulesAsync(
+        string targetRuleSetId,
+        string content,
+        bool commit,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<byte[]> ExportRuleSetAsync(
+        string ruleSetId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
         string? cursor = null,
@@ -108,7 +150,8 @@ public sealed record ReaderCapabilities(
     bool Enabled,
     ReaderDatabaseCapability Database,
     ReaderPlaybackCapability Playback,
-    ReaderImportCapability? Imports = null);
+    ReaderImportCapability? Imports = null,
+    ReaderRuleCapability? Rules = null);
 
 public sealed record ReaderDatabaseCapability(bool Ready, int SchemaVersion, bool SearchAvailable);
 
@@ -122,6 +165,10 @@ public sealed record ReaderImportCapability(
     IReadOnlyList<string> Formats,
     int MaxFileBytes,
     bool OcrAvailable);
+
+public sealed record ReaderRuleCapability(
+    IReadOnlyList<string> Types,
+    bool RegexTimeoutSupported);
 
 public sealed record VoicePage(IReadOnlyList<VoiceDescriptor> Voices, string? DefaultVoice);
 
@@ -204,6 +251,102 @@ public sealed record ReaderImportPreview(
     bool PreviewTruncated,
     string? DuplicateDocumentId,
     int ExpiresInSeconds);
+
+public sealed record ReaderRuleSetPage(
+    [property: JsonPropertyName("rule_sets")] IReadOnlyList<ReaderRuleSet> RuleSets,
+    [property: JsonPropertyName("rules_version")] int RulesVersion);
+
+public sealed record ReaderRuleSet(
+    string Id,
+    string Name,
+    string Description,
+    bool Enabled,
+    string Scope,
+    int Version,
+    int RowVersion,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CreateRuleSetRequest(
+    string Name,
+    string Description = "",
+    string Scope = "global");
+
+public sealed record ReaderRulePage(IReadOnlyList<ReaderRule> Rules);
+
+public sealed record ReaderRule(
+    string Id,
+    string RuleSetId,
+    string Name,
+    bool Enabled,
+    string Stage,
+    string RuleType,
+    string Pattern,
+    string Replacement,
+    bool CaseSensitive,
+    bool WholeWord,
+    string? LanguageFilter,
+    string? EngineFilter,
+    string? VoiceFilter,
+    string? DocumentFilter,
+    int Priority,
+    int RegexTimeoutMs,
+    int RowVersion,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    JsonElement RawImportMetadata);
+
+public sealed record SaveRuleRequest(
+    string Name,
+    string Stage,
+    string RuleType,
+    string Pattern,
+    string Replacement,
+    bool Enabled = true,
+    bool CaseSensitive = false,
+    bool WholeWord = false,
+    string? LanguageFilter = null,
+    string? EngineFilter = null,
+    string? VoiceFilter = null,
+    string? DocumentFilter = null,
+    int Priority = 100,
+    int? RegexTimeoutMs = null);
+
+public sealed record RulePreviewRequest(
+    string Text,
+    [property: JsonPropertyName("rule_set_ids")] IReadOnlyList<string> RuleSetIds,
+    string? Language = null,
+    string? Engine = null,
+    string? Voice = null,
+    string? DocumentId = null);
+
+public sealed record ReaderRulePreviewSpan(int StartOffset, int EndOffset);
+public sealed record ReaderRuleTrace(
+    string RuleId,
+    string RuleType,
+    int StartOffset,
+    int EndOffset,
+    int ReplacementLength);
+public sealed record ReaderRuleWarning(string Code, string Message, string? RuleId);
+public sealed record ReaderRulePreview(
+    string OriginalText,
+    string SpokenText,
+    IReadOnlyList<ReaderRulePreviewSpan> SourceSpans,
+    IReadOnlyList<ReaderRuleTrace> Trace,
+    IReadOnlyList<ReaderRuleWarning> Warnings,
+    double ElapsedMs,
+    int PipelineVersion,
+    int RulesVersion);
+
+public sealed record ReaderRuleImportReport(
+    string SourceSha256,
+    int Imported,
+    int Disabled,
+    int Duplicate,
+    int Invalid,
+    int Unsupported,
+    bool Committed,
+    bool Idempotent);
 
 public sealed record BlockPage(IReadOnlyList<ReaderBlock> Blocks, int? NextAfterOrdinal);
 
@@ -339,6 +482,12 @@ public sealed record ReaderStreamDone(
 public sealed record ReaderStreamCancelled(
     string StreamId,
     ReaderCursor GeneratedCursor) : ReaderStreamEvent(StreamId);
+
+public sealed record ReaderStreamWarning(
+    string StreamId,
+    string WarningType,
+    string Message,
+    string? RuleId) : ReaderStreamEvent(StreamId);
 
 public sealed record ReaderStreamError(
     string StreamId,

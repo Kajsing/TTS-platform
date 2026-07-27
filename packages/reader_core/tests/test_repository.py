@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,6 +18,11 @@ from reader_core import (
     ReaderLibrary,
     ReaderStaleCursorError,
     ReaderValidationError,
+    RuleScope,
+    RuleStage,
+    RuleType,
+    SpeechRule,
+    SpeechRuleSet,
     SqliteReaderRepository,
     initialize_reader_repository,
 )
@@ -33,6 +39,52 @@ def _cursor(document, block, offset: int) -> ReaderCursor:
         character_offset=offset,
         content_revision=document.content_revision,
     )
+
+
+def test_rule_sets_rules_versions_and_conflicts_are_persistent(repository) -> None:
+    now = datetime.now(timezone.utc)
+    rule_set = repository.create_rule_set(
+        SpeechRuleSet(
+            id=str(uuid.uuid4()),
+            name="Danish IT",
+            scope=RuleScope.LANGUAGE,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    version_after_set = repository.get_rules_version()
+    rule = repository.create_rule(
+        SpeechRule(
+            id=str(uuid.uuid4()),
+            rule_set_id=rule_set.id,
+            name="Expand fx",
+            stage=RuleStage.PRONUNCIATION,
+            rule_type=RuleType.LITERAL_REPLACE,
+            pattern="fx.",
+            replacement="for eksempel",
+            language_filter="da",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    assert repository.get_rules_version() > version_after_set
+    assert repository.list_rules((rule_set.id,)) == (rule,)
+    touched_set = repository.get_rule_set(rule_set.id)
+    assert touched_set.version == 2
+    assert touched_set.row_version == 2
+
+    changed = repository.update_rule(
+        replace(rule, replacement="for eksempelvis"),
+        expected_row_version=rule.row_version,
+    )
+    assert changed.replacement == "for eksempelvis"
+    assert changed.row_version == 2
+    with pytest.raises(ReaderConflictError):
+        repository.delete_rule(rule.id, expected_row_version=1)
+
+    repository.record_rule_import(rule_set.id, "a" * 64, {"imported": 1})
+    assert repository.get_rule_import_report(rule_set.id, "a" * 64) == {"imported": 1}
 
 
 def test_document_crud_order_soft_delete_and_restore(repository, document) -> None:

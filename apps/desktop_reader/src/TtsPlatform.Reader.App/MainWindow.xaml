@@ -27,6 +27,8 @@
                   AutomationProperties.Name="Read clipboard without saving" />
           <Button x:Name="CompactButton" Content="Compact" Click="CompactButton_Click"
                   AutomationProperties.Name="Open compact playback controller" />
+          <Button x:Name="SpeechRulesButton" Content="Speech rules…" Click="SpeechRulesButton_Click"
+                  AutomationProperties.Name="Manage speech rules" />
           <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
                   AutomationProperties.Name="Check local service connection" />
           <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
@@ -187,6 +189,9 @@
                     VerticalAlignment="Center" Margin="6,0" />
           <Button x:Name="DuplicateEditableButton" Content="Duplicate as editable text"
                   Click="DuplicateEditableButton_Click" IsEnabled="False" />
+          <Button x:Name="CreateRuleFromSelectionButton" Content="Create rule from selection"
+                  Click="CreateRuleFromSelectionButton_Click"
+                  AutomationProperties.Name="Create speech rule from selected text" />
           <Button x:Name="SaveEditButton" Content="Save edit" Click="SaveEditButton_Click" IsEnabled="False" />
           <Button x:Name="RevertEditButton" Content="Revert local" Click="RevertEditButton_Click" IsEnabled="False" />
           <Button x:Name="UndoButton" Content="Undo saved edit" Click="UndoButton_Click" IsEnabled="False" />

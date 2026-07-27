@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timezone
 from functools import partial
 from threading import Event
@@ -19,7 +20,9 @@ from reader_core import (
     ReaderError,
     ReaderStaleCursorError,
     ReaderValidationError,
+    SpeechRule,
 )
+from speech_rules import RuleContext, SpeechRuleError
 from starlette.concurrency import run_in_threadpool
 
 from .reader_errors import (
@@ -28,6 +31,7 @@ from .reader_errors import (
     reader_disabled,
     translate_import_error,
     translate_reader_error,
+    translate_rule_error,
 )
 from .reader_offsets import ReaderOffsetError, utf16_offset_to_python
 from .reader_schemas import (
@@ -35,6 +39,8 @@ from .reader_schemas import (
     AppendReaderContentRequest,
     CreateReaderBookmarkRequest,
     CreateReaderDocumentRequest,
+    CreateReaderRuleRequest,
+    CreateReaderRuleSetRequest,
     ExpectedReaderVersionRequest,
     ReaderBlockPageResponse,
     ReaderBlockResponse,
@@ -60,12 +66,25 @@ from .reader_schemas import (
     ReaderQueueItemResponse,
     ReaderQueueResponse,
     ReaderRuleCapability,
+    ReaderRuleImportReportResponse,
+    ReaderRuleImportRequest,
+    ReaderRuleListResponse,
+    ReaderRulePreviewRequest,
+    ReaderRulePreviewResponse,
+    ReaderRulePreviewSpan,
+    ReaderRuleResponse,
+    ReaderRuleSetListResponse,
+    ReaderRuleSetResponse,
+    ReaderRuleTraceResponse,
+    ReaderRuleWarningResponse,
     ReorderReaderQueueRequest,
     ReplaceReaderContentRequest,
     SaveReaderPositionRequest,
     UpdateReaderBookmarkRequest,
     UpdateReaderDocumentRequest,
     UpdateReaderQueueItemRequest,
+    UpdateReaderRuleRequest,
+    UpdateReaderRuleSetRequest,
 )
 from .reader_service import (
     ReaderApplicationService,
@@ -97,7 +116,17 @@ def build_reader_router() -> APIRouter:
                 max_file_bytes=config.imports.max_file_bytes,
                 ocr_available=False,
             ),
-            rules=ReaderRuleCapability(types=[], regex_timeout_supported=False),
+            rules=ReaderRuleCapability(
+                types=[
+                    "literal_replace",
+                    "regex_replace",
+                    "skip",
+                    "spell",
+                    "pause",
+                    "phoneme",
+                ],
+                regex_timeout_supported=True,
+            ),
             playback=ReaderPlaybackCapability(
                 stream_protocol_version=1,
                 source_offset_encoding="utf-16",
@@ -721,6 +750,235 @@ def build_reader_router() -> APIRouter:
             items=[ReaderQueueItemResponse.from_domain(item) for item in items]
         )
 
+    @router.get("/rule-sets", response_model=ReaderRuleSetListResponse)
+    async def list_rule_sets(request: Request) -> ReaderRuleSetListResponse:
+        service = _service(request)
+        rule_sets = _run_reader(service.repository.list_rule_sets, missing_entity="rule set")
+        return ReaderRuleSetListResponse(
+            rule_sets=[ReaderRuleSetResponse.from_domain(item) for item in rule_sets],
+            rules_version=_run_reader(service.repository.get_rules_version),
+        )
+
+    @router.post(
+        "/rule-sets",
+        response_model=ReaderRuleSetResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_rule_set(
+        request: Request, payload: CreateReaderRuleSetRequest
+    ) -> ReaderRuleSetResponse:
+        service = _service(request)
+        rule_set = _run_rule(
+            lambda: service.create_rule_set(
+                name=payload.name,
+                description=payload.description,
+                scope=payload.scope,
+            ),
+            missing_entity="rule set",
+        )
+        return ReaderRuleSetResponse.from_domain(rule_set)
+
+    @router.patch("/rule-sets/{rule_set_id}", response_model=ReaderRuleSetResponse)
+    async def update_rule_set(
+        request: Request,
+        rule_set_id: str,
+        payload: UpdateReaderRuleSetRequest,
+    ) -> ReaderRuleSetResponse:
+        service = _service(request)
+        current = _run_reader(
+            lambda: service.repository.get_rule_set(rule_set_id),
+            missing_entity="rule set",
+        )
+        changes = payload.model_dump(exclude={"expected_row_version"}, exclude_unset=True)
+        updated = _run_reader(
+            lambda: service.repository.update_rule_set(
+                replace(current, **changes),
+                expected_row_version=payload.expected_row_version,
+            ),
+            missing_entity="rule set",
+        )
+        return ReaderRuleSetResponse.from_domain(updated)
+
+    @router.delete("/rule-sets/{rule_set_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_rule_set(
+        request: Request,
+        rule_set_id: str,
+        expected_row_version: Annotated[int, Query(gt=0)],
+    ) -> Response:
+        service = _service(request)
+        _run_reader(
+            lambda: service.repository.delete_rule_set(
+                rule_set_id, expected_row_version=expected_row_version
+            ),
+            missing_entity="rule set",
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get(
+        "/rule-sets/{rule_set_id}/rules", response_model=ReaderRuleListResponse
+    )
+    async def list_rules(request: Request, rule_set_id: str) -> ReaderRuleListResponse:
+        service = _service(request)
+        _run_reader(
+            lambda: service.repository.get_rule_set(rule_set_id),
+            missing_entity="rule set",
+        )
+        rules = _run_reader(
+            lambda: service.repository.list_rules((rule_set_id,)),
+            missing_entity="rule set",
+        )
+        return ReaderRuleListResponse(
+            rules=[ReaderRuleResponse.from_domain(item) for item in rules]
+        )
+
+    @router.post(
+        "/rule-sets/{rule_set_id}/rules",
+        response_model=ReaderRuleResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_rule(
+        request: Request,
+        rule_set_id: str,
+        payload: CreateReaderRuleRequest,
+    ) -> ReaderRuleResponse:
+        service = _service(request)
+        rule = _run_rule(
+            lambda: service.create_rule(rule_set_id=rule_set_id, **payload.model_dump()),
+            missing_entity="rule set",
+        )
+        return ReaderRuleResponse.from_domain(rule)
+
+    @router.patch("/rules/{rule_id}", response_model=ReaderRuleResponse)
+    async def update_rule(
+        request: Request,
+        rule_id: str,
+        payload: UpdateReaderRuleRequest,
+    ) -> ReaderRuleResponse:
+        service = _service(request)
+        current = _run_reader(
+            lambda: service.repository.get_rule(rule_id),
+            missing_entity="speech rule",
+        )
+        changes = payload.model_dump(exclude={"expected_row_version"}, exclude_unset=True)
+        if changes.get("regex_timeout_ms") is None:
+            changes.pop("regex_timeout_ms", None)
+        candidate = replace(current, **changes)
+        updated = _run_rule(
+            lambda: _validate_and_update_rule(
+                service,
+                candidate,
+                payload.expected_row_version,
+            ),
+            missing_entity="speech rule",
+        )
+        return ReaderRuleResponse.from_domain(updated)
+
+    @router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_rule(
+        request: Request,
+        rule_id: str,
+        expected_row_version: Annotated[int, Query(gt=0)],
+    ) -> Response:
+        service = _service(request)
+        _run_reader(
+            lambda: service.repository.delete_rule(
+                rule_id, expected_row_version=expected_row_version
+            ),
+            missing_entity="speech rule",
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post("/rules/preview", response_model=ReaderRulePreviewResponse)
+    async def preview_rules(
+        request: Request, payload: ReaderRulePreviewRequest
+    ) -> ReaderRulePreviewResponse:
+        service = _service(request)
+        result = await run_in_threadpool(
+            lambda: _run_rule(
+                lambda: service.preview_rules(
+                    payload.text,
+                    rule_set_ids=tuple(payload.rule_set_ids),
+                    context=RuleContext(
+                        language=payload.language,
+                        engine=payload.engine,
+                        voice=payload.voice,
+                        document_id=payload.document_id,
+                    ),
+                ),
+                missing_entity="rule set",
+            )
+        )
+        return ReaderRulePreviewResponse(
+            original_text=payload.text,
+            spoken_text=result.text,
+            source_spans=[
+                ReaderRulePreviewSpan(
+                    start_offset=_utf16(payload.text, span.start_offset),
+                    end_offset=_utf16(payload.text, span.end_offset),
+                )
+                for span in result.source_spans
+            ],
+            trace=[
+                ReaderRuleTraceResponse(
+                    rule_id=item.rule_id,
+                    rule_type=item.rule_type,
+                    start_offset=_utf16(payload.text, item.start_offset),
+                    end_offset=_utf16(payload.text, item.end_offset),
+                    replacement_length=item.replacement_length,
+                )
+                for item in result.trace
+            ],
+            warnings=[
+                ReaderRuleWarningResponse(
+                    code=item.code, message=item.message, rule_id=item.rule_id
+                )
+                for item in result.warnings
+            ],
+            elapsed_ms=result.elapsed_ms,
+            pipeline_version=1,
+            rules_version=_run_reader(service.repository.get_rules_version),
+        )
+
+    @router.post("/rule-imports", response_model=ReaderRuleImportReportResponse)
+    async def import_rules(
+        request: Request, payload: ReaderRuleImportRequest
+    ) -> ReaderRuleImportReportResponse:
+        service = _service(request)
+        report = await run_in_threadpool(
+            lambda: _run_rule(
+                lambda: service.import_rules(
+                    target_rule_set_id=payload.target_rule_set_id,
+                    source_data=payload.content.encode("utf-8"),
+                    commit=payload.commit,
+                ),
+                missing_entity="rule set",
+            )
+        )
+        return ReaderRuleImportReportResponse(
+            source_sha256=report.source_sha256,
+            imported=report.imported,
+            disabled=report.disabled,
+            duplicate=report.duplicate,
+            invalid=report.invalid,
+            unsupported=report.unsupported,
+            committed=report.committed,
+            idempotent=report.idempotent,
+        )
+
+    @router.get("/rule-sets/{rule_set_id}/export")
+    async def export_rules(request: Request, rule_set_id: str) -> Response:
+        service = _service(request)
+        content = _run_rule(
+            lambda: service.export_rules(rule_set_id), missing_entity="rule set"
+        )
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="rule-set-{rule_set_id}.json"'
+            },
+        )
+
     return router
 
 
@@ -747,6 +1005,36 @@ def _run_reader(
             missing_entity=missing_entity,
             cursor_input=cursor_input,
         ) from exc
+
+
+def _run_rule(
+    operation: Callable[[], T],
+    *,
+    missing_entity: str,
+) -> T:
+    try:
+        return operation()
+    except SpeechRuleError as exc:
+        raise translate_rule_error(exc) from exc
+    except ReaderError as exc:
+        raise translate_reader_error(exc, missing_entity=missing_entity) from exc
+
+
+def _utf16(text: str, offset: int) -> int:
+    from .reader_offsets import python_offset_to_utf16
+
+    return python_offset_to_utf16(text, offset)
+
+
+def _validate_and_update_rule(
+    service: ReaderApplicationService,
+    candidate: SpeechRule,
+    expected_row_version: int,
+) -> SpeechRule:
+    service.rule_engine().validate_rule(candidate)
+    return service.repository.update_rule(
+        candidate, expected_row_version=expected_row_version
+    )
 
 
 async def _run_import_async(operation: Callable[[Event], T]) -> T:

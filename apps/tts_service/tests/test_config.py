@@ -155,6 +155,12 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
                 "max_document_characters = 200000",
                 "max_blocks = 10000",
                 "timeout_seconds = 15",
+                "[reader.rules]",
+                "enabled = false",
+                "default_regex_timeout_ms = 10",
+                "max_regex_pattern_chars = 1024",
+                "max_replacement_chars = 2048",
+                "max_rule_time_per_block_ms = 100",
             ]
         ),
         encoding="utf-8",
@@ -177,6 +183,31 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
     assert config.reader.imports.max_document_characters == 200_000
     assert config.reader.imports.max_blocks == 10_000
     assert config.reader.imports.timeout_seconds == 15
+    assert config.reader.rules.enabled is False
+    assert config.reader.rules.default_regex_timeout_ms == 10
+    assert config.reader.rules.max_regex_pattern_chars == 1_024
+    assert config.reader.rules.max_replacement_chars == 2_048
+    assert config.reader.rules.max_rule_time_per_block_ms == 100
+
+
+@pytest.mark.parametrize(
+    "setting",
+    [
+        "default_regex_timeout_ms",
+        "max_regex_pattern_chars",
+        "max_replacement_chars",
+        "max_rule_time_per_block_ms",
+    ],
+)
+def test_load_config_rejects_invalid_reader_rule_limits(
+    tmp_path: Path,
+    setting: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f"[reader.rules]\n{setting} = 0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=setting):
+        load_config(config_path, env={})
 
 
 @pytest.mark.parametrize(

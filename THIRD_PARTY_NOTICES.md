@@ -3,6 +3,16 @@
 This file records direct runtime dependencies added by TTS Platform Reader.
 Transitive package notices remain available in their respective distributions.
 
+## regex 2026.7.19
+
+- Purpose: hard-timeout Unicode regular expressions for untrusted Reader speech rules.
+- Source: <https://github.com/mrabarnett/mrab-regex>
+- Package: <https://pypi.org/project/regex/2026.7.19/>
+- License expression: Apache-2.0 AND CNRI-Python.
+
+The applicable license texts are distributed with the upstream package. The
+dependency is independently maintained and is not modified by this project.
+
 ## python-multipart 0.0.32
 
 - Purpose: bounded streaming `multipart/form-data` parsing for Reader imports.

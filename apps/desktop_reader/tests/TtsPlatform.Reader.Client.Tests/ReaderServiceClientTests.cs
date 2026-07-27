@@ -171,6 +171,55 @@ public sealed class ReaderServiceClientTests
         Assert.Equal(HttpMethod.Delete, handler.Requests[2].Method);
     }
 
+    [Fact]
+    public async Task Speech_rule_management_preview_and_interchange_use_protected_routes()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/rule-sets" when request.Method == HttpMethod.Get =>
+                Json(HttpStatusCode.OK, RuleSetPageJson),
+            "/v1/reader/rule-sets" => Json(HttpStatusCode.Created, RuleSetJson),
+            "/v1/reader/rule-sets/set-id/rules" => Json(HttpStatusCode.Created, RuleJson),
+            "/v1/reader/rules/preview" => Json(HttpStatusCode.OK, RulePreviewJson),
+            "/v1/reader/rule-imports" => Json(HttpStatusCode.OK, RuleImportJson),
+            "/v1/reader/rule-sets/set-id/export" => Json(HttpStatusCode.OK, "{\"version\":1}"),
+            "/v1/reader/rule-sets/set-id" when request.Method == HttpMethod.Delete =>
+                new HttpResponseMessage(HttpStatusCode.NoContent),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var sets = await client.GetRuleSetsAsync();
+        var set = await client.CreateRuleSetAsync(new CreateRuleSetRequest("Danish", Scope: "language"));
+        var rule = await client.CreateRuleAsync(
+            set.Id,
+            new SaveRuleRequest(
+                "Expand API",
+                "pronunciation",
+                "literal_replace",
+                "API",
+                "A P I",
+                LanguageFilter: "da"));
+        var preview = await client.PreviewRulesAsync(new RulePreviewRequest("API", [set.Id], "da"));
+        var import = await client.ImportRulesAsync(set.Id, "{\"version\":1}", commit: false);
+        var exported = await client.ExportRuleSetAsync(set.Id);
+        await client.DeleteRuleSetAsync(set.Id, expectedRowVersion: 1);
+
+        Assert.Equal(2, sets.RulesVersion);
+        Assert.Equal("literal_replace", rule.RuleType);
+        Assert.Equal("A P I", preview.SpokenText);
+        Assert.False(import.Committed);
+        Assert.Equal("{\"version\":1}", Encoding.UTF8.GetString(exported));
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"language_filter\":\"da\"", handler.Requests[2].Body, StringComparison.Ordinal);
+        Assert.Contains("\"rule_set_ids\":[\"set-id\"]", handler.Requests[3].Body, StringComparison.Ordinal);
+        Assert.Contains("\"commit\":false", handler.Requests[4].Body, StringComparison.Ordinal);
+        Assert.Equal("?expected_row_version=1", handler.Requests[6].Uri.Query);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json"),
@@ -265,6 +314,42 @@ public sealed class ReaderServiceClientTests
           "sections":[{"ordinal":0,"level":1,"heading":"Imported","first_block_ordinal":0}],
           "sample_blocks":[{"ordinal":0,"kind":"heading","text":"Heading","section_ordinal":0}],
           "preview_truncated":false,"duplicate_document_id":null,"expires_in_seconds":600
+        }
+        """;
+
+    private const string RuleSetPageJson = """
+        {"rule_sets":[],"rules_version":2}
+        """;
+
+    private const string RuleSetJson = """
+        {
+          "id":"set-id","name":"Danish","description":"","enabled":true,"scope":"language",
+          "version":1,"row_version":1,"created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z"
+        }
+        """;
+
+    private const string RuleJson = """
+        {
+          "id":"rule-id","rule_set_id":"set-id","name":"Expand API","enabled":true,
+          "stage":"pronunciation","rule_type":"literal_replace","pattern":"API","replacement":"A P I",
+          "case_sensitive":false,"whole_word":false,"language_filter":"da","engine_filter":null,
+          "voice_filter":null,"document_filter":null,"priority":100,"regex_timeout_ms":25,"row_version":1,
+          "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z","raw_import_metadata":{}
+        }
+        """;
+
+    private const string RulePreviewJson = """
+        {
+          "original_text":"API","spoken_text":"A P I",
+          "source_spans":[{"start_offset":0,"end_offset":3}],"trace":[],"warnings":[],
+          "elapsed_ms":0.2,"pipeline_version":1,"rules_version":2
+        }
+        """;
+
+    private const string RuleImportJson = """
+        {
+          "source_sha256":"abc","imported":0,"disabled":0,"duplicate":0,"invalid":0,
+          "unsupported":0,"committed":false,"idempotent":false
         }
         """;
 }

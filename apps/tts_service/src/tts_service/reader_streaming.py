@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from reader_core import ReaderBlock, ReaderStaleCursorError, ReaderValidationError
+from reader_core import ReaderBlock, ReaderStaleCursorError, ReaderValidationError, SpeechRule
+from speech_rules import RuleContext, RuleWarning, SpeechRuleEngine
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer
 
 from .reader_offsets import ReaderOffsetError, python_offset_to_utf16, utf16_offset_to_python
@@ -78,6 +79,8 @@ class ReaderStreamWindow:
     next_cursor: ReaderStreamCursor | None
     document_complete: bool
     source_character_count: int
+    rule_warnings: tuple[RuleWarning, ...] = ()
+    rules_version: int = 1
 
     def block_text(self, block_id: str) -> str:
         for block_slice in self.blocks:
@@ -92,10 +95,16 @@ class ReaderSpeechCompiler:
         normalizer: TextNormalizer,
         segmenter: SentenceSegmenter,
         chunk_planner: ChunkPlanner,
+        rule_engine: SpeechRuleEngine | None = None,
+        rules: tuple[SpeechRule, ...] = (),
+        rule_context: RuleContext | None = None,
     ) -> None:
         self._normalizer = normalizer
         self._segmenter = segmenter
         self._chunk_planner = chunk_planner
+        self._rule_engine = rule_engine
+        self._rules = rules
+        self._rule_context = rule_context or RuleContext()
 
     def compile_slices(
         self,
@@ -104,13 +113,40 @@ class ReaderSpeechCompiler:
         content_revision: int,
         language_hint: str | None,
     ) -> tuple[ReaderSpeechFragment, ...]:
+        fragments, _ = self.compile_slices_with_warnings(
+            block_slices,
+            content_revision=content_revision,
+            language_hint=language_hint,
+        )
+        return fragments
+
+    def compile_slices_with_warnings(
+        self,
+        block_slices: tuple[ReaderBlockSlice, ...],
+        *,
+        content_revision: int,
+        language_hint: str | None,
+    ) -> tuple[tuple[ReaderSpeechFragment, ...], tuple[RuleWarning, ...]]:
         fragments: list[ReaderSpeechFragment] = []
+        rule_warnings: list[RuleWarning] = []
         segment_index = 0
         for block_slice in block_slices:
             if block_slice.block.kind.value in {"separator", "code"}:
                 continue
+            rule_result = (
+                self._rule_engine.apply(
+                    block_slice.text,
+                    self._rules,
+                    context=self._rule_context,
+                )
+                if self._rule_engine is not None and self._rules
+                else None
+            )
+            prepared_text = rule_result.text if rule_result is not None else block_slice.text
+            if rule_result is not None:
+                rule_warnings.extend(rule_result.warnings)
             mapped = self._normalizer.normalize_with_mapping(
-                block_slice.text,
+                prepared_text,
                 language_hint=language_hint,
             )
             if not mapped.text:
@@ -128,12 +164,34 @@ class ReaderSpeechCompiler:
                     normalized_cursor,
                 )
                 mapped_spans = mapped.source_spans[start:end]
+                if rule_result is None:
+                    original_spans = tuple(mapped_spans)
+                else:
+                    original_spans = tuple(
+                        rule_result.source_spans[index]
+                        for span in mapped_spans
+                        for index in range(span.start_offset, span.end_offset)
+                    )
                 source_start = block_slice.start_offset + min(
-                    span.start_offset for span in mapped_spans
+                    span.start_offset for span in original_spans
                 )
                 source_end = block_slice.start_offset + max(
-                    span.end_offset for span in mapped_spans
+                    span.end_offset for span in original_spans
                 )
+                pause_hint = chunk.pause_ms_hint
+                if rule_result is not None:
+                    pause_hint = max(
+                        [
+                            pause_hint,
+                            *(
+                                pause.duration_ms
+                                for pause in rule_result.pauses
+                                if source_start - block_slice.start_offset
+                                < pause.source_offset
+                                <= source_end - block_slice.start_offset
+                            ),
+                        ]
+                    )
                 cursor_start = ReaderStreamCursor(
                     block_id=block_slice.block.id,
                     block_ordinal=block_slice.block.ordinal,
@@ -162,12 +220,12 @@ class ReaderSpeechCompiler:
                             ),
                         ),
                         section_id=block_slice.block.section_id,
-                        pause_ms_hint=chunk.pause_ms_hint,
+                        pause_ms_hint=pause_hint,
                     )
                 )
                 normalized_cursor = end
                 segment_index += 1
-        return tuple(fragments)
+        return tuple(fragments), tuple(rule_warnings)
 
     @staticmethod
     def _align_chunk(
@@ -230,6 +288,7 @@ class ReaderStreamWindowBuilder:
         max_blocks: int,
         max_source_characters: int,
         language_hint: str | None = None,
+        rules_version: int = 1,
     ) -> ReaderStreamWindow:
         document = self._service.get_document(document_id)
         if content_revision is not None and content_revision != document.content_revision:
@@ -302,7 +361,7 @@ class ReaderStreamWindowBuilder:
                 )
 
         block_slices = tuple(slices)
-        fragments = self._compiler.compile_slices(
+        fragments, rule_warnings = self._compiler.compile_slices_with_warnings(
             block_slices,
             content_revision=document.content_revision,
             language_hint=language_hint or document.language_hint,
@@ -325,6 +384,8 @@ class ReaderStreamWindowBuilder:
                 block_slice.end_offset - block_slice.start_offset
                 for block_slice in block_slices
             ),
+            rule_warnings=rule_warnings,
+            rules_version=rules_version,
         )
 
     @staticmethod

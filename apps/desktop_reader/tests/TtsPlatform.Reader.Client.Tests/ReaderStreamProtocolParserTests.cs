@@ -64,6 +64,20 @@ public sealed class ReaderStreamProtocolParserTests
             parser.ProcessText(StartedJson.Replace("pcm16le", "float32", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void Parser_accepts_nonterminal_rule_warning()
+    {
+        var parser = StartedParser();
+
+        var warning = Assert.IsType<ReaderStreamWarning>(parser.ProcessText(WarningJson));
+        parser.ProcessText(MarkJson);
+        var packet = parser.ProcessBinary(new byte[] { 1, 2, 3, 4 });
+
+        Assert.Equal("reader_regex_timeout", warning.WarningType);
+        Assert.Equal("rule-id", warning.RuleId);
+        Assert.Equal(0, packet.ChunkIndex);
+    }
+
     private static ReaderStreamProtocolParser StartedParser(int characterOffset = 0)
     {
         var parser = new ReaderStreamProtocolParser();
@@ -101,6 +115,13 @@ public sealed class ReaderStreamProtocolParserTests
           "type":"done","stream_id":"stream","chunks_sent":1,
           "cursor":{"block_id":"block","block_ordinal":0,"character_offset":3,"content_revision":1,"segment_index":0},
           "document_complete":true,"next_window_available":false
+        }
+        """;
+
+    private const string WarningJson = """
+        {
+          "type":"warning","stream_id":"stream",
+          "warning":{"type":"reader_regex_timeout","message":"Rule timed out.","rule_id":"rule-id"}
         }
         """;
 }

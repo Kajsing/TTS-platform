@@ -66,6 +66,7 @@ INCLUDED_DIRS = (
     "packages/tts_core/src",
     "packages/reader_core/src",
     "packages/document_import/src",
+    "packages/speech_rules/src",
 )
 
 EXCLUDED_PARTS = {

@@ -26,7 +26,12 @@ from .models import (
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderSection,
+    RuleScope,
+    RuleStage,
+    RuleType,
     SourceType,
+    SpeechRule,
+    SpeechRuleSet,
 )
 from .paths import ReaderPaths, resolve_reader_paths
 from .plain_text import build_plain_text_structure
@@ -60,6 +65,11 @@ __all__ = [
     "ReaderPaths",
     "ReaderRepository",
     "ReaderSection",
+    "RuleScope",
+    "RuleStage",
+    "RuleType",
+    "SpeechRule",
+    "SpeechRuleSet",
     "ReaderStaleCursorError",
     "ReaderValidationError",
     "SourceType",

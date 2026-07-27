@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from reader_core import ReaderLibrary, SqliteReaderRepository
+from reader_core import ReaderLibrary, RuleScope, RuleStage, RuleType, SqliteReaderRepository
+from speech_rules import RuleContext
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer
 from tts_service.config import AppConfig, ReaderConfig
 from tts_service.main import create_app
@@ -186,6 +187,60 @@ def test_compiler_maps_a_chunk_joined_across_adjacent_segments(tmp_path: Path) -
     assert window.fragments[0].spoken_text == "Edited through. NET \U0001f600"
     assert window.fragments[0].source_spans[0].start_offset == 0
     assert window.fragments[0].source_spans[0].end_offset == len("Edited through .NET \U0001f600")
+
+
+def test_speech_rules_compile_into_stream_with_original_source_spans(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    document = ReaderLibrary(service.repository).create_plain_text_document(
+        title="Rules",
+        text="API secret.",
+        language_hint="en",
+    )
+    rule_set = service.create_rule_set(
+        name="Global",
+        description="",
+        scope=RuleScope.GLOBAL,
+    )
+    service.create_rule(
+        rule_set_id=rule_set.id,
+        name="Expand API",
+        stage=RuleStage.PRONUNCIATION,
+        rule_type=RuleType.LITERAL_REPLACE,
+        pattern="API",
+        replacement="A P I",
+    )
+    service.create_rule(
+        rule_set_id=rule_set.id,
+        name="Skip secret",
+        stage=RuleStage.CLEANUP,
+        rule_type=RuleType.SKIP,
+        pattern="secret",
+        replacement="",
+    )
+    compiler = ReaderSpeechCompiler(
+        TextNormalizer(),
+        SentenceSegmenter(),
+        ChunkPlanner(),
+        rule_engine=service.rule_engine(),
+        rules=service.ordered_rules(()),
+        rule_context=RuleContext(language="en", document_id=document.id),
+    )
+
+    window = ReaderStreamWindowBuilder(service, compiler).build(
+        document.id,
+        block_ordinal=0,
+        character_offset_utf16=0,
+        block_id=None,
+        content_revision=1,
+        max_blocks=64,
+        max_source_characters=32_000,
+        rules_version=service.repository.get_rules_version(),
+    )
+
+    assert window.fragments[0].spoken_text == "A P I."
+    assert window.fragments[0].source_spans[0].start_offset == 0
+    assert window.fragments[0].source_spans[0].end_offset == len("API secret.")
+    assert window.rules_version > 1
 
 
 def test_content_lease_rejects_mutation_until_all_streams_release(tmp_path: Path) -> None:

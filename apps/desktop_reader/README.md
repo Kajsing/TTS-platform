@@ -6,7 +6,7 @@ of synthesis and the canonical Reader database.
 
 ## Current feature boundary
 
-The Milestone 6 Reader provides:
+The Milestone 7 Reader MVP provides:
 
 - strict `http://localhost` or `http://127.0.0.1` service validation;
 - a token-file source (the bearer token is never copied into settings JSON);
@@ -44,9 +44,16 @@ The Milestone 6 Reader provides:
 - structure-aware read-only rendering with 64-block pages, recycling WPF
   virtualization, optional follow-reading scroll, and duplicate-as-editable
   plain text.
-
-Speech-rule authoring and interchange remain Milestone 7 and are not part of
-this slice.
+- engine-independent speech-rule sets with deterministic scope, stage, priority,
+  enable/disable, language/engine/voice/document filters, and durable versions;
+- literal and regex replacement, skip, spell, pause, and preserved phoneme rules
+  compiled before the existing language normalizer while retaining source spans;
+- a protected 4,096-character rule preview with spoken result, ordered trace,
+  per-character UTF-16 mapping, typed timeout warnings, and no text logging;
+- hard regex and total-window budgets, bounded expansion, and a direct disable
+  action for a warned preview rule;
+- WPF rule-set/rule management, Create rule from selection, and dry-run-first
+  JSON import plus JSON export using the documented open Reader interchange.
 
 ## Project boundaries
 
@@ -78,7 +85,8 @@ The check starts an isolated Python service, verifies paging, UTF-16 edits,
 source-mapped Reader streaming, position resume, immediate speech without
 document persistence, repeated clipboard append plus one-step Undo, a consistent
 preview snapshot, live safe structured import with durable warnings and an
-editable copy, the default Windows audio endpoint, clipboard-listener and
+editable copy, source-mapped speech-rule preview plus the regex timeout guard,
+the default Windows audio endpoint, clipboard-listener and
 hotkey registration, tray lifecycle, a self-contained `win-x64` package, and a
 packaged WPF render. It does not read or write the current clipboard and does not
 use or alter the installed Reader library.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import zipfile
 from pathlib import Path
@@ -76,7 +77,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 1,
+        "schema_version": 2,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -85,7 +86,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 1,
+        "schema_version": 2,
         "search_available": False,
     }
     assert payload["imports"] == {
@@ -93,7 +94,17 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
         "max_file_bytes": 52_428_800,
         "ocr_available": False,
     }
-    assert payload["rules"]["types"] == []
+    assert payload["rules"] == {
+        "types": [
+            "literal_replace",
+            "regex_replace",
+            "skip",
+            "spell",
+            "pause",
+            "phoneme",
+        ],
+        "regex_timeout_supported": True,
+    }
     assert payload["playback"]["stream_protocol_version"] == 1
     assert payload["exports"]["formats"] == []
 
@@ -254,6 +265,164 @@ def test_import_rejects_unsafe_archive_and_file_quota(tmp_path: Path) -> None:
     assert unsafe.json()["error"]["type"] == "reader_archive_unsafe"
     assert too_large.status_code == 413
     assert too_large.json()["error"]["type"] == "reader_import_too_large"
+
+
+def test_rule_crud_preview_interchange_and_idempotent_import(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    created_set = client.post(
+        "/v1/reader/rule-sets",
+        headers=headers,
+        json={"name": "Danish IT", "scope": "language"},
+    )
+    assert created_set.status_code == 201, created_set.text
+    rule_set = created_set.json()
+    created_rule = client.post(
+        f"/v1/reader/rule-sets/{rule_set['id']}/rules",
+        headers=headers,
+        json={
+            "name": "Expand API",
+            "stage": "pronunciation",
+            "rule_type": "literal_replace",
+            "pattern": "API",
+            "replacement": "A P I",
+            "language_filter": "da",
+            "priority": 10,
+        },
+    )
+    assert created_rule.status_code == 201, created_rule.text
+    rule = created_rule.json()
+
+    preview = client.post(
+        "/v1/reader/rules/preview",
+        headers=headers,
+        json={
+            "text": "L\u00e6s API \U0001f600.",
+            "rule_set_ids": [rule_set["id"]],
+            "language": "da",
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["spoken_text"] == "L\u00e6s A P I \U0001f600."
+    assert body["trace"][0]["rule_id"] == rule["id"]
+    assert body["trace"][0]["start_offset"] == 4
+    assert body["trace"][0]["end_offset"] == 7
+    assert len(body["source_spans"]) == len(body["spoken_text"])
+    assert body["rules_version"] > 1
+
+    invalid = client.patch(
+        f"/v1/reader/rules/{rule['id']}",
+        headers=headers,
+        json={
+            "expected_row_version": rule["row_version"],
+            "rule_type": "regex_replace",
+            "pattern": "(",
+        },
+    )
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["type"] == "reader_rule_invalid"
+
+    exported = client.get(
+        f"/v1/reader/rule-sets/{rule_set['id']}/export", headers=headers
+    )
+    assert exported.status_code == 200
+    target = client.post(
+        "/v1/reader/rule-sets",
+        headers=headers,
+        json={"name": "Imported", "scope": "global"},
+    ).json()
+    dry_run = client.post(
+        "/v1/reader/rule-imports",
+        headers=headers,
+        json={
+            "target_rule_set_id": target["id"],
+            "content": exported.text,
+            "commit": False,
+        },
+    )
+    committed = client.post(
+        "/v1/reader/rule-imports",
+        headers=headers,
+        json={
+            "target_rule_set_id": target["id"],
+            "content": exported.text,
+            "commit": True,
+        },
+    )
+    repeated = client.post(
+        "/v1/reader/rule-imports",
+        headers=headers,
+        json={
+            "target_rule_set_id": target["id"],
+            "content": exported.text,
+            "commit": True,
+        },
+    )
+    assert dry_run.json()["imported"] == 0
+    assert committed.json()["imported"] == 1
+    assert repeated.json()["idempotent"] is True
+    imported_rules = client.get(
+        f"/v1/reader/rule-sets/{target['id']}/rules", headers=headers
+    ).json()["rules"]
+    assert len(imported_rules) == 1
+
+
+def test_rule_import_preserves_unknown_provider_rule_disabled(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    target = client.post(
+        "/v1/reader/rule-sets",
+        headers=headers,
+        json={"name": "Provider", "scope": "global"},
+    ).json()
+    content = json.dumps(
+        {
+            "format": "tts-platform-reader-rule-set",
+            "version": 1,
+            "rule_set": {"name": "Provider", "scope": "global"},
+            "rules": [
+                {
+                    "name": "Vendor rule",
+                    "stage": "pronunciation",
+                    "rule_type": "vendor_phoneme",
+                    "pattern": "name",
+                    "replacement": "ne\u026am",
+                    "vendor_hint": "preserve",
+                }
+            ],
+        }
+    )
+
+    response = client.post(
+        "/v1/reader/rule-imports",
+        headers=headers,
+        json={
+            "target_rule_set_id": target["id"],
+            "content": content,
+            "commit": True,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["unsupported"] == 1
+    assert response.json()["disabled"] == 1
+    imported = client.get(
+        f"/v1/reader/rule-sets/{target['id']}/rules", headers=headers
+    ).json()["rules"][0]
+    assert imported["enabled"] is False
+    assert imported["raw_import_metadata"]["unsupported_rule_type"] == "vendor_phoneme"
+
+
+def test_rule_preview_rejects_mapping_response_amplification(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+
+    response = client.post(
+        "/v1/reader/rules/preview",
+        headers=headers,
+        json={"text": "x" * 4_097, "rule_set_ids": []},
+    )
+
+    assert response.status_code == 400
+    assert "x" * 100 not in response.text
 
 
 def test_reader_routes_enforce_origin_policy(tmp_path: Path) -> None:

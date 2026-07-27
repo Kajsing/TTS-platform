@@ -58,3 +58,10 @@ max_archive_members = 10000
 max_document_characters = 10000000
 max_blocks = 250000
 timeout_seconds = 60
+
+[reader.rules]
+enabled = true
+default_regex_timeout_ms = 25
+max_regex_pattern_chars = 2048
+max_replacement_chars = 4096
+max_rule_time_per_block_ms = 250

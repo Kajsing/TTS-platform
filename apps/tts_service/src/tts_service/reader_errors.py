@@ -16,6 +16,7 @@ from reader_core import (
     ReaderStaleCursorError,
     ReaderValidationError,
 )
+from speech_rules import SpeechRuleError, SpeechRuleInterchangeError
 
 from .errors import APIError, ErrorBody
 from .reader_service import (
@@ -189,4 +190,16 @@ def translate_import_error(error: Exception) -> APIError:
         "reader_import_invalid",
         status_code=400,
         message="The document could not be imported.",
+    )
+
+
+def translate_rule_error(error: SpeechRuleError) -> APIError:
+    return reader_api_error(
+        "reader_rule_invalid",
+        status_code=400,
+        message=(
+            "The rule interchange file is invalid or unsupported."
+            if isinstance(error, SpeechRuleInterchangeError)
+            else "The speech rule is invalid or exceeds a safety limit."
+        ),
     )

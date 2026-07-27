@@ -11,8 +11,15 @@ SERVICE_SRC = REPO_ROOT / "apps" / "tts_service" / "src"
 CORE_SRC = REPO_ROOT / "packages" / "tts_core" / "src"
 READER_CORE_SRC = REPO_ROOT / "packages" / "reader_core" / "src"
 DOCUMENT_IMPORT_SRC = REPO_ROOT / "packages" / "document_import" / "src"
+SPEECH_RULES_SRC = REPO_ROOT / "packages" / "speech_rules" / "src"
 
-for source_path in (SERVICE_SRC, CORE_SRC, READER_CORE_SRC, DOCUMENT_IMPORT_SRC):
+for source_path in (
+    SERVICE_SRC,
+    CORE_SRC,
+    READER_CORE_SRC,
+    DOCUMENT_IMPORT_SRC,
+    SPEECH_RULES_SRC,
+):
     sys.path.insert(0, str(source_path))
 
 from tts_service import cli  # noqa: E402

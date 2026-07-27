@@ -66,6 +66,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
     public event EventHandler<PlaybackStateChanged>? StateChanged;
     public event EventHandler<PlaybackHighlight>? HighlightChanged;
+    public event EventHandler<ReaderStreamWarning>? RuleWarning;
 
     public ReaderPlaybackState State { get; private set; } = ReaderPlaybackState.Stopped;
     public ReaderCursor? LastFullyPlayedCursor => _lastFullyPlayedCursor;
@@ -212,6 +213,9 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             break;
                         case ReaderStreamCancelled:
                             shouldContinue = false;
+                            break;
+                        case ReaderStreamWarning warning:
+                            RuleWarning?.Invoke(this, warning);
                             break;
                         case ReaderStreamError error:
                             throw new ReaderStreamProtocolException(

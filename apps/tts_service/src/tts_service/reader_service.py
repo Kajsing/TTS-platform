@@ -29,10 +29,30 @@ from reader_core import (
     ReaderDocumentBundle,
     ReaderError,
     ReaderLibrary,
+    ReaderNotFoundError,
     ReaderSection,
+    RuleScope,
+    RuleStage,
+    RuleType,
     SourceType,
+    SpeechRule,
+    SpeechRuleSet,
     SqliteReaderRepository,
     resolve_reader_paths,
+)
+from speech_rules import (
+    ImportedRuleCandidate,
+    ParsedRuleSet,
+    RuleApplication,
+    RuleContext,
+    RuleEngineLimits,
+    SpeechRuleEngine,
+    SpeechRuleValidationError,
+    candidate_signature,
+    export_rule_set,
+    order_rules,
+    parse_rule_set,
+    rule_signature,
 )
 
 from .config import ReaderConfig
@@ -67,6 +87,18 @@ class ReaderImportPreview:
     copy_source_file: bool
     source_data: bytes | None
     created_at_monotonic: float
+
+
+@dataclass(frozen=True, slots=True)
+class ReaderRuleImportReport:
+    source_sha256: str
+    imported: int
+    disabled: int
+    duplicate: int
+    invalid: int
+    unsupported: int
+    committed: bool
+    idempotent: bool = False
 
 
 class ReaderContentLeaseRegistry:
@@ -312,6 +344,238 @@ class ReaderApplicationService:
             language_hint=bundle.document.language_hint,
             allow_duplicate=True,
         )
+
+    def create_rule_set(
+        self,
+        *,
+        name: str,
+        description: str,
+        scope: RuleScope,
+    ) -> SpeechRuleSet:
+        now = datetime.now(timezone.utc)
+        return self.repository.create_rule_set(
+            SpeechRuleSet(
+                id=str(uuid.uuid4()),
+                name=name.strip(),
+                description=description.strip(),
+                scope=scope,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    def create_rule(
+        self,
+        *,
+        rule_set_id: str,
+        name: str,
+        stage: RuleStage,
+        rule_type: RuleType,
+        pattern: str,
+        replacement: str,
+        enabled: bool = True,
+        case_sensitive: bool = False,
+        whole_word: bool = False,
+        language_filter: str | None = None,
+        engine_filter: str | None = None,
+        voice_filter: str | None = None,
+        document_filter: str | None = None,
+        priority: int = 100,
+        regex_timeout_ms: int | None = None,
+        raw_import_metadata: dict[str, object] | None = None,
+    ) -> SpeechRule:
+        self.repository.get_rule_set(rule_set_id)
+        now = datetime.now(timezone.utc)
+        rule = SpeechRule(
+            id=str(uuid.uuid4()),
+            rule_set_id=rule_set_id,
+            name=name.strip(),
+            stage=stage,
+            rule_type=rule_type,
+            pattern=pattern,
+            replacement=replacement,
+            enabled=enabled,
+            case_sensitive=case_sensitive,
+            whole_word=whole_word,
+            language_filter=language_filter,
+            engine_filter=engine_filter,
+            voice_filter=voice_filter,
+            document_filter=document_filter,
+            priority=priority,
+            regex_timeout_ms=(
+                regex_timeout_ms
+                if regex_timeout_ms is not None
+                else self.config.rules.default_regex_timeout_ms
+            ),
+            created_at=now,
+            updated_at=now,
+            raw_import_metadata=raw_import_metadata or {},
+        )
+        self.rule_engine().validate_rule(rule)
+        return self.repository.create_rule(rule)
+
+    def preview_rules(
+        self,
+        text: str,
+        *,
+        rule_set_ids: tuple[str, ...],
+        context: RuleContext,
+    ) -> RuleApplication:
+        rules = self.ordered_rules(rule_set_ids)
+        return self.rule_engine().apply(text, rules, context=context)
+
+    def ordered_rules(self, rule_set_ids: tuple[str, ...]) -> tuple[SpeechRule, ...]:
+        if not self.config.rules.enabled:
+            return ()
+        rule_sets = {item.id: item for item in self.repository.list_rule_sets()}
+        if not rule_set_ids:
+            rule_set_ids = tuple(
+                item.id for item in rule_sets.values() if item.enabled
+            )
+        missing = [rule_set_id for rule_set_id in rule_set_ids if rule_set_id not in rule_sets]
+        if missing:
+            raise ReaderNotFoundError("rule set", missing[0])
+        rules = self.repository.list_rules(rule_set_ids)
+        return order_rules(rules, {key: value.scope for key, value in rule_sets.items()})
+
+    def rule_engine(self) -> SpeechRuleEngine:
+        config = self.config.rules
+        return SpeechRuleEngine(
+            RuleEngineLimits(
+                default_regex_timeout_ms=config.default_regex_timeout_ms,
+                max_regex_pattern_chars=config.max_regex_pattern_chars,
+                max_replacement_chars=config.max_replacement_chars,
+                max_rule_time_per_block_ms=config.max_rule_time_per_block_ms,
+            )
+        )
+
+    def import_rules(
+        self,
+        *,
+        target_rule_set_id: str,
+        source_data: bytes,
+        commit: bool,
+    ) -> ReaderRuleImportReport:
+        self.repository.get_rule_set(target_rule_set_id)
+        parsed = parse_rule_set(source_data)
+        previous = self.repository.get_rule_import_report(
+            target_rule_set_id, parsed.source_sha256
+        )
+        if commit and previous is not None:
+            return ReaderRuleImportReport(
+                source_sha256=parsed.source_sha256,
+                imported=int(previous.get("imported", 0)),
+                disabled=int(previous.get("disabled", 0)),
+                duplicate=int(previous.get("duplicate", 0)),
+                invalid=int(previous.get("invalid", 0)),
+                unsupported=int(previous.get("unsupported", 0)),
+                committed=True,
+                idempotent=True,
+            )
+        report, importable = self._prepare_rule_import(target_rule_set_id, parsed)
+        if not commit:
+            return report
+        for candidate in importable:
+            self.create_rule(
+                rule_set_id=target_rule_set_id,
+                name=candidate.name,
+                stage=candidate.stage,
+                rule_type=candidate.rule_type,
+                pattern=candidate.pattern,
+                replacement=candidate.replacement,
+                enabled=candidate.enabled,
+                case_sensitive=candidate.case_sensitive,
+                whole_word=candidate.whole_word,
+                language_filter=candidate.language_filter,
+                engine_filter=candidate.engine_filter,
+                voice_filter=candidate.voice_filter,
+                document_filter=candidate.document_filter,
+                priority=candidate.priority,
+                regex_timeout_ms=candidate.regex_timeout_ms,
+                raw_import_metadata=dict(candidate.raw_import_metadata),
+            )
+        committed = replace(report, committed=True, imported=len(importable))
+        self.repository.record_rule_import(
+            target_rule_set_id,
+            parsed.source_sha256,
+            {
+                "imported": committed.imported,
+                "disabled": committed.disabled,
+                "duplicate": committed.duplicate,
+                "invalid": committed.invalid,
+                "unsupported": committed.unsupported,
+            },
+        )
+        return committed
+
+    def _prepare_rule_import(
+        self,
+        target_rule_set_id: str,
+        parsed: ParsedRuleSet,
+    ) -> tuple[ReaderRuleImportReport, tuple[ImportedRuleCandidate, ...]]:
+        existing = {
+            rule_signature(rule)
+            for rule in self.repository.list_rules((target_rule_set_id,))
+        }
+        importable = []
+        duplicates = 0
+        invalid = parsed.invalid_count
+        engine = self.rule_engine()
+        for candidate in parsed.candidates:
+            if candidate_signature(candidate) in existing:
+                duplicates += 1
+                continue
+            try:
+                probe = self._candidate_probe(target_rule_set_id, candidate)
+                engine.validate_rule(probe)
+            except (ReaderError, SpeechRuleValidationError):
+                invalid += 1
+                continue
+            importable.append(candidate)
+        return (
+            ReaderRuleImportReport(
+                source_sha256=parsed.source_sha256,
+                imported=0,
+                disabled=sum(not candidate.enabled for candidate in importable),
+                duplicate=duplicates,
+                invalid=invalid,
+                unsupported=parsed.unsupported_count,
+                committed=False,
+            ),
+            tuple(importable),
+        )
+
+    @staticmethod
+    def _candidate_probe(
+        rule_set_id: str, candidate: ImportedRuleCandidate
+    ) -> SpeechRule:
+        now = datetime.now(timezone.utc)
+        return SpeechRule(
+            id=str(uuid.uuid4()),
+            rule_set_id=rule_set_id,
+            name=candidate.name,
+            enabled=candidate.enabled,
+            stage=candidate.stage,
+            rule_type=candidate.rule_type,
+            pattern=candidate.pattern,
+            replacement=candidate.replacement,
+            case_sensitive=candidate.case_sensitive,
+            whole_word=candidate.whole_word,
+            language_filter=candidate.language_filter,
+            engine_filter=candidate.engine_filter,
+            voice_filter=candidate.voice_filter,
+            document_filter=candidate.document_filter,
+            priority=candidate.priority,
+            regex_timeout_ms=candidate.regex_timeout_ms,
+            created_at=now,
+            updated_at=now,
+            raw_import_metadata=candidate.raw_import_metadata,
+        )
+
+    def export_rules(self, rule_set_id: str) -> bytes:
+        rule_set = self.repository.get_rule_set(rule_set_id)
+        rules = self.repository.list_rules((rule_set_id,))
+        return export_rule_set(rule_set, rules)
 
     def content_lease(self, document_id: str, owner_id: str):
         return self.content_leases.lease(document_id, owner_id)

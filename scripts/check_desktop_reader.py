@@ -116,6 +116,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
         repo_root / "docs" / "reader_milestone5_manual_checklist.md",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.en-US.resx",
@@ -165,10 +166,25 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             f"Milestone 6 import or virtualized-reading features are missing: "
             f"{missing_import_features}"
         )
+    rule_features = [
+        "PreviewRulesAsync",
+        "RuleEditorDialog",
+        "Create rule from selection",
+        "DisableWarningRuleButton",
+        "ReaderStreamWarning",
+    ]
+    missing_rule_features = [
+        value for value in rule_features if value.casefold() not in source_text.casefold()
+    ]
+    if missing_rule_features:
+        raise DesktopReaderCheckError(
+            f"Milestone 7 speech-rule features are missing: {missing_rule_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
         "structured_import": "implemented",
+        "speech_rules": "implemented",
     }
 
 
@@ -185,6 +201,7 @@ def _live_reader_service(repo_root: Path, temporary: Path) -> Iterator[tuple[str
         repo_root / "packages" / "tts_core" / "src",
         repo_root / "packages" / "reader_core" / "src",
         repo_root / "packages" / "document_import" / "src",
+        repo_root / "packages" / "speech_rules" / "src",
     ):
         sys.path.insert(0, str(source_root))
 
@@ -243,7 +260,7 @@ def _live_reader_service(repo_root: Path, temporary: Path) -> Iterator[tuple[str
     finally:
         server.should_exit = True
         thread.join(timeout=10)
-        if thread.is_alive():
+        if thread.is_alive() and sys.exc_info()[0] is None:
             raise DesktopReaderCheckError("The temporary local Reader service did not stop.")
 
 
@@ -265,6 +282,7 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
             cwd=repo_root,
         )
         structured_import = _check_live_structured_import(base_url, token_path)
+        speech_rules = _check_live_speech_rules(base_url, token_path)
     payload = json.loads(output)
     if payload.get("live_reader_paging") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm live Reader paging.")
@@ -285,6 +303,7 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
             "The .NET client did not confirm private immediate speech and clipboard append/undo."
         )
     payload["live_structured_import"] = structured_import
+    payload["live_speech_rules"] = speech_rules
     return payload
 
 
@@ -352,6 +371,76 @@ def _check_live_structured_import(base_url: str, token_path: Path) -> bool:
         editable = json.load(response)
     if editable["source_type"] != "plain_text":
         raise DesktopReaderCheckError("Structured import did not produce an editable copy.")
+    return True
+
+
+def _check_live_speech_rules(base_url: str, token_path: Path) -> bool:
+    token = token_path.read_text(encoding="utf-8").strip()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    def send(path: str, payload: dict[str, object]) -> dict[str, object]:
+        request = urllib.request.Request(
+            f"{base_url}{path}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.load(response)
+
+    rule_set = send("v1/reader/rule-sets", {"name": "Live speech-rule smoke"})
+    rule = send(
+        f"v1/reader/rule-sets/{rule_set['id']}/rules",
+        {
+            "name": "Expand API",
+            "stage": "pronunciation",
+            "rule_type": "literal_replace",
+            "pattern": "API",
+            "replacement": "A P I",
+        },
+    )
+    preview = send(
+        "v1/reader/rules/preview",
+        {"text": "API test", "rule_set_ids": [rule_set["id"]]},
+    )
+    if (
+        preview["spoken_text"] != "A P I test"
+        or preview["trace"][0]["rule_id"] != rule["id"]
+        or len(preview["source_spans"]) != len(preview["spoken_text"])
+        or preview["rules_version"] <= 1
+    ):
+        raise DesktopReaderCheckError("The live speech-rule preview was invalid.")
+
+    timeout_rule = send(
+        f"v1/reader/rule-sets/{rule_set['id']}/rules",
+        {
+            "name": "Timeout guard",
+            "stage": "cleanup",
+            "rule_type": "regex_replace",
+            "pattern": "(a+)+$",
+            "replacement": "x",
+            "regex_timeout_ms": 1,
+            "priority": -100,
+        },
+    )
+    started = time.monotonic()
+    guarded = send(
+        "v1/reader/rules/preview",
+        {"text": "a" * 4_095 + "!", "rule_set_ids": [rule_set["id"]]},
+    )
+    elapsed = time.monotonic() - started
+    if (
+        elapsed >= 5
+        or not any(
+            warning.get("code") == "rule_timeout"
+            and warning.get("rule_id") == timeout_rule["id"]
+            for warning in guarded["warnings"]
+        )
+    ):
+        raise DesktopReaderCheckError("The live regex timeout guard did not respond safely.")
     return True
 
 

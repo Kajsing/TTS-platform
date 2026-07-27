@@ -102,6 +102,169 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task<ReaderRuleSetPage> GetRuleSetsAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRuleSetPage>(
+            HttpMethod.Get,
+            "v1/reader/rule-sets",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderRuleSet> CreateRuleSetAsync(
+        CreateRuleSetRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRuleSet>(
+            HttpMethod.Post,
+            "v1/reader/rule-sets",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<ReaderRuleSet> UpdateRuleSetAsync(
+        string ruleSetId,
+        CreateRuleSetRequest request,
+        bool enabled,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRuleSet>(
+            HttpMethod.Patch,
+            $"v1/reader/rule-sets/{Uri.EscapeDataString(ruleSetId)}",
+            true,
+            new
+            {
+                expected_row_version = expectedRowVersion,
+                request.Name,
+                request.Description,
+                request.Scope,
+                enabled,
+            },
+            cancellationToken);
+
+    public Task DeleteRuleSetAsync(
+        string ruleSetId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) =>
+        SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/rule-sets/{Uri.EscapeDataString(ruleSetId)}?expected_row_version={expectedRowVersion}",
+            cancellationToken);
+
+    public Task<ReaderRulePage> GetRulesAsync(
+        string ruleSetId,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRulePage>(
+            HttpMethod.Get,
+            $"v1/reader/rule-sets/{Uri.EscapeDataString(ruleSetId)}/rules",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderRule> CreateRuleAsync(
+        string ruleSetId,
+        SaveRuleRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRule>(
+            HttpMethod.Post,
+            $"v1/reader/rule-sets/{Uri.EscapeDataString(ruleSetId)}/rules",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<ReaderRule> UpdateRuleAsync(
+        string ruleId,
+        SaveRuleRequest request,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var body = new
+        {
+            expected_row_version = expectedRowVersion,
+            request.Name,
+            request.Enabled,
+            request.Stage,
+            request.RuleType,
+            request.Pattern,
+            request.Replacement,
+            request.CaseSensitive,
+            request.WholeWord,
+            request.LanguageFilter,
+            request.EngineFilter,
+            request.VoiceFilter,
+            request.DocumentFilter,
+            request.Priority,
+            request.RegexTimeoutMs,
+        };
+        return SendAsync<ReaderRule>(
+            HttpMethod.Patch,
+            $"v1/reader/rules/{Uri.EscapeDataString(ruleId)}",
+            true,
+            body,
+            cancellationToken);
+    }
+
+    public Task DeleteRuleAsync(
+        string ruleId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) =>
+        SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/rules/{Uri.EscapeDataString(ruleId)}?expected_row_version={expectedRowVersion}",
+            cancellationToken);
+
+    public Task<ReaderRulePreview> PreviewRulesAsync(
+        RulePreviewRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRulePreview>(
+            HttpMethod.Post,
+            "v1/reader/rules/preview",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<ReaderRuleImportReport> ImportRulesAsync(
+        string targetRuleSetId,
+        string content,
+        bool commit,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderRuleImportReport>(
+            HttpMethod.Post,
+            "v1/reader/rule-imports",
+            true,
+            new
+            {
+                target_rule_set_id = targetRuleSetId,
+                content,
+                commit,
+            },
+            cancellationToken);
+
+    public async Task<byte[]> ExportRuleSetAsync(
+        string ruleSetId,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/reader/rule-sets/{Uri.EscapeDataString(ruleSetId)}/export");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await SendHttpAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+        const int maximumBytes = 1_048_576;
+        if (response.Content.Headers.ContentLength > maximumBytes)
+        {
+            throw new ReaderServiceUnavailableException("The exported rule set is too large.");
+        }
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return content.Length <= maximumBytes
+            ? content
+            : throw new ReaderServiceUnavailableException("The exported rule set is too large.");
+    }
+
     public Task<DocumentPage> GetDocumentsAsync(
         int limit = 50,
         string? cursor = null,

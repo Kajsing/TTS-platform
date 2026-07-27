@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_ROOT = REPO_ROOT / "contracts" / "reader"
 for source_root in (
     REPO_ROOT / "packages" / "reader_core" / "src",
+    REPO_ROOT / "packages" / "speech_rules" / "src",
     REPO_ROOT / "apps" / "tts_service" / "src",
 ):
     sys.path.insert(0, str(source_root))
@@ -19,6 +20,7 @@ from tts_service.reader_schemas import (  # noqa: E402
     ReaderErrorResponse,
     ReaderImportPreviewResponse,
     ReaderMutationResponse,
+    ReaderRulePreviewResponse,
     SaveReaderPositionRequest,
 )
 
@@ -30,6 +32,7 @@ FIXTURES = {
     "mutation.response.json": ReaderMutationResponse,
     "error.response.json": ReaderErrorResponse,
     "import_preview.response.json": ReaderImportPreviewResponse,
+    "rule_preview.response.json": ReaderRulePreviewResponse,
 }
 
 

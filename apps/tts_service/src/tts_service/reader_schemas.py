@@ -16,7 +16,12 @@ from reader_core import (
     ReaderBlock,
     ReaderCursor,
     ReaderDocument,
+    RuleScope,
+    RuleStage,
+    RuleType,
     SourceType,
+    SpeechRule,
+    SpeechRuleSet,
 )
 
 from .reader_offsets import python_offset_to_utf16
@@ -390,6 +395,205 @@ class ReaderQueueItemResponse(BaseModel):
 
 class ReaderQueueResponse(BaseModel):
     items: list[ReaderQueueItemResponse]
+
+
+class CreateReaderRuleSetRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    scope: RuleScope = RuleScope.GLOBAL
+
+
+class UpdateReaderRuleSetRequest(BaseModel):
+    expected_row_version: int = Field(gt=0)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    enabled: bool | None = None
+    scope: RuleScope | None = None
+
+
+class ReaderRuleSetResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    enabled: bool
+    scope: RuleScope
+    source_sha256: str | None
+    version: int
+    row_version: int
+    created_at: datetime
+    updated_at: datetime
+    raw_import_metadata: dict[str, Any]
+
+    @classmethod
+    def from_domain(cls, rule_set: SpeechRuleSet) -> "ReaderRuleSetResponse":
+        return cls(
+            id=rule_set.id,
+            name=rule_set.name,
+            description=rule_set.description,
+            enabled=rule_set.enabled,
+            scope=rule_set.scope,
+            source_sha256=rule_set.source_sha256,
+            version=rule_set.version,
+            row_version=rule_set.row_version,
+            created_at=rule_set.created_at,
+            updated_at=rule_set.updated_at,
+            raw_import_metadata=dict(rule_set.raw_import_metadata),
+        )
+
+
+class ReaderRuleSetListResponse(BaseModel):
+    rule_sets: list[ReaderRuleSetResponse]
+    rules_version: int
+
+
+class ReaderRuleFields(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    enabled: bool = True
+    stage: RuleStage = RuleStage.PRONUNCIATION
+    rule_type: RuleType = RuleType.LITERAL_REPLACE
+    pattern: str = Field(min_length=1, max_length=2048)
+    replacement: str = Field(default="", max_length=4096)
+    case_sensitive: bool = False
+    whole_word: bool = False
+    language_filter: str | None = Field(default=None, max_length=200)
+    engine_filter: str | None = Field(default=None, max_length=200)
+    voice_filter: str | None = Field(default=None, max_length=200)
+    document_filter: str | None = Field(default=None, max_length=200)
+    priority: int = Field(default=100, ge=-100_000, le=100_000)
+    regex_timeout_ms: int | None = Field(default=None, gt=0, le=1000)
+
+
+class CreateReaderRuleRequest(ReaderRuleFields):
+    pass
+
+
+class UpdateReaderRuleRequest(BaseModel):
+    expected_row_version: int = Field(gt=0)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    enabled: bool | None = None
+    stage: RuleStage | None = None
+    rule_type: RuleType | None = None
+    pattern: str | None = Field(default=None, min_length=1, max_length=2048)
+    replacement: str | None = Field(default=None, max_length=4096)
+    case_sensitive: bool | None = None
+    whole_word: bool | None = None
+    language_filter: str | None = Field(default=None, max_length=200)
+    engine_filter: str | None = Field(default=None, max_length=200)
+    voice_filter: str | None = Field(default=None, max_length=200)
+    document_filter: str | None = Field(default=None, max_length=200)
+    priority: int | None = Field(default=None, ge=-100_000, le=100_000)
+    regex_timeout_ms: int | None = Field(default=None, gt=0, le=1000)
+
+
+class ReaderRuleResponse(BaseModel):
+    id: str
+    rule_set_id: str
+    name: str
+    enabled: bool
+    stage: RuleStage
+    rule_type: RuleType
+    pattern: str
+    replacement: str
+    case_sensitive: bool
+    whole_word: bool
+    language_filter: str | None
+    engine_filter: str | None
+    voice_filter: str | None
+    document_filter: str | None
+    priority: int
+    regex_timeout_ms: int
+    row_version: int
+    created_at: datetime
+    updated_at: datetime
+    raw_import_metadata: dict[str, Any]
+
+    @classmethod
+    def from_domain(cls, rule: SpeechRule) -> "ReaderRuleResponse":
+        return cls(
+            id=rule.id,
+            rule_set_id=rule.rule_set_id,
+            name=rule.name,
+            enabled=rule.enabled,
+            stage=rule.stage,
+            rule_type=rule.rule_type,
+            pattern=rule.pattern,
+            replacement=rule.replacement,
+            case_sensitive=rule.case_sensitive,
+            whole_word=rule.whole_word,
+            language_filter=rule.language_filter,
+            engine_filter=rule.engine_filter,
+            voice_filter=rule.voice_filter,
+            document_filter=rule.document_filter,
+            priority=rule.priority,
+            regex_timeout_ms=rule.regex_timeout_ms,
+            row_version=rule.row_version,
+            created_at=rule.created_at,
+            updated_at=rule.updated_at,
+            raw_import_metadata=dict(rule.raw_import_metadata),
+        )
+
+
+class ReaderRuleListResponse(BaseModel):
+    rules: list[ReaderRuleResponse]
+
+
+class ReaderRulePreviewRequest(BaseModel):
+    # Preview returns one source span per spoken character. Keep this interactive
+    # path smaller than a streaming compilation window so the UI cannot be
+    # stalled by an oversized mapping response.
+    text: str = Field(max_length=4_096)
+    rule_set_ids: list[str] = Field(default_factory=list, max_length=100)
+    language: str | None = Field(default=None, max_length=200)
+    engine: str | None = Field(default=None, max_length=200)
+    voice: str | None = Field(default=None, max_length=200)
+    document_id: str | None = Field(default=None, max_length=200)
+
+
+class ReaderRulePreviewSpan(BaseModel):
+    start_offset: int
+    end_offset: int
+
+
+class ReaderRuleTraceResponse(BaseModel):
+    rule_id: str
+    rule_type: RuleType
+    start_offset: int
+    end_offset: int
+    replacement_length: int
+
+
+class ReaderRuleWarningResponse(BaseModel):
+    code: str
+    message: str
+    rule_id: str | None
+
+
+class ReaderRulePreviewResponse(BaseModel):
+    original_text: str
+    spoken_text: str
+    source_spans: list[ReaderRulePreviewSpan]
+    trace: list[ReaderRuleTraceResponse]
+    warnings: list[ReaderRuleWarningResponse]
+    elapsed_ms: float
+    pipeline_version: int
+    rules_version: int
+
+
+class ReaderRuleImportRequest(BaseModel):
+    target_rule_set_id: str
+    content: str = Field(min_length=1, max_length=1_048_576)
+    commit: bool = False
+
+
+class ReaderRuleImportReportResponse(BaseModel):
+    source_sha256: str
+    imported: int
+    disabled: int
+    duplicate: int
+    invalid: int
+    unsupported: int
+    committed: bool
+    idempotent: bool
 
 
 class ReaderDatabaseCapability(BaseModel):

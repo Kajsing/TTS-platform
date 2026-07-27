@@ -123,6 +123,28 @@ def test_http_request_log_omits_query_token_and_body_text(tmp_path: Path, monkey
     assert "body secret text" not in serialized
 
 
+def test_rule_preview_log_omits_private_preview_text(tmp_path: Path, monkeypatch) -> None:
+    client, auth_headers = build_test_bundle(tmp_path)
+    private_text = "PRIVATE speech-rule preview text"
+    log_messages: list[str] = []
+    monkeypatch.setattr(
+        client.app.state.container.observability.logger,
+        "info",
+        log_messages.append,
+    )
+
+    response = client.post(
+        "/v1/reader/rules/preview",
+        headers=auth_headers,
+        json={"text": private_text, "rule_set_ids": []},
+    )
+
+    assert response.status_code == 200
+    assert log_messages
+    assert private_text not in "\n".join(log_messages)
+    assert json.loads(log_messages[-1])["endpoint"] == "/v1/reader/rules/preview"
+
+
 def test_http_request_log_preserves_safe_client_request_id(tmp_path: Path, monkeypatch) -> None:
     client, _ = build_test_bundle(tmp_path)
     log_messages: list[str] = []

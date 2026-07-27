@@ -576,7 +576,7 @@ scope.
 - [x] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
 - [x] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
 - [x] Reader Milestone 6: Structured import and virtualized reading.
-- [ ] Reader Milestone 7: Speech-rule engine and open rule interchange.
+- [x] Reader Milestone 7: Speech-rule engine and open rule interchange.
 - [ ] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
 - [ ] Reader Milestone 9: Browser-to-library integration and prototype consolidation.
 - [ ] Reader Milestone 10: PDF text extraction.
@@ -609,7 +609,7 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 7 is the next incomplete milestone. Add the engine-independent
-speech-rule model, deterministic compiler and preview, safe regex limits,
-versioned import/export, WPF rule management, and playback integration described
-by the normative design.
+Reader Milestone 8 is the next incomplete milestone. Complete library search and
+state workflows, saved queues/playlists, bookmarks, persistent WAV export jobs,
+batch export, cancellation, progress, and diagnostics described by the normative
+design.
