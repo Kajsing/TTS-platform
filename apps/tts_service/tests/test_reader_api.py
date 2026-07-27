@@ -282,6 +282,49 @@ def test_content_edit_append_undo_redo_and_typed_failures(tmp_path: Path) -> Non
     assert missing_block.json()["error"]["type"] == "reader_block_not_found"
 
 
+def test_content_edit_uses_utf16_offsets_at_the_http_boundary(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    document = create_document(client, headers, text="A😀B")
+    block = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"][0]
+
+    edited = client.patch(
+        f"/v1/reader/documents/{document['id']}/content",
+        headers=headers,
+        json={
+            "expected_row_version": document["row_version"],
+            "block_id": block["id"],
+            "start_offset": 1,
+            "end_offset": 3,
+            "replacement_text": "ø",
+        },
+    )
+    invalid = client.patch(
+        f"/v1/reader/documents/{document['id']}/content",
+        headers=headers,
+        json={
+            "expected_row_version": edited.json()["document"]["row_version"],
+            "block_id": block["id"],
+            "start_offset": 99,
+            "end_offset": 99,
+            "replacement_text": "x",
+        },
+    )
+    current_block = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"][0]
+
+    assert edited.status_code == 200
+    assert edited.json()["edit"]["start_offset"] == 1
+    assert edited.json()["edit"]["end_offset"] == 3
+    assert current_block["text"] == "AøB"
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["type"] == "reader_invalid_offset"
+
+
 def test_positions_bookmarks_and_queue_endpoints_are_durable(tmp_path: Path) -> None:
     client, headers, app = build_reader_bundle(tmp_path)
     first = create_document(client, headers, text="First unique text")

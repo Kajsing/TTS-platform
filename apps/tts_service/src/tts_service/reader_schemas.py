@@ -19,6 +19,8 @@ from reader_core import (
     SourceType,
 )
 
+from .reader_offsets import python_offset_to_utf16
+
 
 class ReaderCursorPayload(BaseModel):
     block_id: str
@@ -177,7 +179,17 @@ class ReaderEditResponse(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_domain(cls, edit: DocumentEdit) -> "ReaderEditResponse":
+    def from_domain(
+        cls,
+        edit: DocumentEdit,
+        *,
+        source_text: str | None = None,
+    ) -> "ReaderEditResponse":
+        start_offset = edit.start_offset
+        end_offset = edit.end_offset
+        if source_text is not None:
+            start_offset = python_offset_to_utf16(source_text, edit.start_offset)
+            end_offset = python_offset_to_utf16(source_text, edit.end_offset)
         return cls(
             id=edit.id,
             document_id=edit.document_id,
@@ -185,8 +197,8 @@ class ReaderEditResponse(BaseModel):
             base_content_revision=edit.base_content_revision,
             result_content_revision=edit.result_content_revision,
             block_id=edit.block_id,
-            start_offset=edit.start_offset,
-            end_offset=edit.end_offset,
+            start_offset=start_offset,
+            end_offset=end_offset,
             operation_type=edit.operation_type,
             created_at=edit.created_at,
         )

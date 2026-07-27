@@ -11,9 +11,75 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 2, protected Reader HTTP
-  API and shared version-1 contracts.
-- Current loop result: complete. The service now initializes Reader storage in
+- Current loop target: Reader Workstation Milestone 3, the .NET 10 WPF desktop
+  shell, localhost client, onboarding, library paging, and conflict-safe plain-
+  text editing.
+- Current loop result: complete. The layered WPF shell connects only to a
+  strictly validated loopback service, keeps the bearer token outside settings,
+  reports actionable onboarding states, pages the live library, and edits
+  eligible text blocks with durable Undo/Redo and conflict preservation. Audio,
+  clipboard capture, global hotkeys, tray behavior, and the compact controller
+  were not added.
+- Reader Workstation resume point: Milestone 4, protected Reader streaming,
+  bounded source-mapped windows, PCM playback, highlighting, resume, controls,
+  content leases, and protocol tests. Do not start Milestone 5 Windows capture
+  or tray work yet.
+- Reader Milestone 3 implementation details:
+  - `apps/desktop_reader/TtsPlatform.Reader.sln` separates cross-platform Client
+    and Application projects from Windows infrastructure and WPF composition;
+  - the Client accepts only HTTP with the exact `localhost` or `127.0.0.1` host
+    and rejects credentials, non-root paths, queries, and fragments;
+  - settings live at `%LOCALAPPDATA%\TTSPlatform\Reader\settings.json` and store
+    only a token-file path. Atomic settings writes, file-token reads, and fixed
+    per-user scheduled-service startup are isolated in the Windows project;
+  - onboarding distinguishes unavailable service, missing or rejected token,
+    disabled/degraded Reader storage, unsupported contract, and degraded voice
+    backend states without exposing tokens or raw service details;
+  - the library uses opaque keyset cursors and preserves loaded state on failed
+    requests. Plain-text, clipboard, selection, and text-file blocks are
+    editable; structured sources remain read-only;
+  - edit requests send integer document row versions and UTF-16 code-unit
+    offsets. A revision conflict keeps the WPF edit buffer intact and requires
+    an explicit reload; server Undo/Redo is disabled while local edits are
+    unsaved;
+  - the Python HTTP boundary now explicitly converts UTF-16 edit offsets to
+    internal Python indices and converts mutation metadata back. Tests cover
+    Danish text, combining marks, emoji, surrogate boundaries, and invalid
+    offsets;
+  - English and Danish resource files, keyboard-accessible controls, automation
+    names, virtualized library rows, and an `asInvoker` manifest establish the
+    initial accessibility and no-admin shell baseline;
+  - the desktop check starts an isolated live Python service, proves two-page
+    .NET client paging and a UTF-16 edit, publishes a self-contained `win-x64`
+    development archive, verifies it contains no token/settings files, and
+    launches the packaged WPF executable through a render marker;
+  - external desktop packaging fails while `LICENSE` is absent unless the
+    explicit `--development-only` switch is used. Development packages contain
+    a warning and are deleted after the smoke check.
+- Reader Milestone 3 validation passed on 2026-07-27:
+  - .NET 10.0.202 restore and Release build passed with zero warnings;
+  - `dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release
+    --no-build`: 25 passed across Client, Application, and Windows projects;
+  - `py -3 scripts\check_desktop_reader.py --require-dotnet`: live paging,
+    live UTF-16 edit, self-contained portable package, and Windows WPF render
+    passed; the package correctly reported `external_distribution_ready=false`;
+  - `py -3 -m pytest -q`: 326 passed;
+  - `py -3 scripts\check_reader_contracts.py`: six fixtures ready;
+  - `py -3 -m ruff check .`, `dotnet format --verify-no-changes`, and
+    `git diff --check`: passed.
+- Reader Milestone 3 assumptions and deviations:
+  - .NET 10.0.202 was installed per-user under
+    `%LOCALAPPDATA%\TTSPlatform\dotnet` because the machine-wide SDK is .NET 8;
+    no administrator access or PATH change was needed;
+  - the broader source-map compiler remains Milestone 4, but UTF-16 conversion
+    for the already-public edit route moved forward because WPF editing would
+    otherwise split surrogate pairs at the API boundary;
+  - xUnit, its Visual Studio runner, and Microsoft.NET.Test.Sdk are test-only
+    dependencies. The desktop runtime added no third-party audio or capture
+    dependency in this milestone;
+  - the existing uncommitted `models/MANIFEST.json` change remains user-owned
+    and excluded from this milestone.
+- Previous loop result: Reader Milestone 2 complete. The service initializes Reader storage in
   an isolated runtime state, exposes authenticated `/v1/reader/*` routes for
   capabilities, documents, revisioned content changes, blocks, positions,
   bookmarks, and queue operations, and reports sanitized Reader readiness from
@@ -25,9 +91,6 @@ This file is the live status log and shared memory for future Codex loops.
   new `reader_core` domain; add protected `/v1/reader/*` contracts rather than
   changing existing TTS endpoints; and preserve structured source mapping before
   reuse of the existing `tts_core` synthesis pipeline.
-- Reader Workstation resume point after this loop: Milestone 3, WPF desktop
-  shell and onboarding without audio playback. SAPI remains an optional
-  compatibility client and is not the active product track.
 - Reader Milestone 2 implementation details:
   - every `/v1/reader/*` read and write passes through the existing bearer,
     origin, and rate-limit middleware; public health remains unauthenticated;

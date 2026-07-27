@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TtsPlatform.Reader.Client\TtsPlatform.Reader.Client.csproj" />
+    <ProjectReference Include="..\TtsPlatform.Reader.Application\TtsPlatform.Reader.Application.csproj" />
+    <ProjectReference Include="..\TtsPlatform.Reader.Windows\TtsPlatform.Reader.Windows.csproj" />
+  </ItemGroup>
+</Project>

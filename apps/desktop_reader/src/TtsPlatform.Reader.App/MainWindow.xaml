@@ -1,0 +1,117 @@
+<Window x:Class="TtsPlatform.Reader.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="TTS Platform Reader" Height="760" Width="1180" MinHeight="560" MinWidth="860"
+        WindowStartupLocation="CenterScreen">
+  <Grid Background="White">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" Background="{StaticResource AccentBrush}" Padding="16,12">
+      <DockPanel LastChildFill="True">
+        <TextBlock Foreground="White" FontSize="22" FontWeight="SemiBold"
+                   Text="TTS Platform Reader" VerticalAlignment="Center" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
+                  AutomationProperties.Name="Check local service connection" />
+          <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
+                  AutomationProperties.Name="Run suggested connection action" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Border Grid.Row="1" x:Name="StatusBorder" Background="#FFF4D6" Padding="12">
+      <StackPanel>
+        <TextBlock x:Name="StatusText" Text="Connection has not been checked." FontWeight="SemiBold"
+                   TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+        <Expander Header="Connection settings" Margin="0,8,0,0">
+          <Grid Margin="0,4,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="2*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="3*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Service URL" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBox Grid.Column="1" x:Name="ServiceUrlTextBox" AutomationProperties.Name="Service URL" />
+            <TextBlock Grid.Column="2" Text="Token file" VerticalAlignment="Center" Margin="12,0,5,0" />
+            <TextBox Grid.Column="3" x:Name="TokenPathTextBox" AutomationProperties.Name="Token file path" />
+            <StackPanel Grid.Column="4" Orientation="Horizontal">
+              <Button Content="Browse…" Click="BrowseTokenButton_Click" />
+              <Button Content="Save" Click="SaveSettingsButton_Click" />
+            </StackPanel>
+          </Grid>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="2" Margin="12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" MinWidth="300" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="3*" MinWidth="380" />
+      </Grid.ColumnDefinitions>
+
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,8">
+          <Button DockPanel.Dock="Right" Content="Search" Click="SearchButton_Click" />
+          <TextBox x:Name="SearchTextBox" AutomationProperties.Name="Search library"
+                   ToolTip="Search document titles" />
+        </DockPanel>
+        <DataGrid Grid.Row="1" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                  SelectionMode="Single" SelectionChanged="DocumentsGrid_SelectionChanged"
+                  EnableRowVirtualization="True" AutomationProperties.Name="Reader library">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+            <DataGridTextColumn Header="Source" Binding="{Binding SourceType}" Width="110" />
+            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" />
+          </DataGrid.Columns>
+        </DataGrid>
+        <Button Grid.Row="2" x:Name="LoadMoreButton" Content="Load more" Click="LoadMoreButton_Click"
+                HorizontalAlignment="Left" IsEnabled="False" />
+      </Grid>
+
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+          <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="20" FontWeight="SemiBold" />
+          <TextBlock x:Name="EditorHintText" Foreground="#555" Margin="0,3,0,8"
+                     Text="Editable text will appear here." TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBox Grid.Row="1" x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
+                 TextChanged="EditorTextBox_TextChanged" AutomationProperties.Name="Document text" />
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
+          <Button x:Name="SaveEditButton" Content="Save edit" Click="SaveEditButton_Click" IsEnabled="False" />
+          <Button x:Name="RevertEditButton" Content="Revert local" Click="RevertEditButton_Click" IsEnabled="False" />
+          <Button x:Name="UndoButton" Content="Undo saved edit" Click="UndoButton_Click" IsEnabled="False" />
+          <Button x:Name="RedoButton" Content="Redo saved edit" Click="RedoButton_Click" IsEnabled="False" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <StatusBar Grid.Row="3">
+      <StatusBarItem><TextBlock x:Name="FooterText" Text="Ready" /></StatusBarItem>
+    </StatusBar>
+  </Grid>
+</Window>

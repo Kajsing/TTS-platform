@@ -13,3 +13,6 @@ config/config.toml
 config/token.txt
 models/voices/
 out.wav
+**/bin/
+**/obj/
+apps/desktop_reader/artifacts/

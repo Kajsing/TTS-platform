@@ -20,6 +20,7 @@ from .reader_errors import (
     reader_disabled,
     translate_reader_error,
 )
+from .reader_offsets import ReaderOffsetError, utf16_offset_to_python
 from .reader_schemas import (
     AddReaderQueueItemRequest,
     AppendReaderContentRequest,
@@ -207,12 +208,33 @@ def build_reader_router() -> APIRouter:
         payload: ReplaceReaderContentRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
+        bundle = _run_reader(lambda: service.get_document_bundle(document_id))
+        source_block = next(
+            (block for block in bundle.blocks if block.id == payload.block_id),
+            None,
+        )
+        if source_block is None:
+            raise reader_api_error(
+                "reader_block_not_found",
+                status_code=404,
+                message="Reader block was not found.",
+            )
+        try:
+            start_offset = utf16_offset_to_python(source_block.text, payload.start_offset)
+            end_offset = utf16_offset_to_python(source_block.text, payload.end_offset)
+        except ReaderOffsetError as error:
+            raise reader_api_error(
+                "reader_invalid_offset",
+                status_code=400,
+                message="Reader edit offsets must be valid UTF-16 code-unit boundaries.",
+                param="start_offset/end_offset",
+            ) from error
         document, edit = _run_reader(
             lambda: service.repository.replace_block_text(
                 document_id,
                 payload.block_id,
-                start_offset=payload.start_offset,
-                end_offset=payload.end_offset,
+                start_offset=start_offset,
+                end_offset=end_offset,
                 replacement_text=payload.replacement_text,
                 expected_row_version=payload.expected_row_version,
             ),
@@ -226,7 +248,7 @@ def build_reader_router() -> APIRouter:
         )
         return ReaderMutationResponse(
             document=ReaderDocumentResponse.from_domain(document),
-            edit=ReaderEditResponse.from_domain(edit),
+            edit=ReaderEditResponse.from_domain(edit, source_text=source_block.text),
         )
 
     @router.post("/documents/{document_id}/append", response_model=ReaderMutationResponse)
