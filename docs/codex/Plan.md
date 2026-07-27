@@ -574,12 +574,12 @@ scope.
 - [ ] Reader Milestone 2: Protected Reader API and shared contracts.
 - [ ] Reader Milestone 3: WPF desktop shell and onboarding.
 - [ ] Reader Milestone 4: Reader stream, PCM playback, highlighting, and resume.
-- [ ] Reader Milestone 5: Clipboard, selected text, tray, and compact controller.
+- [ ] Reader Milestone 5: Clipboard capture, document append, tray, and compact controller.
 - [ ] Reader Milestone 6: Structured import and virtualized reading.
-- [ ] Reader Milestone 7: Speech-rule engine and TextAloud migration.
+- [ ] Reader Milestone 7: Speech-rule engine and open rule interchange.
 - [ ] Reader Milestone 8: Library workflow, search, playlists, and WAV export.
 - [ ] Reader Milestone 9: Browser-to-library integration and prototype consolidation.
-- [ ] Reader Milestone 10: PDF text extraction and optional OCR.
+- [ ] Reader Milestone 10: PDF text extraction.
 - [ ] Reader Milestone 11: Backup, packaging, accessibility, security, and release candidate.
 
 Release boundaries:
@@ -590,6 +590,26 @@ Release boundaries:
 - Beta after Reader Milestone 8.
 - Release candidate after Reader Milestone 11.
 
+Locked refinements from the 2026-07-27 product review:
+
+- Editable plain-text documents use stable block IDs, content revisions,
+  integer row versions, bounded edit operations, and persistent Undo/Redo.
+- Active playback holds a content lease; content editing resumes only after the
+  stream is cancelled.
+- Installed Reader data defaults to `%LOCALAPPDATA%\TTSPlatform\Reader`.
+  Future multi-computer sharing must use APIs and revisions, never live SQLite
+  file synchronization.
+- Repeated explicit `Ctrl+C` capture into one open document is a primary
+  Milestone 5 workflow. One clipboard append equals one Undo operation.
+- TextAloud dictionary migration is removed from MVP. Rule interchange is
+  Reader-owned and engine-independent.
+- Text-layer PDF remains planned for 1.0; OCR is post-1.0 and does not block the
+  release candidate.
+- Use xUnit for .NET tests, exercise portable publishing before the final
+  installer milestone, and preserve a future public-distribution path through
+  dependency-license checks.
+
 Reader Milestone 1 is the next incomplete milestone. Do not create HTTP routes,
 WPF code, importers, or speech-rule feature code during that milestone; follow
-its domain-and-SQLite boundary in the normative design.
+its revised domain-and-SQLite boundary in the normative design, including
+stable cursors, revisioned edits, Undo/Redo, and the per-user Reader home.

@@ -115,10 +115,10 @@ Detailed scope and acceptance criteria live in
 - [ ] Milestone 2: Protected Reader API and shared contracts
 - [ ] Milestone 3: WPF desktop shell and onboarding
 - [ ] Milestone 4: Reader stream, PCM playback, highlighting, and resume
-- [ ] Milestone 5: Clipboard, selected text, tray, and compact controller
+- [ ] Milestone 5: Clipboard capture, document append, tray, and compact controller
 - [ ] Milestone 6: Structured import and virtualized reading
-- [ ] Milestone 7: Speech-rule engine and TextAloud migration
+- [ ] Milestone 7: Speech-rule engine and open rule interchange
 - [ ] Milestone 8: Library workflow, search, playlists, and WAV export
 - [ ] Milestone 9: Browser-to-library integration and prototype consolidation
-- [ ] Milestone 10: PDF text extraction and optional OCR
+- [ ] Milestone 10: PDF text extraction
 - [ ] Milestone 11: Backup, packaging, accessibility, security, and release candidate

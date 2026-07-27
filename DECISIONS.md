@@ -133,3 +133,39 @@ Reasoning:
   not on positions in a flattened or transformed string.
 - Structure-first storage supports imports, rules, bookmarks, and bounded
   long-document playback without coupling them to a backend.
+
+## 2026-07-27: Support revisioned direct editing and persistent Undo/Redo
+
+Plain-text, clipboard, and selection documents are directly editable. Stable
+Reader cursors use block IDs plus content revisions; ordinals remain traversal
+hints. Content changes use integer row versions and bounded edit operations that
+support persistent Undo/Redo and cursor remapping.
+
+Active playback holds a content lease. Content edits and clipboard appends are
+rejected until the stream is cancelled, preventing audio, highlighting, and
+stored source positions from referring to different text.
+
+## 2026-07-27: Default Reader data to LocalAppData and reserve API-based sync
+
+Installed Windows operation stores Reader data under
+`%LOCALAPPDATA%\TTSPlatform\Reader`; development and tests use explicit paths.
+Future multi-computer sharing may use additive authenticated APIs, globally
+unique IDs, and content revisions, but live SQLite files must never be copied or
+merged as a synchronization mechanism.
+
+## 2026-07-27: Make clipboard append primary and remove TextAloud/OCR gates
+
+Repeated explicit `Ctrl+C` capture into an open editable document is a primary
+Reader workflow. Each append is an atomic, undoable operation with a deliberate
+paragraph boundary.
+
+TextAloud dictionary migration is removed from MVP in favor of a Reader-owned,
+engine-independent rule interchange format. Text-layer PDF remains in the 1.0
+plan; OCR is deferred to an optional post-1.0 provider.
+
+## 2026-07-27: Preserve a future public distribution path
+
+The Reader may be shared publicly. New dependencies and copied code therefore
+need recorded, distribution-compatible licenses. The repository license must be
+chosen before publishing a desktop binary. The .NET test projects use xUnit,
+and portable publishing is exercised before the final installer milestone.

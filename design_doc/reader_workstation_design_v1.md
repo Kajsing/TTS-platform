@@ -4,30 +4,40 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed design, ready for repository activation |
-| Design version | 1.0 |
+| Status | Active post-v1 design |
+| Design version | 1.1 |
 | Design date | 2026-07-19 |
+| Last amended | 2026-07-27 |
 | Repository | `Kajsing/TTS-platform` |
 | Baseline reviewed | `f4648b90069ff22f1773b795a5731b47bb493a63` |
 | Intended repository path | `design_doc/reader_workstation_design_v1.md` |
 | Working product name | **TTS Platform Reader** |
 | Primary target | Windows desktop |
 | Primary implementation languages | Python, C#, JavaScript, existing C++ SAPI bridge |
-| First Codex action | **Milestone 0 only** |
+| Next Codex action | **Milestone 1 only** |
 
 > **Codex directive**
 >
-> This document defines a new post-v1 product track. Do not attempt to implement
-> the whole document in one run. First read `AGENTS.md`,
+> This document defines the active post-v1 product track. Do not attempt to
+> implement the whole document in one run. First read `AGENTS.md`,
 > `docs/codex/Prompt.md`, `docs/codex/Plan.md`,
 > `docs/codex/Implement.md`, and `docs/codex/Documentation.md`.
-> Then execute **Milestone 0: Activate the Reader Workstation track** and stop
-> after its validation, documentation update, commit, and push.
+> Milestone 0 is complete. Execute the next incomplete Reader milestone recorded
+> in `docs/codex/Plan.md`, then stop after its validation, documentation update,
+> commit, and push.
 >
 > Existing v1 behavior is a protected baseline, not disposable scaffolding.
 > Add the reader workstation without regressing the stable TTS service, Chrome
 > reader, model-management flow, Windows bootstrap, release gates, or SAPI
 > bridge.
+
+> **Design amendment 2026-07-27**
+>
+> Editable text, persistent undo/redo, stable block-based cursors, and the
+> repeated clipboard-append workflow are first-class product requirements.
+> Reader data defaults to the current Windows user's local application data.
+> TextAloud dictionary migration and OCR are not 1.0 gates. Future multi-device
+> sharing must use additive service APIs rather than synchronizing SQLite files.
 
 ---
 
@@ -144,13 +154,14 @@ of:
 4. A preview shows original text, spoken text, matched rule, and source mapping.
 5. The rule is saved into a scoped rule set and affects future playback.
 
-#### Keep using TextAloud during migration
+#### Build one document from selected excerpts
 
-1. TextAloud selects a TTS Platform SAPI voice.
-2. The existing SAPI bridge routes synthesis to the same localhost service.
-3. New voices and rule tuning can be tested before the new desktop reader
-   reaches feature parity.
-4. The user gradually moves workflows into TTS Platform Reader.
+1. The user selects useful text in another application and presses `Ctrl+C`.
+2. Clipboard prompt mode notices the explicit copy and asks whether to append to
+   the open editable document, create a new document, read now, or ignore it.
+3. Appending adds a deliberate paragraph boundary and one atomic undo entry.
+4. The user moves to the next page or post and repeats without importing the
+   surrounding navigation, signatures, or filler text.
 
 ### 3.3 Product principles
 
@@ -185,12 +196,12 @@ The Reader Workstation track must deliver:
 - a Windows-native desktop application;
 - long-document streaming playback with highlighting and resume;
 - explicit clipboard and selected-text capture;
+- direct editing of plain-text documents with durable undo/redo;
 - import for TXT, Markdown, HTML, DOCX, and EPUB before MVP completion;
 - pronunciation/transformation rule editing and preview;
-- migration from official TextAloud dictionary exports when a real fixture is
-  available;
+- open rule interchange that is independent of TextAloud or a specific engine;
 - WAV export before beta;
-- PDF text extraction and optional OCR before the 1.0 release candidate;
+- PDF text extraction before the 1.0 release candidate;
 - backup, restore, support-bundle, accessibility, and security gates before 1.0.
 
 ### 4.2 Non-goals for this track
@@ -213,6 +224,9 @@ changes them:
   registry exports, or generated audio;
 - a rich word processor capable of lossless editing of every imported format;
 - automatically monitoring and transmitting every clipboard change.
+- TextAloud-specific dictionary migration in the MVP;
+- OCR as a 1.0 release gate;
+- synchronizing or copying the live SQLite database between computers.
 
 ### 4.3 Release boundaries
 
@@ -338,6 +352,43 @@ Early milestones extend the existing Windows bundle and setup scripts. A single
 signed installer is release work, not a prerequisite for building the reader.
 
 Do not block domain and UX work on final installer technology.
+
+### ADR-R13: Editable documents use revisioned operations
+
+Plain-text, clipboard, and selection documents are directly editable. Content
+changes are stored as bounded operations with persistent undo/redo, stable block
+IDs, content revisions, and integer optimistic-concurrency tokens.
+
+Active playback holds a content lease. Editing is rejected until the stream is
+cancelled so generated audio, highlighting, and source cursors cannot silently
+refer to different text.
+
+### ADR-R14: Use a per-user Reader home and keep sync behind APIs
+
+Installed Windows operation defaults Reader data to
+`%LOCALAPPDATA%\TTSPlatform\Reader`. Development and tests use explicit paths.
+Globally unique IDs and content revisions preserve a future path to
+multi-computer sharing, but sync is not implemented in this track and must never
+copy or merge the live SQLite file.
+
+### ADR-R15: Clipboard append is a primary capture workflow
+
+Clipboard prompt mode supports repeated explicit `Ctrl+C` capture into one open
+editable document. Each append is atomic and undoable. This workflow is a core
+Milestone 5 acceptance path, not incidental clipboard polish.
+
+### ADR-R16: Keep 1.0 independent of TextAloud and OCR
+
+The speech-rule MVP uses an open Reader-owned interchange format rather than a
+TextAloud migration contract. Text-layer PDF remains planned for 1.0; OCR is a
+post-1.0 optional provider unless a later explicit product decision restores it.
+
+### ADR-R17: Preserve a public-distribution path
+
+The repository may be shared publicly. New dependencies must have recorded,
+distribution-compatible licenses, and copied code must preserve notices. Choose
+and record the repository license before publishing a desktop binary. The .NET
+test stack uses xUnit unless a later ADR records a concrete blocker.
 
 ---
 
@@ -484,7 +535,7 @@ packages/
       evaluator.py
       source_map.py
       preview.py
-      textaloud_xml.py
+      interchange.py
 
 contracts/
   reader/
@@ -543,6 +594,8 @@ created_at
 updated_at
 imported_at
 deleted_at              # soft delete
+content_revision        # increments when blocks or source text change
+row_version             # optimistic concurrency token
 total_sections
 total_blocks
 total_characters
@@ -590,6 +643,7 @@ kind
 text
 character_count
 content_sha256
+row_version
 metadata
 ```
 
@@ -612,14 +666,43 @@ than discarded.
 
 ```text
 document_id
+block_id
 block_ordinal
 character_offset
+content_revision
 segment_index           # optional diagnostic/resume hint
 ```
 
-The stable identity is `document_id + block_ordinal + character_offset`.
+The stable anchor is `document_id + block_id + character_offset`.
+`block_ordinal` is a traversal and display hint, not identity.
+`content_revision` detects anchors created against older content. The service
+remaps an older anchor through recorded edit operations when possible and
+returns a typed stale-cursor conflict when it cannot do so safely.
 `segment_index` is a generated-plan hint and must not be the only resume field,
 because rule or pipeline changes can invalidate segment numbering.
+
+#### `DocumentEdit`
+
+```text
+id
+document_id
+base_content_revision
+result_content_revision
+block_id
+start_offset
+end_offset
+original_text
+replacement_text
+operation_type          # replace | append | split | merge
+created_at
+undone_at
+```
+
+Editable plain-text changes are recorded transactionally as bounded operations.
+Each operation contains enough information for persistent undo/redo and cursor
+remapping. Clipboard append is one operation, so one Undo removes the complete
+append. History retention is bounded by configurable operation and byte limits;
+trimming history never changes current document content.
 
 #### `PlaybackPosition`
 
@@ -743,18 +826,23 @@ The service owns the reader database. The first implementation adds:
 ```toml
 [reader]
 enabled = true
-database_path = "./data/reader.db"
-managed_files_path = "./data/library"
+home_path = ""            # Windows default: %LOCALAPPDATA%\TTSPlatform\Reader
+database_path = "reader.db"
+managed_files_path = "library"
 copy_imported_files = false
 ```
 
-Paths are resolved using the same explicit repository/config-root conventions
-as the current service. Do not migrate existing token, model, or config paths
-during the first reader milestones.
+When `home_path` is empty, installed Windows operation uses
+`%LOCALAPPDATA%\TTSPlatform\Reader`. Relative Reader paths resolve under that
+home. Development and tests provide explicit repository or temporary paths.
+An explicit home override may support a portable layout later, but portable mode
+is not a Milestone 1 requirement. Do not migrate existing token, model, or
+config paths as part of Reader work.
 
-A later packaging milestone may introduce `TTS_PLATFORM_HOME` and an installed
-per-user default under `%LOCALAPPDATA%`, but that move requires a migration plan
-and must not silently strand an existing library.
+Future multi-device sharing must operate through versioned service contracts and
+globally unique entity IDs. Do not synchronize, copy, or merge a live SQLite
+file between computers. No sync transport or cloud dependency is added in the
+current track.
 
 ### 9.2 Connection policy
 
@@ -790,6 +878,7 @@ Migration `001_reader_library.sql` creates:
 - `reader_playback_positions`
 - `reader_bookmarks`
 - `reader_queue_items`
+- `reader_document_edits`
 - `schema_migrations`
 
 Migration `002_rules_and_profiles.sql` creates:
@@ -812,6 +901,10 @@ and retain title/source-type filtering when FTS5 is unavailable.
 
 - `reader_blocks(document_id, ordinal)` is unique.
 - `reader_sections(document_id, ordinal)` is unique.
+- Content mutations compare `row_version` and increment `content_revision` in
+  the same transaction as block and edit-history changes.
+- Undo and redo are content mutations and use the same optimistic concurrency
+  contract as direct edits.
 - `reader_queue_items(ordinal)` is unique after each reorder transaction.
 - A document soft delete removes it from normal lists and queue playback but
   does not immediately delete blocks.
@@ -861,6 +954,10 @@ Input bytes or clipboard text
 - Empty blocks do not synthesize audio.
 - Original block text is immutable unless the user explicitly edits an
   editable plain-text document.
+- While a Reader stream for a document is active, content edits and clipboard
+  appends return `reader_document_locked`. Metadata-only changes may continue.
+  Pause cancels the stream and releases the lock; a later resume recompiles from
+  the current content revision.
 
 ### 10.3 Source-map invariants
 
@@ -873,6 +970,8 @@ Input bytes or clipboard text
 6. The resume cursor advances to the end of the last fully played mapped span.
 7. Pipeline or rule-version changes may recompile segments but must still resolve
    a stable block/character cursor.
+8. An edit never silently reuses a cursor from a different content revision;
+   it is remapped through edit history or rejected as stale.
 
 ### 10.4 Compilation window
 
@@ -1005,28 +1104,28 @@ enforced.
 The preview endpoint is protected and its request/response body is excluded from
 logs.
 
-### 11.6 TextAloud dictionary migration
+### 11.6 Rule interchange
 
-Support only official user exports or documented formats. Do not decompile
-TextAloud `.chl` files.
+The Reader owns a documented, engine-independent JSON interchange format for
+rule sets. A simpler CSV import/export may cover literal replacement rules.
+Neither format contains bearer tokens, document text, or backend-specific
+binary data.
 
-The importer must:
+Import must:
 
-1. compute and store the export file SHA-256;
+1. compute and store the source file SHA-256;
 2. parse into `ImportedRuleCandidate` records;
 3. show a dry-run report before writing;
-4. preserve unsupported fields in `raw_import_metadata`;
-5. import unsupported phoneme/provider rules as disabled rather than dropping
-   them;
+4. preserve unknown fields in bounded `raw_import_metadata`;
+5. import unsupported provider rules as disabled rather than dropping them;
 6. report exact counts for imported, disabled, duplicate, invalid, and
    unsupported rules;
-7. be idempotent for the same source export and rule-set target;
+7. be idempotent for the same source file and rule-set target;
 8. include fixture-based tests.
 
-If no real export fixture exists when Milestone 7 starts, Codex implements the
-import interface, report model, and synthetic fixture support, then records
-manual validation against a real export as pending. That condition does not
-justify guessing a proprietary schema.
+TextAloud-specific import is not part of MVP. A future adapter requires a lawful,
+documented export format and a real user need; do not guess or reverse-engineer
+proprietary schemas.
 
 ---
 
@@ -1146,6 +1245,19 @@ document in one transaction.
 - `DELETE /v1/reader/documents/{document_id}` for soft delete
 - `POST /v1/reader/documents/{document_id}/restore`
 
+#### Editable content
+
+- `PATCH /v1/reader/documents/{document_id}/content` applies bounded edit
+  operations to editable plain-text blocks.
+- `POST /v1/reader/documents/{document_id}/append` appends one bounded text
+  selection with an explicit paragraph separator.
+- `POST /v1/reader/documents/{document_id}/undo`
+- `POST /v1/reader/documents/{document_id}/redo`
+
+Every content mutation carries `expected_row_version`. Clipboard append is one
+atomic edit. Content mutations fail with `reader_document_locked` while an
+active Reader stream owns the document content lease.
+
 #### Blocks
 
 `GET /v1/reader/documents/{document_id}/blocks?after_ordinal=0&limit=200`
@@ -1157,8 +1269,9 @@ Return source blocks in display order. Default limit is 200; maximum is 500.
 - `GET /v1/reader/documents/{document_id}/position`
 - `PUT /v1/reader/documents/{document_id}/position`
 
-Position updates are idempotent and include an `expected_updated_at` field for
-optimistic concurrency when multiple clients are active.
+Position updates are idempotent and include `expected_row_version` for
+optimistic concurrency when multiple clients are active. Timestamps remain
+display/audit data and are not concurrency tokens.
 
 ### 12.4 Bookmarks and queue
 
@@ -1185,7 +1298,8 @@ applies it transactionally.
 - `PATCH /v1/reader/rules/{rule_id}`
 - `DELETE /v1/reader/rules/{rule_id}`
 - `POST /v1/reader/rules/preview`
-- `POST /v1/reader/rule-imports/textaloud`
+- `POST /v1/reader/rule-imports`
+- `GET /v1/reader/rule-sets/{rule_set_id}/export`
 
 ### 12.6 Typed reader errors
 
@@ -1197,6 +1311,9 @@ Initial reader error codes:
 - `reader_document_not_found`
 - `reader_block_not_found`
 - `reader_invalid_cursor`
+- `reader_stale_cursor`
+- `reader_document_locked`
+- `reader_revision_conflict`
 - `reader_conflict`
 - `reader_duplicate_document`
 - `reader_import_unsupported`
@@ -1386,7 +1503,7 @@ heard position and does not exceed configured audio memory limits.
 - `System.Text.Json`
 - Microsoft.Extensions dependency injection, configuration, and logging only
   where they reduce custom plumbing
-- xUnit or NUnit for non-UI tests; choose one in Milestone 0 and record it
+- xUnit for non-UI tests
 
 Do not use a prerelease UI or audio dependency in the MVP path.
 
@@ -1520,6 +1637,8 @@ Invariants:
 - document completion marks the queue item complete and advances only when
   auto-advance is enabled;
 - changing voice, rules, or rate restarts from the last heard cursor;
+- active playback holds a document content lease; edit and append commands are
+  disabled locally and rejected by the service until the stream is cancelled;
 - UI commands remain idempotent during rapid repeated input;
 - shutdown cancels stream, drains/halts audio, flushes position, then exits.
 
@@ -1553,9 +1672,11 @@ Use a virtualized block list:
 - scroll the active block into view without stealing keyboard focus;
 - preserve the user's manual scroll position when “follow reading” is disabled.
 
-Plain-text documents created inside the app may have an edit mode. Structured
-imports are read-only in MVP. Provide “Duplicate as editable text” rather than
-silently flattening and overwriting the imported structure.
+Plain-text, clipboard, and selection documents have a direct edit mode with
+service-backed Undo and Redo. A successful edit increments the content revision;
+the UI sends the expected row version and handles conflicts explicitly.
+Structured imports are read-only in MVP. Provide “Duplicate as editable text”
+rather than silently flattening and overwriting the imported structure.
 
 ---
 
@@ -1724,12 +1845,16 @@ the WPF window handle. Debounce duplicate sequence numbers.
 Prompt mode can offer:
 
 - Read now
+- Append to open editable document
+- Create a new editable document
 - Add to Inbox
-- Append to current editable document
 - Ignore
 - Always ignore this executable
 
-The app stores ignored executable names, not clipboard contents.
+Append adds a deliberate paragraph boundary at the end of the open document and
+is committed as one undoable operation. The prompt remembers no clipboard text
+after the chosen action completes. The app stores ignored executable names, not
+clipboard contents.
 
 ### 16.3 Copy-selection helper
 
@@ -1797,7 +1922,7 @@ warnings, ignored-item counts, source hash, and importer version.
 | DOCX | 6 | Headings, paragraphs, lists, tables; macros/objects ignored |
 | EPUB | 6 | OPF spine order, XHTML structure, chapter headings |
 | PDF with text layer | 10 | Layout-aware blocks, header/footer heuristics |
-| Scanned PDF/images | 10 | Optional OCR provider with explicit availability |
+| Scanned PDF/images | Post-1.0 | Optional local OCR provider |
 | RTF/ODT | Post-1.0 unless trivial | Provider interface remains open |
 
 ### 17.3 Import security limits
@@ -1874,9 +1999,9 @@ PDF cleanup steps:
 5. mark low-confidence order in import warnings;
 6. detect pages with little/no text and offer OCR when available.
 
-#### OCR
+#### OCR (post-1.0)
 
-OCR is optional and local.
+OCR is optional, local, and not a 1.0 release gate.
 
 The provider contract reports:
 
@@ -2002,8 +2127,9 @@ Extend `AppConfig` additively.
 ```toml
 [reader]
 enabled = true
-database_path = "./data/reader.db"
-managed_files_path = "./data/library"
+home_path = ""
+database_path = "reader.db"
+managed_files_path = "library"
 copy_imported_files = false
 default_page_size = 50
 max_page_size = 500
@@ -2035,11 +2161,17 @@ formats = ["wav"]
 Rules:
 
 - validate all paths and positive limits;
+- an empty `reader.home_path` selects
+  `%LOCALAPPDATA%\TTSPlatform\Reader` on Windows;
+- resolve relative Reader data paths under the Reader home, not the process
+  working directory;
 - create directories only during explicit setup or startup initialization;
 - no secret fields in TOML;
 - environment overrides continue to use `TTS_PLATFORM__...`;
 - example config documents every new default;
 - reader disabled mode leaves existing TTS behavior intact.
+- future cross-device sharing uses additive authenticated APIs and revisioned
+  entities; never synchronize the live SQLite file.
 
 ---
 
@@ -2393,12 +2525,16 @@ docs: activate reader workstation track
   - documents;
   - sections;
   - blocks;
+  - revisioned content edits and undo/redo;
   - playback positions;
   - bookmarks;
   - queue.
 - Add a plain-text-to-block domain helper.
+- Add stable block cursors, integer row versions, and content-revision mapping.
+- Add the SQLite backup primitive used by pre-migration and later user backups.
 - Add database integrity and schema version reporting.
-- Add config models for `[reader]` core settings.
+- Add config models for `[reader]` core settings, including the per-user Reader
+  home and explicit development/test overrides.
 - Keep reader disabled mode possible.
 - Add synthetic library generator for tests only.
 
@@ -2406,6 +2542,10 @@ docs: activate reader workstation track
 
 - A plain-text document can be created, read, listed, updated, soft-deleted, and
   restored through application/domain calls.
+- Direct edits, clipboard-style append, undo, and redo are transactional and
+  increment content and row versions correctly.
+- Stable cursors use block IDs and either remap through edit history or return a
+  typed stale-cursor result.
 - Blocks and sections preserve order.
 - Position, bookmark, and queue transactions are durable.
 - Concurrent readers work under WAL.
@@ -2414,6 +2554,8 @@ docs: activate reader workstation track
 - No HTTP routes exist yet.
 - Tests cover 10,000-document pagination without offset scans for normal list
   use.
+- Windows default-path tests resolve Reader data under `%LOCALAPPDATA%`, while
+  tests can use explicit temporary homes.
 
 #### Validation
 
@@ -2436,6 +2578,8 @@ Suggested commits may split migration/repositories from domain services.
 - Add reader application services and route modules.
 - Add reader capability and health status.
 - Add document CRUD, block paging, position, bookmark, and queue endpoints.
+- Add editable-content, append, undo, and redo endpoints with integer optimistic
+  concurrency tokens.
 - Protect all reader routes with existing token auth.
 - Add typed errors.
 - Add `contracts/reader/` fixtures.
@@ -2450,6 +2594,8 @@ Suggested commits may split migration/repositories from domain services.
 - Existing unauthenticated/public health and voice behavior remains unchanged.
 - Existing TTS endpoints and WebSocket tests pass.
 - Documents larger than one page are paged.
+- Stale edit versions fail with typed conflicts rather than overwriting newer
+  content.
 - Logs contain IDs and sizes, not text or titles.
 - Python contract fixtures validate.
 
@@ -2474,14 +2620,21 @@ and browse the library, but does not yet play reader audio.
 - Create `apps/desktop_reader/TtsPlatform.Reader.sln`.
 - Target .NET 10.
 - Add Client, Application, Windows, App, and test projects.
+- Use xUnit for non-UI .NET tests.
 - Add settings and token-source abstraction.
 - Add strict localhost base-URL validation.
 - Add health, capabilities, voices, and document-list clients.
 - Implement first-run/status UI.
 - Implement main-window shell and paged library.
+- Implement direct editing plus Undo/Redo commands for editable plain-text
+  documents; structured imports remain read-only.
 - Add English and Danish resource structure.
 - Add `scripts/check_desktop_reader.py`.
 - Document Windows and WSL build behavior.
+- Add an early self-contained publish and portable package smoke; do not wait
+  for the final installer milestone to discover runtime-layout problems.
+- Record the repository license before any desktop binary is published outside
+  development testing.
 
 #### Acceptance criteria
 
@@ -2489,6 +2642,7 @@ and browse the library, but does not yet play reader audio.
 - Service unavailable, token missing, backend degraded, and reader disabled
   states are actionable.
 - No token is stored in plain settings.
+- Editing sends integer row versions and exposes conflicts without data loss.
 - Library paging works against a live local service.
 - Cross-platform client/application tests pass.
 - WPF starts and renders on a Windows smoke machine.
@@ -2523,6 +2677,9 @@ py -3 -m ruff check .
 - Persist last fully played cursor.
 - Implement play, pause, resume, stop, previous/next section.
 - Add stream cancellation and next-window continuation.
+- Hold and release the document content lease with the Reader stream lifecycle.
+- Create a consistent developer-preview database snapshot through the SQLite
+  backup primitive.
 - Add deterministic service and client protocol tests.
 
 #### Acceptance criteria
@@ -2533,6 +2690,8 @@ py -3 -m ruff check .
 - Closing and reopening resumes correctly.
 - Current source text is highlighted from server-provided spans.
 - Rule/pipeline version changes still resolve the stable source cursor.
+- Content edits are rejected while playback holds the document lease; pause or
+  stop releases it, after which edits can create a new revision.
 - Audio buffering is bounded.
 - Existing raw TTS stream and Chrome reader behavior passes unchanged.
 - Manual Windows playback with a real installed voice is recorded.
@@ -2552,7 +2711,7 @@ py -3 -m ruff check .
 
 ---
 
-### Milestone 5: Clipboard, selected text, tray, and compact controller
+### Milestone 5: Clipboard capture, document append, tray, and compact controller
 
 **Purpose:** Restore the high-value Windows capture workflow.
 
@@ -2565,7 +2724,11 @@ py -3 -m ruff check .
 - Add tray menu.
 - Add compact controller.
 - Add global play/pause and stop.
-- Add “Save to Inbox” from clipboard prompt.
+- Add clipboard prompt actions for Read Now, Append to Open Document, Create New
+  Document, Save to Inbox, and Ignore.
+- Make repeated `Ctrl+C` append-to-open-document capture a first-class tested
+  workflow. Each append is one undoable operation with an explicit paragraph
+  boundary.
 - Add privacy-mode behavior.
 - Add Windows-only smoke tests and manual checklist.
 
@@ -2575,6 +2738,9 @@ py -3 -m ruff check .
 - Read Clipboard never requires monitoring mode.
 - Copy Selection and Read has a bounded timeout and does not loop.
 - Clipboard content is not logged or persisted unless the user saves it.
+- Repeated selections can be appended to one open editable document, and one
+  Undo removes exactly the latest appended selection.
+- Append is refused with an actionable state while that document is playing.
 - Monitoring state is visibly indicated.
 - Tray exit shuts down active desktop playback cleanly.
 - Manual tests cover Notepad, a browser, Word where available, and an
@@ -2632,7 +2798,7 @@ py -3 -m ruff check .
 
 ---
 
-### Milestone 7: Speech-rule engine and TextAloud migration
+### Milestone 7: Speech-rule engine and open rule interchange
 
 **Purpose:** Deliver the key expert-user capability that makes the product a
 real successor rather than another read-aloud window.
@@ -2648,8 +2814,8 @@ real successor rather than another read-aloud window.
 - Add rule preview and trace API.
 - Add WPF rule-set and rule editor.
 - Add “Create rule from selection.”
-- Add TextAloud XML import interface, report, synthetic fixtures, and real
-  fixture validation when available.
+- Add documented Reader JSON rule-set import/export and optional CSV interchange
+  for literal replacements.
 - Invalidate compiled plans safely when rules change.
 
 #### Acceptance criteria
@@ -2659,11 +2825,11 @@ real successor rather than another read-aloud window.
 - Skip rules advance source position without audio.
 - Regex timeout cannot hang service or UI.
 - Unsupported imported rules are preserved disabled with warnings.
+- Rule interchange is engine-independent, idempotent, and round-trips supported
+  rules without TextAloud-specific fields.
 - Rule preview is accurate and does not log text.
 - Existing language normalization remains available and can be overridden
   without backend-specific API fields.
-- Real TextAloud export validation is documented or explicitly marked pending
-  due to missing fixture.
 
 #### Validation
 
@@ -2739,7 +2905,7 @@ logic.
 
 ---
 
-### Milestone 10: PDF text extraction and optional OCR
+### Milestone 10: PDF text extraction
 
 **Purpose:** Cover the most important difficult document format.
 
@@ -2751,7 +2917,6 @@ logic.
 - Add repeated header/footer detection.
 - Add list and heading heuristics.
 - Add scanned-page detection.
-- Add optional local OCR provider interface and one Windows-supported provider.
 - Add page-range import and preview.
 - Add low-confidence warnings and manual block reorder/skip controls where
   feasible.
@@ -2761,9 +2926,8 @@ logic.
 - Text-layer PDFs import without flattening every page into one sentence.
 - Repeated headers/footers are detected on a representative fixture.
 - Multi-column low-confidence order is warned rather than presented as certain.
-- Scanned pages show OCR unavailable/available status explicitly.
-- OCR is local and opt-in.
-- PDF/OCR dependencies and licenses are documented.
+- Scanned pages are detected and reported as requiring a post-1.0 OCR provider.
+- PDF dependencies and licenses are documented.
 - Malformed PDFs cannot hang the service indefinitely.
 
 ---
@@ -2845,27 +3009,28 @@ A release candidate must pass this scenario on a clean Windows user profile:
    - one EPUB;
    - one DOCX;
    - one HTML article;
-   - one text-layer PDF;
-   - one scanned page when OCR is installed.
+   - one text-layer PDF.
 8. Add one clipboard item and one globally captured text selection.
-9. Create:
+9. Build one editable document by appending at least three explicit clipboard
+   selections, edit the text directly, then verify Undo and Redo.
+10. Create:
    - a literal pronunciation rule;
    - a regex cleanup rule;
    - a skip rule;
    - a bookmark.
-10. Play a long document.
-11. Pause during a paragraph, close the app, reopen it, and resume at the last
+11. Play a long document.
+12. Pause during a paragraph, close the app, reopen it, and resume at the last
     fully heard source position.
-12. Change voice and speed without losing position.
-13. Reorder the queue and auto-advance to the next item.
-14. Export selected chapters to WAV.
-15. Save a browser page to the library and open it in the desktop app.
-16. Stop the network connection and repeat normal local playback.
-17. Create a backup.
-18. Restore the backup into a clean reader home.
-19. Generate a support bundle and verify it contains no document text, token,
+13. Change voice and speed without losing position.
+14. Reorder the queue and auto-advance to the next item.
+15. Export selected chapters to WAV.
+16. Save a browser page to the library and open it in the desktop app.
+17. Stop the network connection and repeat normal local playback.
+18. Create a backup.
+19. Restore the backup into a clean reader home.
+20. Generate a support bundle and verify it contains no document text, token,
     database, or model binary.
-20. Run release, security, accessibility, and migration gates.
+21. Run release, security, accessibility, and migration gates.
 
 ---
 
@@ -2875,6 +3040,7 @@ A release candidate must pass this scenario on a clean Windows user profile:
 |---|---|---|
 | WPF and Python packaging become a distraction | Delays core product | Portable bundle and existing service install remain the early path; unified installer is Milestone 11 |
 | Source mapping breaks after replacements | Wrong highlighting/resume | Make source spans first-class from Milestone 4; property tests and UTF-16 contract fixtures |
+| Editing invalidates positions or bookmarks | Resume points move to the wrong text | Stable block IDs, content revisions, operation-based remapping, typed stale-cursor conflicts |
 | Long books overwhelm WPF | High memory/UI freezes | Block paging, virtualization, bounded compile windows |
 | Regex rules hang service | Local denial of service | Hard timeout, bounded input, per-block total budget, disable-on-warning |
 | PDF layout extraction is poor | Unusable reading order | Provider interface, confidence warnings, header/footer and column heuristics, OCR separate |
@@ -2896,14 +3062,15 @@ These decisions do not block Milestones 0–8.
 | Decision | Default until revisited |
 |---|---|
 | Final commercial/product name | `TTS Platform Reader` |
-| Public project license | Do not publish a binary release until repository and third-party licensing are explicitly recorded |
+| Public project license | Preserve a public-release path; choose and record the license before publishing a desktop binary |
 | Cloud voices | Disabled and out of MVP |
-| Sync across devices | Out of scope |
+| Sync across devices | Out of scope; future work uses additive APIs and revisions, never live SQLite-file sync |
 | Database encryption | Out of MVP; document filesystem/account boundary honestly |
 | Unified installer | Portable bundle first; signed packaging in Milestone 11 |
 | Additional audio formats | WAV first; capability adapters later |
 | RTF/ODT | Post-1.0 unless low-risk |
 | Full rich-text editing | Out of MVP |
+| OCR | Post-1.0 optional local provider |
 | Provider-specific phoneme syntax | Preserve metadata and enable only through capability-aware adapters |
 | Automatic update service | Deferred until signed packaging exists |
 
@@ -2935,26 +3102,29 @@ Primary references:
 
 ---
 
-## Appendix A: Ready-to-paste first Codex prompt
+## Appendix A: Ready-to-paste Milestone 1 Codex prompt
 
 ```text
 Read AGENTS.md, docs/codex/Prompt.md, docs/codex/Plan.md,
-docs/codex/Implement.md, docs/codex/Documentation.md, docs/sapi_bridge.md,
-and design_doc/reader_workstation_design_v1.md.
+docs/codex/Implement.md, docs/codex/Documentation.md, and
+design_doc/reader_workstation_design_v1.md.
 
-Activate the new Reader Workstation post-v1 track by implementing Milestone 0
-from design_doc/reader_workstation_design_v1.md.
+Implement Reader Workstation Milestone 1 from
+design_doc/reader_workstation_design_v1.md.
 
 Important:
-- Implement Milestone 0 only.
+- Implement Milestone 1 only, or one coherent documented slice when the full
+  milestone cannot safely fit one run.
 - Preserve completed v1 behavior and the SAPI compatibility track.
-- Do not add runtime dependencies or feature code.
-- Update the Codex workflow files, TASKS.md, and DECISIONS.md as specified.
-- Create only the minimal README skeletons specified by Milestone 0.
-- Run all Milestone 0 validation.
+- Keep this slice inside the Reader domain and SQLite library; do not add HTTP
+  routes or WPF code.
+- Implement stable block cursors, content revisions, integer row versions,
+  direct edit/append operations, and persistent undo/redo as specified.
+- Use the per-user Reader home contract while allowing explicit temp paths in
+  tests.
+- Run all applicable Milestone 1 validation.
 - Fix failures before finishing.
-- Update docs/codex/Documentation.md with the exact result and the Milestone 1
-  resume point.
+- Update docs/codex/Documentation.md with the exact result and resume point.
 - Commit and push the validated slice according to AGENTS.md.
 - Report branch, commit hash, validation results, and any stop condition.
 ```

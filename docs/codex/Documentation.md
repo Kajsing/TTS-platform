@@ -11,12 +11,13 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 0, activating the new track
-  without changing product behavior.
-- Current loop result: complete. This loop imported the approved design,
-  updated the Codex workflow sources, recorded the locked architecture
-  decisions, and created only the minimal ownership README files required by
-  Milestone 0. It added no runtime dependencies or product feature code.
+- Current loop target: refine the active Reader Workstation plan from the
+  user's product answers before Milestone 1 locks the persistence model.
+- Current loop result: complete. This documentation-only refinement records
+  editable documents with persistent Undo/Redo, stable block/revision cursors,
+  a per-user Reader home, clipboard append as a primary workflow, open rule
+  interchange, post-1.0 OCR, and a future public-distribution path. It changes
+  no runtime code or dependencies.
 - Locked Reader Workstation architecture: preserve the existing Python TTS
   service as the single synthesis authority; use a thin WPF/.NET 10 Windows
   client; keep canonical reader persistence in service-owned SQLite through a
@@ -26,6 +27,29 @@ This file is the live status log and shared memory for future Codex loops.
 - Reader Workstation resume point after this loop: Milestone 1, Reader domain
   and SQLite library. SAPI remains an optional compatibility client and is not
   the active product track.
+- Reader product clarifications approved on 2026-07-27:
+  - plain-text, clipboard, and selection documents are directly editable;
+  - active playback locks content, while edit operations provide persistent
+    Undo/Redo and revision-aware cursor remapping;
+  - installed Reader data defaults to
+    `%LOCALAPPDATA%\TTSPlatform\Reader`;
+  - future multi-computer sharing is API-based and remains out of current scope;
+  - TextAloud dictionary migration is removed rather than preserved;
+  - repeated explicit `Ctrl+C` append into an open document is a primary daily
+    workflow;
+  - OCR is not required for 1.0;
+  - dependencies and packaging must preserve the option of a public release.
+- Reader plan-refinement validation passed on 2026-07-27:
+  - `py -3 -m pytest -q`: 261 passed.
+  - `py -3 -m ruff check .`: passed.
+  - `py -3 scripts\check_v1_completion.py --require-complete`: passed with all
+    nine v1 criteria ready.
+  - `git diff --check`: passed; line-ending notices are informational.
+  - design consistency checks found all required revised contracts and none of
+    the superseded TextAloud/OCR/ordinal/timestamp contracts.
+- No plan deviation remains. The specific public project license is deliberately
+  deferred, but must be chosen before publishing a desktop binary; it does not
+  block Reader Milestone 1.
 - Reader Milestone 0 validation passed on 2026-07-27:
   - `py -3 -m pytest -q`: 261 passed.
   - `py -3 -m ruff check .`: passed.
@@ -638,7 +662,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Start Reader Workstation Milestone 1 from
   `design_doc/reader_workstation_design_v1.md`: implement the backend-agnostic
   Reader domain, explicit SQLite migrations, repositories, integrity/schema
-  reporting, and `[reader]` core configuration without adding HTTP or WPF code.
+  reporting, stable block cursors, revisioned content edits, Undo/Redo, the
+  SQLite backup primitive, and `[reader]` per-user-home configuration without
+  adding HTTP or WPF code.
 - V1 remains complete at the repo/test-contract level and must stay green as a
   protected regression baseline throughout Reader work.
 - If the service is intentionally exposed beyond loopback in a future milestone,
@@ -656,6 +682,13 @@ This file is the live status log and shared memory for future Codex loops.
 - The Reader Workstation design is now the active post-v1 product direction.
   It adds a service-owned local library and thin WPF client while preserving the
   existing TTS service as the single synthesis authority.
+- Editable text uses stable block IDs, content revisions, integer row versions,
+  and bounded edit operations. Playback owns a temporary content lease rather
+  than forcing documents to be permanently immutable.
+- `%LOCALAPPDATA%\TTSPlatform\Reader` is the installed data default. Future
+  cross-device sharing must use APIs, not copied SQLite files.
+- Clipboard append is a primary Reader workflow. TextAloud rule migration and
+  OCR are not 1.0 gates.
 - `docs/codex/` is now the Codex-oriented source of truth so future loops do not have to rediscover scattered instructions.
 - `AGENTS.md` remains the entry point for repo rules, but it now points directly to the four Codex workflow files.
 - Later phase trackers were treated as stronger than older summary docs when they conflicted.
@@ -940,7 +973,9 @@ python3 scripts/package_windows_bundle.py
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
 4. Resume at Reader Workstation Milestone 1. Keep the slice limited to the
-   Reader domain and SQLite library; do not add HTTP routes or WPF code yet.
+   Reader domain and SQLite library, including stable cursors, content
+   revisions, edit history, Undo/Redo, backup primitive, and per-user Reader
+   home; do not add HTTP routes or WPF code yet.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

@@ -32,7 +32,8 @@ V1 is complete at the repo/test-contract level and remains a protected
 baseline. The active post-v1 product goal is TTS Platform Reader: a
 Windows-first, offline-first reading workstation with a durable document
 library, structure-aware import, source-mapped long-form playback, user-owned
-speech rules, and a thin WPF desktop client over the existing localhost
+speech rules, direct editing with Undo/Redo, repeated clipboard capture into an
+open document, and a thin WPF desktop client over the existing localhost
 service. Its normative design and milestone sequence are in
 `design_doc/reader_workstation_design_v1.md`.
 
