@@ -1,11 +1,12 @@
 <Window x:Class="TtsPlatform.Reader.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TtsPlatform.Reader.App"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="TTS Platform Reader" Height="760" Width="1180" MinHeight="560" MinWidth="860"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen" PreviewKeyDown="MainWindow_PreviewKeyDown">
   <Grid Background="White">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -96,11 +97,39 @@
           <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="20" FontWeight="SemiBold" />
           <TextBlock x:Name="EditorHintText" Foreground="#555" Margin="0,3,0,8"
                      Text="Editable text will appear here." TextWrapping="Wrap" />
+          <WrapPanel Margin="0,0,0,8">
+            <Button x:Name="PreviousSectionButton" Content="Previous section" Click="PreviousSectionButton_Click"
+                    IsEnabled="False" AutomationProperties.Name="Go to previous section" />
+            <Button x:Name="PlayPauseButton" Content="Play" Click="PlayPauseButton_Click"
+                    IsEnabled="False" AutomationProperties.Name="Play or pause document" />
+            <Button x:Name="StopButton" Content="Stop" Click="StopButton_Click"
+                    IsEnabled="False" AutomationProperties.Name="Stop document playback" />
+            <Button x:Name="NextSectionButton" Content="Next section" Click="NextSectionButton_Click"
+                    IsEnabled="False" AutomationProperties.Name="Go to next section" />
+            <TextBlock x:Name="PlaybackStatusText" Text="Stopped" Margin="10,5,0,0"
+                       AutomationProperties.LiveSetting="Polite" />
+          </WrapPanel>
         </StackPanel>
-        <TextBox Grid.Row="1" x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True"
-                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                 TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
-                 TextChanged="EditorTextBox_TextChanged" AutomationProperties.Name="Document text" />
+        <Grid Grid.Row="1">
+          <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                   TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
+                   TextChanged="EditorTextBox_TextChanged" AutomationProperties.Name="Document text" />
+          <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
+                   BorderBrush="#CCC" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                   AutomationProperties.Name="Document reading view">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <local:SourceHighlightTextBlock SourceText="{Binding Text}"
+                    HighlightStart="{Binding HighlightStart}"
+                    HighlightLength="{Binding HighlightLength}"
+                    TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="18"
+                    Margin="8,5" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
           <Button x:Name="SaveEditButton" Content="Save edit" Click="SaveEditButton_Click" IsEnabled="False" />
           <Button x:Name="RevertEditButton" Content="Revert local" Click="RevertEditButton_Click" IsEnabled="False" />

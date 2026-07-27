@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from reader_core import (
@@ -25,6 +28,48 @@ from .observability import ObservabilityState
 @dataclass(frozen=True, slots=True)
 class ReaderDuplicateDocumentError(ReaderError):
     document_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReaderDocumentLockedError(ReaderError):
+    document_id: str
+
+
+class ReaderContentLeaseRegistry:
+    """Serializes content mutations with active in-process Reader streams."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._owners_by_document: dict[str, set[str]] = {}
+
+    @contextmanager
+    def lease(self, document_id: str, owner_id: str) -> Iterator[None]:
+        with self._lock:
+            self._owners_by_document.setdefault(document_id, set()).add(owner_id)
+        try:
+            yield
+        finally:
+            with self._lock:
+                owners = self._owners_by_document.get(document_id)
+                if owners is not None:
+                    owners.discard(owner_id)
+                    if not owners:
+                        self._owners_by_document.pop(document_id, None)
+
+    @contextmanager
+    def mutation(self, document_id: str) -> Iterator[None]:
+        with self._lock:
+            if self._owners_by_document.get(document_id):
+                raise ReaderDocumentLockedError(document_id)
+            yield
+
+    def is_locked(self, document_id: str) -> bool:
+        with self._lock:
+            return bool(self._owners_by_document.get(document_id))
+
+    def active_lease_count(self) -> int:
+        with self._lock:
+            return sum(len(owners) for owners in self._owners_by_document.values())
 
 
 @dataclass(slots=True)
@@ -63,6 +108,7 @@ class ReaderApplicationService:
         self.config = config
         self.library = ReaderLibrary(repository)
         self.observability = observability
+        self.content_leases = ReaderContentLeaseRegistry()
 
     def create_text_document(
         self,
@@ -111,6 +157,12 @@ class ReaderApplicationService:
 
     def get_document_bundle(self, document_id: str) -> ReaderDocumentBundle:
         return self.repository.get_document_bundle(document_id)
+
+    def content_lease(self, document_id: str, owner_id: str):
+        return self.content_leases.lease(document_id, owner_id)
+
+    def content_mutation(self, document_id: str):
+        return self.content_leases.mutation(document_id)
 
     def list_blocks(
         self,

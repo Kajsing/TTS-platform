@@ -40,6 +40,28 @@ public interface IReaderServiceClient
         string documentId,
         ExpectedVersionRequest request,
         CancellationToken cancellationToken = default);
+    Task<ReaderPosition?> GetPositionAsync(
+        string documentId,
+        CancellationToken cancellationToken = default);
+    Task<ReaderPosition> SavePositionAsync(
+        string documentId,
+        SavePositionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IReaderStreamClient
+{
+    Task<IReaderStreamSession> OpenAsync(
+        ReaderStreamStartRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IReaderStreamSession : IAsyncDisposable
+{
+    IAsyncEnumerable<ReaderStreamEvent> ReadEventsAsync(
+        CancellationToken cancellationToken = default);
+    Task CancelAsync(CancellationToken cancellationToken = default);
+    Task ReleaseAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed record HealthResponse(
@@ -150,3 +172,95 @@ public sealed record ReaderEdit(
     int EndOffset,
     string OperationType,
     DateTimeOffset CreatedAt);
+
+public sealed record ReaderCursor(
+    string DocumentId,
+    string BlockId,
+    int BlockOrdinal,
+    int CharacterOffset,
+    int ContentRevision,
+    int? SegmentIndex = null);
+
+public sealed record ReaderPosition(
+    string DocumentId,
+    ReaderCursor Cursor,
+    string? VoiceProfileId,
+    int PipelineVersion,
+    int RulesVersion,
+    DateTimeOffset UpdatedAt,
+    bool Completed,
+    int RowVersion);
+
+public sealed record SavePositionRequest(
+    ReaderCursor Cursor,
+    [property: JsonPropertyName("voice_profile_id")] string? VoiceProfileId = null,
+    [property: JsonPropertyName("pipeline_version")] int PipelineVersion = 1,
+    [property: JsonPropertyName("rules_version")] int RulesVersion = 1,
+    bool Completed = false,
+    [property: JsonPropertyName("expected_row_version")] int? ExpectedRowVersion = null);
+
+public sealed record ReaderProsody(
+    double Rate = 1.0,
+    double Volume = 1.0,
+    double Pitch = 0.0,
+    [property: JsonPropertyName("pause_strategy")] string PauseStrategy = "natural",
+    [property: JsonPropertyName("sentence_pause_ms")] int? SentencePauseMs = null,
+    [property: JsonPropertyName("comma_pause_ms")] int? CommaPauseMs = null,
+    IReadOnlyList<string>? Emphasis = null);
+
+public sealed record ReaderStreamWindow(
+    [property: JsonPropertyName("max_blocks")] int MaxBlocks = 32,
+    [property: JsonPropertyName("max_source_characters")] int MaxSourceCharacters = 16_000);
+
+public sealed record ReaderStreamStartRequest(
+    [property: JsonPropertyName("document_id")] string DocumentId,
+    ReaderCursor Cursor,
+    string? Voice = null,
+    [property: JsonPropertyName("language_hint")] string? LanguageHint = null,
+    ReaderProsody? Prosody = null,
+    ReaderStreamWindow? Window = null);
+
+public abstract record ReaderStreamEvent(string StreamId);
+
+public sealed record ReaderStreamStarted(
+    string StreamId,
+    string DocumentId,
+    int SampleRateHz,
+    int Channels,
+    string SampleFormat,
+    int PipelineVersion,
+    int RulesVersion,
+    ReaderCursor Cursor) : ReaderStreamEvent(StreamId);
+
+public sealed record ReaderSourceSpan(
+    string BlockId,
+    int BlockOrdinal,
+    int StartOffset,
+    int EndOffset);
+
+public sealed record ReaderAudioPacket(
+    string StreamId,
+    string DocumentId,
+    int ChunkIndex,
+    int DurationMs,
+    ReaderCursor CursorStart,
+    ReaderCursor CursorEnd,
+    IReadOnlyList<ReaderSourceSpan> SourceSpans,
+    string? SectionId,
+    bool IsLast,
+    ReadOnlyMemory<byte> PcmBytes) : ReaderStreamEvent(StreamId);
+
+public sealed record ReaderStreamDone(
+    string StreamId,
+    ReaderCursor Cursor,
+    bool DocumentComplete,
+    bool NextWindowAvailable) : ReaderStreamEvent(StreamId);
+
+public sealed record ReaderStreamCancelled(
+    string StreamId,
+    ReaderCursor GeneratedCursor) : ReaderStreamEvent(StreamId);
+
+public sealed record ReaderStreamError(
+    string StreamId,
+    string ErrorType,
+    string Message) : ReaderStreamEvent(StreamId);

@@ -41,6 +41,16 @@ public sealed class SettingsTests : IDisposable
             store.SaveAsync(new DesktopSettings(ServiceBaseUrl: "http://example.com:7777/")));
     }
 
+    [Fact]
+    public void Wasapi_output_has_a_hard_ten_second_mono_pcm_limit()
+    {
+        var format = new PcmAudioFormat(22_050, 1, 16);
+
+        Assert.Equal(441_000, WasapiAudioOutput.MaximumBufferedBytes(format));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            WasapiAudioOutput.MaximumBufferedBytes(new PcmAudioFormat(22_050, 2, 16)));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

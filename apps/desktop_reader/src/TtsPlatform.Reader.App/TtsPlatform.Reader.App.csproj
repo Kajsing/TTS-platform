@@ -11,4 +11,8 @@
     <ProjectReference Include="..\TtsPlatform.Reader.Application\TtsPlatform.Reader.Application.csproj" />
     <ProjectReference Include="..\TtsPlatform.Reader.Windows\TtsPlatform.Reader.Windows.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

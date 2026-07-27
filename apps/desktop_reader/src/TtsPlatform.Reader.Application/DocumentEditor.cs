@@ -18,7 +18,7 @@ public sealed class DocumentEditor(IReaderServiceClient client)
     {
         Document = document;
         LastError = null;
-        var page = await client.GetBlocksAsync(document.Id, cancellationToken: cancellationToken)
+        var page = await client.GetBlocksAsync(document.Id, limit: 1, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         Block = page.Blocks.FirstOrDefault();
         OriginalText = Block?.Text ?? string.Empty;
@@ -114,7 +114,7 @@ public sealed class DocumentEditor(IReaderServiceClient client)
             var mutation = undo
                 ? await client.UndoAsync(Document.Id, request, cancellationToken).ConfigureAwait(false)
                 : await client.RedoAsync(Document.Id, request, cancellationToken).ConfigureAwait(false);
-            var page = await client.GetBlocksAsync(Document.Id, cancellationToken: cancellationToken)
+            var page = await client.GetBlocksAsync(Document.Id, limit: 1, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             Document = mutation.Document;
             Block = page.Blocks.FirstOrDefault();

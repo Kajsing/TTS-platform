@@ -44,12 +44,23 @@ class ReaderCursorResponse(ReaderCursorPayload):
     document_id: str
 
     @classmethod
-    def from_domain(cls, cursor: ReaderCursor) -> "ReaderCursorResponse":
+    def from_domain(
+        cls,
+        cursor: ReaderCursor,
+        *,
+        source_text: str | None = None,
+    ) -> "ReaderCursorResponse":
+        character_offset = cursor.character_offset
+        if source_text is not None:
+            character_offset = python_offset_to_utf16(
+                source_text,
+                cursor.character_offset,
+            )
         return cls(
             document_id=cursor.document_id,
             block_id=cursor.block_id,
             block_ordinal=cursor.block_ordinal,
-            character_offset=cursor.character_offset,
+            character_offset=character_offset,
             content_revision=cursor.content_revision,
             segment_index=cursor.segment_index,
         )
@@ -229,10 +240,18 @@ class ReaderPositionResponse(BaseModel):
     row_version: int
 
     @classmethod
-    def from_domain(cls, position: PlaybackPosition) -> "ReaderPositionResponse":
+    def from_domain(
+        cls,
+        position: PlaybackPosition,
+        *,
+        source_text: str | None = None,
+    ) -> "ReaderPositionResponse":
         return cls(
             document_id=position.document_id,
-            cursor=ReaderCursorResponse.from_domain(position.cursor),
+            cursor=ReaderCursorResponse.from_domain(
+                position.cursor,
+                source_text=source_text,
+            ),
             voice_profile_id=position.voice_profile_id,
             pipeline_version=position.pipeline_version,
             rules_version=position.rules_version,
@@ -269,11 +288,19 @@ class ReaderBookmarkResponse(BaseModel):
     row_version: int
 
     @classmethod
-    def from_domain(cls, bookmark: Bookmark) -> "ReaderBookmarkResponse":
+    def from_domain(
+        cls,
+        bookmark: Bookmark,
+        *,
+        source_text: str | None = None,
+    ) -> "ReaderBookmarkResponse":
         return cls(
             id=bookmark.id,
             document_id=bookmark.document_id,
-            cursor=ReaderCursorResponse.from_domain(bookmark.cursor),
+            cursor=ReaderCursorResponse.from_domain(
+                bookmark.cursor,
+                source_text=source_text,
+            ),
             label=bookmark.label,
             note=bookmark.note,
             created_at=bookmark.created_at,

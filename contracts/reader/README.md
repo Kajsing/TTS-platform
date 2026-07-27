@@ -10,3 +10,9 @@ increment `contract_version` deliberately.
 
 All `/v1/reader/*` routes require the service's existing bearer-token and origin
 checks. `/v1/health` remains public and exposes only sanitized Reader readiness.
+
+Reader stream protocol version 1 is available at `WS /v1/reader/stream`. Its
+JSON control-event and binary PCM pairing is frozen in
+`design_doc/reader_workstation_design_v1.md`; deterministic Python service and
+.NET parser tests enforce identity, byte counts, monotonic UTF-16 cursors,
+source spans, cancellation, and continuation.

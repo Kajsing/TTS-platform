@@ -11,19 +11,79 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 3, the .NET 10 WPF desktop
-  shell, localhost client, onboarding, library paging, and conflict-safe plain-
-  text editing.
-- Current loop result: complete. The layered WPF shell connects only to a
-  strictly validated loopback service, keeps the bearer token outside settings,
-  reports actionable onboarding states, pages the live library, and edits
-  eligible text blocks with durable Undo/Redo and conflict preservation. Audio,
-  clipboard capture, global hotkeys, tray behavior, and the compact controller
-  were not added.
-- Reader Workstation resume point: Milestone 4, protected Reader streaming,
-  bounded source-mapped windows, PCM playback, highlighting, resume, controls,
-  content leases, and protocol tests. Do not start Milestone 5 Windows capture
-  or tray work yet.
+- Current loop target: Reader Workstation Milestone 4, protected source-mapped
+  streaming, bounded Windows playback, durable resume, highlighting, controls,
+  content leases, and developer-preview validation.
+- Current loop result: complete. The Python service now streams bounded Reader
+  windows as strict mark/binary PCM pairs with stable UTF-16 source cursors. The
+  layered desktop client validates the protocol, plays through NAudio/WASAPI,
+  persists only fully heard positions, highlights bounded source blocks, and
+  exposes Play/Pause/Stop plus section controls. Clipboard capture, global
+  hotkeys, tray behavior, and the compact controller were not added.
+- Reader Workstation resume point: Milestone 5, clipboard capture, append-to-open
+  workflow, tray, compact controller, privacy mode, and global playback controls.
+- Reader Milestone 4 implementation details:
+  - `WS /v1/reader/stream` requires the existing loopback, origin, rate-limit,
+    and bearer protections; desktop tokens are sent only in the Authorization
+    header and never in a WebSocket URL;
+  - stream protocol version 1 emits one JSON mark before each binary PCM frame,
+    with byte count, stream/document identity, monotonic stable cursor, UTF-16
+    source spans, and section identity. The .NET parser rejects missing/doubled
+    marks, byte mismatches, format/identity changes, and cursor regression;
+  - source-mapped normalization retains original spans across newline,
+    whitespace, symbol, abbreviation, segmentation, and planner-inserted
+    whitespace transformations. Long documents use keyset block reads bounded
+    to 64 blocks and 32,000 source characters per server window;
+  - active Reader streams hold a ref-counted document lease. Content replace,
+    append, Undo, and Redo return `reader_document_locked` until every stream
+    cancels/releases; raw `/v1/tts` and Chrome streaming are unchanged;
+  - Reader positions and bookmarks now convert UTF-16 offsets explicitly at
+    every HTTP boundary, including surrogate-pair rejection;
+  - the cross-platform application state machine maintains one active stream,
+    applies two-second audio backpressure, drains a fragment before advancing
+    its durable cursor, throttles playing saves to at most once per second, and
+    flushes immediately on pause, stop, completion, and shutdown;
+  - NAudio 2.3.0 is isolated behind `IAudioOutput` in the Windows project. It
+    uses shared-mode WASAPI, mono PCM16 validation, a two-second target, and a
+    hard ten-second buffer. Its MIT terms are recorded in
+    `THIRD_PARTY_NOTICES.md` and included in desktop output/publish artifacts;
+  - WPF renders a bounded 64-block reading viewport and marks current source
+    text with background, bold, and underline cues. Editing is disabled during
+    active playback and restored after pause/stop; Space and Escape provide
+    local keyboard playback control;
+  - `scripts/create_reader_preview_snapshot.py` builds seeded or explicit-source
+    snapshots only through SQLite's backup primitive; the desktop check validates
+    snapshot integrity without touching the installed Reader library;
+  - deterministic fake protocol/audio tests cover pause-at-last-fully-heard,
+    idempotent stop, next-window continuation, one-at-a-time audio consumption,
+    stream leases, UTF-16 spans, and error handling.
+- Reader Milestone 4 validation passed on 2026-07-27:
+  - `py -3 scripts/check_desktop_reader.py --require-dotnet
+    --require-windows-audio`: live paging/edit, 31 paired PCM frames, source
+    spans, position resume, preview snapshot, default WASAPI endpoint,
+    self-contained package, third-party notice, and packaged WPF render passed;
+  - `.\.venv\Scripts\python.exe scripts\check_reader_real_voice_playback.py`:
+    audible Piper `vits-piper-en_US-lessac-high` playback completed through the
+    Reader WebSocket, application state machine, and NAudio shared-mode WASAPI;
+    92 highlight events advanced to UTF-16 character offset 58;
+  - focused Python streaming/API/text tests: 35 passed after final typed-error
+    regression coverage; `py -3 -m pytest -q`: 339 passed;
+  - `dotnet test apps\desktop_reader\TtsPlatform.Reader.sln -c Release`: 35
+    passed across Client, Application, and Windows test projects;
+  - `py -3 scripts\check_reader_contracts.py`: six version-1 fixtures passed
+    with Reader stream protocol capability 1;
+  - `py -3 -m ruff check .`, `dotnet format --verify-no-changes`, and
+    `git diff --check`: passed.
+- Reader Milestone 4 assumptions and deviations:
+  - the approved NAudio 2.x choice resolved to stable version 2.3.0; no cloud,
+    paid, or non-Windows runtime dependency was introduced;
+  - the WPF viewport is deliberately bounded rather than full-book materialized.
+    Full import-aware virtualization remains Milestone 6;
+  - `packages/speech_rules/tests` does not exist before Milestone 7, so the
+    equivalent current Reader/core/service suites are run without inventing an
+    empty directory;
+  - the existing uncommitted `models/MANIFEST.json` installation-state change
+    remains user-owned and excluded from this milestone.
 - Reader Milestone 3 implementation details:
   - `apps/desktop_reader/TtsPlatform.Reader.sln` separates cross-platform Client
     and Application projects from Windows infrastructure and WPF composition;

@@ -8,7 +8,8 @@ if (args.Length != 2)
 }
 
 using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-var client = new ReaderServiceClient(httpClient, args[0], new SmokeTokenProvider(args[1]));
+var tokenProvider = new SmokeTokenProvider(args[1]);
+var client = new ReaderServiceClient(httpClient, args[0], tokenProvider);
 var first = await client.GetDocumentsAsync(limit: 1);
 if (first.Documents.Count != 1 || first.NextCursor is null)
 {
@@ -42,12 +43,68 @@ if (editedBlocks.Blocks.Single().Text != replacement || mutation.Document.RowVer
     return 5;
 }
 
+var editedBlock = editedBlocks.Blocks.Single();
+var streamClient = new ReaderStreamClient(args[0], tokenProvider);
+var startCursor = new ReaderCursor(
+    document.Id,
+    editedBlock.Id,
+    editedBlock.Ordinal,
+    0,
+    mutation.Document.ContentRevision);
+var pcmFrames = 0;
+var pcmBytes = 0;
+var sourceSpans = 0;
+ReaderStreamDone? completed = null;
+await using (var session = await streamClient.OpenAsync(
+    new ReaderStreamStartRequest(document.Id, startCursor)))
+{
+    await foreach (var streamEvent in session.ReadEventsAsync())
+    {
+        if (streamEvent is ReaderAudioPacket packet)
+        {
+            pcmFrames++;
+            pcmBytes += packet.PcmBytes.Length;
+            sourceSpans += packet.SourceSpans.Count;
+        }
+        else if (streamEvent is ReaderStreamDone done)
+        {
+            completed = done;
+        }
+        else if (streamEvent is ReaderStreamError error)
+        {
+            Console.Error.WriteLine($"Reader stream failed: {error.ErrorType}: {error.Message}");
+            return 6;
+        }
+    }
+    await session.ReleaseAsync();
+}
+if (completed is null || !completed.DocumentComplete || pcmFrames == 0 || pcmBytes == 0 || sourceSpans == 0)
+{
+    Console.Error.WriteLine("The live Reader WebSocket did not return paired source-mapped PCM.");
+    return 7;
+}
+
+var savedPosition = await client.SavePositionAsync(
+    document.Id,
+    new SavePositionRequest(completed.Cursor, ExpectedRowVersion: 0));
+var loadedPosition = await client.GetPositionAsync(document.Id);
+if (loadedPosition?.Cursor != savedPosition.Cursor)
+{
+    Console.Error.WriteLine("The live Reader position did not round-trip.");
+    return 8;
+}
+
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
     live_utf16_edit = true,
     first_page_count = first.Documents.Count,
     second_page_count = second.Documents.Count,
+    live_reader_stream = true,
+    live_position_resume = true,
+    pcm_frames = pcmFrames,
+    pcm_bytes = pcmBytes,
+    source_spans = sourceSpans,
 }));
 return 0;
 

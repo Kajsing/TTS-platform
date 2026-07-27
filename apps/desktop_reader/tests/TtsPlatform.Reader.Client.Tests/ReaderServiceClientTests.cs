@@ -77,6 +77,28 @@ public sealed class ReaderServiceClientTests
         Assert.Equal("request-1", exception.RequestId);
     }
 
+    [Fact]
+    public async Task Position_round_trip_uses_protected_document_route()
+    {
+        var handler = new RecordingHandler(request => request.Method == HttpMethod.Get
+            ? Json(HttpStatusCode.OK, $"{{\"position\":{PositionJson}}}")
+            : Json(HttpStatusCode.OK, PositionJson));
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+        var cursor = new ReaderCursor("doc", "block", 0, 3, 1);
+
+        var loaded = await client.GetPositionAsync("doc");
+        var saved = await client.SavePositionAsync("doc", new SavePositionRequest(cursor, ExpectedRowVersion: 2));
+
+        Assert.Equal(3, loaded?.Cursor.CharacterOffset);
+        Assert.Equal(3, saved.Cursor.CharacterOffset);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"expected_row_version\":2", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("document_id", handler.Requests[1].Body, StringComparison.Ordinal);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json"),
@@ -122,7 +144,7 @@ public sealed class ReaderServiceClientTests
         {
           "contract_version":1,"enabled":true,
           "database":{"ready":true,"schema_version":1,"search_available":false},
-          "playback":{"stream_protocol_version":0,"source_offset_encoding":"utf-16","max_blocks_per_window":64,"max_source_chars_per_window":32000}
+          "playback":{"stream_protocol_version":1,"source_offset_encoding":"utf-16","max_blocks_per_window":64,"max_source_chars_per_window":32000}
         }
         """;
 
@@ -139,5 +161,14 @@ public sealed class ReaderServiceClientTests
 
     private const string ErrorJson = """
         {"error":{"type":"reader_revision_conflict","message":"changed","param":null,"request_id":"request-1","details":{"expected_row_version":1,"actual_row_version":2}}}
+        """;
+
+    private const string PositionJson = """
+        {
+          "document_id":"doc",
+          "cursor":{"document_id":"doc","block_id":"block","block_ordinal":0,"character_offset":3,"content_revision":1,"segment_index":null},
+          "voice_profile_id":null,"pipeline_version":1,"rules_version":1,
+          "updated_at":"2026-07-27T12:00:00Z","completed":false,"row_version":2
+        }
         """;
 }

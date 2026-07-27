@@ -26,6 +26,11 @@ def _parser() -> argparse.ArgumentParser:
         description="Validate the .NET desktop Reader, live paging, and portable WPF package."
     )
     parser.add_argument("--require-dotnet", action="store_true")
+    parser.add_argument(
+        "--require-windows-audio",
+        action="store_true",
+        help="Require a real Windows shared-mode audio endpoint smoke.",
+    )
     parser.add_argument("--dotnet", type=Path)
     parser.add_argument("--skip-build", action="store_true")
     return parser
@@ -95,6 +100,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderServiceClient.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Onboarding.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "JsonDesktopSettingsStore.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "WasapiAudioOutput.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderStreamClient.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.en-US.resx",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Resources" / "Strings.da-DK.resx",
@@ -109,7 +117,6 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         if path.is_file() and path.suffix.lower() in {".cs", ".csproj", ".xaml"}
     )
     forbidden = [
-        "NAudio",
         "AddClipboardFormatListener",
         "WM_HOTKEY",
         "System.Windows.Forms.Clipboard",
@@ -117,11 +124,13 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
     found = [value for value in forbidden if value.casefold() in source_text.casefold()]
     if found:
         raise DesktopReaderCheckError(
-            f"Milestone 3 must not contain audio or clipboard capture code: {found}"
+            f"Milestone 4 must not contain clipboard capture code: {found}"
         )
     if "<TargetFramework>net10.0-windows</TargetFramework>" not in source_text:
         raise DesktopReaderCheckError("The WPF application does not target net10.0-windows.")
-    return {"required_files": len(required), "forbidden_features": "absent"}
+    if "NAudio" not in source_text or "ReaderStreamProtocolParser" not in source_text:
+        raise DesktopReaderCheckError("Milestone 4 audio or stream protocol code is missing.")
+    return {"required_files": len(required), "clipboard_features": "absent"}
 
 
 def _free_port() -> int:
@@ -220,7 +229,62 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         raise DesktopReaderCheckError("The .NET client did not confirm live Reader paging.")
     if payload.get("live_utf16_edit") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm a live UTF-16 edit.")
+    if (
+        payload.get("live_reader_stream") is not True
+        or payload.get("live_position_resume") is not True
+    ):
+        raise DesktopReaderCheckError(
+            "The .NET client did not confirm Reader WebSocket streaming and durable resume."
+        )
     return payload
+
+
+def _check_preview_snapshot(repo_root: Path, temporary: Path) -> dict[str, object]:
+    output = _run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "create_reader_preview_snapshot.py"),
+            "--output",
+            str(temporary / "preview" / "reader-preview.db"),
+        ],
+        cwd=repo_root,
+    )
+    payload = json.loads(output)
+    if payload.get("integrity_ok") is not True or payload.get("document_count") != 2:
+        raise DesktopReaderCheckError("The Reader preview snapshot is not consistent.")
+    return payload
+
+
+def _check_windows_audio(
+    repo_root: Path,
+    dotnet: Path,
+    *,
+    required: bool,
+) -> dict[str, object]:
+    if os.name != "nt":
+        if required:
+            raise DesktopReaderCheckError(
+                "The required Windows audio smoke cannot run off Windows."
+            )
+        return {"status": "skipped", "reason": "Windows audio requires Windows"}
+    if not required:
+        return {"status": "skipped", "reason": "pass --require-windows-audio"}
+
+    smoke_dll = (
+        repo_root
+        / "apps"
+        / "desktop_reader"
+        / "tools"
+        / "TtsPlatform.Reader.Audio.Smoke"
+        / "bin"
+        / "Release"
+        / "net10.0-windows"
+        / "TtsPlatform.Reader.Audio.Smoke.dll"
+    )
+    payload = json.loads(_run([str(dotnet), str(smoke_dll)], cwd=repo_root))
+    if payload.get("windows_audio") is not True:
+        raise DesktopReaderCheckError("NAudio did not confirm the default Windows audio endpoint.")
+    return {"status": "passed", **payload}
 
 
 def _build_development_package(
@@ -249,6 +313,7 @@ def _build_development_package(
         "TtsPlatform.Reader.App.exe",
         "TtsPlatform.Reader.App.dll",
         "TtsPlatform.Reader.App.runtimeconfig.json",
+        "THIRD_PARTY_NOTICES.md",
         "DEVELOPMENT-ONLY.txt",
     }
     if not required.issubset(names):
@@ -311,6 +376,12 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="tts-reader-check-") as temporary_value:
             temporary = Path(temporary_value)
             live_paging = _check_live_paging(repo_root, dotnet, temporary)
+            preview_snapshot = _check_preview_snapshot(repo_root, temporary)
+            windows_audio = _check_windows_audio(
+                repo_root,
+                dotnet,
+                required=args.require_windows_audio,
+            )
             archive, package = _build_development_package(repo_root, dotnet, temporary)
             wpf = _check_wpf_render(archive, temporary)
         print(
@@ -319,6 +390,8 @@ def main() -> int:
                     "source": source,
                     "dotnet": str(dotnet),
                     "live_paging": live_paging,
+                    "preview_snapshot": preview_snapshot,
+                    "windows_audio": windows_audio,
                     "portable_package": package,
                     "wpf_render": wpf,
                 },

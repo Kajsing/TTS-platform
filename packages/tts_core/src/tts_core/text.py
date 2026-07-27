@@ -39,6 +39,29 @@ class PreparedText:
 
 
 @dataclass(frozen=True, slots=True)
+class TextSourceSpan:
+    start_offset: int
+    end_offset: int
+
+
+@dataclass(frozen=True, slots=True)
+class MappedText:
+    text: str
+    source_spans: tuple[TextSourceSpan, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.text) != len(self.source_spans):
+            raise ValueError("mapped text must have one source span per character")
+
+
+@dataclass(frozen=True, slots=True)
+class _MappedCharacter:
+    value: str
+    start_offset: int
+    end_offset: int
+
+
+@dataclass(frozen=True, slots=True)
 class _PlanningUnit:
     text: str
     locked: bool = False
@@ -71,20 +94,125 @@ class TextNormalizer:
         }
 
     def normalize(self, text: str, *, language_hint: str | None = None) -> str:
+        return self.normalize_with_mapping(text, language_hint=language_hint).text
+
+    def normalize_with_mapping(
+        self,
+        text: str,
+        *,
+        language_hint: str | None = None,
+    ) -> MappedText:
         language = (language_hint or "en").lower()
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-        normalized = re.sub(r"\n{2,}", "\n\n", normalized)
-        normalized = normalized.replace("\n", " ")
+        mapped = self._map_newlines(text)
+        mapped = tuple(
+            _MappedCharacter(
+                value=" " if item.value == "\n" else item.value,
+                start_offset=item.start_offset,
+                end_offset=item.end_offset,
+            )
+            for item in mapped
+        )
 
         for symbol, replacement in self._symbol_rules.get(language, {}).items():
-            normalized = normalized.replace(symbol, replacement)
+            mapped = self._replace_mapped(mapped, symbol, replacement)
 
         for source, replacement in self._abbreviation_rules.get(language, {}).items():
-            normalized = normalized.replace(source, replacement)
+            mapped = self._replace_mapped(mapped, source, replacement)
 
-        normalized = re.sub(r"[ \t]+", " ", normalized)
-        normalized = re.sub(r"\s+([,.;:!?])", r"\1", normalized)
-        return normalized.strip()
+        mapped = self._collapse_horizontal_whitespace(mapped)
+        mapped = self._remove_space_before_punctuation(mapped)
+        mapped = self._strip_whitespace(mapped)
+        return MappedText(
+            text="".join(item.value for item in mapped),
+            source_spans=tuple(
+                TextSourceSpan(item.start_offset, item.end_offset) for item in mapped
+            ),
+        )
+
+    @staticmethod
+    def _map_newlines(text: str) -> tuple[_MappedCharacter, ...]:
+        mapped: list[_MappedCharacter] = []
+        index = 0
+        while index < len(text):
+            if text.startswith("\r\n", index):
+                mapped.append(_MappedCharacter("\n", index, index + 2))
+                index += 2
+                continue
+            value = "\n" if text[index] == "\r" else text[index]
+            mapped.append(_MappedCharacter(value, index, index + 1))
+            index += 1
+        return tuple(mapped)
+
+    @staticmethod
+    def _replace_mapped(
+        mapped: tuple[_MappedCharacter, ...],
+        source: str,
+        replacement: str,
+    ) -> tuple[_MappedCharacter, ...]:
+        if not source or not mapped:
+            return mapped
+        values = "".join(item.value for item in mapped)
+        result: list[_MappedCharacter] = []
+        cursor = 0
+        while True:
+            match = values.find(source, cursor)
+            if match < 0:
+                result.extend(mapped[cursor:])
+                break
+            result.extend(mapped[cursor:match])
+            matched = mapped[match : match + len(source)]
+            start_offset = matched[0].start_offset
+            end_offset = matched[-1].end_offset
+            result.extend(
+                _MappedCharacter(value, start_offset, end_offset) for value in replacement
+            )
+            cursor = match + len(source)
+        return tuple(result)
+
+    @staticmethod
+    def _collapse_horizontal_whitespace(
+        mapped: tuple[_MappedCharacter, ...],
+    ) -> tuple[_MappedCharacter, ...]:
+        result: list[_MappedCharacter] = []
+        index = 0
+        while index < len(mapped):
+            item = mapped[index]
+            if item.value not in {" ", "\t"}:
+                result.append(item)
+                index += 1
+                continue
+            end = index + 1
+            while end < len(mapped) and mapped[end].value in {" ", "\t"}:
+                end += 1
+            result.append(
+                _MappedCharacter(" ", item.start_offset, mapped[end - 1].end_offset)
+            )
+            index = end
+        return tuple(result)
+
+    @staticmethod
+    def _remove_space_before_punctuation(
+        mapped: tuple[_MappedCharacter, ...],
+    ) -> tuple[_MappedCharacter, ...]:
+        result: list[_MappedCharacter] = []
+        for item in mapped:
+            if item.value in ",.;:!?":
+                while result and result[-1].value.isspace():
+                    result.pop()
+            result.append(item)
+        return tuple(result)
+
+    @staticmethod
+    def _strip_whitespace(
+        mapped: tuple[_MappedCharacter, ...],
+    ) -> tuple[_MappedCharacter, ...]:
+        start = 0
+        end = len(mapped)
+        while start < end and mapped[start].value.isspace():
+            start += 1
+        while end > start and mapped[end - 1].value.isspace():
+            end -= 1
+        return mapped[start:end]
 
 
 class SentenceSegmenter:

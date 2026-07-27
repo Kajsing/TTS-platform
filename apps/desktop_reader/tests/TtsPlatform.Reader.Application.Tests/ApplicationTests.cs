@@ -266,5 +266,14 @@ public sealed class ApplicationTests
             string documentId,
             ExpectedVersionRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<ReaderPosition?> GetPositionAsync(
+            string documentId,
+            CancellationToken cancellationToken = default) => Task.FromResult<ReaderPosition?>(null);
+
+        public Task<ReaderPosition> SavePositionAsync(
+            string documentId,
+            SavePositionRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

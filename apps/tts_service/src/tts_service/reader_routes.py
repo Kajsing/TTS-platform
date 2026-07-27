@@ -11,7 +11,10 @@ from reader_core import (
     DocumentState,
     PlaybackPosition,
     QueueItem,
+    ReaderCursor,
     ReaderError,
+    ReaderStaleCursorError,
+    ReaderValidationError,
 )
 
 from .reader_errors import (
@@ -32,6 +35,7 @@ from .reader_schemas import (
     ReaderBookmarkListResponse,
     ReaderBookmarkResponse,
     ReaderCapabilitiesResponse,
+    ReaderCursorPayload,
     ReaderDatabaseCapability,
     ReaderDocumentPageResponse,
     ReaderDocumentResponse,
@@ -79,7 +83,7 @@ def build_reader_router() -> APIRouter:
             ),
             rules=ReaderRuleCapability(types=[], regex_timeout_supported=False),
             playback=ReaderPlaybackCapability(
-                stream_protocol_version=0,
+                stream_protocol_version=1,
                 source_offset_encoding="utf-16",
                 max_blocks_per_window=config.max_blocks_per_stream_window,
                 max_source_chars_per_window=config.max_source_chars_per_stream_window,
@@ -229,7 +233,9 @@ def build_reader_router() -> APIRouter:
                 message="Reader edit offsets must be valid UTF-16 code-unit boundaries.",
                 param="start_offset/end_offset",
             ) from error
-        document, edit = _run_reader(
+        document, edit = _run_content_mutation(
+            service,
+            document_id,
             lambda: service.repository.replace_block_text(
                 document_id,
                 payload.block_id,
@@ -258,7 +264,9 @@ def build_reader_router() -> APIRouter:
         payload: AppendReaderContentRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
-        document, edit = _run_reader(
+        document, edit = _run_content_mutation(
+            service,
+            document_id,
             lambda: service.repository.append_text(
                 document_id,
                 payload.text,
@@ -283,7 +291,9 @@ def build_reader_router() -> APIRouter:
         payload: ExpectedReaderVersionRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
-        document = _run_reader(
+        document = _run_content_mutation(
+            service,
+            document_id,
             lambda: service.repository.undo(
                 document_id,
                 expected_row_version=payload.expected_row_version,
@@ -299,7 +309,9 @@ def build_reader_router() -> APIRouter:
         payload: ExpectedReaderVersionRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
-        document = _run_reader(
+        document = _run_content_mutation(
+            service,
+            document_id,
             lambda: service.repository.redo(
                 document_id,
                 expected_row_version=payload.expected_row_version,
@@ -347,7 +359,11 @@ def build_reader_router() -> APIRouter:
         _run_reader(lambda: service.get_document(document_id))
         position = _run_reader(lambda: service.repository.get_position(document_id))
         return ReaderPositionEnvelope(
-            position=ReaderPositionResponse.from_domain(position) if position else None
+            position=(
+                _run_reader(lambda: _position_response(service, position))
+                if position
+                else None
+            )
         )
 
     @router.put(
@@ -360,11 +376,15 @@ def build_reader_router() -> APIRouter:
         payload: SaveReaderPositionRequest,
     ) -> ReaderPositionResponse:
         service = _service(request)
+        cursor = _run_reader(
+            lambda: _api_cursor_to_domain(service, document_id, payload.cursor),
+            cursor_input=True,
+        )
         position = _run_reader(
             lambda: service.repository.save_position(
                 PlaybackPosition(
                     document_id=document_id,
-                    cursor=payload.cursor.to_domain(document_id),
+                    cursor=cursor,
                     voice_profile_id=payload.voice_profile_id,
                     pipeline_version=payload.pipeline_version,
                     rules_version=payload.rules_version,
@@ -380,7 +400,7 @@ def build_reader_router() -> APIRouter:
             document_id=document_id,
             block_id=position.cursor.block_id,
         )
-        return ReaderPositionResponse.from_domain(position)
+        return _run_reader(lambda: _position_response(service, position))
 
     @router.get(
         "/documents/{document_id}/bookmarks",
@@ -393,7 +413,10 @@ def build_reader_router() -> APIRouter:
         service = _service(request)
         bookmarks = _run_reader(lambda: service.repository.list_bookmarks(document_id))
         return ReaderBookmarkListResponse(
-            bookmarks=[ReaderBookmarkResponse.from_domain(item) for item in bookmarks]
+            bookmarks=[
+                _run_reader(lambda item=item: _bookmark_response(service, item))
+                for item in bookmarks
+            ]
         )
 
     @router.post(
@@ -408,12 +431,16 @@ def build_reader_router() -> APIRouter:
     ) -> ReaderBookmarkResponse:
         service = _service(request)
         now = datetime.now(timezone.utc)
+        cursor = _run_reader(
+            lambda: _api_cursor_to_domain(service, document_id, payload.cursor),
+            cursor_input=True,
+        )
         bookmark = _run_reader(
             lambda: service.repository.create_bookmark(
                 Bookmark(
                     id=str(uuid.uuid4()),
                     document_id=document_id,
-                    cursor=payload.cursor.to_domain(document_id),
+                    cursor=cursor,
                     label=payload.label,
                     note=payload.note,
                     created_at=now,
@@ -427,7 +454,7 @@ def build_reader_router() -> APIRouter:
             document_id=document_id,
             block_id=bookmark.cursor.block_id,
         )
-        return ReaderBookmarkResponse.from_domain(bookmark)
+        return _run_reader(lambda: _bookmark_response(service, bookmark))
 
     @router.patch("/bookmarks/{bookmark_id}", response_model=ReaderBookmarkResponse)
     async def update_bookmark(
@@ -440,11 +467,23 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.get_bookmark(bookmark_id),
             missing_entity="bookmark",
         )
+        cursor = (
+            _run_reader(
+                lambda: _api_cursor_to_domain(
+                    service,
+                    current.document_id,
+                    payload.cursor,
+                ),
+                cursor_input=True,
+            )
+            if payload.cursor
+            else None
+        )
         bookmark = _run_reader(
             lambda: service.repository.update_bookmark(
                 bookmark_id,
                 expected_row_version=payload.expected_row_version,
-                cursor=payload.cursor.to_domain(current.document_id) if payload.cursor else None,
+                cursor=cursor,
                 label=payload.label,
                 note=payload.note,
             ),
@@ -456,7 +495,7 @@ def build_reader_router() -> APIRouter:
             document_id=bookmark.document_id,
             block_id=bookmark.cursor.block_id,
         )
-        return ReaderBookmarkResponse.from_domain(bookmark)
+        return _run_reader(lambda: _bookmark_response(service, bookmark))
 
     @router.delete(
         "/bookmarks/{bookmark_id}",
@@ -605,3 +644,83 @@ def _run_reader(
             missing_entity=missing_entity,
             cursor_input=cursor_input,
         ) from exc
+
+
+def _run_content_mutation(
+    service: ReaderApplicationService,
+    document_id: str,
+    operation: Callable[[], T],
+    *,
+    missing_entity: str = "document",
+) -> T:
+    try:
+        with service.content_mutation(document_id):
+            return operation()
+    except ReaderError as exc:
+        raise translate_reader_error(exc, missing_entity=missing_entity) from exc
+
+
+def _api_cursor_to_domain(
+    service: ReaderApplicationService,
+    document_id: str,
+    payload: ReaderCursorPayload,
+) -> ReaderCursor:
+    document = service.get_document(document_id)
+    if payload.content_revision != document.content_revision:
+        raise ReaderStaleCursorError("API cursor content revision is stale")
+    blocks = service.list_blocks(
+        document_id,
+        after_ordinal=payload.block_ordinal - 1,
+        limit=1,
+    )
+    if not blocks or blocks[0].id != payload.block_id:
+        raise ReaderStaleCursorError("API cursor block does not match its ordinal")
+    try:
+        character_offset = utf16_offset_to_python(
+            blocks[0].text,
+            payload.character_offset,
+        )
+    except ReaderOffsetError as error:
+        raise ReaderValidationError("API cursor UTF-16 offset is invalid") from error
+    return ReaderCursor(
+        document_id=document_id,
+        block_id=payload.block_id,
+        block_ordinal=payload.block_ordinal,
+        character_offset=character_offset,
+        content_revision=payload.content_revision,
+        segment_index=payload.segment_index,
+    )
+
+
+def _cursor_source_text(
+    service: ReaderApplicationService,
+    cursor: ReaderCursor,
+) -> str:
+    blocks = service.list_blocks(
+        cursor.document_id,
+        after_ordinal=cursor.block_ordinal - 1,
+        limit=1,
+    )
+    if not blocks or blocks[0].id != cursor.block_id:
+        raise ReaderStaleCursorError("stored cursor block does not match its ordinal")
+    return blocks[0].text
+
+
+def _position_response(
+    service: ReaderApplicationService,
+    position: PlaybackPosition,
+) -> ReaderPositionResponse:
+    return ReaderPositionResponse.from_domain(
+        position,
+        source_text=_cursor_source_text(service, position.cursor),
+    )
+
+
+def _bookmark_response(
+    service: ReaderApplicationService,
+    bookmark: Bookmark,
+) -> ReaderBookmarkResponse:
+    return ReaderBookmarkResponse.from_domain(
+        bookmark,
+        source_text=_cursor_source_text(service, bookmark.cursor),
+    )

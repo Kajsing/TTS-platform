@@ -16,7 +16,7 @@
     "regex_timeout_supported": false
   },
   "playback": {
-    "stream_protocol_version": 0,
+    "stream_protocol_version": 1,
     "source_offset_encoding": "utf-16",
     "max_blocks_per_window": 64,
     "max_source_chars_per_window": 32000

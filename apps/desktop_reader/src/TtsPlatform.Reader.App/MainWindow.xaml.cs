@@ -1,8 +1,10 @@
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Win32;
 using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
@@ -19,6 +21,8 @@ public partial class MainWindow : Window
     private IReaderServiceClient? _client;
     private LibraryPager? _library;
     private DocumentEditor? _editor;
+    private ReaderPlaybackCoordinator? _playback;
+    private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
         "Connection has not been checked.",
@@ -33,6 +37,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
+        ReadingBlocksList.ItemsSource = _readingBlocks;
         ContentRendered += MainWindow_ContentRendered;
         Loaded += MainWindow_Loaded;
     }
@@ -71,6 +76,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _httpClient?.Dispose();
         base.OnClosed(e);
     }
@@ -105,15 +111,24 @@ public partial class MainWindow : Window
 
     private void RebuildClient()
     {
+        _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _httpClient?.Dispose();
         _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var tokenProvider = new FileTokenProvider(_settings.EffectiveTokenSource.Path);
         _client = new ReaderServiceClient(
             _httpClient,
             _settings.ServiceBaseUrl,
-            new FileTokenProvider(_settings.EffectiveTokenSource.Path));
+            tokenProvider);
         _library = new LibraryPager(_client);
         _editor = new DocumentEditor(_client);
+        _playback = new ReaderPlaybackCoordinator(
+            _client,
+            new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider),
+            new WasapiAudioOutput());
+        _playback.StateChanged += Playback_StateChanged;
+        _playback.HighlightChanged += Playback_HighlightChanged;
         DocumentsGrid.ItemsSource = _library.Documents;
+        UpdatePlaybackControls();
     }
 
     private IReaderServiceClient GetClient()
@@ -274,7 +289,12 @@ public partial class MainWindow : Window
 
         try
         {
+            if (_playback?.IsActive == true)
+            {
+                await _playback.StopAsync();
+            }
             await _editor.LoadAsync(document);
+            await LoadReadingWindowAsync(document, 0);
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
             EditorTextBox.Text = _editor.WorkingText;
@@ -283,6 +303,7 @@ public partial class MainWindow : Window
                 ? "Editing the selected text block. Save uses the document row version; conflicts preserve this local text."
                 : "Structured imports are read-only. A later milestone can duplicate them as editable text.";
             UpdateEditorButtons();
+            UpdatePlaybackControls();
         }
         catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
         {
@@ -376,10 +397,223 @@ public partial class MainWindow : Window
     private void UpdateEditorButtons()
     {
         var editable = _editor?.IsEditable == true;
-        SaveEditButton.IsEnabled = editable && _editor!.HasUnsavedChanges;
-        RevertEditButton.IsEnabled = editable && _editor!.HasUnsavedChanges;
-        UndoButton.IsEnabled = editable && !_editor!.HasUnsavedChanges;
-        RedoButton.IsEnabled = editable && !_editor!.HasUnsavedChanges;
+        var playbackActive = _playback?.IsActive == true;
+        EditorTextBox.IsReadOnly = playbackActive || !editable;
+        SaveEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
+        RevertEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
+        UndoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
+        RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
+    }
+
+    private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
+        await TogglePlaybackAsync();
+
+    private async Task TogglePlaybackAsync()
+    {
+        if (_playback is null || _editor?.Document is null)
+        {
+            return;
+        }
+        if (_playback.IsActive)
+        {
+            await _playback.PauseAsync();
+            return;
+        }
+        if (_editor.HasUnsavedChanges)
+        {
+            FooterText.Text = "Save or revert the local edit before playback.";
+            return;
+        }
+
+        try
+        {
+            await _playback.PlayAsync(_editor.Document);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Playback: {exception.Message}";
+        }
+    }
+
+    private async void StopButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_playback is not null)
+        {
+            await _playback.StopAsync();
+        }
+    }
+
+    private async void PreviousSectionButton_Click(object sender, RoutedEventArgs e) =>
+        await NavigateSectionAsync(next: false);
+
+    private async void NextSectionButton_Click(object sender, RoutedEventArgs e) =>
+        await NavigateSectionAsync(next: true);
+
+    private async Task NavigateSectionAsync(bool next)
+    {
+        if (_playback is null || _client is null || _editor?.Document is not ReaderDocument document)
+        {
+            return;
+        }
+        if (_editor.HasUnsavedChanges)
+        {
+            FooterText.Text = "Save or revert the local edit before changing playback position.";
+            return;
+        }
+
+        var currentOrdinal = _playback.LastFullyPlayedCursor?.BlockOrdinal ?? 0;
+        var startOrdinal = next ? currentOrdinal : Math.Max(0, currentOrdinal - 63);
+        var page = await _client.GetBlocksAsync(
+            document.Id,
+            afterOrdinal: startOrdinal - 1,
+            limit: 64);
+        var current = page.Blocks.FirstOrDefault(item => item.Ordinal == currentOrdinal)
+            ?? page.Blocks.FirstOrDefault();
+        if (current is null)
+        {
+            return;
+        }
+
+        ReaderBlock? target;
+        if (next)
+        {
+            target = page.Blocks.FirstOrDefault(item =>
+                item.Ordinal > currentOrdinal &&
+                !string.Equals(item.SectionId, current.SectionId, StringComparison.Ordinal));
+        }
+        else
+        {
+            var prior = page.Blocks.LastOrDefault(item =>
+                item.Ordinal < currentOrdinal &&
+                !string.Equals(item.SectionId, current.SectionId, StringComparison.Ordinal));
+            target = prior;
+            if (prior is not null)
+            {
+                target = page.Blocks.First(item =>
+                    item.Ordinal <= prior.Ordinal &&
+                    string.Equals(item.SectionId, prior.SectionId, StringComparison.Ordinal));
+            }
+        }
+
+        if (target is null)
+        {
+            FooterText.Text = next ? "No next section in the current window." : "No previous section in the current window.";
+            return;
+        }
+
+        await _playback.SeekAsync(
+            document,
+            new ReaderCursor(
+                document.Id,
+                target.Id,
+                target.Ordinal,
+                0,
+                document.ContentRevision));
+    }
+
+    private async Task LoadReadingWindowAsync(ReaderDocument document, int startOrdinal)
+    {
+        if (_client is null)
+        {
+            return;
+        }
+
+        var page = await _client.GetBlocksAsync(
+            document.Id,
+            afterOrdinal: Math.Max(-1, startOrdinal - 1),
+            limit: 64);
+        _readingBlocks.Clear();
+        foreach (var block in page.Blocks)
+        {
+            _readingBlocks.Add(new ReaderBlockDisplay(block));
+        }
+    }
+
+    private void Playback_StateChanged(object? sender, PlaybackStateChanged change)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            PlaybackStatusText.Text = change.Message is null
+                ? change.State.ToString()
+                : $"{change.State}: {change.Message}";
+            FooterText.Text = change.Message ?? $"Playback {change.State.ToString().ToLowerInvariant()}";
+            UpdatePlaybackControls();
+            UpdateEditorButtons();
+        }));
+    }
+
+    private void Playback_HighlightChanged(object? sender, PlaybackHighlight highlight)
+    {
+        Dispatcher.BeginInvoke(new Action(async () => await ShowHighlightAsync(highlight)));
+    }
+
+    private async Task ShowHighlightAsync(PlaybackHighlight highlight)
+    {
+        if (_editor?.Document is not ReaderDocument document ||
+            !string.Equals(document.Id, highlight.DocumentId, StringComparison.Ordinal) ||
+            highlight.SourceSpans.Count == 0)
+        {
+            return;
+        }
+
+        var firstSpan = highlight.SourceSpans[0];
+        if (_readingBlocks.All(item => !string.Equals(item.Id, firstSpan.BlockId, StringComparison.Ordinal)))
+        {
+            await LoadReadingWindowAsync(document, firstSpan.BlockOrdinal);
+        }
+
+        foreach (var block in _readingBlocks)
+        {
+            block.HighlightStart = -1;
+            block.HighlightLength = 0;
+        }
+        foreach (var group in highlight.SourceSpans.GroupBy(item => item.BlockId))
+        {
+            var block = _readingBlocks.FirstOrDefault(item =>
+                string.Equals(item.Id, group.Key, StringComparison.Ordinal));
+            if (block is null)
+            {
+                continue;
+            }
+            var start = group.Min(item => item.StartOffset);
+            var end = group.Max(item => item.EndOffset);
+            block.HighlightStart = start;
+            block.HighlightLength = Math.Max(0, end - start);
+            ReadingBlocksList.SelectedItem = block;
+            ReadingBlocksList.ScrollIntoView(block);
+        }
+    }
+
+    private void UpdatePlaybackControls()
+    {
+        var hasDocument = _editor?.Document is not null;
+        var active = _playback?.IsActive == true;
+        PlayPauseButton.Content = active ? "Pause" : "Play";
+        PlayPauseButton.IsEnabled = hasDocument;
+        StopButton.IsEnabled = hasDocument && _playback?.State is not ReaderPlaybackState.Stopped;
+        PreviousSectionButton.IsEnabled = hasDocument;
+        NextSectionButton.IsEnabled = hasDocument;
+        ReadingBlocksList.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        EditorTextBox.Visibility = active ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _playback?.State is not ReaderPlaybackState.Stopped)
+        {
+            e.Handled = true;
+            await _playback!.StopAsync();
+            return;
+        }
+        if (e.Key == Key.Space && Keyboard.FocusedElement is not TextBox)
+        {
+            e.Handled = true;
+            await TogglePlaybackAsync();
+        }
     }
 
     private void SetBusy(bool busy, string? text = null)

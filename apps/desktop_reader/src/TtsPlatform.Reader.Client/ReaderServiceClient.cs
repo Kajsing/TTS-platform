@@ -118,6 +118,54 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             request,
             cancellationToken);
 
+    public async Task<ReaderPosition?> GetPositionAsync(
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        var envelope = await SendAsync<ReaderPositionEnvelope>(
+            HttpMethod.Get,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/position",
+            true,
+            null,
+            cancellationToken).ConfigureAwait(false);
+        return envelope.Position;
+    }
+
+    public Task<ReaderPosition> SavePositionAsync(
+        string documentId,
+        SavePositionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        if (!string.Equals(request.Cursor.DocumentId, documentId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The position cursor must belong to the document.", nameof(request));
+        }
+        var body = new
+        {
+            cursor = new
+            {
+                block_id = request.Cursor.BlockId,
+                block_ordinal = request.Cursor.BlockOrdinal,
+                character_offset = request.Cursor.CharacterOffset,
+                content_revision = request.Cursor.ContentRevision,
+                segment_index = request.Cursor.SegmentIndex,
+            },
+            voice_profile_id = request.VoiceProfileId,
+            pipeline_version = request.PipelineVersion,
+            rules_version = request.RulesVersion,
+            completed = request.Completed,
+            expected_row_version = request.ExpectedRowVersion,
+        };
+        return SendAsync<ReaderPosition>(
+            HttpMethod.Put,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/position",
+            true,
+            body,
+            cancellationToken);
+    }
+
     private async Task<T> SendAsync<T>(
         HttpMethod method,
         string relativeUrl,
@@ -234,4 +282,6 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             values.Add($"{name}={Uri.EscapeDataString(value)}");
         }
     }
+
+    private sealed record ReaderPositionEnvelope(ReaderPosition? Position);
 }

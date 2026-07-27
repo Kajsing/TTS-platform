@@ -13,6 +13,19 @@ def test_text_normalizer_collapses_whitespace_and_expands_abbreviations() -> Non
     assert normalized == "Doctor Smith brought tea and cake."
 
 
+def test_text_normalizer_preserves_source_mapping_through_expansion() -> None:
+    normalizer = TextNormalizer()
+
+    mapped = normalizer.normalize_with_mapping("  fx.\r\n& 😀  ", language_hint="da")
+
+    assert mapped.text == "for eksempel og 😀"
+    assert len(mapped.source_spans) == len(mapped.text)
+    assert {span.start_offset for span in mapped.source_spans[:12]} == {2}
+    assert {span.end_offset for span in mapped.source_spans[:12]} == {5}
+    assert mapped.source_spans[-1].start_offset == 9
+    assert mapped.source_spans[-1].end_offset == 10
+
+
 def test_sentence_segmenter_avoids_splitting_common_abbreviations() -> None:
     segmenter = SentenceSegmenter()
 

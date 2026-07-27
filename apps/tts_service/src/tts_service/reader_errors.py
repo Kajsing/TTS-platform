@@ -11,7 +11,7 @@ from reader_core import (
 )
 
 from .errors import APIError, ErrorBody
-from .reader_service import ReaderDuplicateDocumentError
+from .reader_service import ReaderDocumentLockedError, ReaderDuplicateDocumentError
 
 
 def reader_api_error(
@@ -60,6 +60,13 @@ def translate_reader_error(
             "reader_duplicate_document",
             status_code=409,
             message="An identical Reader document already exists.",
+            details={"document_id": error.document_id},
+        )
+    if isinstance(error, ReaderDocumentLockedError):
+        return reader_api_error(
+            "reader_document_locked",
+            status_code=409,
+            message="Reader content is locked by active playback. Pause or stop before editing.",
             details={"document_id": error.document_id},
         )
     if isinstance(error, ReaderConflictError):

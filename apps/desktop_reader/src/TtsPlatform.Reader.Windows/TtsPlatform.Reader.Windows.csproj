@@ -4,6 +4,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <ProjectReference Include="..\TtsPlatform.Reader.Client\TtsPlatform.Reader.Client.csproj" />
     <ProjectReference Include="..\TtsPlatform.Reader.Application\TtsPlatform.Reader.Application.csproj" />
   </ItemGroup>

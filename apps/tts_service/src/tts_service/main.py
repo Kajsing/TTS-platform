@@ -21,6 +21,7 @@ from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
 from .reader_routes import build_reader_router
+from .reader_stream_routes import build_reader_stream_router
 from .schemas import SynthesizeRequestPayload
 from .security import (
     enforce_headers_access,
@@ -51,6 +52,7 @@ def create_app(
     _register_exception_handlers(app)
     _register_routes(app)
     app.include_router(build_reader_router())
+    app.include_router(build_reader_stream_router())
     return app
 
 

@@ -89,7 +89,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     }
     assert payload["imports"]["formats"] == []
     assert payload["rules"]["types"] == []
-    assert payload["playback"]["stream_protocol_version"] == 0
+    assert payload["playback"]["stream_protocol_version"] == 1
     assert payload["exports"]["formats"] == []
 
 
@@ -325,6 +325,38 @@ def test_content_edit_uses_utf16_offsets_at_the_http_boundary(tmp_path: Path) ->
     assert invalid.json()["error"]["type"] == "reader_invalid_offset"
 
 
+def test_content_mutations_are_rejected_while_reader_lease_is_active(
+    tmp_path: Path,
+) -> None:
+    client, headers, app = build_reader_bundle(tmp_path)
+    document = create_document(client, headers, text="Lease protected.")
+    service = app.state.container.reader.service
+    assert service is not None
+
+    with service.content_lease(document["id"], "active-stream"):
+        response = client.post(
+            f"/v1/reader/documents/{document['id']}/append",
+            headers=headers,
+            json={
+                "expected_row_version": document["row_version"],
+                "text": "Must wait.",
+            },
+        )
+
+    allowed = client.post(
+        f"/v1/reader/documents/{document['id']}/append",
+        headers=headers,
+        json={
+            "expected_row_version": document["row_version"],
+            "text": "Allowed now.",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["type"] == "reader_document_locked"
+    assert allowed.status_code == 200
+
+
 def test_positions_bookmarks_and_queue_endpoints_are_durable(tmp_path: Path) -> None:
     client, headers, app = build_reader_bundle(tmp_path)
     first = create_document(client, headers, text="First unique text")
@@ -418,6 +450,42 @@ def test_positions_bookmarks_and_queue_endpoints_are_durable(tmp_path: Path) -> 
     )
     assert deleted_bookmark.status_code == 204
     assert removed_queue.status_code == 204
+
+
+def test_position_and_bookmark_offsets_use_utf16_code_units(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    document = create_document(client, headers, text="A\U0001f600BC")
+    block = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"][0]
+    cursor = cursor_for(block, document, offset=3)
+
+    position = client.put(
+        f"/v1/reader/documents/{document['id']}/position",
+        headers=headers,
+        json={"cursor": cursor, "expected_row_version": 0},
+    )
+    bookmark = client.post(
+        f"/v1/reader/documents/{document['id']}/bookmarks",
+        headers=headers,
+        json={"cursor": cursor, "label": "After emoji"},
+    )
+    invalid = client.put(
+        f"/v1/reader/documents/{document['id']}/position",
+        headers=headers,
+        json={
+            "cursor": cursor_for(block, document, offset=2),
+            "expected_row_version": position.json()["row_version"],
+        },
+    )
+
+    assert position.status_code == 200
+    assert position.json()["cursor"]["character_offset"] == 3
+    assert bookmark.status_code == 201
+    assert bookmark.json()["cursor"]["character_offset"] == 3
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["type"] == "reader_invalid_cursor"
 
 
 def test_disabled_and_degraded_reader_do_not_degrade_tts_health(tmp_path: Path) -> None:
