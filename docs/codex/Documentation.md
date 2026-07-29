@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-07-27
+- Date: 2026-07-29
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,6 +18,38 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed post-Milestone 9 playback-resume reliability follow-up: a live
+  98-block article exposed that a durable cursor saved exactly at the end of a
+  non-final block was not normalized to the first block actually included in
+  the next stream window. Building the `started` event then referenced a block
+  outside that window, raised an uncaught `ReaderValidationError`, leaked the
+  active-stream metric, and caused the desktop to report an incomplete
+  WebSocket close handshake. Stream windows now expose the first included
+  slice as their start cursor, and an exhausted start block no longer consumes
+  the bounded block quota. The complete stream startup path is inside the
+  existing failure/cancellation cleanup boundary, and backend/internal stream
+  failures write a structured exception before returning a typed Reader error.
+  A desktop Stop may close its receive side before the server can return the
+  terminal `cancelled` event; that terminal send is now best effort,
+  cancellation is checked again after background synthesis returns, and metrics
+  no longer count the same stream as both cancelled and failed. The real voice
+  playback smoke now adds all local package roots itself instead of requiring a
+  manually supplied `PYTHONPATH`.
+- Playback-resume validation passed on 2026-07-29:
+  - `py -3 -m pytest -q`: 394 passed; `py -3 -m ruff check .` and `git diff
+    --check` passed;
+  - focused window and WebSocket regression tests prove that a cursor at the
+    exact end of one block resumes at offset zero of the next block;
+  - the isolated Windows real-voice Reader smoke completed through NAudio with
+    `vits-piper-en_US-lessac-high`;
+  - the original article, original schema-4 database, stored block-26 boundary
+    cursor, and real Lessac voice produced a `started` event at block 27 plus
+    PCM frames, then cancelled cleanly with zero active or failed streams. The
+    WPF Reader subsequently resumed that same document through its Play action
+    and returned to Stopped through its Stop action without faulting. The
+    healthy local service and responsive WPF Reader remain running;
+  - no product, architecture, security, dependency, or licensing direction
+    changed. The user-owned `models/MANIFEST.json` remains excluded.
 - Completed post-Milestone 9 reliability follow-up: a real desktop run exposed
   that the two-second browser-handoff poll alone exhausted the default
   30-request-per-minute localhost limit. The bounded fix reduces normal polling

@@ -18,6 +18,8 @@ for source_root in (
     REPO_ROOT / "apps" / "tts_service" / "src",
     REPO_ROOT / "packages" / "tts_core" / "src",
     REPO_ROOT / "packages" / "reader_core" / "src",
+    REPO_ROOT / "packages" / "document_import" / "src",
+    REPO_ROOT / "packages" / "speech_rules" / "src",
 ):
     sys.path.insert(0, str(source_root))
 

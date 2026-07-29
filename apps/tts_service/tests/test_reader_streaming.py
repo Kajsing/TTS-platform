@@ -108,6 +108,31 @@ def test_window_is_bounded_and_returns_stable_continuation(tmp_path: Path) -> No
     assert window.source_character_count < 10_000
 
 
+def test_window_normalizes_start_cursor_after_an_exhausted_block(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    document = ReaderLibrary(service.repository).create_plain_text_document(
+        title="Resume boundary",
+        text="Finished block.\n\nNext block.",
+    )
+    first_block = service.list_blocks(document.id, after_ordinal=-1, limit=1)[0]
+
+    window = _builder(service).build(
+        document.id,
+        block_ordinal=first_block.ordinal,
+        character_offset_utf16=len(first_block.text),
+        block_id=first_block.id,
+        content_revision=document.content_revision,
+        max_blocks=1,
+        max_source_characters=32_000,
+    )
+
+    assert len(window.blocks) == 1
+    assert window.blocks[0].block.ordinal == 1
+    assert window.start_cursor.block_id == window.blocks[0].block.id
+    assert window.start_cursor.block_ordinal == 1
+    assert window.start_cursor.character_offset == 0
+
+
 def test_window_clips_inside_a_block_at_the_source_character_limit(tmp_path: Path) -> None:
     service = _service(tmp_path)
     document = ReaderLibrary(service.repository).create_plain_text_document(
@@ -356,6 +381,50 @@ def test_reader_websocket_continues_by_stable_cursor_without_loading_all_blocks(
         assert done["cursor"]["character_offset"] == 0
 
 
+def test_reader_websocket_resumes_from_the_end_of_a_block(tmp_path: Path) -> None:
+    client, headers = _api_bundle(tmp_path)
+    document = _api_document(client, headers, text="Finished block.\n\nNext block.")
+    blocks = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+    first_block = blocks[0]
+
+    with client.websocket_connect("/v1/reader/stream", headers=headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "document_id": document["id"],
+                    "cursor": {
+                        "block_id": first_block["id"],
+                        "block_ordinal": first_block["ordinal"],
+                        "character_offset": first_block["character_count"],
+                        "content_revision": document["content_revision"],
+                    },
+                },
+            }
+        )
+        started = websocket.receive_json()
+        assert started["type"] == "started"
+        assert started["cursor"]["block_id"] == blocks[1]["id"]
+        assert started["cursor"]["block_ordinal"] == 1
+        assert started["cursor"]["character_offset"] == 0
+
+        done = None
+        for _ in range(128):
+            message_type, payload = _next_message(websocket)
+            if message_type == "json" and payload["type"] == "done":
+                done = payload
+                websocket.send_json(
+                    {"type": "release", "stream_id": started["stream_id"]}
+                )
+                break
+
+        assert done is not None
+        assert done["document_complete"] is True
+
+
 def test_reader_websocket_holds_content_lease_until_release(tmp_path: Path) -> None:
     client, headers = _api_bundle(tmp_path)
     document = _api_document(client, headers, text="Locked during playback.")
@@ -383,10 +452,14 @@ def test_reader_websocket_holds_content_lease_until_release(tmp_path: Path) -> N
         headers=headers,
         json={"expected_row_version": 1, "text": "Now."},
     )
+    streaming = client.get("/v1/health").json()["streaming"]
 
     assert locked.status_code == 409
     assert locked.json()["error"]["type"] == "reader_document_locked"
     assert allowed.status_code == 200
+    assert streaming["active_streams"] == 0
+    assert streaming["cancelled_streams"] == 1
+    assert streaming["failed_streams"] == 0
 
 
 def test_reader_websocket_requires_authentication(tmp_path: Path) -> None:

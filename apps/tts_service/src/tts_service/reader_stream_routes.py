@@ -228,44 +228,44 @@ async def _run_reader_stream(
                 backend=container.backend,
             )
         )
-        container.streaming_metrics.mark_started()
-        await websocket.send_json(
-            {
-                "type": "started",
-                "stream_id": stream_id,
-                "document_id": payload.document_id,
-                "sample_rate_hz": voice.sample_rate_hz,
-                "channels": 1,
-                "sample_format": "pcm16le",
-                "pipeline_version": 1,
-                "rules_version": window.rules_version,
-                "source_offset_encoding": "utf-16",
-                "cursor": _cursor_payload(window, window.start_cursor),
-            }
-        )
-        service.observability.log_reader_operation(
-            operation="reader_stream_start",
-            document_id=payload.document_id,
-            block_count=len(window.blocks),
-            character_count=window.source_character_count,
-        )
-        for warning in window.rule_warnings:
-            await websocket.send_json(
-                {
-                    "type": "warning",
-                    "stream_id": stream_id,
-                    "warning": {
-                        "type": warning.code,
-                        "message": warning.message,
-                        "rule_id": warning.rule_id,
-                    },
-                }
-            )
-
         chunks_sent = 0
         latest_cursor = window.start_cursor
         first_chunk = True
         try:
+            container.streaming_metrics.mark_started()
+            await websocket.send_json(
+                {
+                    "type": "started",
+                    "stream_id": stream_id,
+                    "document_id": payload.document_id,
+                    "sample_rate_hz": voice.sample_rate_hz,
+                    "channels": 1,
+                    "sample_format": "pcm16le",
+                    "pipeline_version": 1,
+                    "rules_version": window.rules_version,
+                    "source_offset_encoding": "utf-16",
+                    "cursor": _cursor_payload(window, window.start_cursor),
+                }
+            )
+            service.observability.log_reader_operation(
+                operation="reader_stream_start",
+                document_id=payload.document_id,
+                block_count=len(window.blocks),
+                character_count=window.source_character_count,
+            )
+            for warning in window.rule_warnings:
+                await websocket.send_json(
+                    {
+                        "type": "warning",
+                        "stream_id": stream_id,
+                        "warning": {
+                            "type": warning.code,
+                            "message": warning.message,
+                            "rule_id": warning.rule_id,
+                        },
+                    }
+                )
+
             for fragment_index, fragment in enumerate(window.fragments):
                 if cancel_event.is_set():
                     break
@@ -280,6 +280,8 @@ async def _run_reader_stream(
                 while not cancel_event.is_set():
                     backend_chunk = await asyncio.to_thread(_next_chunk, iterator)
                     if backend_chunk is None:
+                        break
+                    if cancel_event.is_set():
                         break
                     if backend_chunk.sample_rate_hz != voice.sample_rate_hz:
                         raise BackendError("Reader backend changed sample rate midstream")
@@ -326,18 +328,18 @@ async def _run_reader_stream(
 
             if cancel_event.is_set():
                 outcome = "cancelled"
+                with suppress(RuntimeError, WebSocketDisconnect):
+                    await websocket.send_json(
+                        {
+                            "type": "cancelled",
+                            "stream_id": stream_id,
+                            "chunks_sent": chunks_sent,
+                            "generated_cursor": _cursor_payload(window, latest_cursor),
+                        }
+                    )
                 container.streaming_metrics.mark_cancelled()
-                await websocket.send_json(
-                    {
-                        "type": "cancelled",
-                        "stream_id": stream_id,
-                        "chunks_sent": chunks_sent,
-                        "generated_cursor": _cursor_payload(window, latest_cursor),
-                    }
-                )
             else:
                 outcome = "success"
-                container.streaming_metrics.mark_completed()
                 done_cursor = window.next_cursor or window.generated_cursor
                 await websocket.send_json(
                     {
@@ -349,6 +351,7 @@ async def _run_reader_stream(
                         "next_window_available": window.next_cursor is not None,
                     }
                 )
+                container.streaming_metrics.mark_completed()
                 with suppress(TimeoutError):
                     await asyncio.wait_for(
                         release_event.wait(),
@@ -358,10 +361,20 @@ async def _run_reader_stream(
             outcome = "cancelled"
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_cancelled()
-        except BackendError:
+        except BackendError as error:
             outcome = "failure"
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_failed()
+            container.observability.logger.exception(
+                json.dumps(
+                    {
+                        "event": "reader_stream_error",
+                        "stream_id": stream_id,
+                        "document_id": payload.document_id,
+                        "error_type": type(error).__name__,
+                    }
+                )
+            )
             await _send_error(
                 websocket,
                 reader_api_error(
@@ -371,10 +384,20 @@ async def _run_reader_stream(
                 ),
                 close_code=1011,
             )
-        except Exception:
+        except Exception as error:
             outcome = "failure"
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_failed()
+            container.observability.logger.exception(
+                json.dumps(
+                    {
+                        "event": "reader_stream_error",
+                        "stream_id": stream_id,
+                        "document_id": payload.document_id,
+                        "error_type": type(error).__name__,
+                    }
+                )
+            )
             await _send_error(
                 websocket,
                 reader_api_error(

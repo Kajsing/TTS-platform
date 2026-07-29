@@ -301,17 +301,29 @@ class ReaderStreamWindowBuilder:
         fetched = self._service.list_blocks(
             document_id,
             after_ordinal=block_ordinal - 1,
-            limit=max_blocks + 1,
+            limit=max_blocks + 2,
         )
         if not fetched or fetched[0].ordinal != block_ordinal:
             raise ReaderStaleCursorError("stream start block no longer exists")
-        first = fetched[0]
-        if block_id is not None and first.id != block_id:
+        requested_first = fetched[0]
+        if block_id is not None and requested_first.id != block_id:
             raise ReaderStaleCursorError("stream block id does not match its ordinal")
         try:
-            first_offset = utf16_offset_to_python(first.text, character_offset_utf16)
+            first_offset = utf16_offset_to_python(
+                requested_first.text,
+                character_offset_utf16,
+            )
         except ReaderOffsetError as error:
             raise ReaderValidationError("stream cursor UTF-16 offset is invalid") from error
+
+        window_candidates = fetched
+        if (
+            first_offset == len(requested_first.text)
+            and requested_first.ordinal < document.total_blocks - 1
+        ):
+            window_candidates = fetched[1:]
+            first_offset = 0
+        first = window_candidates[0]
 
         remaining_characters = max_source_characters
         slices: list[ReaderBlockSlice] = []
@@ -322,7 +334,7 @@ class ReaderStreamWindowBuilder:
             first_offset,
             document.content_revision,
         )
-        for index, block in enumerate(fetched[:max_blocks]):
+        for index, block in enumerate(window_candidates[:max_blocks]):
             start_offset = first_offset if index == 0 else 0
             if start_offset == len(block.text) and block.ordinal < document.total_blocks - 1:
                 generated_cursor = ReaderStreamCursor(
@@ -346,37 +358,41 @@ class ReaderStreamWindowBuilder:
                 break
             if remaining_characters == 0 and block.ordinal < document.total_blocks - 1:
                 next_cursor = self._next_block_cursor(
-                    fetched,
+                    window_candidates,
                     index,
                     document.content_revision,
                 )
                 break
         else:
-            last = fetched[min(len(fetched), max_blocks) - 1]
+            last = window_candidates[min(len(window_candidates), max_blocks) - 1]
             if last.ordinal < document.total_blocks - 1:
                 next_cursor = self._next_block_cursor(
-                    fetched,
-                    min(len(fetched), max_blocks) - 1,
+                    window_candidates,
+                    min(len(window_candidates), max_blocks) - 1,
                     document.content_revision,
                 )
 
         block_slices = tuple(slices)
+        if not block_slices:
+            raise ReaderValidationError("stream window contains no readable blocks")
         fragments, rule_warnings = self._compiler.compile_slices_with_warnings(
             block_slices,
             content_revision=document.content_revision,
             language_hint=language_hint or document.language_hint,
+        )
+        first_slice = block_slices[0]
+        start_cursor = ReaderStreamCursor(
+            first_slice.block.id,
+            first_slice.block.ordinal,
+            first_slice.start_offset,
+            document.content_revision,
         )
         return ReaderStreamWindow(
             document_id=document.id,
             content_revision=document.content_revision,
             blocks=block_slices,
             fragments=fragments,
-            start_cursor=ReaderStreamCursor(
-                first.id,
-                first.ordinal,
-                first_offset,
-                document.content_revision,
-            ),
+            start_cursor=start_cursor,
             generated_cursor=generated_cursor,
             next_cursor=next_cursor,
             document_complete=next_cursor is None,
