@@ -106,6 +106,25 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Library_replaces_a_mutated_document_without_an_api_refresh()
+    {
+        var client = new StubClient
+        {
+            DocumentPages = new Queue<DocumentPage>(
+                [new DocumentPage([Document("one", 1)], null)]),
+        };
+        var pager = new LibraryPager(client);
+        await pager.RefreshAsync();
+        var updated = Document("one", 2) with { Title = "Updated" };
+
+        var replaced = pager.ReplaceDocument(updated);
+
+        Assert.True(replaced);
+        Assert.Same(updated, pager.Documents.Single());
+        Assert.Single(client.ReceivedCursors);
+    }
+
+    [Fact]
     public void Library_updates_observable_collection_on_calling_synchronization_context()
     {
         var previousContext = SynchronizationContext.Current;
@@ -164,6 +183,25 @@ public sealed class ApplicationTests
         Assert.Equal(0, previous.StartOrdinal);
         Assert.Equal([-1, 63, -1], client.ReceivedBlockAfterOrdinals);
         Assert.All(client.ReceivedBlockLimits, limit => Assert.Equal(64, limit));
+    }
+
+    [Fact]
+    public async Task Reading_window_reuses_a_loaded_editable_document_without_more_api_calls()
+    {
+        var blocks = Enumerable.Range(0, 130).Select(index => Block($"Block {index}", index)).ToArray();
+        var client = new StubClient();
+        var pager = new ReadingWindowPager(client);
+
+        var initial = pager.UseLoadedDocument("document", blocks);
+        var next = await pager.LoadNextAsync("document");
+        var last = await pager.LoadNextAsync("document");
+        var previous = await pager.LoadPreviousAsync("document");
+
+        Assert.Equal(64, initial.Blocks.Count);
+        Assert.Equal(64, next.StartOrdinal);
+        Assert.Equal(2, last.Blocks.Count);
+        Assert.Equal(64, previous.StartOrdinal);
+        Assert.Empty(client.ReceivedBlockAfterOrdinals);
     }
 
     [Fact]

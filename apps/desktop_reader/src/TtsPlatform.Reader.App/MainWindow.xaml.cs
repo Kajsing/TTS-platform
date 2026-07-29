@@ -19,6 +19,7 @@ public partial class MainWindow : Window
 {
     private static readonly TimeSpan DesktopOpenPollInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DesktopOpenRateLimitBackoff = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan DocumentRateLimitRetryDelay = TimeSpan.FromSeconds(61);
     private const int ContinuousEditorMaxCharacters = 1_000_000;
     private const int ContinuousEditorMaxBlocks = 20_000;
 
@@ -65,6 +66,7 @@ public partial class MainWindow : Window
     private bool _exitRequested;
     private bool _shutdownInProgress;
     private bool _closed;
+    private int _documentLoadGeneration;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
 
@@ -1337,7 +1339,11 @@ public partial class MainWindow : Window
 
         try
         {
-            await LoadDocumentAsync(await GetClient().GetDocumentAsync(document.Id));
+            var selectedDocument = _editor.Document is ReaderDocument current &&
+                string.Equals(current.Id, document.Id, StringComparison.Ordinal)
+                ? current
+                : document;
+            await LoadDocumentAsync(selectedDocument);
         }
         catch (Exception exception) when (
             exception is ReaderApiException or ReaderServiceUnavailableException)
@@ -1352,16 +1358,71 @@ public partial class MainWindow : Window
         {
             return;
         }
+        var loadGeneration = ++_documentLoadGeneration;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                await LoadDocumentCoreAsync(document);
+                return;
+            }
+            catch (ReaderApiException exception) when (
+                exception.ErrorType == "rate_limited" && attempt == 0)
+            {
+                FooterText.Text =
+                    "The local service is temporarily busy. The document is not locked; Reader will retry automatically in one minute.";
+                await Task.Delay(DocumentRateLimitRetryDelay);
+                if (_closed || loadGeneration != _documentLoadGeneration)
+                {
+                    return;
+                }
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or ReaderServiceUnavailableException)
+            {
+                FooterText.Text = $"Document: {exception.Message}";
+                return;
+            }
+        }
+    }
+
+    private async Task LoadDocumentCoreAsync(ReaderDocument document)
+    {
+        if (_editor is null)
+        {
+            return;
+        }
         try
         {
             if (_playback?.IsActive == true)
             {
                 await _playback.StopAsync();
             }
-            await _editor.LoadAsync(document);
+
             _continuousDocument = null;
-            await LoadReadingWindowAsync(document, 0);
             await LoadContinuousDocumentAsync(document);
+            ReadingWindowPage? readingPage = null;
+            if (_continuousDocument is not null)
+            {
+                _editor.LoadBlock(document, _continuousDocument.Blocks.FirstOrDefault());
+                readingPage = _readingWindow?.UseLoadedDocument(
+                    document.Id,
+                    _continuousDocument.Blocks);
+            }
+            else if (_readingWindow is not null)
+            {
+                readingPage = await _readingWindow.LoadAsync(document.Id, 0);
+                _editor.LoadBlock(document, readingPage.Blocks.FirstOrDefault());
+            }
+            else
+            {
+                await _editor.LoadAsync(document);
+            }
+            if (readingPage is not null)
+            {
+                await ShowReadingPageAsync(readingPage);
+            }
+
             _textCursor = null;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
@@ -1372,12 +1433,12 @@ public partial class MainWindow : Window
                     ? $"This document is too large for the continuous editor. Reading remains page-based above {ContinuousEditorMaxCharacters:N0} characters."
                     : "Select and copy across the whole document, or click anywhere to edit and place the playback cursor. Save one paragraph before editing another."
                 : DescribeStructuredDocument(document);
+            if (_continuousDocument is not null)
+            {
+                FooterText.Text = "Showing the complete document.";
+            }
             UpdateEditorButtons();
             UpdatePlaybackControls();
-        }
-        catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
-        {
-            FooterText.Text = $"Document: {exception.Message}";
         }
         finally
         {
@@ -1684,6 +1745,10 @@ public partial class MainWindow : Window
         if (result.Saved)
         {
             var caret = EditorTextBox.CaretIndex;
+            if (_editor.Document is ReaderDocument updatedDocument)
+            {
+                _library?.ReplaceDocument(updatedDocument);
+            }
             if (_continuousDocument is not null && _editor.Block is ReaderBlock savedBlock)
             {
                 _updatingEditor = true;
@@ -1691,6 +1756,13 @@ public partial class MainWindow : Window
                 EditorTextBox.Text = _continuousDocument.Text;
                 EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
                 _updatingEditor = false;
+                if (_readingWindow is not null && _editor.Document is ReaderDocument document)
+                {
+                    _readingWindow.UseLoadedDocument(
+                        document.Id,
+                        _continuousDocument.Blocks,
+                        _readingWindow.Current.StartOrdinal);
+                }
                 _readingBlocks.FirstOrDefault(item =>
                     string.Equals(item.Id, savedBlock.Id, StringComparison.Ordinal))?.ApplySavedBlock(savedBlock);
             }
@@ -1735,10 +1807,18 @@ public partial class MainWindow : Window
             var caret = EditorTextBox.CaretIndex;
             if (_editor.Document is ReaderDocument document)
             {
+                _library?.ReplaceDocument(document);
                 await LoadContinuousDocumentAsync(document);
                 if (_readingWindow is not null)
                 {
-                    await LoadReadingWindowAsync(document, _readingWindow.Current.StartOrdinal);
+                    var startOrdinal = _readingWindow.Current.StartOrdinal;
+                    var page = _continuousDocument is not null
+                        ? _readingWindow.UseLoadedDocument(
+                            document.Id,
+                            _continuousDocument.Blocks,
+                            startOrdinal)
+                        : await _readingWindow.LoadAsync(document.Id, startOrdinal);
+                    await ShowReadingPageAsync(page);
                 }
             }
             _updatingEditor = true;

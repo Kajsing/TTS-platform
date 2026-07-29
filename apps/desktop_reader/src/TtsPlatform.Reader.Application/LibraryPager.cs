@@ -14,6 +14,21 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
     public bool IsLoading { get; private set; }
     public string? LastError { get; private set; }
 
+    public bool ReplaceDocument(ReaderDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        for (var index = 0; index < Documents.Count; index++)
+        {
+            if (!string.Equals(Documents[index].Id, document.Id, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            Documents[index] = document;
+            return true;
+        }
+        return false;
+    }
+
     public async Task RefreshAsync(
         string? query = null,
         string? state = null,

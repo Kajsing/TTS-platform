@@ -18,6 +18,32 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed continuous-editor rate-limit follow-up: the first full-document UI
+  version fetched the same blocks separately for `DocumentEditor`, the reading
+  page, and the continuous editor. Combined with normal browser-handoff polling
+  and the live smoke session, selecting a document could receive HTTP 429 and
+  leave the old view visible with `Document: Rate limit exceeded.` The optimized
+  load fetches editable blocks once, loads the editor's active block from that
+  result, and gives the complete block collection to `ReadingWindowPager` as a
+  local cache. Page navigation and playback highlighting reuse that cache without
+  more block requests. Library rows are updated in memory after Save/Undo/Redo,
+  so normal selection no longer needs an extra document GET merely to obtain the
+  current row version. If another local client still exhausts the shared limit,
+  the footer now states that the document is not locked and Reader retries once
+  automatically after the 60-second limiter window. A newer document selection
+  supersedes that delayed retry.
+- Rate-limit follow-up validation passed on 2026-07-29:
+  - `.NET Release` solution tests increased to 69 and passed; focused tests prove
+    three forward/back pages from a loaded editable document make zero additional
+    block calls and that a mutated library row is replaced without an API refresh;
+  - `py -3 -m pytest -q` passed all 394 tests, Ruff and .NET formatting passed,
+    and `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed the live Reader, Windows integration, audio, packaging, and WPF checks;
+  - a fresh live service opened five documents consecutively, including both
+    816-block articles, then reopened the 98-block/17,359-character article with
+    its continuous editor every time and no rate-limit response;
+  - no rate-limit threshold or security behavior was weakened. This is client-side
+    request reuse and recovery only; `models/MANIFEST.json` remains excluded.
 - Completed post-Milestone 9 continuous-editor correction: comparison with the
   TextAloud UI showed that separate inline `TextBox` controls still exposed the
   internal Reader blocks and prevented one selection from spanning an article.

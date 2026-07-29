@@ -264,6 +264,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "ContinuousDocumentText",
         "Continuous document text",
         "InvisibleReadingBlockContainerStyle",
+        "UseLoadedDocument",
+        "Reader will retry automatically in one minute",
         "Play from cursor",
         "startCursor: cursor",
         "Start local TTS service",
