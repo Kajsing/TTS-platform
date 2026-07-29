@@ -84,6 +84,50 @@ public sealed class PlaybackTests
         Assert.Equal(startCursor, streams.Requests[0].Cursor);
     }
 
+    [Fact]
+    public async Task Playback_complete_restarts_from_first_cursor_on_next_play()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(request => CompletedSession(request));
+        var audio = new FakeAudioOutput();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+        var nearEnd = new ReaderCursor("doc", "block-0", 0, 5, 1);
+
+        await playback.PlayAsync(Document(), startCursor: nearEnd);
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => streams.Requests.Count == 2);
+
+        Assert.Equal(nearEnd, streams.Requests[0].Cursor);
+        Assert.Equal(0, streams.Requests[1].Cursor.CharacterOffset);
+    }
+
+    [Fact]
+    public async Task Persisted_completed_position_restarts_from_first_cursor()
+    {
+        var completedCursor = new ReaderCursor("doc", "block-0", 0, 6, 1);
+        var service = new PlaybackService
+        {
+            Position = new ReaderPosition(
+                "doc",
+                completedCursor,
+                null,
+                1,
+                1,
+                DateTimeOffset.UtcNow,
+                true,
+                7),
+        };
+        var streams = new FakeStreamClient(request => CompletedSession(request));
+        var audio = new FakeAudioOutput();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => streams.Requests.Count == 1);
+
+        Assert.Equal(0, streams.Requests[0].Cursor.CharacterOffset);
+    }
+
     private static FakeStreamSession SessionWithPackets(
         ReaderStreamStartRequest request,
         bool includeSecondPacket)
@@ -178,10 +222,11 @@ public sealed class PlaybackTests
     private sealed class PlaybackService : IReaderServiceClient
     {
         public List<SavePositionRequest> SavedPositions { get; } = [];
+        public ReaderPosition? Position { get; init; }
 
         public Task<ReaderPosition?> GetPositionAsync(
             string documentId,
-            CancellationToken cancellationToken = default) => Task.FromResult<ReaderPosition?>(null);
+            CancellationToken cancellationToken = default) => Task.FromResult(Position);
 
         public Task<ReaderPosition> SavePositionAsync(
             string documentId,

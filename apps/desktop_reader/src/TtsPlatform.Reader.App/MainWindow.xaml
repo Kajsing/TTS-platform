@@ -196,10 +196,8 @@
             <Button x:Name="PreviousSectionButton" Content="Previous section" Click="PreviousSectionButton_Click"
                     IsEnabled="False" AutomationProperties.Name="Go to previous section" />
             <Button x:Name="PlayPauseButton" Content="Play" Click="PlayPauseButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Play or pause document" />
-            <Button x:Name="PlayFromCursorButton" Content="Play from cursor"
-                    Click="PlayFromCursorButton_Click" IsEnabled="False"
-                    AutomationProperties.Name="Start playback from text cursor" />
+                    IsEnabled="False" AutomationProperties.Name="Play or pause document"
+                    ToolTip="Continues from your saved position or starts where you last placed the text cursor." />
             <Button x:Name="StopButton" Content="Stop" Click="StopButton_Click"
                     IsEnabled="False" AutomationProperties.Name="Stop document playback" />
             <Button x:Name="NextSectionButton" Content="Next section" Click="NextSectionButton_Click"

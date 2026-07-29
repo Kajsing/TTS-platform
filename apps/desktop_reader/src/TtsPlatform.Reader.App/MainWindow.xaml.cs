@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     private int _documentLoadGeneration;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
+    private bool _useTextCursorOnNextPlay;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -1424,6 +1425,7 @@ public partial class MainWindow : Window
             }
 
             _textCursor = null;
+            _useTextCursorOnNextPlay = false;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
             EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
@@ -1666,6 +1668,7 @@ public partial class MainWindow : Window
         }
         _editor.SetWorkingText(edit.ReplacementText);
         UpdateTextCursorFromContinuousEditor();
+        _useTextCursorOnNextPlay = _textCursor is not null;
         UpdateEditorButtons();
         UpdatePlaybackControls();
     }
@@ -1674,7 +1677,7 @@ public partial class MainWindow : Window
     {
         if (!_updatingEditor)
         {
-            UpdateTextCursorFromContinuousEditor();
+            MarkTextCursorForNextPlayback();
         }
     }
 
@@ -1682,8 +1685,15 @@ public partial class MainWindow : Window
     {
         if (!_updatingEditor)
         {
-            UpdateTextCursorFromContinuousEditor();
+            MarkTextCursorForNextPlayback();
         }
+    }
+
+    private void MarkTextCursorForNextPlayback()
+    {
+        UpdateTextCursorFromContinuousEditor();
+        _useTextCursorOnNextPlay = _textCursor is not null;
+        UpdatePlaybackControls();
     }
 
     private void RestoreContinuousWorkingText(string message)
@@ -1924,38 +1934,6 @@ public partial class MainWindow : Window
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
         await ToggleUnifiedPlaybackAsync();
 
-    private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e) =>
-        await PlayFromTextCursorAsync();
-
-    private async Task PlayFromTextCursorAsync()
-    {
-        if (_playback is null ||
-            _editor?.Document is not ReaderDocument document ||
-            _textCursor is not ReaderCursor cursor)
-        {
-            return;
-        }
-        if (_editor.HasUnsavedChanges)
-        {
-            FooterText.Text = "Save or revert changes before playback.";
-            return;
-        }
-
-        try
-        {
-            await StopEphemeralAsync(clearReplay: true);
-            await _playback.PlayAsync(document, startCursor: cursor);
-        }
-        catch (Exception exception) when (
-            exception is ReaderApiException or
-                ReaderServiceUnavailableException or
-                ReaderStreamProtocolException or
-                ReaderTokenUnavailableException)
-        {
-            FooterText.Text = $"Playback: {exception.Message}";
-        }
-    }
-
     private async Task TogglePlaybackAsync()
     {
         if (_playback is null || _editor?.Document is null)
@@ -1976,7 +1954,9 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
-            await _playback.PlayAsync(_editor.Document);
+            var requestedCursor = _useTextCursorOnNextPlay ? _textCursor : null;
+            await _playback.PlayAsync(_editor.Document, startCursor: requestedCursor);
+            _useTextCursorOnNextPlay = false;
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2218,9 +2198,6 @@ public partial class MainWindow : Window
         NextReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
         SaveEditButton.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
         RevertEditButton.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
-        PlayFromCursorButton.IsEnabled = showContinuousEditor &&
-            _textCursor is not null &&
-            _editor?.HasUnsavedChanges != true;
     }
 
     private void UpdateCompactController()

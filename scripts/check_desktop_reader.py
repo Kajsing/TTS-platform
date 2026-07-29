@@ -266,8 +266,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "InvisibleReadingBlockContainerStyle",
         "UseLoadedDocument",
         "Reader will retry automatically in one minute",
-        "Play from cursor",
-        "startCursor: cursor",
+        "_useTextCursorOnNextPlay",
+        "startCursor: requestedCursor",
+        "starts where you last placed the text cursor",
         "Start local TTS service",
         "Stop local TTS service",
         "FindLocalServiceLauncher",
@@ -283,6 +284,18 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             "Service control, inline editing, or cursor playback features are missing: "
             f"{missing_workstation_usability_features}"
         )
+    obsolete_cursor_button = "PlayFromCursor" + "Button"
+    main_window_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
+            reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml.cs",
+        )
+    )
+    if obsolete_cursor_button in main_window_source:
+        raise DesktopReaderCheckError(
+            "The obsolete separate Play from cursor button is still present."
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
@@ -295,6 +308,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "title_editing": "implemented",
         "inline_editing": "implemented",
         "cursor_playback": "implemented",
+        "smart_playback": "implemented",
         "service_controls": "implemented",
     }
 

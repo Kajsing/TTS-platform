@@ -109,6 +109,12 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                 _positionRowVersion = position?.RowVersion ?? 0;
                 _positionCompleted = position?.Completed ?? false;
             }
+            if (startCursor is null && _positionCompleted)
+            {
+                _lastFullyPlayedCursor = await FirstCursorAsync(document, cancellationToken)
+                    .ConfigureAwait(false);
+                _positionCompleted = false;
+            }
 
             _desiredState = ReaderPlaybackState.Playing;
             _runCancellation = new CancellationTokenSource();

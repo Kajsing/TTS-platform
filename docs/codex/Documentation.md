@@ -18,6 +18,21 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed smart-Play follow-up: the separate `Play from cursor` button was
+  removed. The single `Play` control now consumes a user-selected text cursor for
+  the next start, then returns to normal durable resume behavior. Clicking in the
+  text or moving the caret, including `Ctrl+Home`, selects that one-time start;
+  `Stop` continues to preserve the last fully heard position. If either the live
+  coordinator or the saved position says the document was completed, the next
+  normal Play starts at the document's first cursor instead of reopening at the
+  end. Clipboard replay, Pause, compact-controller, and global-hotkey behavior
+  retain their existing semantics.
+- Smart-Play validation passed on 2026-07-29: 71 .NET Release tests (including
+  live-completion and persisted-completion restart regressions), all 394 Python
+  tests, Ruff, .NET formatting, and `git diff --check` passed. The complete
+  desktop check also passed live Reader streaming/resume, Windows integration,
+  audio, self-contained packaging, WPF rendering, and a source assertion that
+  the obsolete second playback button is absent.
 - Completed continuous-editor rate-limit follow-up: the first full-document UI
   version fetched the same blocks separately for `DocumentEditor`, the reading
   page, and the continuous editor. Combined with normal browser-handoff polling
