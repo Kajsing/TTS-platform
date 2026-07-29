@@ -114,6 +114,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ReadingWindowPager.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "ContinuousDocumentText.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardCaptureDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ClipboardDuplicateDialog.xaml",
@@ -247,7 +248,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "Save title",
         "RenameAsync",
         "ReadingBlockTemplate",
-        "ReadingBlocksList.Visibility = hasDocument",
+        "ReadingBlocksList.Visibility = showReadingView",
     ]
     missing_document_display_features = [
         value
@@ -260,7 +261,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             f"{missing_document_display_features}"
         )
     workstation_usability_features = [
-        "EditableBlockTemplate",
+        "ContinuousDocumentText",
+        "Continuous document text",
+        "InvisibleReadingBlockContainerStyle",
         "Play from cursor",
         "startCursor: cursor",
         "Start local TTS service",

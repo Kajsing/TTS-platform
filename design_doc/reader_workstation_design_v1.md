@@ -1678,6 +1678,17 @@ the UI sends the expected row version and handles conflicts explicitly.
 Structured imports are read-only in MVP. Provide “Duplicate as editable text”
 rather than silently flattening and overwriting the imported structure.
 
+For ordinary editable articles, the stopped desktop view may assemble the
+bounded source blocks into one plain WPF `TextBox` so selection, Ctrl+A, copy,
+and caret placement behave like a conventional text editor. This continuous
+editor is limited to 1,000,000 source characters and 20,000 blocks; larger
+documents and all active playback continue to use the virtualized block view.
+Block separators have no visible containers. The desktop maps the global caret
+back to the stable block cursor, and the current block-based mutation/Undo
+contract permits one paragraph to be changed per saved edit. Cross-paragraph
+selection and copying remain supported; a mutation crossing a separator is
+rejected and restored locally rather than being split into non-atomic edits.
+
 ---
 
 ## 15. UX and wireframes

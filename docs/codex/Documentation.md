@@ -18,6 +18,42 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed post-Milestone 9 continuous-editor correction: comparison with the
+  TextAloud UI showed that separate inline `TextBox` controls still exposed the
+  internal Reader blocks and prevented one selection from spanning an article.
+  Stopped editable articles now assemble all source blocks into one conventional
+  WPF text surface. Ctrl+A, selection, copy, and caret placement span the complete
+  article, while a tested mapping converts the global caret back to the stable
+  block ID and UTF-16 offset used by playback. The reading view remains paged and
+  virtualized, but its ListBox containers have no focus, border, or selection
+  chrome; source-span highlighting continues to mark the active sentence. To
+  preserve the existing atomic block-edit and Undo contract, one saved edit may
+  change one paragraph. A cross-paragraph mutation is restored locally with a
+  clear message, although selection and copying may cross every paragraph.
+  Continuous editing is bounded at 1,000,000 characters and 20,000 blocks so an
+  extreme book cannot freeze WPF; larger documents retain the virtualized reader.
+- Continuous-editor validation passed on 2026-07-29:
+  - `.NET Release` solution build completed with zero warnings/errors and all 67
+    tests passed. New tests cover document assembly, global caret mapping,
+    single-paragraph edits, and rejection of separator-crossing edits;
+  - `py -3 -m pytest -q`: 394 passed; one first-run WebSocket metric snapshot
+    raced its existing cancellation cleanup, then its focused test passed five
+    consecutive runs and the full suite passed. Ruff, .NET formatting, and diff
+    checks passed;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live editing/resume, Windows audio, clipboard/hotkey/tray integration,
+    portable packaging, WPF rendering, and the updated source contract;
+  - live UI Automation opened the real 98-block article and found one document
+    editor containing 17,359 displayed characters. A whole-document selection
+    selected all 17,359 characters; the block list, page controls, and legacy
+    block-edit controls were absent while stopped. A middle-paragraph edit enabled
+    Save/Revert and Revert restored the full article without persistence. A
+    separator-crossing edit was rejected/restored, and Play from a middle caret
+    switched to the boundary-free reading view, entered Playing, then restored the
+    continuous editor after Stop;
+  - the user-owned `models/MANIFEST.json` remains excluded. No dependency,
+    security, licensing, deployment, or backend contract changed. The design now
+    records the bounded continuous-editor exception to the long-book rule.
 - Completed post-Milestone 9 Reader workflow follow-up: the WPF header now
   reports whether the localhost TTS service is running and offers explicit
   Start/Stop controls. Start prefers the installed per-user Task Scheduler task

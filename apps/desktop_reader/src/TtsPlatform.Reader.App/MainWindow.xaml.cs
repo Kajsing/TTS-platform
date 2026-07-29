@@ -19,6 +19,8 @@ public partial class MainWindow : Window
 {
     private static readonly TimeSpan DesktopOpenPollInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DesktopOpenRateLimitBackoff = TimeSpan.FromMinutes(1);
+    private const int ContinuousEditorMaxCharacters = 1_000_000;
+    private const int ContinuousEditorMaxBlocks = 20_000;
 
     private readonly IDesktopSettingsStore _settingsStore;
     private readonly bool _smokeTest;
@@ -59,14 +61,11 @@ public partial class MainWindow : Window
     private bool _updatingEditor;
     private bool _copySelectionInProgress;
     private bool _clipboardPromptOpen;
-    private bool _editingBlock;
-    private bool _switchingInlineEditor;
     private bool _ephemeralPlaying;
     private bool _exitRequested;
     private bool _shutdownInProgress;
     private bool _closed;
-    private ReaderBlockDisplay? _activeInlineBlock;
-    private TextBox? _activeInlineTextBox;
+    private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
@@ -969,11 +968,7 @@ public partial class MainWindow : Window
             if (_editor is not null &&
                 (DocumentsGrid.SelectedItem as ReaderDocument)?.Id == _editor.Document?.Id)
             {
-                await _editor.LoadAsync(current);
-                _updatingEditor = true;
-                EditorTextBox.Text = _editor.WorkingText;
-                _updatingEditor = false;
-                UpdateEditorButtons();
+                await LoadDocumentAsync(current);
             }
         }
         FooterText.Text = result.Message;
@@ -1364,17 +1359,18 @@ public partial class MainWindow : Window
                 await _playback.StopAsync();
             }
             await _editor.LoadAsync(document);
+            _continuousDocument = null;
             await LoadReadingWindowAsync(document, 0);
-            _editingBlock = false;
-            _activeInlineBlock = null;
-            _activeInlineTextBox = null;
+            await LoadContinuousDocumentAsync(document);
             _textCursor = null;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
-            EditorTextBox.Text = _editor.WorkingText;
-            EditorTextBox.IsReadOnly = !_editor.IsEditable;
-            EditorHintText.Text = _editor.IsEditable
-                ? "Click in the text to edit or place the playback cursor. Editing is locked while speech is playing."
+            EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+            EditorTextBox.IsReadOnly = _continuousDocument is null;
+            EditorHintText.Text = document.IsEditable
+                ? _continuousDocument is null
+                    ? $"This document is too large for the continuous editor. Reading remains page-based above {ContinuousEditorMaxCharacters:N0} characters."
+                    : "Select and copy across the whole document, or click anywhere to edit and place the playback cursor. Save one paragraph before editing another."
                 : DescribeStructuredDocument(document);
             UpdateEditorButtons();
             UpdatePlaybackControls();
@@ -1387,6 +1383,41 @@ public partial class MainWindow : Window
         {
             _updatingEditor = false;
         }
+    }
+
+    private async Task LoadContinuousDocumentAsync(ReaderDocument document)
+    {
+        _continuousDocument = null;
+        if (!document.IsEditable ||
+            document.TotalCharacters > ContinuousEditorMaxCharacters ||
+            document.TotalBlocks > ContinuousEditorMaxBlocks)
+        {
+            return;
+        }
+
+        var blocks = new List<ReaderBlock>(document.TotalBlocks);
+        var afterOrdinal = -1;
+        while (true)
+        {
+            var page = await GetClient().GetBlocksAsync(
+                document.Id,
+                afterOrdinal,
+                limit: 500);
+            blocks.AddRange(page.Blocks);
+            if (page.NextAfterOrdinal is not int nextAfterOrdinal)
+            {
+                break;
+            }
+            if (nextAfterOrdinal <= afterOrdinal)
+            {
+                throw new ReaderApiException(
+                    "reader_invalid_page",
+                    "The service returned a non-advancing document page.",
+                    502);
+            }
+            afterOrdinal = nextAfterOrdinal;
+        }
+        _continuousDocument = new ContinuousDocumentText(blocks);
     }
 
     private async void LibraryWorkflowButton_Click(object sender, RoutedEventArgs e)
@@ -1535,13 +1566,109 @@ public partial class MainWindow : Window
 
     private void EditorTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_updatingEditor || _editor is null)
+        if (_updatingEditor ||
+            _editor?.Document is not ReaderDocument document ||
+            _continuousDocument is null ||
+            !document.IsEditable)
         {
             return;
         }
 
-        _editor.SetWorkingText(EditorTextBox.Text);
+        if (string.Equals(EditorTextBox.Text, _continuousDocument.Text, StringComparison.Ordinal))
+        {
+            _editor.RevertLocalChanges();
+            UpdateTextCursorFromContinuousEditor();
+            UpdateEditorButtons();
+            UpdatePlaybackControls();
+            return;
+        }
+
+        if (!_continuousDocument.TryMapSingleBlockEdit(EditorTextBox.Text, out var edit) || edit is null)
+        {
+            RestoreContinuousWorkingText(
+                "A saved edit may change one paragraph at a time. Selection and copying can span the whole document.");
+            return;
+        }
+
+        if (_editor.HasUnsavedChanges &&
+            _editor.Block is ReaderBlock activeBlock &&
+            !string.Equals(activeBlock.Id, edit.Block.Id, StringComparison.Ordinal))
+        {
+            RestoreContinuousWorkingText("Save or revert the current paragraph before editing another one.");
+            return;
+        }
+
+        if (_editor.Block is not ReaderBlock loadedBlock ||
+            !string.Equals(loadedBlock.Id, edit.Block.Id, StringComparison.Ordinal))
+        {
+            _editor.LoadBlock(document, edit.Block);
+        }
+        _editor.SetWorkingText(edit.ReplacementText);
+        UpdateTextCursorFromContinuousEditor();
         UpdateEditorButtons();
+        UpdatePlaybackControls();
+    }
+
+    private void EditorTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (!_updatingEditor)
+        {
+            UpdateTextCursorFromContinuousEditor();
+        }
+    }
+
+    private void EditorTextBox_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_updatingEditor)
+        {
+            UpdateTextCursorFromContinuousEditor();
+        }
+    }
+
+    private void RestoreContinuousWorkingText(string message)
+    {
+        var caret = EditorTextBox.CaretIndex;
+        var text = CurrentContinuousDocument()?.Text ?? string.Empty;
+        _updatingEditor = true;
+        EditorTextBox.Text = text;
+        EditorTextBox.CaretIndex = Math.Clamp(caret, 0, text.Length);
+        _updatingEditor = false;
+        FooterText.Text = message;
+        UpdateTextCursorFromContinuousEditor();
+        UpdateEditorButtons();
+        UpdatePlaybackControls();
+    }
+
+    private ContinuousDocumentText? CurrentContinuousDocument()
+    {
+        if (_continuousDocument is null ||
+            _editor?.HasUnsavedChanges != true ||
+            _editor.Block is not ReaderBlock block)
+        {
+            return _continuousDocument;
+        }
+        return _continuousDocument.ReplaceBlock(block with
+        {
+            Text = _editor.WorkingText,
+            CharacterCount = _editor.WorkingText.Length,
+        });
+    }
+
+    private void UpdateTextCursorFromContinuousEditor()
+    {
+        if (_editor?.Document is not ReaderDocument document ||
+            CurrentContinuousDocument() is not ContinuousDocumentText continuousDocument ||
+            continuousDocument.Blocks.Count == 0)
+        {
+            _textCursor = null;
+            return;
+        }
+
+        _textCursor = continuousDocument.CursorAt(
+            document.Id,
+            document.ContentRevision,
+            EditorTextBox.CaretIndex);
+        UpdatePlaybackControls();
     }
 
     private async void SaveEditButton_Click(object sender, RoutedEventArgs e)
@@ -1556,13 +1683,18 @@ public partial class MainWindow : Window
         UpdateEditorButtons();
         if (result.Saved)
         {
-            if (_activeInlineBlock is not null && _editor.Block is not null)
+            var caret = EditorTextBox.CaretIndex;
+            if (_continuousDocument is not null && _editor.Block is ReaderBlock savedBlock)
             {
                 _updatingEditor = true;
-                _activeInlineBlock.ApplySavedBlock(_editor.Block);
+                _continuousDocument = _continuousDocument.ReplaceBlock(savedBlock);
+                EditorTextBox.Text = _continuousDocument.Text;
+                EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
                 _updatingEditor = false;
+                _readingBlocks.FirstOrDefault(item =>
+                    string.Equals(item.Id, savedBlock.Id, StringComparison.Ordinal))?.ApplySavedBlock(savedBlock);
             }
-            UpdateTextCursorFromActiveEditor();
+            UpdateTextCursorFromContinuousEditor();
             UpdatePlaybackControls();
         }
     }
@@ -1575,15 +1707,13 @@ public partial class MainWindow : Window
         }
 
         _editor.RevertLocalChanges();
+        var caret = EditorTextBox.CaretIndex;
         _updatingEditor = true;
-        EditorTextBox.Text = _editor.WorkingText;
-        if (_activeInlineBlock is not null)
-        {
-            _activeInlineBlock.Text = _editor.WorkingText;
-        }
+        EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+        EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
         _updatingEditor = false;
         FooterText.Text = "Local changes reverted";
-        UpdateTextCursorFromActiveEditor();
+        UpdateTextCursorFromContinuousEditor();
         UpdateEditorButtons();
     }
 
@@ -1602,17 +1732,20 @@ public partial class MainWindow : Window
         FooterText.Text = result.Saved ? (undo ? "Saved edit undone" : "Saved edit redone") : result.Message ?? "No history change";
         if (result.Saved)
         {
-            _editingBlock = false;
-            _activeInlineBlock = null;
-            _activeInlineTextBox = null;
-            _textCursor = null;
-            _updatingEditor = true;
-            EditorTextBox.Text = _editor.WorkingText;
-            _updatingEditor = false;
-            if (_editor.Document is ReaderDocument document && _readingWindow is not null)
+            var caret = EditorTextBox.CaretIndex;
+            if (_editor.Document is ReaderDocument document)
             {
-                await LoadReadingWindowAsync(document, _readingWindow.Current.StartOrdinal);
+                await LoadContinuousDocumentAsync(document);
+                if (_readingWindow is not null)
+                {
+                    await LoadReadingWindowAsync(document, _readingWindow.Current.StartOrdinal);
+                }
             }
+            _updatingEditor = true;
+            EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+            EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
+            _updatingEditor = false;
+            UpdateTextCursorFromContinuousEditor();
             UpdatePlaybackControls();
         }
 
@@ -1691,158 +1824,9 @@ public partial class MainWindow : Window
     private void ReadingBlocksList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateEditorButtons();
 
-    private void InlineEditor_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (_switchingInlineEditor ||
-            sender is not TextBox textBox ||
-            textBox.DataContext is not ReaderBlockDisplay display ||
-            _editor?.Document is not ReaderDocument document ||
-            !document.IsEditable ||
-            _playback?.IsActive == true)
-        {
-            return;
-        }
-
-        if (_activeInlineBlock is not null &&
-            !string.Equals(_activeInlineBlock.Id, display.Id, StringComparison.Ordinal) &&
-            _editor.HasUnsavedChanges)
-        {
-            var discard = MessageBox.Show(
-                "Discard the unsaved changes in the previous paragraph?",
-                "Unsaved changes",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (discard != MessageBoxResult.Yes)
-            {
-                var previous = _activeInlineTextBox;
-                _switchingInlineEditor = true;
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    previous?.Focus();
-                    _switchingInlineEditor = false;
-                }));
-                return;
-            }
-
-            _editor.RevertLocalChanges();
-            _updatingEditor = true;
-            _activeInlineBlock.Text = _editor.WorkingText;
-            _updatingEditor = false;
-        }
-
-        if (_activeInlineBlock is null ||
-            !string.Equals(_activeInlineBlock.Id, display.Id, StringComparison.Ordinal))
-        {
-            _editor.LoadBlock(document, display.Block);
-        }
-        _activeInlineBlock = display;
-        _activeInlineTextBox = textBox;
-        _editingBlock = true;
-        ReadingBlocksList.SelectedItem = display;
-        UpdateTextCursorFromActiveEditor();
-        UpdateEditorButtons();
-        UpdatePlaybackControls();
-    }
-
-    private void InlineEditor_SelectionChanged(object sender, RoutedEventArgs e)
-    {
-        if (sender is TextBox textBox &&
-            textBox.DataContext is ReaderBlockDisplay display &&
-            ReferenceEquals(display, _activeInlineBlock))
-        {
-            _activeInlineTextBox = textBox;
-            UpdateTextCursorFromActiveEditor();
-        }
-    }
-
-    private void InlineEditor_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_updatingEditor ||
-            sender is not TextBox textBox ||
-            textBox.DataContext is not ReaderBlockDisplay display ||
-            !ReferenceEquals(display, _activeInlineBlock) ||
-            _editor is null)
-        {
-            return;
-        }
-
-        _editor.SetWorkingText(textBox.Text);
-        _activeInlineTextBox = textBox;
-        UpdateTextCursorFromActiveEditor();
-        UpdateEditorButtons();
-        UpdatePlaybackControls();
-    }
-
-    private void UpdateTextCursorFromActiveEditor()
-    {
-        if (_editor?.Document is not ReaderDocument document ||
-            _activeInlineBlock is not ReaderBlockDisplay display ||
-            _activeInlineTextBox is not TextBox textBox)
-        {
-            _textCursor = null;
-            return;
-        }
-
-        _textCursor = new ReaderCursor(
-            document.Id,
-            display.Id,
-            display.Ordinal,
-            Math.Clamp(textBox.CaretIndex, 0, textBox.Text.Length),
-            document.ContentRevision);
-    }
-
-    private void EditSelectedBlockButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_editor?.Document is not ReaderDocument document ||
-            !document.IsEditable ||
-            ReadingBlocksList.SelectedItem is not ReaderBlockDisplay selected ||
-            _playback?.IsActive == true)
-        {
-            return;
-        }
-
-        _editor.LoadBlock(document, selected.Block);
-        _editingBlock = true;
-        _updatingEditor = true;
-        EditorTextBox.Text = _editor.WorkingText;
-        _updatingEditor = false;
-        EditorHintText.Text =
-            $"Editing block {selected.Ordinal + 1:N0}. Save is revision-aware; conflicts preserve this local text.";
-        UpdatePlaybackControls();
-        UpdateEditorButtons();
-        EditorTextBox.Focus();
-    }
-
-    private void BackToDocumentButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_editor is null)
-        {
-            return;
-        }
-        if (_editor.HasUnsavedChanges)
-        {
-            var result = MessageBox.Show(
-                "Discard the unsaved local block edit and return to the document?",
-                "Unsaved edit",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes)
-            {
-                return;
-            }
-            _editor.RevertLocalChanges();
-        }
-
-        _editingBlock = false;
-        EditorHintText.Text =
-            "Showing the document in bounded pages. Select a block and choose Edit selected block to change its text.";
-        UpdatePlaybackControls();
-        UpdateEditorButtons();
-    }
-
     private void UpdateEditorButtons()
     {
-        var editable = _editor?.IsEditable == true;
+        var editable = _editor?.IsEditable == true && _continuousDocument is not null;
         var playbackActive = _playback?.IsActive == true;
         EditorTextBox.IsReadOnly = playbackActive || !editable;
         SaveEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
@@ -1851,10 +1835,6 @@ public partial class MainWindow : Window
         RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         var document = _editor?.Document;
         RenameDocumentButton.IsEnabled = document is not null && !playbackActive;
-        EditSelectedBlockButton.IsEnabled = document?.IsEditable == true &&
-            !playbackActive &&
-            !_editingBlock &&
-            ReadingBlocksList.SelectedItem is ReaderBlockDisplay;
         FinishDocumentButton.IsEnabled = document is not null && document.State != "finished";
         ArchiveDocumentButton.IsEnabled = document is not null && document.State != "archived";
         RestoreDocumentButton.IsEnabled = document is not null &&
@@ -1916,7 +1896,6 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
-            _editingBlock = false;
             await _playback.PlayAsync(_editor.Document);
         }
         catch (Exception exception) when (
@@ -2012,10 +1991,6 @@ public partial class MainWindow : Window
 
     private Task ShowReadingPageAsync(ReadingWindowPage page)
     {
-        _activeInlineBlock = null;
-        _activeInlineTextBox = null;
-        _textCursor = null;
-        _editingBlock = false;
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
@@ -2076,7 +2051,7 @@ public partial class MainWindow : Window
 
     private void CreateRuleFromSelectionButton_Click(object sender, RoutedEventArgs e)
     {
-        var selection = _activeInlineTextBox?.SelectedText ?? EditorTextBox.SelectedText;
+        var selection = EditorTextBox.SelectedText;
         if (string.IsNullOrWhiteSpace(selection))
         {
             FooterText.Text = "Select text in an editable document before creating a speech rule.";
@@ -2137,7 +2112,7 @@ public partial class MainWindow : Window
     private void UpdatePlaybackControls()
     {
         var hasDocument = _editor?.Document is not null;
-        var structuredDocument = hasDocument && _editor?.IsEditable != true;
+        var structuredDocument = hasDocument && _editor?.Document?.IsEditable != true;
         var documentActive = _playback?.IsActive == true;
         var ephemeralPaused = !_ephemeralPlaying && _ephemeralReplayText is not null;
         var hasPlayback = _ephemeralPlaying || ephemeralPaused ||
@@ -2147,23 +2122,23 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = hasPlayback;
         PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        var editableDocument = hasDocument && _editor?.IsEditable == true;
-        var showEditableText = editableDocument && !documentActive;
-        ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource(
-            showEditableText ? "EditableBlockTemplate" : "ReadingBlockTemplate");
-        ReadingBlocksList.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = Visibility.Collapsed;
-        FollowReadingCheckBox.Visibility = documentActive || structuredDocument
+        var continuousEditableDocument = hasDocument &&
+            _editor?.Document?.IsEditable == true &&
+            _continuousDocument is not null;
+        var showContinuousEditor = continuousEditableDocument && !documentActive;
+        var showReadingView = hasDocument && !showContinuousEditor;
+        ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource("ReadingBlockTemplate");
+        ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        EditorTextBox.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
+        FollowReadingCheckBox.Visibility = showReadingView && (documentActive || structuredDocument)
             ? Visibility.Visible
             : Visibility.Collapsed;
         DuplicateEditableButton.IsEnabled = structuredDocument && !documentActive;
-        PreviousReadingPageButton.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
-        NextReadingPageButton.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
-        EditSelectedBlockButton.Visibility = Visibility.Collapsed;
-        BackToDocumentButton.Visibility = Visibility.Collapsed;
-        SaveEditButton.Visibility = showEditableText ? Visibility.Visible : Visibility.Collapsed;
-        RevertEditButton.Visibility = showEditableText ? Visibility.Visible : Visibility.Collapsed;
-        PlayFromCursorButton.IsEnabled = showEditableText &&
+        PreviousReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        NextReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
+        SaveEditButton.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
+        RevertEditButton.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
+        PlayFromCursorButton.IsEnabled = showContinuousEditor &&
             _textCursor is not null &&
             _editor?.HasUnsavedChanges != true;
     }

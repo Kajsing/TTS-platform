@@ -17,19 +17,19 @@
           FontSize="{Binding DisplayFontSize}" FontWeight="{Binding DisplayFontWeight}"
           FontStyle="{Binding DisplayFontStyle}" Margin="{Binding DisplayMargin}" />
     </DataTemplate>
-    <DataTemplate x:Key="EditableBlockTemplate">
-      <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-               AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
-               VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
-               BorderThickness="1" BorderBrush="Transparent" Background="Transparent"
-               FontFamily="{Binding DisplayFontFamily}" FontSize="{Binding DisplayFontSize}"
-               FontWeight="{Binding DisplayFontWeight}" FontStyle="{Binding DisplayFontStyle}"
-               Margin="{Binding DisplayMargin}" Padding="3"
-               GotKeyboardFocus="InlineEditor_GotKeyboardFocus"
-               SelectionChanged="InlineEditor_SelectionChanged"
-               TextChanged="InlineEditor_TextChanged"
-               AutomationProperties.Name="Editable document text" />
-    </DataTemplate>
+    <Style x:Key="InvisibleReadingBlockContainerStyle" TargetType="ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <ContentPresenter />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
   <Grid Background="White">
     <Grid.RowDefinitions>
@@ -212,14 +212,19 @@
         </StackPanel>
         <Grid Grid.Row="1">
           <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True" Visibility="Collapsed"
-                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                    TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
-                   TextChanged="EditorTextBox_TextChanged" AutomationProperties.Name="Document text" />
+                   Padding="12" BorderThickness="1" BorderBrush="#CCC"
+                   GotKeyboardFocus="EditorTextBox_GotKeyboardFocus"
+                   SelectionChanged="EditorTextBox_SelectionChanged"
+                   TextChanged="EditorTextBox_TextChanged"
+                   AutomationProperties.Name="Continuous document text" />
           <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
                    BorderBrush="#CCC" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                    VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                    SelectionMode="Single" SelectionChanged="ReadingBlocksList_SelectionChanged"
                    ItemTemplate="{StaticResource ReadingBlockTemplate}"
+                   ItemContainerStyle="{StaticResource InvisibleReadingBlockContainerStyle}"
                    AutomationProperties.Name="Document text" />
         </Grid>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
@@ -227,10 +232,6 @@
                   Click="PreviousReadingPageButton_Click" IsEnabled="False" />
           <Button x:Name="NextReadingPageButton" Content="Next page"
                   Click="NextReadingPageButton_Click" IsEnabled="False" />
-          <Button x:Name="EditSelectedBlockButton" Content="Edit selected block" Visibility="Collapsed"
-                  Click="EditSelectedBlockButton_Click" IsEnabled="False" />
-          <Button x:Name="BackToDocumentButton" Content="Back to document"
-                  Click="BackToDocumentButton_Click" Visibility="Collapsed" />
           <CheckBox x:Name="FollowReadingCheckBox" Content="Follow reading" IsChecked="True"
                     VerticalAlignment="Center" Margin="6,0" />
           <Button x:Name="DuplicateEditableButton" Content="Duplicate as editable text"
