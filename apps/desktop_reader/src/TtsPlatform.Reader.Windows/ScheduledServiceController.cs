@@ -8,6 +8,8 @@ public static class ScheduledServiceController
     public const string TaskName = "TTS Platform Local Reader";
 
     private static readonly object ProcessGate = new();
+    private static readonly ReaderServiceProcessLeaseStore ProcessLeaseStore = new(
+        DesktopPaths.ServiceProcessLeasePath);
     private static Process? _ownedServiceProcess;
 
     public static bool OwnsRunningService
@@ -16,8 +18,17 @@ public static class ScheduledServiceController
         {
             lock (ProcessGate)
             {
-                return _ownedServiceProcess is { HasExited: false };
+                if (_ownedServiceProcess is { HasExited: false })
+                {
+                    return true;
+                }
             }
+            if (!TryOpenPersistedOwnedService(out var persisted, out _))
+            {
+                return false;
+            }
+            persisted!.Dispose();
+            return true;
         }
     }
 
@@ -32,6 +43,13 @@ public static class ScheduledServiceController
             }
             _ownedServiceProcess?.Dispose();
             _ownedServiceProcess = null;
+        }
+
+        if (TryOpenPersistedOwnedService(out var persisted, out _))
+        {
+            persisted!.Dispose();
+            message = "The Reader-started local service is already running.";
+            return true;
         }
 
         if (TryRunScheduledTask("/Run", out _))
@@ -73,6 +91,24 @@ public static class ScheduledServiceController
                 return false;
             }
 
+            try
+            {
+                ProcessLeaseStore.Save(process, launcher.FullName);
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException or
+                    InvalidOperationException or Win32Exception or NotSupportedException)
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
+                }
+                process.Dispose();
+                message = $"The local service ownership could not be recorded safely: {exception.Message}";
+                return false;
+            }
+
             lock (ProcessGate)
             {
                 _ownedServiceProcess = process;
@@ -98,26 +134,18 @@ public static class ScheduledServiceController
 
         if (owned is not null)
         {
-            try
-            {
-                if (!owned.HasExited)
-                {
-                    owned.Kill(entireProcessTree: true);
-                    owned.WaitForExit(5000);
-                }
-                message = "The Reader-started local service was stopped.";
-                return true;
-            }
-            catch (Exception exception) when (
-                exception is InvalidOperationException or Win32Exception or NotSupportedException)
-            {
-                message = $"The Reader-started service could not be stopped: {exception.Message}";
-                return false;
-            }
-            finally
-            {
-                owned.Dispose();
-            }
+            return TryStopOwnedProcess(
+                owned,
+                "The Reader-started local service was stopped.",
+                out message);
+        }
+
+        if (TryOpenPersistedOwnedService(out var persisted, out var persistedError))
+        {
+            return TryStopOwnedProcess(
+                persisted!,
+                "The Reader-started local service was stopped after reconnecting to it.",
+                out message);
         }
 
         if (TryRunScheduledTask("/End", out var schedulerError))
@@ -127,9 +155,61 @@ public static class ScheduledServiceController
         }
 
         message =
-            "Reader did not start this service and the per-user service task could not be stopped. " +
-            $"No unrelated Python process was terminated. {schedulerError}";
+            "Reader could not verify a Reader-started service process, and the per-user service task could not be stopped. " +
+            $"No unrelated Python process was terminated. {persistedError} {schedulerError}";
         return false;
+    }
+
+    private static bool TryStopOwnedProcess(Process process, string successMessage, out string message)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                if (!process.WaitForExit(5000))
+                {
+                    message = "The Reader-started service did not stop within five seconds.";
+                    return false;
+                }
+            }
+            try
+            {
+                ProcessLeaseStore.Clear();
+                message = successMessage;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                message = $"{successMessage} Its stale ownership record could not be removed: {exception.Message}";
+            }
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            message = $"The Reader-started service could not be stopped: {exception.Message}";
+            return false;
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
+    private static bool TryOpenPersistedOwnedService(out Process? process, out string error)
+    {
+        var launcher = FindLocalServiceLauncher(AppContext.BaseDirectory);
+        if (launcher is null)
+        {
+            process = null;
+            error = "The local service launcher could not be found for ownership verification.";
+            return false;
+        }
+        return ProcessLeaseStore.TryOpenVerified(
+            launcher.FullName,
+            WindowsPowerShellPath(),
+            out process,
+            out error);
     }
 
     public static FileInfo? FindLocalServiceLauncher(string startDirectory)

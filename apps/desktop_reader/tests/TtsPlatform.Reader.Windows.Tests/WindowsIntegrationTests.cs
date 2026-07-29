@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NAudio.Wave;
 using TtsPlatform.Reader.Windows;
 
@@ -25,6 +26,69 @@ public sealed class WindowsIntegrationTests
         }
         finally
         {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Service_process_lease_reopens_only_the_exact_recorded_process()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"tts-reader-lease-{Guid.NewGuid():N}");
+        var launcher = Path.Combine(root, "run_service.ps1");
+        var leasePath = Path.Combine(root, "service-process.json");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(launcher, "# test launcher");
+        using var current = Process.GetCurrentProcess();
+        var executable = current.MainModule?.FileName;
+        Assert.False(string.IsNullOrWhiteSpace(executable));
+        var store = new ReaderServiceProcessLeaseStore(leasePath);
+        try
+        {
+            store.Save(current, launcher);
+
+            Assert.True(store.TryOpenVerified(launcher, executable!, out var reopened, out var error), error);
+            Assert.Equal(current.Id, reopened!.Id);
+            reopened.Dispose();
+
+            Assert.False(store.TryOpenVerified(
+                Path.Combine(root, "different.ps1"),
+                executable!,
+                out var rejected,
+                out _));
+            Assert.Null(rejected);
+            Assert.False(File.Exists(leasePath));
+        }
+        finally
+        {
+            store.Clear();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Service_process_lease_rejects_malformed_records_without_touching_a_process()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"tts-reader-lease-{Guid.NewGuid():N}");
+        var leasePath = Path.Combine(root, "service-process.json");
+        var launcher = Path.Combine(root, "run_service.ps1");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(launcher, "# test launcher");
+        File.WriteAllText(leasePath, "not json");
+        var store = new ReaderServiceProcessLeaseStore(leasePath);
+        try
+        {
+            Assert.False(store.TryOpenVerified(
+                launcher,
+                Environment.ProcessPath!,
+                out var process,
+                out var error));
+            Assert.Null(process);
+            Assert.Contains("unreadable", error, StringComparison.Ordinal);
+            Assert.False(File.Exists(leasePath));
+        }
+        finally
+        {
+            store.Clear();
             Directory.Delete(root, recursive: true);
         }
     }

@@ -18,6 +18,23 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed service-control ownership follow-up: the fallback service launcher
+  was previously owned only through an in-memory `Process` handle. If Reader was
+  restarted while that service remained alive, the new Reader correctly refused
+  to kill an unverifiable Python process and `Stop service` reported that neither
+  it nor a per-user scheduled task could be stopped. Reader now persists a small
+  local ownership record at `%LOCALAPPDATA%\TTSPlatform\Reader\service-process.json`
+  when it starts the fallback launcher. The record contains no token or document
+  data. A later Reader verifies the launcher PID, exact start time, PowerShell
+  executable, and bundled launcher path before it may stop the complete owned
+  process tree. Missing, stale, malformed, or installation-mismatched records are
+  rejected and never cause an arbitrary Python process to be selected.
+- Service-control follow-up validation passed on 2026-07-29: 73 .NET Release
+  tests, all 394 Python tests, Ruff, .NET formatting, `git diff --check`, and the
+  complete Windows desktop integration check passed. A live transition also
+  passed `Start service -> terminate Reader only -> open a new Reader -> Stop
+  service`; the second Reader removed both the verified process tree and ownership
+  record. Service was then started again with a new record and left running.
 - Completed smart-Play follow-up: the separate `Play from cursor` button was
   removed. The single `Play` control now consumes a user-selected text cursor for
   the next start, then returns to normal durable resume behavior. Clicking in the

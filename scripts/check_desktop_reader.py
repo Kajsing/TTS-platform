@@ -110,6 +110,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "GlobalHotkeys.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderTrayIcon.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ScheduledServiceController.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderServiceProcessLeaseStore.cs",
         reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderStreamClient.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
@@ -272,6 +273,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "Start local TTS service",
         "Stop local TTS service",
         "FindLocalServiceLauncher",
+        "ReaderServiceProcessLeaseStore",
+        "service-process.json",
+        "stopped after reconnecting to it",
         "No unrelated Python process was terminated",
     ]
     missing_workstation_usability_features = [

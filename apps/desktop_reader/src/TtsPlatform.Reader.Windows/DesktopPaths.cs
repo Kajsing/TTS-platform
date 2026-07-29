@@ -8,4 +8,8 @@ public static class DesktopPaths
         "Reader");
 
     public static string SettingsPath => Path.Combine(ReaderHome, "settings.json");
+
+    public static string ServiceProcessLeasePath => Path.Combine(
+        ReaderHome,
+        "service-process.json");
 }
