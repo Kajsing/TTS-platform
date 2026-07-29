@@ -69,6 +69,21 @@ public sealed class PlaybackTests
         Assert.All(service.SavedPositions, item => Assert.Equal(0, item.Cursor.CharacterOffset));
     }
 
+    [Fact]
+    public async Task Explicit_start_cursor_overrides_the_saved_resume_position()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(request => CompletedSession(request));
+        var audio = new FakeAudioOutput();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+        var startCursor = new ReaderCursor("doc", "block-0", 0, 4, 1);
+
+        await playback.PlayAsync(Document(), startCursor: startCursor);
+        await WaitUntilAsync(() => streams.Requests.Count == 1);
+
+        Assert.Equal(startCursor, streams.Requests[0].Cursor);
+    }
+
     private static FakeStreamSession SessionWithPackets(
         ReaderStreamStartRequest request,
         bool includeSecondPacket)

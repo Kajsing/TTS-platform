@@ -18,6 +18,40 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed post-Milestone 9 Reader workflow follow-up: the WPF header now
+  reports whether the localhost TTS service is running and offers explicit
+  Start/Stop controls. Start prefers the installed per-user Task Scheduler task
+  and falls back to the bundled PowerShell launcher in a source checkout. Stop
+  may end that task or the exact process tree started by the current Reader; it
+  never searches for and terminates an unrelated Python process. Editable
+  documents now use a virtualized, page-bounded series of visually continuous
+  inline text editors, keeping blocks as an internal persistence/playback detail.
+  The active paragraph can be edited whenever playback is stopped, with the
+  existing revision-aware Save, Revert, Undo, and Redo behavior. Playback swaps
+  the page to its read/highlight template, locking text for the duration. A new
+  Play from cursor action sends the active WPF caret as the explicit UTF-16
+  Reader cursor; normal Play continues to use the durable saved position.
+- Reader workflow validation passed on 2026-07-29:
+  - `py -3 -m pytest -q`: 394 passed; `py -3 -m ruff check .`, `git diff
+    --check`, and .NET format verification passed;
+  - `.NET Release` solution tests: 63 passed, including explicit-cursor precedence
+    and safe bundled-launcher discovery; the solution build completed with zero
+    warnings and zero errors;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`
+    passed live paging/editing/resume, shared Windows audio, clipboard/hotkey/tray
+    integration, portable packaging, WPF rendering, and the new source contract;
+  - live Windows UI Automation confirmed stopped/running service state, owned
+    process-tree start, port release on Stop, and a successful restart. It placed
+    a zero-length selection at character offset 5, observed Play from cursor enter
+    Playing, confirmed the editor was absent while playing, and returned to
+    Stopped. A temporary local edit enabled Save/Revert and Revert restored the
+    original text without persisting a mutation. The 98-block article exposed
+    only five currently materialized inline editors plus the next-page control;
+    the old block-edit and return controls were absent. The healthy service and
+    responsive Reader remain running;
+  - no product direction, architecture, security model, licensing model, cloud
+    dependency, or data contract changed. The user-owned `models/MANIFEST.json`
+    remains excluded.
 - Completed post-Milestone 9 playback-resume reliability follow-up: a live
   98-block article exposed that a durable cursor saved exactly at the end of a
   non-final block was not normalized to the first block actually included in

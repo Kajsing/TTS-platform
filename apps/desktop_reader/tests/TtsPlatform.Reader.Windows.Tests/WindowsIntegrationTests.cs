@@ -5,6 +5,30 @@ namespace TtsPlatform.Reader.Windows.Tests;
 
 public sealed class WindowsIntegrationTests
 {
+    [Fact]
+    public void Service_controller_finds_only_the_bundled_launcher_above_the_app_directory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"tts-reader-service-{Guid.NewGuid():N}");
+        var launcher = Path.Combine(root, "scripts", "windows", "run_service.ps1");
+        var appDirectory = Path.Combine(root, "apps", "desktop_reader", "publish");
+        Directory.CreateDirectory(Path.GetDirectoryName(launcher)!);
+        Directory.CreateDirectory(appDirectory);
+        File.WriteAllText(launcher, "# test launcher");
+        try
+        {
+            var found = ScheduledServiceController.FindLocalServiceLauncher(appDirectory);
+
+            Assert.NotNull(found);
+            Assert.Equal(Path.GetFullPath(launcher), found.FullName);
+            Assert.Null(ScheduledServiceController.FindLocalServiceLauncher(
+                Path.Combine(Path.GetTempPath(), $"tts-reader-unrelated-{Guid.NewGuid():N}")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("Ctrl+Alt+Insert")]
     [InlineData("Ctrl+Alt+Space")]

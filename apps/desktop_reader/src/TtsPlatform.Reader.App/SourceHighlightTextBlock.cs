@@ -90,14 +90,27 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
 {
     private int _highlightStart = -1;
     private int _highlightLength;
+    private string _text = block.Text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public ReaderBlock Block { get; } = block;
+    public ReaderBlock Block { get; private set; } = block;
     public string Id => Block.Id;
     public string? SectionId => Block.SectionId;
     public int Ordinal => Block.Ordinal;
-    public string Text => Block.Text;
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            if (string.Equals(_text, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+            _text = value;
+            OnPropertyChanged();
+        }
+    }
     public double DisplayFontSize => Block.Kind is "title" ? 24 : Block.Kind is "heading" ? 21 : 18;
     public FontWeight DisplayFontWeight =>
         Block.Kind is "title" or "heading" ? FontWeights.SemiBold : FontWeights.Normal;
@@ -141,6 +154,17 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
             _highlightLength = value;
             OnPropertyChanged();
         }
+    }
+
+    public void ApplySavedBlock(ReaderBlock savedBlock)
+    {
+        ArgumentNullException.ThrowIfNull(savedBlock);
+        if (!string.Equals(savedBlock.Id, Block.Id, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Saved block must match the displayed block.", nameof(savedBlock));
+        }
+        Block = savedBlock;
+        Text = savedBlock.Text;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

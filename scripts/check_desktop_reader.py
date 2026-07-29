@@ -109,6 +109,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ClipboardIntegration.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "GlobalHotkeys.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderTrayIcon.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "ScheduledServiceController.cs",
         reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderStreamClient.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Playback.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
@@ -242,12 +243,11 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             f"{missing_clipboard_duplicate_features}"
         )
     document_display_features = [
-        "Edit selected block",
-        "Back to document",
         "RenameDocumentDialog",
         "Save title",
         "RenameAsync",
-        "showReadingView = hasDocument",
+        "ReadingBlockTemplate",
+        "ReadingBlocksList.Visibility = hasDocument",
     ]
     missing_document_display_features = [
         value
@@ -259,6 +259,25 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             "Full-document display or title-editing features are missing: "
             f"{missing_document_display_features}"
         )
+    workstation_usability_features = [
+        "EditableBlockTemplate",
+        "Play from cursor",
+        "startCursor: cursor",
+        "Start local TTS service",
+        "Stop local TTS service",
+        "FindLocalServiceLauncher",
+        "No unrelated Python process was terminated",
+    ]
+    missing_workstation_usability_features = [
+        value
+        for value in workstation_usability_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_workstation_usability_features:
+        raise DesktopReaderCheckError(
+            "Service control, inline editing, or cursor playback features are missing: "
+            f"{missing_workstation_usability_features}"
+        )
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
@@ -269,6 +288,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "clipboard_duplicate_choice": "implemented",
         "full_document_display": "implemented",
         "title_editing": "implemented",
+        "inline_editing": "implemented",
+        "cursor_playback": "implemented",
+        "service_controls": "implemented",
     }
 
 

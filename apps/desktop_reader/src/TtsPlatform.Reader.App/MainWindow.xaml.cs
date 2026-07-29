@@ -60,10 +60,14 @@ public partial class MainWindow : Window
     private bool _copySelectionInProgress;
     private bool _clipboardPromptOpen;
     private bool _editingBlock;
+    private bool _switchingInlineEditor;
     private bool _ephemeralPlaying;
     private bool _exitRequested;
     private bool _shutdownInProgress;
     private bool _closed;
+    private ReaderBlockDisplay? _activeInlineBlock;
+    private TextBox? _activeInlineTextBox;
+    private ReaderCursor? _textCursor;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -375,6 +379,95 @@ public partial class MainWindow : Window
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) =>
         await RefreshConnectionAsync();
 
+    private async void StartServiceButton_Click(object sender, RoutedEventArgs e) =>
+        await StartLocalServiceAsync();
+
+    private async void StopServiceButton_Click(object sender, RoutedEventArgs e) =>
+        await StopLocalServiceAsync();
+
+    private async Task StartLocalServiceAsync()
+    {
+        SetBusy(true, "Starting the local serviceâ€¦");
+        try
+        {
+            if (!ScheduledServiceController.TryStart(out var message))
+            {
+                StatusText.Text = message;
+                FooterText.Text = "Service start failed";
+                return;
+            }
+
+            StatusText.Text = message;
+            ServiceStatusText.Text = "Service: starting";
+            await WaitForServiceAvailabilityAsync(shouldBeAvailable: true);
+            await RefreshConnectionAsync();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task StopLocalServiceAsync()
+    {
+        var confirmation = MessageBox.Show(
+            "Stop the local TTS service? Current Reader and browser playback will be interrupted.",
+            "Stop local service",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        SetBusy(true, "Stopping the local serviceâ€¦");
+        try
+        {
+            await StopUnifiedPlaybackAsync();
+            if (!ScheduledServiceController.TryStop(out var message))
+            {
+                StatusText.Text = message;
+                FooterText.Text = "Service stop was refused safely";
+                return;
+            }
+
+            StatusText.Text = message;
+            ServiceStatusText.Text = "Service: stopping";
+            await WaitForServiceAvailabilityAsync(shouldBeAvailable: false);
+            await RefreshConnectionAsync();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task WaitForServiceAvailabilityAsync(bool shouldBeAvailable)
+    {
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            var available = false;
+            try
+            {
+                _ = await GetClient().GetHealthAsync();
+                available = true;
+            }
+            catch (Exception exception) when (
+                exception is ReaderServiceUnavailableException or
+                    ReaderTokenUnavailableException or
+                    ReaderApiException)
+            {
+                // A transition is expected while the local process starts or stops.
+            }
+
+            if (available == shouldBeAvailable)
+            {
+                return;
+            }
+            await Task.Delay(250);
+        }
+    }
+
     private async Task RefreshConnectionAsync()
     {
         SetBusy(true, "Checking the local service…");
@@ -527,6 +620,14 @@ public partial class MainWindow : Window
             SuggestedAction.EnableReader => "Reader setup help",
             _ => "Retry",
         };
+        var serviceUnavailable = result.State == ConnectionState.ServiceUnavailable;
+        ServiceStatusText.Text = serviceUnavailable
+            ? "Service: stopped"
+            : result.State is ConnectionState.NotChecked or ConnectionState.Checking
+                ? "Service: checking"
+                : "Service: running";
+        StartServiceButton.IsEnabled = serviceUnavailable;
+        StopServiceButton.IsEnabled = !serviceUnavailable || ScheduledServiceController.OwnsRunningService;
         FooterText.Text = result.State.ToString();
     }
 
@@ -535,8 +636,7 @@ public partial class MainWindow : Window
         switch (_onboarding.Action)
         {
             case SuggestedAction.StartService:
-                ScheduledServiceController.TryStart(out var message);
-                StatusText.Text = message;
+                await StartLocalServiceAsync();
                 break;
             case SuggestedAction.ChooseTokenFile:
                 BrowseForToken();
@@ -1240,7 +1340,15 @@ public partial class MainWindow : Window
             }
         }
 
-        await LoadDocumentAsync(document);
+        try
+        {
+            await LoadDocumentAsync(await GetClient().GetDocumentAsync(document.Id));
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Document: {exception.Message}";
+        }
     }
 
     private async Task LoadDocumentAsync(ReaderDocument document)
@@ -1258,12 +1366,15 @@ public partial class MainWindow : Window
             await _editor.LoadAsync(document);
             await LoadReadingWindowAsync(document, 0);
             _editingBlock = false;
+            _activeInlineBlock = null;
+            _activeInlineTextBox = null;
+            _textCursor = null;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
             EditorTextBox.Text = _editor.WorkingText;
             EditorTextBox.IsReadOnly = !_editor.IsEditable;
             EditorHintText.Text = _editor.IsEditable
-                ? "Showing the document in bounded pages. Select a block and choose Edit selected block to change its text."
+                ? "Click in the text to edit or place the playback cursor. Editing is locked while speech is playing."
                 : DescribeStructuredDocument(document);
             UpdateEditorButtons();
             UpdatePlaybackControls();
@@ -1445,8 +1556,13 @@ public partial class MainWindow : Window
         UpdateEditorButtons();
         if (result.Saved)
         {
-            _editingBlock = false;
-            await RefreshLibraryAfterMutationAsync();
+            if (_activeInlineBlock is not null && _editor.Block is not null)
+            {
+                _updatingEditor = true;
+                _activeInlineBlock.ApplySavedBlock(_editor.Block);
+                _updatingEditor = false;
+            }
+            UpdateTextCursorFromActiveEditor();
             UpdatePlaybackControls();
         }
     }
@@ -1461,8 +1577,13 @@ public partial class MainWindow : Window
         _editor.RevertLocalChanges();
         _updatingEditor = true;
         EditorTextBox.Text = _editor.WorkingText;
+        if (_activeInlineBlock is not null)
+        {
+            _activeInlineBlock.Text = _editor.WorkingText;
+        }
         _updatingEditor = false;
         FooterText.Text = "Local changes reverted";
+        UpdateTextCursorFromActiveEditor();
         UpdateEditorButtons();
     }
 
@@ -1482,10 +1603,16 @@ public partial class MainWindow : Window
         if (result.Saved)
         {
             _editingBlock = false;
+            _activeInlineBlock = null;
+            _activeInlineTextBox = null;
+            _textCursor = null;
             _updatingEditor = true;
             EditorTextBox.Text = _editor.WorkingText;
             _updatingEditor = false;
-            await RefreshLibraryAfterMutationAsync();
+            if (_editor.Document is ReaderDocument document && _readingWindow is not null)
+            {
+                await LoadReadingWindowAsync(document, _readingWindow.Current.StartOrdinal);
+            }
             UpdatePlaybackControls();
         }
 
@@ -1539,6 +1666,11 @@ public partial class MainWindow : Window
     {
         if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
         {
+            if (_editor.HasUnsavedChanges)
+            {
+                FooterText.Text = "Save or revert changes before changing page.";
+                return;
+            }
             await ShowReadingPageAsync(await _readingWindow.LoadPreviousAsync(document.Id));
         }
     }
@@ -1547,12 +1679,117 @@ public partial class MainWindow : Window
     {
         if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
         {
+            if (_editor.HasUnsavedChanges)
+            {
+                FooterText.Text = "Save or revert changes before changing page.";
+                return;
+            }
             await ShowReadingPageAsync(await _readingWindow.LoadNextAsync(document.Id));
         }
     }
 
     private void ReadingBlocksList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateEditorButtons();
+
+    private void InlineEditor_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_switchingInlineEditor ||
+            sender is not TextBox textBox ||
+            textBox.DataContext is not ReaderBlockDisplay display ||
+            _editor?.Document is not ReaderDocument document ||
+            !document.IsEditable ||
+            _playback?.IsActive == true)
+        {
+            return;
+        }
+
+        if (_activeInlineBlock is not null &&
+            !string.Equals(_activeInlineBlock.Id, display.Id, StringComparison.Ordinal) &&
+            _editor.HasUnsavedChanges)
+        {
+            var discard = MessageBox.Show(
+                "Discard the unsaved changes in the previous paragraph?",
+                "Unsaved changes",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (discard != MessageBoxResult.Yes)
+            {
+                var previous = _activeInlineTextBox;
+                _switchingInlineEditor = true;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    previous?.Focus();
+                    _switchingInlineEditor = false;
+                }));
+                return;
+            }
+
+            _editor.RevertLocalChanges();
+            _updatingEditor = true;
+            _activeInlineBlock.Text = _editor.WorkingText;
+            _updatingEditor = false;
+        }
+
+        if (_activeInlineBlock is null ||
+            !string.Equals(_activeInlineBlock.Id, display.Id, StringComparison.Ordinal))
+        {
+            _editor.LoadBlock(document, display.Block);
+        }
+        _activeInlineBlock = display;
+        _activeInlineTextBox = textBox;
+        _editingBlock = true;
+        ReadingBlocksList.SelectedItem = display;
+        UpdateTextCursorFromActiveEditor();
+        UpdateEditorButtons();
+        UpdatePlaybackControls();
+    }
+
+    private void InlineEditor_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox &&
+            textBox.DataContext is ReaderBlockDisplay display &&
+            ReferenceEquals(display, _activeInlineBlock))
+        {
+            _activeInlineTextBox = textBox;
+            UpdateTextCursorFromActiveEditor();
+        }
+    }
+
+    private void InlineEditor_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingEditor ||
+            sender is not TextBox textBox ||
+            textBox.DataContext is not ReaderBlockDisplay display ||
+            !ReferenceEquals(display, _activeInlineBlock) ||
+            _editor is null)
+        {
+            return;
+        }
+
+        _editor.SetWorkingText(textBox.Text);
+        _activeInlineTextBox = textBox;
+        UpdateTextCursorFromActiveEditor();
+        UpdateEditorButtons();
+        UpdatePlaybackControls();
+    }
+
+    private void UpdateTextCursorFromActiveEditor()
+    {
+        if (_editor?.Document is not ReaderDocument document ||
+            _activeInlineBlock is not ReaderBlockDisplay display ||
+            _activeInlineTextBox is not TextBox textBox)
+        {
+            _textCursor = null;
+            return;
+        }
+
+        _textCursor = new ReaderCursor(
+            document.Id,
+            display.Id,
+            display.Ordinal,
+            Math.Clamp(textBox.CaretIndex, 0, textBox.Text.Length),
+            document.ContentRevision);
+    }
 
     private void EditSelectedBlockButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1626,6 +1863,38 @@ public partial class MainWindow : Window
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
         await ToggleUnifiedPlaybackAsync();
+
+    private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e) =>
+        await PlayFromTextCursorAsync();
+
+    private async Task PlayFromTextCursorAsync()
+    {
+        if (_playback is null ||
+            _editor?.Document is not ReaderDocument document ||
+            _textCursor is not ReaderCursor cursor)
+        {
+            return;
+        }
+        if (_editor.HasUnsavedChanges)
+        {
+            FooterText.Text = "Save or revert changes before playback.";
+            return;
+        }
+
+        try
+        {
+            await StopEphemeralAsync(clearReplay: true);
+            await _playback.PlayAsync(document, startCursor: cursor);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Playback: {exception.Message}";
+        }
+    }
 
     private async Task TogglePlaybackAsync()
     {
@@ -1743,6 +2012,10 @@ public partial class MainWindow : Window
 
     private Task ShowReadingPageAsync(ReadingWindowPage page)
     {
+        _activeInlineBlock = null;
+        _activeInlineTextBox = null;
+        _textCursor = null;
+        _editingBlock = false;
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
@@ -1751,9 +2024,12 @@ public partial class MainWindow : Window
         ReadingBlocksList.SelectedItem = _readingBlocks.FirstOrDefault();
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
         NextReadingPageButton.IsEnabled = page.HasNext;
+        var pageNumber = page.StartOrdinal / 64 + 1;
         FooterText.Text = page.Blocks.Count == 0
             ? "This document contains no readable blocks."
-            : $"Showing blocks {page.Blocks[0].Ordinal + 1:N0}-{page.Blocks[^1].Ordinal + 1:N0}.";
+            : $"Showing document page {pageNumber:N0}.";
+        UpdatePlaybackControls();
+        UpdateEditorButtons();
         return Task.CompletedTask;
     }
 
@@ -1800,7 +2076,7 @@ public partial class MainWindow : Window
 
     private void CreateRuleFromSelectionButton_Click(object sender, RoutedEventArgs e)
     {
-        var selection = EditorTextBox.SelectedText;
+        var selection = _activeInlineTextBox?.SelectedText ?? EditorTextBox.SelectedText;
         if (string.IsNullOrWhiteSpace(selection))
         {
             FooterText.Text = "Select text in an editable document before creating a speech rule.";
@@ -1871,20 +2147,25 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = hasPlayback;
         PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        var showReadingView = hasDocument && (documentActive || structuredDocument || !_editingBlock);
-        var showEditor = hasDocument && !showReadingView;
-        ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
-        FollowReadingCheckBox.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        DuplicateEditableButton.IsEnabled = structuredDocument && !documentActive;
-        PreviousReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        NextReadingPageButton.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        EditSelectedBlockButton.Visibility = showReadingView && !structuredDocument
+        var editableDocument = hasDocument && _editor?.IsEditable == true;
+        var showEditableText = editableDocument && !documentActive;
+        ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource(
+            showEditableText ? "EditableBlockTemplate" : "ReadingBlockTemplate");
+        ReadingBlocksList.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
+        EditorTextBox.Visibility = Visibility.Collapsed;
+        FollowReadingCheckBox.Visibility = documentActive || structuredDocument
             ? Visibility.Visible
             : Visibility.Collapsed;
-        BackToDocumentButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
-        SaveEditButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
-        RevertEditButton.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
+        DuplicateEditableButton.IsEnabled = structuredDocument && !documentActive;
+        PreviousReadingPageButton.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
+        NextReadingPageButton.Visibility = hasDocument ? Visibility.Visible : Visibility.Collapsed;
+        EditSelectedBlockButton.Visibility = Visibility.Collapsed;
+        BackToDocumentButton.Visibility = Visibility.Collapsed;
+        SaveEditButton.Visibility = showEditableText ? Visibility.Visible : Visibility.Collapsed;
+        RevertEditButton.Visibility = showEditableText ? Visibility.Visible : Visibility.Collapsed;
+        PlayFromCursorButton.IsEnabled = showEditableText &&
+            _textCursor is not null &&
+            _editor?.HasUnsavedChanges != true;
     }
 
     private void UpdateCompactController()
@@ -1928,6 +2209,18 @@ public partial class MainWindow : Window
     {
         RefreshButton.IsEnabled = !busy;
         ActionButton.IsEnabled = !busy;
+        if (busy)
+        {
+            StartServiceButton.IsEnabled = false;
+            StopServiceButton.IsEnabled = false;
+        }
+        else
+        {
+            var serviceUnavailable = _onboarding.State == ConnectionState.ServiceUnavailable;
+            StartServiceButton.IsEnabled = serviceUnavailable;
+            StopServiceButton.IsEnabled = !serviceUnavailable ||
+                ScheduledServiceController.OwnsRunningService;
+        }
         if (text is not null)
         {
             StatusText.Text = text;
