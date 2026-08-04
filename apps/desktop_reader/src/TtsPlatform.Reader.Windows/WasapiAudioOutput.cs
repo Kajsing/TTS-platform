@@ -14,7 +14,39 @@ public sealed class WasapiAudioOutput : IAudioOutput
     private WasapiOut? _output;
     private BufferedWaveProvider? _buffer;
     private PcmAudioFormat? _format;
+    private long _generation;
+    private long _submittedBytes;
+    private long _confirmedPlayedBytes;
     private bool _disposed;
+
+    public AudioPlaybackCheckpoint SubmittedCheckpoint
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return new AudioPlaybackCheckpoint(_generation, _submittedBytes);
+            }
+        }
+    }
+
+    public AudioPlaybackCheckpoint PlayedCheckpoint
+    {
+        get
+        {
+            lock (_sync)
+            {
+                var bufferedBytes = _buffer?.BufferedBytes ?? 0;
+                var latencyBytes = _format is null ? 0 : BytesFor(_format, TargetLatency);
+                var estimatedPlayedBytes = Math.Max(
+                    0,
+                    _submittedBytes - bufferedBytes - latencyBytes);
+                return new AudioPlaybackCheckpoint(
+                    _generation,
+                    Math.Max(_confirmedPlayedBytes, estimatedPlayedBytes));
+            }
+        }
+    }
 
     public static int MaximumBufferedBytes(PcmAudioFormat format)
     {
@@ -52,6 +84,7 @@ public sealed class WasapiAudioOutput : IAudioOutput
                 EnsureFormat(format);
                 var samples = pcmBytes.ToArray();
                 _buffer!.AddSamples(samples, 0, samples.Length);
+                _submittedBytes = checked(_submittedBytes + samples.Length);
                 if (_output!.PlaybackState != PlaybackState.Playing)
                 {
                     _output.Play();
@@ -101,6 +134,10 @@ public sealed class WasapiAudioOutput : IAudioOutput
         }
 
         await Task.Delay(TargetLatency, cancellationToken).ConfigureAwait(false);
+        lock (_sync)
+        {
+            _confirmedPlayedBytes = _submittedBytes;
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)
@@ -125,6 +162,7 @@ public sealed class WasapiAudioOutput : IAudioOutput
             _output = null;
             _buffer = null;
             _format = null;
+            ResetCheckpoints();
         }
         _playGate.Dispose();
         return ValueTask.CompletedTask;
@@ -155,6 +193,7 @@ public sealed class WasapiAudioOutput : IAudioOutput
             latency: (int)TargetLatency.TotalMilliseconds);
         _output.Init(_buffer);
         _format = format;
+        ResetCheckpoints();
     }
 
     private void StopCore()
@@ -168,7 +207,15 @@ public sealed class WasapiAudioOutput : IAudioOutput
 
             _output?.Stop();
             _buffer?.ClearBuffer();
+            ResetCheckpoints();
         }
+    }
+
+    private void ResetCheckpoints()
+    {
+        _generation = checked(_generation + 1);
+        _submittedBytes = 0;
+        _confirmedPlayedBytes = 0;
     }
 
     private static void ValidateFormat(PcmAudioFormat format)
@@ -184,8 +231,11 @@ public sealed class WasapiAudioOutput : IAudioOutput
     }
 
     private static int BufferedBytesFor(PcmAudioFormat format, TimeSpan duration) => checked(
-        format.SampleRateHz *
+        (int)BytesFor(format, duration));
+
+    private static long BytesFor(PcmAudioFormat format, TimeSpan duration) => checked(
+        (long)(format.SampleRateHz *
         format.Channels *
         (format.BitsPerSample / 8) *
-        (int)duration.TotalSeconds);
+        duration.TotalSeconds));
 }

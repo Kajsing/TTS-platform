@@ -57,6 +57,23 @@ This file is the live status log and shared memory for future Codex loops.
   audio across both source blocks. The service was restarted with Kokoro and
   left healthy; no stored document text, playback position, security setting,
   or model selection was changed.
+- Completed continuous playback-buffer follow-up: the desktop coordinator no
+  longer drains WASAPI after every cursor-advancing speech fragment. Audio can
+  now remain buffered across paragraph and block boundaries and drains once at
+  the end of a bounded Reader stream window. Submitted and conservatively
+  estimated played-byte checkpoints keep Pause/Stop resume positions behind
+  audio that may still be queued or within the 100 ms WASAPI target latency.
+  The existing two-second backpressure target and hard ten-second memory limit
+  are unchanged.
+- Playback-buffer validation passed on 2026-08-04: all 74 .NET Release tests,
+  including a regression requiring two fragments and only one terminal drain,
+  all 400 Python tests, Ruff, .NET formatting, `git diff --check`, and the full
+  Windows desktop integration check passed after the user disabled Windows
+  Smart App Control. The latter covered live paging/stream/resume, shared-mode
+  audio, clipboard/hotkey/tray integration, self-contained packaging, and WPF
+  rendering. The repository architecture, localhost security model, and
+  dependency set were not changed; a user-local official .NET 10 SDK was used
+  because the machine-wide SDK remains .NET 8.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

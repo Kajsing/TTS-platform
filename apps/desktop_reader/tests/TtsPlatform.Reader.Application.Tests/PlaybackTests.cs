@@ -70,6 +70,23 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public async Task Playback_buffers_across_cursor_boundaries_and_drains_once_at_stream_end()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true));
+        var audio = new FakeAudioOutput();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
+
+        Assert.Equal(2, audio.CallCount);
+        Assert.Equal(1, audio.DrainCount);
+        Assert.Equal(6, playback.LastFullyPlayedCursor?.CharacterOffset);
+    }
+
+    [Fact]
     public async Task Explicit_start_cursor_overrides_the_saved_resume_position()
     {
         var service = new PlaybackService();
@@ -313,9 +330,36 @@ public sealed class PlaybackTests
     {
         private readonly TaskCompletionSource _stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<int> _calls = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly object _sync = new();
         private int _activeCalls;
+        private long _generation = 1;
+        private long _submittedBytes;
+        private long _playedBytes;
         public int CallCount { get; private set; }
+        public int DrainCount { get; private set; }
         public int MaxConcurrentCalls { get; private set; }
+
+        public AudioPlaybackCheckpoint SubmittedCheckpoint
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return new AudioPlaybackCheckpoint(_generation, _submittedBytes);
+                }
+            }
+        }
+
+        public AudioPlaybackCheckpoint PlayedCheckpoint
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return new AudioPlaybackCheckpoint(_generation, _playedBytes);
+                }
+            }
+        }
 
         public async Task PlayAsync(
             ReadOnlyMemory<byte> pcmBytes,
@@ -325,6 +369,14 @@ public sealed class PlaybackTests
             _ = pcmBytes;
             _ = format;
             CallCount++;
+            long generation;
+            long submittedBytes;
+            lock (_sync)
+            {
+                generation = _generation;
+                _submittedBytes += pcmBytes.Length;
+                submittedBytes = _submittedBytes;
+            }
             _calls.TrySetResult(CallCount);
             _activeCalls++;
             MaxConcurrentCalls = Math.Max(MaxConcurrentCalls, _activeCalls);
@@ -333,6 +385,14 @@ public sealed class PlaybackTests
                 if (blockCall == CallCount)
                 {
                     await _stop.Task.WaitAsync(cancellationToken);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                lock (_sync)
+                {
+                    if (_generation == generation)
+                    {
+                        _playedBytes = submittedBytes;
+                    }
                 }
             }
             finally
@@ -357,10 +417,25 @@ public sealed class PlaybackTests
         public Task StopAsync(CancellationToken cancellationToken = default)
         {
             _stop.TrySetResult();
+            lock (_sync)
+            {
+                _generation++;
+                _submittedBytes = 0;
+                _playedBytes = 0;
+            }
             return Task.CompletedTask;
         }
 
-        public Task DrainAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DrainAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_sync)
+            {
+                DrainCount++;
+                _playedBytes = _submittedBytes;
+            }
+            return Task.CompletedTask;
+        }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

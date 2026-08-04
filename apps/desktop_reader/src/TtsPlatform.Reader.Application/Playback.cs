@@ -15,8 +15,12 @@ public enum ReaderPlaybackState
 
 public sealed record PcmAudioFormat(int SampleRateHz, int Channels, int BitsPerSample = 16);
 
+public sealed record AudioPlaybackCheckpoint(long Generation, long BytePosition);
+
 public interface IAudioOutput : IAsyncDisposable
 {
+    AudioPlaybackCheckpoint SubmittedCheckpoint { get; }
+    AudioPlaybackCheckpoint PlayedCheckpoint { get; }
     Task PlayAsync(
         ReadOnlyMemory<byte> pcmBytes,
         PcmAudioFormat format,
@@ -44,6 +48,9 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     private readonly IReaderStreamClient _streamClient;
     private readonly IAudioOutput _audioOutput;
     private readonly SemaphoreSlim _transitionLock = new(1, 1);
+    private readonly object _audioCursorSync = new();
+    private readonly Queue<(AudioPlaybackCheckpoint Checkpoint, ReaderCursor Cursor)>
+        _pendingAudioCursors = new();
     private CancellationTokenSource? _runCancellation;
     private Task? _runTask;
     private IReaderStreamSession? _activeSession;
@@ -89,6 +96,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
             _document = document;
             _voice = voice;
+            ClearPendingAudioCursors();
             if (startCursor is not null)
             {
                 ValidateCursorDocument(startCursor, document.Id);
@@ -199,20 +207,27 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                                 packet.PcmBytes,
                                 packetFormat,
                                 cancellationToken).ConfigureAwait(false);
+                            cancellationToken.ThrowIfCancellationRequested();
                             if (CursorAdvanced(packet.CursorStart, packet.CursorEnd))
                             {
-                                await _audioOutput.DrainAsync(cancellationToken).ConfigureAwait(false);
-                                cancellationToken.ThrowIfCancellationRequested();
-                                _lastFullyPlayedCursor = packet.CursorEnd;
-                                if (saveTimer.Elapsed >= PositionSaveInterval)
+                                var checkpoint = _audioOutput.SubmittedCheckpoint;
+                                if (checkpoint.BytePosition > 0)
                                 {
-                                    await PersistPositionAsync(completed: false, cancellationToken)
-                                        .ConfigureAwait(false);
-                                    saveTimer.Restart();
+                                    EnqueueAudioCursor(checkpoint, packet.CursorEnd);
                                 }
+                            }
+                            if (AcknowledgePlayedAudio() &&
+                                saveTimer.Elapsed >= PositionSaveInterval)
+                            {
+                                await PersistPositionAsync(completed: false, cancellationToken)
+                                    .ConfigureAwait(false);
+                                saveTimer.Restart();
                             }
                             break;
                         case ReaderStreamDone done:
+                            await _audioOutput.DrainAsync(cancellationToken).ConfigureAwait(false);
+                            cancellationToken.ThrowIfCancellationRequested();
+                            AcknowledgePlayedAudio();
                             continueAt = done.Cursor;
                             shouldContinue = done.NextWindowAvailable;
                             completed = done.DocumentComplete;
@@ -324,6 +339,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                     // The server/session already completed while the transition began.
                 }
             }
+            AcknowledgePlayedAudio();
             await _audioOutput.StopAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -414,5 +430,49 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
     private static bool CursorAdvanced(ReaderCursor start, ReaderCursor end) =>
         start.BlockOrdinal != end.BlockOrdinal || start.CharacterOffset != end.CharacterOffset;
+
+    private void EnqueueAudioCursor(
+        AudioPlaybackCheckpoint checkpoint,
+        ReaderCursor cursor)
+    {
+        lock (_audioCursorSync)
+        {
+            _pendingAudioCursors.Enqueue((checkpoint, cursor));
+        }
+    }
+
+    private bool AcknowledgePlayedAudio()
+    {
+        var played = _audioOutput.PlayedCheckpoint;
+        var advanced = false;
+        lock (_audioCursorSync)
+        {
+            while (_pendingAudioCursors.TryPeek(out var pending))
+            {
+                if (pending.Checkpoint.Generation < played.Generation)
+                {
+                    _pendingAudioCursors.Dequeue();
+                    continue;
+                }
+                if (pending.Checkpoint.Generation != played.Generation ||
+                    pending.Checkpoint.BytePosition > played.BytePosition)
+                {
+                    break;
+                }
+                _pendingAudioCursors.Dequeue();
+                _lastFullyPlayedCursor = pending.Cursor;
+                advanced = true;
+            }
+        }
+        return advanced;
+    }
+
+    private void ClearPendingAudioCursors()
+    {
+        lock (_audioCursorSync)
+        {
+            _pendingAudioCursors.Clear();
+        }
+    }
 
 }

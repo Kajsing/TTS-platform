@@ -16,8 +16,9 @@ The Milestone 9 Reader beta provides:
   documents, including durable Undo and Redo through integer row versions;
 - read-only display for structured source types;
 - protected Reader WebSocket playback with strict mark/binary validation;
-- NAudio 2.3 shared-mode WASAPI PCM output with two-second backpressure and a
-  hard ten-second memory limit;
+- NAudio 2.3 shared-mode WASAPI PCM output with a continuous two-second target
+  across speech fragments, a hard ten-second memory limit, and played-byte
+  checkpoints for truthful Pause/Stop resume positions;
 - Play/Pause/Stop, bounded section navigation, a 64-block reading viewport,
   source-span highlighting, and durable resume from the last fully played
   UTF-16 cursor;
