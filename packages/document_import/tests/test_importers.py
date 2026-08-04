@@ -38,7 +38,7 @@ def test_text_and_markdown_preserve_paragraphs_headings_lists_quotes_and_code() 
     markdown = import_document(
         source(
             "book.md",
-            b"# Chapter One\n\nParagraph.\n\n- first\n\n> quote\n\n```\ncode()\n```",
+            b"# Chapter One\n\nParagraph.\n\n- first\n\n> quote\n\n```python\ncode()\n```",
         )
     )
 
@@ -52,6 +52,19 @@ def test_text_and_markdown_preserve_paragraphs_headings_lists_quotes_and_code() 
     ]
     assert markdown.sections[1].heading == "Chapter One"
     assert markdown.blocks[-1].text == "code()"
+    assert markdown.blocks[-1].metadata == {"markdown_fence_language": "python"}
+
+
+def test_markdown_records_plain_text_fence_language_for_speech_preparation() -> None:
+    markdown = import_document(
+        source(
+            "chapter.md",
+            b"```text\n[SYSTEM NOTICE]\n\nContinuity protection: partial.\n```",
+        )
+    )
+
+    assert markdown.blocks[0].kind == "code"
+    assert markdown.blocks[0].metadata == {"markdown_fence_language": "text"}
 
 
 def test_html_is_non_fetching_and_ignores_active_hidden_and_navigation_content() -> None:

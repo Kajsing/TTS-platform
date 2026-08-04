@@ -31,7 +31,7 @@ from .models import (
     ImportWarning,
 )
 
-IMPORTER_VERSION = "1"
+IMPORTER_VERSION = "2"
 SUPPORTED_FORMATS = ("txt", "md", "html", "docx", "epub")
 _SPACE = re.compile(r"[ \t\f\v]+")
 _BLANK_LINES = re.compile(r"\n[ \t]*\n+")
@@ -221,6 +221,7 @@ def _import_markdown(
     paragraph: list[str] = []
     fenced: list[str] = []
     in_fence = False
+    fence_language: str | None = None
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -232,12 +233,26 @@ def _import_markdown(
         stripped = raw_line.strip()
         if stripped.startswith("```") or stripped.startswith("~~~"):
             if in_fence:
-                builder.add_block("code", "\n".join(fenced), preserve_whitespace=True)
+                builder.add_block(
+                    "code",
+                    "\n".join(fenced),
+                    preserve_whitespace=True,
+                    metadata=(
+                        {"markdown_fence_language": fence_language}
+                        if fence_language is not None
+                        else None
+                    ),
+                )
                 fenced.clear()
                 in_fence = False
+                fence_language = None
             else:
                 flush_paragraph()
                 in_fence = True
+                fence_info = stripped[3:].strip()
+                fence_language = (
+                    fence_info.split(maxsplit=1)[0][:64].lower() if fence_info else None
+                )
             continue
         if in_fence:
             fenced.append(raw_line)
@@ -265,7 +280,16 @@ def _import_markdown(
     flush_paragraph()
     if in_fence:
         builder.warn("markdown_unclosed_fence", "An unclosed code fence was preserved as code.")
-        builder.add_block("code", "\n".join(fenced), preserve_whitespace=True)
+        builder.add_block(
+            "code",
+            "\n".join(fenced),
+            preserve_whitespace=True,
+            metadata=(
+                {"markdown_fence_language": fence_language}
+                if fence_language is not None
+                else None
+            ),
+        )
     return builder.finish()
 
 

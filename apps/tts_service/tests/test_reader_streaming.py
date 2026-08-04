@@ -5,8 +5,17 @@ import logging
 from pathlib import Path
 
 import pytest
+from document_import import ImportOptions, ImportSource
 from fastapi.testclient import TestClient
-from reader_core import ReaderLibrary, RuleScope, RuleStage, RuleType, SqliteReaderRepository
+from reader_core import (
+    BlockKind,
+    ReaderBlock,
+    ReaderLibrary,
+    RuleScope,
+    RuleStage,
+    RuleType,
+    SqliteReaderRepository,
+)
 from speech_rules import RuleContext
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer
 from tts_service.config import AppConfig, ReaderConfig
@@ -17,6 +26,7 @@ from tts_service.reader_service import (
     ReaderDocumentLockedError,
 )
 from tts_service.reader_streaming import (
+    ReaderBlockSlice,
     ReaderSpeechCompiler,
     ReaderStreamWindowBuilder,
 )
@@ -212,6 +222,83 @@ def test_compiler_maps_a_chunk_joined_across_adjacent_segments(tmp_path: Path) -
     assert window.fragments[0].spoken_text == "Edited through. NET \U0001f600"
     assert window.fragments[0].source_spans[0].start_offset == 0
     assert window.fragments[0].source_spans[0].end_offset == len("Edited through .NET \U0001f600")
+
+
+def test_compiler_speaks_visible_markdown_fenced_text_blocks(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    document = service.import_source(
+        source=ImportSource(
+            filename="chapter.md",
+            content_type="text/markdown",
+            data=(
+                b"Before.\n\n```text\n"
+                b"[IDENTITY RESOLUTION FAILED]\n\n"
+                b"No valid regional record.\n"
+                b"Recovery authority: unavailable.\n"
+                b"Local continuity protection: partial.\n"
+                b"```\n\n```python\nprint('not spoken')\n```\n\nAfter."
+            ),
+        ),
+        options=ImportOptions(language_hint="en"),
+        copy_source_file=False,
+        allow_duplicate=False,
+    )
+
+    window = _builder(service).build(
+        document.id,
+        block_ordinal=0,
+        character_offset_utf16=0,
+        block_id=None,
+        content_revision=document.content_revision,
+        max_blocks=64,
+        max_source_characters=32_000,
+    )
+
+    blocks = service.list_blocks(document.id, after_ordinal=-1, limit=64)
+    assert [block.kind.value for block in blocks] == [
+        "paragraph",
+        "code",
+        "code",
+        "paragraph",
+    ]
+    assert blocks[1].metadata == {"markdown_fence_language": "text"}
+    assert blocks[2].metadata == {"markdown_fence_language": "python"}
+    spoken = " ".join(fragment.spoken_text for fragment in window.fragments)
+    assert "[IDENTITY RESOLUTION FAILED]" in spoken
+    assert "No valid regional record." in spoken
+    assert "Recovery authority: unavailable." in spoken
+    assert "Local continuity protection: partial." in spoken
+    assert "not spoken" not in spoken
+
+
+def test_compiler_speaks_legacy_bracketed_notification_code_blocks() -> None:
+    text = (
+        "[ROUTE CONTINUITY DEGRADED]\n\n"
+        "Traveller identity: unresolved.\n"
+        "Segment history: conflicting.\n"
+        "Load compensation: suspended."
+    )
+    block = ReaderBlock(
+        id="00000000-0000-0000-0000-000000000001",
+        document_id="00000000-0000-0000-0000-000000000002",
+        section_id=None,
+        ordinal=0,
+        kind=BlockKind.CODE,
+        text=text,
+        character_count=len(text),
+        content_sha256="legacy",
+    )
+    compiler = ReaderSpeechCompiler(TextNormalizer(), SentenceSegmenter(), ChunkPlanner())
+
+    fragments = compiler.compile_slices(
+        (ReaderBlockSlice(block=block, start_offset=0, end_offset=len(text)),),
+        content_revision=1,
+        language_hint="en",
+    )
+
+    spoken = " ".join(fragment.spoken_text for fragment in fragments)
+    assert "[ROUTE CONTINUITY DEGRADED]" in spoken
+    assert "Load compensation: suspended." in spoken
 
 
 def test_speech_rules_compile_into_stream_with_original_source_spans(tmp_path: Path) -> None:

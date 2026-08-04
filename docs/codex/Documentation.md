@@ -40,6 +40,23 @@ This file is the live status log and shared memory for future Codex loops.
   architecture, localhost security, exposure, or licensing direction changed;
   the selected model is Apache-2.0. Reader Workstation still resumes at
   Milestone 10 only when explicitly requested.
+- Completed Markdown text-fence speech correction: Reader displayed imported
+  fenced blocks but the speech compiler skipped every `code` block, so novel
+  system messages such as `[ROUTE CONTINUITY DEGRADED]` silently jumped to the
+  following paragraph. Importer version 2 now records the Markdown fence
+  language. Fences labeled `text`, `txt`, `plain`, `plaintext`, or `prose` are
+  spoken literally, while programming-language fences retain the planned
+  article-profile skip behavior. A conservative compatibility check also speaks
+  legacy imports whose metadata is absent when they contain a bracketed,
+  uppercase notification header followed by punctuated text.
+- Text-fence validation passed on 2026-08-04: all 400 Python tests, Ruff, and
+  `git diff --check` passed. A live Reader WebSocket started directly at the
+  existing chapter-02 block 51 and produced 350,828 PCM bytes while source marks
+  covered all 120 characters. The separate imported
+  `[IDENTITY RESOLUTION FAILED]` heading and following paragraph also produced
+  audio across both source blocks. The service was restarted with Kokoro and
+  left healthy; no stored document text, playback position, security setting,
+  or model selection was changed.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

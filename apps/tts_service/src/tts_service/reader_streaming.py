@@ -90,6 +90,8 @@ class ReaderStreamWindow:
 
 
 class ReaderSpeechCompiler:
+    _SPOKEN_FENCE_LANGUAGES = frozenset({"plain", "plaintext", "prose", "text", "txt"})
+
     def __init__(
         self,
         normalizer: TextNormalizer,
@@ -131,7 +133,7 @@ class ReaderSpeechCompiler:
         rule_warnings: list[RuleWarning] = []
         segment_index = 0
         for block_slice in block_slices:
-            if block_slice.block.kind.value in {"separator", "code"}:
+            if not self._should_speak_block(block_slice.block):
                 continue
             rule_result = (
                 self._rule_engine.apply(
@@ -226,6 +228,34 @@ class ReaderSpeechCompiler:
                 normalized_cursor = end
                 segment_index += 1
         return tuple(fragments), tuple(rule_warnings)
+
+    @classmethod
+    def _should_speak_block(cls, block: ReaderBlock) -> bool:
+        if block.kind.value == "separator":
+            return False
+        if block.kind.value != "code":
+            return True
+        fence_language = str(block.metadata.get("markdown_fence_language", "")).lower()
+        if fence_language in cls._SPOKEN_FENCE_LANGUAGES:
+            return True
+        if fence_language:
+            return False
+        return cls._looks_like_legacy_notification(block.text)
+
+    @staticmethod
+    def _looks_like_legacy_notification(text: str) -> bool:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return False
+        header = lines[0]
+        if not (header.startswith("[") and header.endswith("]")):
+            return False
+        header_text = header[1:-1]
+        if not any(character.isalpha() for character in header_text):
+            return False
+        if header_text != header_text.upper():
+            return False
+        return any(line.endswith((".", ":", "!", "?")) for line in lines[1:])
 
     @staticmethod
     def _align_chunk(

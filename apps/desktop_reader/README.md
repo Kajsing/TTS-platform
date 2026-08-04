@@ -39,6 +39,10 @@ The Milestone 9 Reader beta provides:
 - offline TXT, Markdown, HTML/HTM, DOCX, and EPUB import with a bounded preview,
   cancellation, duplicate detection, durable warnings, and optional managed
   source-file copies;
+- Markdown fences labeled `text`, `txt`, `plain`, `plaintext`, or `prose` are
+  read literally, while programming-language code fences remain skipped in the
+  current article-style playback; legacy bracketed system notifications are
+  recognized so existing imports retain their spoken content;
 - non-fetching HTML import, archive/XML safety limits, and active-content
   removal before anything reaches the Reader library;
 - structure-aware read-only rendering with 64-block pages, recycling WPF
