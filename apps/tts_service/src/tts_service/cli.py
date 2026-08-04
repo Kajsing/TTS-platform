@@ -2301,6 +2301,7 @@ def _rewrite_backend_paths(*, source: str, backend: dict[str, object]) -> dict[s
         "model",
         "tokens",
         "data_dir",
+        "dict_dir",
         "lexicon",
         "voices",
         "acoustic_model",
@@ -3060,7 +3061,7 @@ def _model_backend_asset_checks(
                 required=True,
             )
         )
-    for field in ("tokens", "data_dir", "lexicon"):
+    for field in ("tokens", "data_dir", "dict_dir", "lexicon"):
         raw_path = str(getattr(runtime_config, field))
         if raw_path and field not in required_fields:
             checks.append(

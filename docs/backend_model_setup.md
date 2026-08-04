@@ -279,6 +279,7 @@ Backend path fields:
 - `model`
 - `tokens`
 - `data_dir`
+- `dict_dir`
 - `lexicon`
 - `voices`
 - `acoustic_model`
@@ -296,7 +297,10 @@ Required asset rules:
   `data_dir`.
 - `kokoro` requires `model`, `voices`, `tokens`, and `data_dir`.
 - `kitten` requires `model`, `voices`, `tokens`, and `data_dir`.
+- Multilingual Kokoro packages may additionally require both `lexicon` and
+  `dict_dir`; include them when they are present in the model package.
 - `lexicon` and every `rule_fsts` entry must exist if provided.
+- `dict_dir` must exist if provided.
 
 Backend asset paths must be relative and must resolve under the voice
 `source`, normally `models/voices/<voice-id>`. Paths may be model-relative, such
@@ -389,6 +393,25 @@ SHA-256 checksum, and maps the installed VITS backend to:
 - `vits-piper-en_US-lessac-medium/tokens.txt`
 - `vits-piper-en_US-lessac-medium/espeak-ng-data`
 
+The separate optional catalog at `models/catalog.kokoro.json` contains the
+English `kokoro-en-v1_0-af-heart` voice. It uses the official sherpa-onnx
+`kokoro-multi-lang-v1_0` package, pins the artifact size and SHA-256, and selects
+speaker 3 (`af_heart`) from the package's 53 speakers. Keeping this voice outside
+the default catalog preserves the single-model Piper first-run and release-demo
+flow while making Kokoro a reversible opt-in:
+
+```bash
+tts catalog-list --catalog ./models/catalog.kokoro.json
+tts model-install kokoro-en-v1_0-af-heart --catalog ./models/catalog.kokoro.json --activate
+```
+
+Downloaded model assets and local manifest/config activation remain local and
+are not committed. To switch an existing installation back to Piper:
+
+```bash
+tts model-activate vits-piper-en_US-lessac-high
+```
+
 `tts catalog-list` keeps the raw `models` entries in stdout JSON and adds:
 
 - `catalog` counts for total, installable, and checksum-covered entries
@@ -479,6 +502,12 @@ Install and activate a model in one first-run command:
 ```bash
 tts model-install vits-piper-en_US-lessac-medium --activate
 tts model-install <model-id> --catalog <path-or-url> --activate
+```
+
+Install and activate the optional Kokoro `af_heart` voice:
+
+```bash
+tts model-install kokoro-en-v1_0-af-heart --catalog ./models/catalog.kokoro.json --activate
 ```
 
 Replace an existing installed model:

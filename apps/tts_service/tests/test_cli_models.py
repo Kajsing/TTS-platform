@@ -2365,6 +2365,18 @@ def test_model_check_accepts_source_relative_backend_asset_paths(
     ]
 
 
+def test_rewrite_backend_paths_includes_kokoro_dict_dir() -> None:
+    rewritten = cli._rewrite_backend_paths(
+        source="models/voices/kokoro-en",
+        backend={
+            "model_type": "kokoro",
+            "dict_dir": "kokoro-model/dict",
+        },
+    )
+
+    assert rewritten["dict_dir"] == "models/voices/kokoro-en/kokoro-model/dict"
+
+
 def test_model_check_rejects_backend_asset_paths_outside_voice_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

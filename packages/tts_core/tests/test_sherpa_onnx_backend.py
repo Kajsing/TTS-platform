@@ -250,6 +250,65 @@ def test_sherpa_backend_real_mode_accepts_source_relative_backend_paths(
     assert backend.snapshot()["loaded_real_voices"] == ["sherpa-en-debug"]
 
 
+def test_sherpa_backend_passes_kokoro_dict_dir_to_runtime(tmp_path, monkeypatch) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "sherpa-en-debug"
+    voice_dir.mkdir(parents=True)
+    for filename in ("model.onnx", "voices.bin", "tokens.txt", "lexicon.txt"):
+        (voice_dir / filename).write_text("fake", encoding="utf-8")
+    (voice_dir / "espeak-ng-data").mkdir()
+    (voice_dir / "dict").mkdir()
+    monkeypatch.setitem(sys.modules, "sherpa_onnx", build_fake_sherpa_onnx_module())
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "kokoro",
+                "model": "model.onnx",
+                "voices": "voices.bin",
+                "tokens": "tokens.txt",
+                "data_dir": "espeak-ng-data",
+                "dict_dir": "dict",
+                "lexicon": "lexicon.txt",
+            }
+        },
+    )
+
+    backend.warmup("sherpa-en-debug")
+
+    runtime = backend._runtime_by_voice_id["sherpa-en-debug"]
+    kokoro_config = runtime.config.model.kwargs["kokoro"]
+    assert kokoro_config.kwargs["dict_dir"] == str((voice_dir / "dict").resolve())
+    assert runtime.config.model.kwargs["vits"].kwargs["model"] == ""
+    assert runtime.config.model.kwargs["matcha"].kwargs["tokens"] == ""
+    assert runtime.config.model.kwargs["kitten"].kwargs["model"] == ""
+
+
+def test_sherpa_backend_rejects_missing_configured_kokoro_dict_dir(tmp_path) -> None:
+    voice_dir = tmp_path / "models" / "voices" / "sherpa-en-debug"
+    voice_dir.mkdir(parents=True)
+    for filename in ("model.onnx", "voices.bin", "tokens.txt"):
+        (voice_dir / filename).write_text("fake", encoding="utf-8")
+    (voice_dir / "espeak-ng-data").mkdir()
+    backend = SherpaOnnxBackend(
+        models_root=tmp_path / "models" / "voices",
+        settings=SherpaOnnxBackendSettings(runtime_mode="real"),
+        voice_runtime_configs={
+            "sherpa-en-debug": {
+                "model_type": "kokoro",
+                "model": "model.onnx",
+                "voices": "voices.bin",
+                "tokens": "tokens.txt",
+                "data_dir": "espeak-ng-data",
+                "dict_dir": "dict",
+            }
+        },
+    )
+
+    with pytest.raises(BackendNotReadyError, match="missing backend asset"):
+        backend.warmup("sherpa-en-debug")
+
+
 def test_sherpa_backend_real_mode_rejects_backend_traversal_before_runtime_import(
     tmp_path,
 ) -> None:

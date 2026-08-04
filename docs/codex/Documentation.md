@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-07-29
+- Date: 2026-08-04
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,6 +18,28 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed user-requested Kokoro follow-up: the optional committed catalog at
+  `models/catalog.kokoro.json` installs the official sherpa-onnx
+  `kokoro-multi-lang-v1_0` package as `kokoro-en-v1_0-af-heart`, pins its
+  artifact size and SHA-256, and selects English speaker 3 (`af_heart`). The
+  smaller default `models/catalog.json` remains Piper-only, preserving the
+  existing first-run and release-demo behavior. Kokoro model assets and local
+  activation state remain ignored local data; the user's `models/MANIFEST.json`
+  changes are deliberately excluded from repository commits. Piper remains an
+  installed, one-command fallback.
+- Kokoro exposed a backend configuration defect hidden by the VITS-first setup:
+  resolved paths were copied into every sherpa-onnx model subconfiguration.
+  Runtime construction now populates only the selected model type, and optional
+  Kokoro `dict_dir` paths are supported through catalog installation, validation,
+  and runtime loading. Regression tests cover model-type isolation and missing
+  dictionary assets.
+- Kokoro validation passed on 2026-08-04 with sherpa-onnx 1.13.4: all 397 Python
+  tests, Ruff, catalog/model readiness, and live loopback HTTP, job, and
+  WebSocket synthesis all completed with the default
+  `kokoro-en-v1_0-af-heart` voice; synthesized audio was 24 kHz. No
+  architecture, localhost security, exposure, or licensing direction changed;
+  the selected model is Apache-2.0. Reader Workstation still resumes at
+  Milestone 10 only when explicitly requested.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

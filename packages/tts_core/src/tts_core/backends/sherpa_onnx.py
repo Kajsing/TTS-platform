@@ -62,6 +62,7 @@ class SherpaOnnxVoiceRuntimeConfig:
     model: str = ""
     tokens: str = ""
     data_dir: str = ""
+    dict_dir: str = ""
     lexicon: str = ""
     voices: str = ""
     acoustic_model: str = ""
@@ -90,6 +91,7 @@ class SherpaOnnxVoiceRuntimeConfig:
             model=str(data.get("model", "")),
             tokens=str(data.get("tokens", "")),
             data_dir=str(data.get("data_dir", "")),
+            dict_dir=str(data.get("dict_dir", "")),
             lexicon=str(data.get("lexicon", "")),
             voices=str(data.get("voices", "")),
             acoustic_model=str(data.get("acoustic_model", "")),
@@ -523,30 +525,33 @@ class SherpaOnnxBackend:
             tts_config = module.OfflineTtsConfig(
                 model=module.OfflineTtsModelConfig(
                     vits=module.OfflineTtsVitsModelConfig(
-                        model=resolved.model,
-                        lexicon=resolved.lexicon,
-                        data_dir=resolved.data_dir,
-                        tokens=resolved.tokens,
+                        model=resolved.model if resolved.model_type == "vits" else "",
+                        lexicon=resolved.lexicon if resolved.model_type == "vits" else "",
+                        data_dir=resolved.data_dir if resolved.model_type == "vits" else "",
+                        tokens=resolved.tokens if resolved.model_type == "vits" else "",
                     ),
                     matcha=module.OfflineTtsMatchaModelConfig(
-                        acoustic_model=resolved.acoustic_model,
-                        vocoder=resolved.vocoder,
-                        lexicon=resolved.lexicon,
-                        tokens=resolved.tokens,
-                        data_dir=resolved.data_dir,
+                        acoustic_model=(
+                            resolved.acoustic_model if resolved.model_type == "matcha" else ""
+                        ),
+                        vocoder=resolved.vocoder if resolved.model_type == "matcha" else "",
+                        lexicon=resolved.lexicon if resolved.model_type == "matcha" else "",
+                        tokens=resolved.tokens if resolved.model_type == "matcha" else "",
+                        data_dir=resolved.data_dir if resolved.model_type == "matcha" else "",
                     ),
                     kokoro=module.OfflineTtsKokoroModelConfig(
-                        model=resolved.model,
-                        voices=resolved.voices,
-                        tokens=resolved.tokens,
-                        data_dir=resolved.data_dir,
-                        lexicon=resolved.lexicon,
+                        model=resolved.model if resolved.model_type == "kokoro" else "",
+                        voices=resolved.voices if resolved.model_type == "kokoro" else "",
+                        tokens=resolved.tokens if resolved.model_type == "kokoro" else "",
+                        data_dir=resolved.data_dir if resolved.model_type == "kokoro" else "",
+                        dict_dir=resolved.dict_dir if resolved.model_type == "kokoro" else "",
+                        lexicon=resolved.lexicon if resolved.model_type == "kokoro" else "",
                     ),
                     kitten=module.OfflineTtsKittenModelConfig(
-                        model=resolved.model,
-                        voices=resolved.voices,
-                        tokens=resolved.tokens,
-                        data_dir=resolved.data_dir,
+                        model=resolved.model if resolved.model_type == "kitten" else "",
+                        voices=resolved.voices if resolved.model_type == "kitten" else "",
+                        tokens=resolved.tokens if resolved.model_type == "kitten" else "",
+                        data_dir=resolved.data_dir if resolved.model_type == "kitten" else "",
                     ),
                     provider=self.settings.provider,
                     debug=self.settings.debug,
@@ -580,6 +585,7 @@ class SherpaOnnxBackend:
             model=self._resolve_path(voice_id, runtime_config.model, model_root=model_root),
             tokens=self._resolve_path(voice_id, runtime_config.tokens, model_root=model_root),
             data_dir=self._resolve_path(voice_id, runtime_config.data_dir, model_root=model_root),
+            dict_dir=self._resolve_path(voice_id, runtime_config.dict_dir, model_root=model_root),
             lexicon=self._resolve_path(voice_id, runtime_config.lexicon, model_root=model_root),
             voices=self._resolve_path(voice_id, runtime_config.voices, model_root=model_root),
             acoustic_model=self._resolve_path(
@@ -631,6 +637,8 @@ class SherpaOnnxBackend:
             self._require_existing_path(voice_id, runtime_config.tokens)
         if runtime_config.data_dir:
             self._require_existing_path(voice_id, runtime_config.data_dir)
+        if runtime_config.dict_dir:
+            self._require_existing_path(voice_id, runtime_config.dict_dir)
         if runtime_config.lexicon:
             self._require_existing_path(voice_id, runtime_config.lexicon)
         for rule_fst in runtime_config.rule_fsts:

@@ -257,6 +257,11 @@ The committed default catalog currently includes the English
 real acoustic output from the local reader, and install `sherpa-onnx` plus
 `numpy` into the same Python environment when `setup-local`, `model-list`, or
 `model-check` reports the corresponding `python -m pip install ...` step.
+An optional pinned Kokoro catalog is also committed. Install and activate its
+English `af_heart` voice with
+`tts model-install kokoro-en-v1_0-af-heart --catalog models/catalog.kokoro.json --activate`.
+The default catalog remains Piper-only so existing first-run automation stays
+deterministic; activating either installed voice is reversible.
 `model-activate` validates that the model exists in the manifest and updates
 `config/config.toml` so new synthesis requests use that voice by default.
 `model-check` reports whether the selected or default voice has manifest

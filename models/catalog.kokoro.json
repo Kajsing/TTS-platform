@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "kokoro-en-v1_0-af-heart",
+      "name": "Kokoro English af_heart",
+      "engine": "sherpa_onnx",
+      "language": "en-US",
+      "sample_rate_hz": 24000,
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/hexgrad/Kokoro-82M/blob/main/LICENSE",
+      "source_url": "https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html#kokoro-multi-lang-v1-0-chinese-english-53-speakers",
+      "upstream_url": "https://huggingface.co/hexgrad/Kokoro-82M",
+      "artifact_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+      "artifact_sha256": "c133d26353d776da730870dac7da07dbfc9a5e3bc80cc5e8e83ab6e823be7046",
+      "artifact_size_bytes": 349418188,
+      "quality_tier": "high",
+      "latency_tier": "local",
+      "gender_style_hint": "American English female; af_heart",
+      "tags": [
+        "english",
+        "en-us",
+        "kokoro",
+        "fp32",
+        "sherpa-onnx",
+        "multi-speaker",
+        "af-heart"
+      ],
+      "capabilities": {
+        "supports_pitch": false,
+        "supports_streaming": true,
+        "supports_multi_speaker": true
+      },
+      "backend": {
+        "model_type": "kokoro",
+        "model": "kokoro-multi-lang-v1_0/model.onnx",
+        "voices": "kokoro-multi-lang-v1_0/voices.bin",
+        "tokens": "kokoro-multi-lang-v1_0/tokens.txt",
+        "data_dir": "kokoro-multi-lang-v1_0/espeak-ng-data",
+        "lexicon": "kokoro-multi-lang-v1_0/lexicon-us-en.txt",
+        "speaker_id": 3
+      }
+    }
+  ]
+}
