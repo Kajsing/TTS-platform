@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private ReadingWindowPager? _readingWindow;
     private DocumentEditor? _editor;
     private ReaderPlaybackCoordinator? _playback;
+    private JsonlPlaybackPerformanceSink? _playbackPerformance;
     private ClipboardDocumentCapture? _clipboardCapture;
     private readonly WindowsClipboardAdapter _clipboard = new();
     private readonly ForegroundApplicationReader _foregroundApplication = new();
@@ -371,6 +372,7 @@ public partial class MainWindow : Window
             _compactController.Close();
         }
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _playbackPerformance?.Dispose();
         _desktopOpenTimer.Stop();
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
@@ -568,6 +570,7 @@ public partial class MainWindow : Window
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
         _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _playbackPerformance?.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
         _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
@@ -586,10 +589,12 @@ public partial class MainWindow : Window
         _editor = new DocumentEditor(_client);
         _clipboardCapture = new ClipboardDocumentCapture(_client);
         _ephemeralAudio = new WasapiAudioOutput();
+        _playbackPerformance = new JsonlPlaybackPerformanceSink();
         _playback = new ReaderPlaybackCoordinator(
             _client,
             new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider),
-            new WasapiAudioOutput());
+            new WasapiAudioOutput(),
+            _playbackPerformance);
         _playback.StateChanged += Playback_StateChanged;
         _playback.HighlightChanged += Playback_HighlightChanged;
         _playback.RuleWarning += Playback_RuleWarning;
@@ -1542,6 +1547,50 @@ public partial class MainWindow : Window
     private async void RestoreDocumentButton_Click(object sender, RoutedEventArgs e) =>
         await UpdateDocumentStateAsync("inbox");
 
+    private async void DeleteDocumentButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editor?.Document is not ReaderDocument document || _playback?.IsActive == true)
+        {
+            return;
+        }
+
+        var unsavedWarning = _editor.HasUnsavedChanges
+            ? "\n\nYour unsaved text changes will also be discarded."
+            : string.Empty;
+        var choice = MessageBox.Show(
+            "Delete this article from the Reader library?\n\n" +
+            "It will also be removed from the reading queue. The original imported file will not be deleted." +
+            unsavedWarning,
+            "Delete article",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (choice != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            await GetClient().DeleteDocumentAsync(document.Id, document.RowVersion);
+            DocumentsGrid.SelectedItem = null;
+            ClearDocumentDisplay();
+            await RefreshLibraryAsync();
+            if (_library?.Documents.FirstOrDefault() is ReaderDocument next)
+            {
+                DocumentsGrid.SelectedItem = next;
+            }
+            FooterText.Text = "Article deleted from the Reader library.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Delete article: {exception.Message}";
+        }
+    }
+
     private async void RenameDocumentButton_Click(object sender, RoutedEventArgs e)
     {
         if (_editor?.Document is not ReaderDocument document)
@@ -1589,6 +1638,29 @@ public partial class MainWindow : Window
         {
             FooterText.Text = $"Document state: {exception.Message}";
         }
+    }
+
+    private void ClearDocumentDisplay()
+    {
+        ++_documentLoadGeneration;
+        _editor?.Clear();
+        _continuousDocument = null;
+        _textCursor = null;
+        _useTextCursorOnNextPlay = false;
+        _readingBlocks.Clear();
+        _updatingEditor = true;
+        try
+        {
+            DocumentTitleText.Text = "Select a document";
+            EditorHintText.Text = "Editable text will appear here.";
+            EditorTextBox.Text = string.Empty;
+        }
+        finally
+        {
+            _updatingEditor = false;
+        }
+        UpdateEditorButtons();
+        UpdatePlaybackControls();
     }
 
     private async Task AutoAdvanceAsync(string completedDocumentId)
@@ -1925,6 +1997,7 @@ public partial class MainWindow : Window
         RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         var document = _editor?.Document;
         RenameDocumentButton.IsEnabled = document is not null && !playbackActive;
+        DeleteDocumentButton.IsEnabled = document is not null && !playbackActive;
         FinishDocumentButton.IsEnabled = document is not null && document.State != "finished";
         ArchiveDocumentButton.IsEnabled = document is not null && document.State != "archived";
         RestoreDocumentButton.IsEnabled = document is not null &&

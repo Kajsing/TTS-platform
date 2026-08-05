@@ -60,7 +60,9 @@ The Milestone 9 Reader beta provides:
 - WPF rule-set/rule management, Create rule from selection, and dry-run-first
   JSON import plus JSON export using the documented open Reader interchange.
 - title and content search with a transparent SQLite FTS5/portable fallback;
-- inbox, reading, finished, and archive filters with reversible state actions;
+- inbox, reading, finished, and archive filters with reversible state actions,
+  plus confirmed recoverable article deletion that also removes queue entries
+  without deleting an external source file;
 - a durable, reorderable reading queue with single-item activation and optional
   auto-advance;
 - bookmark creation, listing, deletion, and position jumps for the open document;
@@ -68,6 +70,10 @@ The Milestone 9 Reader beta provides:
   safe output names, and service-owned completion after the desktop closes;
 - Reader diagnostics for database integrity, search capability, document states,
   stream leases, queue size, export states, and low-sensitivity metrics.
+- bounded JSONL playback diagnostics containing chunk arrival gaps, submission
+  time, PCM duration, WASAPI buffer duration, and suspected underrun counts at
+  `%LOCALAPPDATA%\TTSPlatform\Reader\logs\playback-performance.jsonl`; no
+  document title, text, token, or imported-file path is recorded.
 - persistent browser-open handoffs polled from the protected local service; a
   saved web document opens only after unsaved edits and active playback are clear.
 
@@ -85,6 +91,11 @@ The Milestone 9 Reader beta provides:
 
 The desktop must not own SQL, document parsers, speech-rule semantics, or TTS
 backend inference.
+
+The service emits one low-sensitivity `reader_stream_performance` summary per
+Reader stream window when observability is enabled. It reports first-audio and
+generation timing, audio duration, real-time factor, maximum backend chunk gap,
+and slow-chunk count without logging source text or document titles.
 
 ## Build and check on Windows
 

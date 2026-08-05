@@ -316,6 +316,24 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task<ReaderDocument> DeleteDocumentAsync(
+        string documentId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        if (expectedRowVersion <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedRowVersion));
+        }
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Delete,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}?expected_row_version={expectedRowVersion}",
+            true,
+            null,
+            cancellationToken);
+    }
+
     public Task<BlockPage> GetBlocksAsync(
         string documentId,
         int afterOrdinal = -1,

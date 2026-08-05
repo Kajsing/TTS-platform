@@ -4,7 +4,7 @@ using TtsPlatform.Reader.Application;
 
 namespace TtsPlatform.Reader.Windows;
 
-public sealed class WasapiAudioOutput : IAudioOutput
+public sealed class WasapiAudioOutput : IAudioOutput, IAudioOutputDiagnostics
 {
     public static readonly TimeSpan MaximumBufferedDuration = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan TargetBufferedDuration = TimeSpan.FromSeconds(2);
@@ -17,7 +17,23 @@ public sealed class WasapiAudioOutput : IAudioOutput
     private long _generation;
     private long _submittedBytes;
     private long _confirmedPlayedBytes;
+    private long _suspectedUnderrunCount;
+    private bool _detectUnderrun;
     private bool _disposed;
+
+    public AudioOutputSnapshot Snapshot
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return new AudioOutputSnapshot(
+                    BufferedDurationMs: BufferedDurationMilliseconds(),
+                    SuspectedUnderrunCount: _suspectedUnderrunCount,
+                    IsPlaying: _output?.PlaybackState == PlaybackState.Playing);
+            }
+        }
+    }
 
     public AudioPlaybackCheckpoint SubmittedCheckpoint
     {
@@ -82,9 +98,16 @@ public sealed class WasapiAudioOutput : IAudioOutput
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 EnsureFormat(format);
+                if (_detectUnderrun &&
+                    _buffer!.BufferedBytes == 0 &&
+                    _output!.PlaybackState == PlaybackState.Playing)
+                {
+                    _suspectedUnderrunCount = checked(_suspectedUnderrunCount + 1);
+                }
                 var samples = pcmBytes.ToArray();
                 _buffer!.AddSamples(samples, 0, samples.Length);
                 _submittedBytes = checked(_submittedBytes + samples.Length);
+                _detectUnderrun = true;
                 if (_output!.PlaybackState != PlaybackState.Playing)
                 {
                     _output.Play();
@@ -137,6 +160,7 @@ public sealed class WasapiAudioOutput : IAudioOutput
         lock (_sync)
         {
             _confirmedPlayedBytes = _submittedBytes;
+            _detectUnderrun = false;
         }
     }
 
@@ -216,6 +240,20 @@ public sealed class WasapiAudioOutput : IAudioOutput
         _generation = checked(_generation + 1);
         _submittedBytes = 0;
         _confirmedPlayedBytes = 0;
+        _suspectedUnderrunCount = 0;
+        _detectUnderrun = false;
+    }
+
+    private double BufferedDurationMilliseconds()
+    {
+        if (_buffer is null || _format is null)
+        {
+            return 0;
+        }
+        var bytesPerSecond = BytesFor(_format, TimeSpan.FromSeconds(1));
+        return bytesPerSecond == 0
+            ? 0
+            : Math.Round(_buffer.BufferedBytes * 1000d / bytesPerSecond, 2);
     }
 
     private static void ValidateFormat(PcmAudioFormat format)

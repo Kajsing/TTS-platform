@@ -231,6 +231,12 @@ async def _run_reader_stream(
         chunks_sent = 0
         latest_cursor = window.start_cursor
         first_chunk = True
+        first_audio_latency_ms: float | None = None
+        last_backend_chunk_at: float | None = None
+        max_backend_chunk_gap_ms = 0.0
+        max_fragment_generation_ms = 0.0
+        total_audio_duration_ms = 0
+        slow_chunk_count = 0
         try:
             container.streaming_metrics.mark_started()
             await websocket.send_json(
@@ -269,6 +275,7 @@ async def _run_reader_stream(
             for fragment_index, fragment in enumerate(window.fragments):
                 if cancel_event.is_set():
                     break
+                fragment_started_at = monotonic()
                 request = _synthesis_request(
                     fragment,
                     voice_id=voice_id,
@@ -287,9 +294,20 @@ async def _run_reader_stream(
                         raise BackendError("Reader backend changed sample rate midstream")
                     if backend_chunk.channels != 1:
                         raise BackendError("Reader backend returned non-mono audio")
+                    chunk_ready_at = monotonic()
+                    if last_backend_chunk_at is not None:
+                        chunk_gap_ms = (chunk_ready_at - last_backend_chunk_at) * 1000
+                        max_backend_chunk_gap_ms = max(
+                            max_backend_chunk_gap_ms,
+                            chunk_gap_ms,
+                        )
+                        if chunk_gap_ms > max(250, backend_chunk.duration_ms * 1.5):
+                            slow_chunk_count += 1
+                    last_backend_chunk_at = chunk_ready_at
                     if first_chunk:
+                        first_audio_latency_ms = (chunk_ready_at - started_at) * 1000
                         container.streaming_metrics.mark_first_chunk(
-                            int((monotonic() - started_at) * 1000)
+                            int(first_audio_latency_ms)
                         )
                         first_chunk = False
                     chunk_cursor_end = (
@@ -324,7 +342,42 @@ async def _run_reader_stream(
                     )
                     await websocket.send_bytes(backend_chunk.pcm_bytes)
                     chunks_sent += 1
+                    total_audio_duration_ms += backend_chunk.duration_ms
                     latest_cursor = chunk_cursor_end
+                max_fragment_generation_ms = max(
+                    max_fragment_generation_ms,
+                    (monotonic() - fragment_started_at) * 1000,
+                )
+
+            generation_duration_ms = (monotonic() - started_at) * 1000
+            service.observability.log_reader_operation(
+                operation="reader_stream_performance",
+                document_id=payload.document_id,
+                block_count=len(window.blocks),
+                extra={
+                    "stream_id": stream_id,
+                    "fragment_count": len(window.fragments),
+                    "chunk_count": chunks_sent,
+                    "first_audio_latency_ms": (
+                        round(first_audio_latency_ms, 2)
+                        if first_audio_latency_ms is not None
+                        else None
+                    ),
+                    "generation_duration_ms": round(generation_duration_ms, 2),
+                    "audio_duration_ms": total_audio_duration_ms,
+                    "generation_realtime_factor": (
+                        round(generation_duration_ms / total_audio_duration_ms, 3)
+                        if total_audio_duration_ms > 0
+                        else None
+                    ),
+                    "max_backend_chunk_gap_ms": round(max_backend_chunk_gap_ms, 2),
+                    "max_fragment_generation_ms": round(
+                        max_fragment_generation_ms,
+                        2,
+                    ),
+                    "slow_chunk_count": slow_chunk_count,
+                },
+            )
 
             if cancel_event.is_set():
                 outcome = "cancelled"

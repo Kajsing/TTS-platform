@@ -274,6 +274,25 @@ public sealed class ReaderServiceClientTests
         Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[9].Body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Delete_document_uses_protected_soft_delete_contract_with_row_version()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK, DocumentJson));
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var deleted = await client.DeleteDocumentAsync("doc/id", expectedRowVersion: 7);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Delete, request.Method);
+        Assert.Equal("/v1/reader/documents/doc%2Fid", request.Uri.AbsolutePath);
+        Assert.Equal("?expected_row_version=7", request.Uri.Query);
+        Assert.Equal("Bearer token", request.Authorization);
+        Assert.Equal("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", deleted.Id);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
     {
         Content = new StringContent(body, Encoding.UTF8, "application/json"),

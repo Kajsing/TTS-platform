@@ -87,6 +87,35 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public async Task Playback_records_privacy_safe_chunk_and_buffer_timings()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true));
+        var audio = new FakeAudioOutput();
+        var diagnostics = new FakePerformanceSink();
+        await using var playback = new ReaderPlaybackCoordinator(
+            service,
+            streams,
+            audio,
+            diagnostics);
+
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
+
+        var packets = diagnostics.Events.Where(item => item.Name == "audio_packet").ToArray();
+        Assert.Equal(2, packets.Length);
+        Assert.Equal([0, 1], packets.Select(item => item.ChunkIndex));
+        Assert.All(packets, item => Assert.Equal("doc", item.DocumentId));
+        Assert.All(packets, item => Assert.Equal(4, item.PcmBytes));
+        Assert.All(packets, item => Assert.NotNull(item.BufferAfterMs));
+        Assert.Contains(diagnostics.Events, item => item.Name == "stream_done");
+        Assert.DoesNotContain(
+            diagnostics.Events,
+            item => item.ErrorCategory is not null);
+    }
+
+    [Fact]
     public async Task Explicit_start_cursor_overrides_the_saved_resume_position()
     {
         var service = new PlaybackService();
@@ -326,7 +355,7 @@ public sealed class PlaybackTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeAudioOutput(int? blockCall = null) : IAudioOutput
+    private sealed class FakeAudioOutput(int? blockCall = null) : IAudioOutput, IAudioOutputDiagnostics
     {
         private readonly TaskCompletionSource _stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<int> _calls = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -338,6 +367,11 @@ public sealed class PlaybackTests
         public int CallCount { get; private set; }
         public int DrainCount { get; private set; }
         public int MaxConcurrentCalls { get; private set; }
+
+        public AudioOutputSnapshot Snapshot => new(
+            BufferedDurationMs: 125,
+            SuspectedUnderrunCount: 0,
+            IsPlaying: CallCount > 0);
 
         public AudioPlaybackCheckpoint SubmittedCheckpoint
         {
@@ -438,5 +472,13 @@ public sealed class PlaybackTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakePerformanceSink : IPlaybackPerformanceSink
+    {
+        public List<PlaybackPerformanceEvent> Events { get; } = [];
+
+        public void Record(PlaybackPerformanceEvent performanceEvent) =>
+            Events.Add(performanceEvent);
     }
 }

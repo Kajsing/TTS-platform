@@ -90,6 +90,10 @@ public interface IReaderServiceClient
         string documentId,
         UpdateDocumentRequest request,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> DeleteDocumentAsync(
+        string documentId,
+        int expectedRowVersion,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<BlockPage> GetBlocksAsync(
         string documentId,
         int afterOrdinal = -1,

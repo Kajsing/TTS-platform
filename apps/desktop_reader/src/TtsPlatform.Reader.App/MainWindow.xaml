@@ -184,6 +184,9 @@
         </Grid.RowDefinitions>
         <StackPanel>
           <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="DeleteDocumentButton" Content="Delete article..."
+                    Click="DeleteDocumentButton_Click" IsEnabled="False" Foreground="#9C1C1C"
+                    AutomationProperties.Name="Delete selected article" />
             <Button DockPanel.Dock="Right" x:Name="RenameDocumentButton" Content="Rename"
                     Click="RenameDocumentButton_Click" IsEnabled="False"
                     AutomationProperties.Name="Rename selected document" />

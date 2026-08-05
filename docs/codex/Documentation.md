@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-04
+- Date: 2026-08-05
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -74,6 +74,29 @@ This file is the live status log and shared memory for future Codex loops.
   rendering. The repository architecture, localhost security model, and
   dependency set were not changed; a user-local official .NET 10 SDK was used
   because the machine-wide SDK remains .NET 8.
+- Completed user-requested article deletion: the WPF document header now has a
+  `Delete article...` action with a default-No warning. It calls the existing
+  protected, row-versioned soft-delete contract, removes the article from
+  normal library results and the reading queue, refreshes selection safely,
+  and never deletes an external imported source file. This deliberately follows
+  the design's recoverable-delete boundary; permanent erasure remains deferred
+  until backup/restore exists.
+- Added privacy-safe playback performance diagnostics before making another
+  buffer-policy change. The desktop writes bounded JSONL events to
+  `%LOCALAPPDATA%\TTSPlatform\Reader\logs\playback-performance.jsonl` with
+  stream/window/chunk IDs, arrival gaps, PCM duration, submission time, WASAPI
+  buffer duration, and suspected underrun counts. The service now emits one
+  `reader_stream_performance` summary per stream window with first-audio and
+  generation latency, generated-audio duration, real-time factor, maximum
+  backend chunk gap, and slow-chunk count. Neither side logs document titles,
+  source text, tokens, clipboard contents, or imported-file paths. No buffering
+  thresholds were changed in this diagnostic slice; the next tuning decision
+  should use a reproduced Kokoro trace.
+- Article-delete and diagnostics validation passed on 2026-08-05: all 77 .NET
+  Release tests, all 400 Python tests, Ruff, .NET formatting,
+  `git diff --check`, and the complete Windows desktop integration check passed.
+  The integration check covered live Reader stream/resume, WASAPI output,
+  clipboard/hotkey/tray behavior, self-contained packaging, and WPF rendering.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

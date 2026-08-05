@@ -35,6 +35,15 @@ public sealed class DocumentEditor(IReaderServiceClient client)
         WorkingText = OriginalText;
     }
 
+    public void Clear()
+    {
+        Document = null;
+        Block = null;
+        OriginalText = string.Empty;
+        WorkingText = string.Empty;
+        LastError = null;
+    }
+
     public async Task<EditorSaveResult> RenameAsync(
         string title,
         CancellationToken cancellationToken = default)

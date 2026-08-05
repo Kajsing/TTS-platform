@@ -12,4 +12,9 @@ public static class DesktopPaths
     public static string ServiceProcessLeasePath => Path.Combine(
         ReaderHome,
         "service-process.json");
+
+    public static string PlaybackPerformanceLogPath => Path.Combine(
+        ReaderHome,
+        "logs",
+        "playback-performance.jsonl");
 }

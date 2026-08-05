@@ -106,6 +106,10 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Onboarding.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "JsonDesktopSettingsStore.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "WasapiAudioOutput.cs",
+        reader_root
+        / "src"
+        / "TtsPlatform.Reader.Windows"
+        / "JsonlPlaybackPerformanceSink.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ClipboardIntegration.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "GlobalHotkeys.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderTrayIcon.cs",
@@ -277,6 +281,10 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "service-process.json",
         "stopped after reconnecting to it",
         "No unrelated Python process was terminated",
+        "DeleteDocumentAsync",
+        "Delete article...",
+        "JsonlPlaybackPerformanceSink",
+        "SuspectedUnderrunCount",
     ]
     missing_workstation_usability_features = [
         value
@@ -314,6 +322,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "cursor_playback": "implemented",
         "smart_playback": "implemented",
         "service_controls": "implemented",
+        "article_deletion": "implemented",
+        "playback_performance_logging": "implemented",
     }
 
 

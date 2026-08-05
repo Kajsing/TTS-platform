@@ -381,8 +381,15 @@ def test_content_lease_rejects_mutation_until_all_streams_release(tmp_path: Path
 
 def test_reader_websocket_pairs_marks_and_pcm_with_utf16_source_spans(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     client, headers = _api_bundle(tmp_path)
+    log_messages: list[str] = []
+    monkeypatch.setattr(
+        client.app.state.container.observability.logger,
+        "info",
+        log_messages.append,
+    )
     document = _api_document(client, headers, text="Læs 😀 højt.")
 
     with client.websocket_connect("/v1/reader/stream", headers=headers) as websocket:
@@ -431,6 +438,20 @@ def test_reader_websocket_pairs_marks_and_pcm_with_utf16_source_spans(
         assert done["document_complete"] is True
         assert done["next_window_available"] is False
         assert done["chunks_sent"] == chunks
+
+    performance = next(
+        entry
+        for entry in map(json.loads, log_messages)
+        if entry.get("event") == "reader_operation"
+        and entry.get("operation") == "reader_stream_performance"
+    )
+    assert performance["chunk_count"] == chunks
+    assert performance["first_audio_latency_ms"] >= 0
+    assert performance["generation_duration_ms"] >= 0
+    assert performance["audio_duration_ms"] > 0
+    assert performance["generation_realtime_factor"] >= 0
+    assert performance["max_backend_chunk_gap_ms"] >= 0
+    assert "Læs" not in json.dumps(performance)
 
 
 def test_reader_websocket_continues_by_stable_cursor_without_loading_all_blocks(
