@@ -33,9 +33,10 @@ DEFAULT_COMPLETED_JOB_TTL_SECONDS = 300
 DEFAULT_MAX_STORED_JOBS = 128
 DEFAULT_BACKEND_MODE = "auto"
 DEFAULT_BACKEND_PROVIDER = "cpu"
-DEFAULT_BACKEND_NUM_THREADS = 1
+DEFAULT_BACKEND_NUM_THREADS = 4
 DEFAULT_BACKEND_DEBUG = False
 DEFAULT_BACKEND_MAX_NUM_SENTENCES = 1
+DEFAULT_BACKEND_SILENCE_SCALE = 0.06
 DEFAULT_READER_ENABLED = True
 DEFAULT_READER_HOME_PATH = ""
 DEFAULT_READER_DATABASE_PATH = "reader.db"
@@ -215,6 +216,7 @@ class BackendConfig:
     num_threads: int = DEFAULT_BACKEND_NUM_THREADS
     debug: bool = DEFAULT_BACKEND_DEBUG
     max_num_sentences: int = DEFAULT_BACKEND_MAX_NUM_SENTENCES
+    silence_scale: float = DEFAULT_BACKEND_SILENCE_SCALE
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "BackendConfig":
@@ -226,6 +228,9 @@ class BackendConfig:
             max_num_sentences=int(
                 data.get("max_num_sentences", DEFAULT_BACKEND_MAX_NUM_SENTENCES)
             ),
+            silence_scale=float(
+                data.get("silence_scale", DEFAULT_BACKEND_SILENCE_SCALE)
+            ),
         )
         if config.mode not in {"auto", "stub", "real"}:
             raise ValueError("backend.mode must be one of: auto, stub, real")
@@ -235,6 +240,8 @@ class BackendConfig:
             raise ValueError("backend.num_threads must be positive")
         if config.max_num_sentences == 0 or config.max_num_sentences < -1:
             raise ValueError("backend.max_num_sentences must be positive or -1")
+        if not 0 <= config.silence_scale <= 2:
+            raise ValueError("backend.silence_scale must be between 0 and 2")
         return config
 
 

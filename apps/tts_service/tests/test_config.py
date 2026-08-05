@@ -28,6 +28,8 @@ def test_load_config_reads_toml_file(tmp_path: Path) -> None:
     assert config.tts.default_voice == "voice-x"
     assert config.tts.max_chars_per_stream == 48000
     assert config.streaming.prebuffer_ms == 200
+    assert config.backend.num_threads == 4
+    assert config.backend.silence_scale == 0.06
 
 
 def test_load_config_applies_environment_overrides(tmp_path: Path) -> None:
@@ -117,6 +119,7 @@ def test_load_config_reads_backend_section(tmp_path: Path) -> None:
                 "num_threads = 2",
                 "debug = true",
                 "max_num_sentences = 3",
+                "silence_scale = 0.08",
             ]
         ),
         encoding="utf-8",
@@ -129,6 +132,22 @@ def test_load_config_reads_backend_section(tmp_path: Path) -> None:
     assert config.backend.num_threads == 2
     assert config.backend.debug is True
     assert config.backend.max_num_sentences == 3
+    assert config.backend.silence_scale == 0.08
+
+
+@pytest.mark.parametrize("silence_scale", [-0.01, 2.01])
+def test_load_config_rejects_out_of_range_backend_silence_scale(
+    tmp_path: Path,
+    silence_scale: float,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"[backend]\nsilence_scale = {silence_scale}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="backend.silence_scale"):
+        load_config(config_path, env={})
 
 
 def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:

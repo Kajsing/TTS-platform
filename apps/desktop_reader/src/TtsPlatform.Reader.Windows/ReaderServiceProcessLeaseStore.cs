@@ -30,8 +30,16 @@ public sealed class ReaderServiceProcessLeaseStore(string leasePath)
             throw new InvalidOperationException("The local service launcher exited before ownership was recorded.");
         }
 
-        var executablePath = process.MainModule?.FileName
-            ?? throw new InvalidOperationException("The local service launcher executable could not be identified.");
+        var executablePath = process.MainModule?.FileName;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            executablePath = process.StartInfo.FileName;
+        }
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            throw new InvalidOperationException(
+                "The local service launcher executable could not be identified.");
+        }
         var lease = new ReaderServiceProcessLease(
             CurrentSchemaVersion,
             process.Id,

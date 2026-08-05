@@ -34,9 +34,10 @@ max_stored_jobs = 128
 [backend]
 mode = "auto"
 provider = "cpu"
-num_threads = 1
+num_threads = 4
 debug = false
 max_num_sentences = 1
+silence_scale = 0.06
 
 [reader]
 enabled = true

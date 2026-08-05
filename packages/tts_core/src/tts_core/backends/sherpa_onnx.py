@@ -51,9 +51,10 @@ def build_stub_voice() -> VoiceDescriptor:
 class SherpaOnnxBackendSettings:
     runtime_mode: str = "auto"
     provider: str = "cpu"
-    num_threads: int = 1
+    num_threads: int = 4
     debug: bool = False
     max_num_sentences: int = 1
+    silence_scale: float = 0.06
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +127,8 @@ class SherpaOnnxBackend:
             "name": self.name,
             "runtime_mode": self.settings.runtime_mode,
             "provider": self.settings.provider,
+            "num_threads": self.settings.num_threads,
+            "silence_scale": self.settings.silence_scale,
             "configured_real_voices": len(self.voice_runtime_configs),
             "loaded_real_voices": loaded_real_voices,
             "module_loaded": self._module_cache is not None,
@@ -426,7 +429,7 @@ class SherpaOnnxBackend:
         generation_config = module.GenerationConfig()
         generation_config.sid = runtime_config.speaker_id
         generation_config.speed = max(request.prosody.rate, 0.1)
-        generation_config.silence_scale = 0.2
+        generation_config.silence_scale = self.settings.silence_scale
         return generation_config
 
     def _runtime_sample_rate_hz(self, runtime: object) -> int | None:

@@ -172,9 +172,10 @@ voices or is absent, the backend can expose the development stub voice
 [backend]
 mode = "auto"
 provider = "cpu"
-num_threads = 1
+num_threads = 4
 debug = false
 max_num_sentences = 1
+silence_scale = 0.06
 ```
 
 Supported `backend.mode` values:
@@ -188,6 +189,13 @@ Supported `backend.mode` values:
 Supported `backend.provider` values are `cpu`, `cuda`, and `coreml`. The current
 Windows-safe default is `cpu`.
 
+`backend.num_threads` controls CPU inference parallelism. The default of four
+is a conservative baseline for current desktop processors; high-core-count
+machines can benchmark a higher value locally. `backend.silence_scale` controls
+the silence sherpa-onnx inserts between generated sentences. The default `0.06`
+keeps a short audible boundary without the roughly 200 ms pause from the
+upstream `0.2` default. Valid values are from `0` through `2`.
+
 ## Readiness
 
 `GET /v1/health` reports service readiness:
@@ -200,6 +208,8 @@ Windows-safe default is `cpu`.
 - `tts.max_chars_per_request`: current `/v1/tts` and job text limit.
 - `tts.max_chars_per_stream`: current WebSocket stream text limit.
 - `backend.runtime_mode`: active backend mode.
+- `backend.num_threads`: configured CPU inference thread count.
+- `backend.silence_scale`: configured inter-sentence silence scale.
 - `backend.configured_real_voices`: number of manifest voices with backend
   config.
 - `backend.loaded_real_voices`: real runtime voices initialized so far.

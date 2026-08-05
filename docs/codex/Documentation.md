@@ -119,6 +119,35 @@ This file is the live status log and shared memory for future Codex loops.
   hotkey and tray behavior, self-contained packaging, and WPF rendering. The
   existing two-second backpressure target remains unchanged based on the
   reproduced trace; this slice changes visual timing only.
+- Completed the first measured Kokoro latency and rhythm tuning pass. A fresh
+  affected Reader trace took 6.38 seconds to produce its first audio, later had
+  a 9.47-second packet gap, and accumulated four WASAPI underruns. A controlled
+  one-thread baseline needed an average 13.03 seconds to generate 6.55 seconds
+  of the same speech (`RTF 1.99`). Four CPU inference threads reduced that to
+  2.57 seconds (`RTF 0.39`). On the user's 16-core/24-thread i9-12900KF, eight
+  threads were another 25 percent faster than four while twelve regressed, so
+  the user-local config now uses eight and the portable default is four.
+- Sherpa-onnx generation silence is now configurable as
+  `backend.silence_scale`, bounded from `0` through `2` and reported in the
+  backend health snapshot. The new default `0.06` retains a short sentence
+  boundary while replacing the upstream `0.2` value that added roughly 223 ms
+  per generated sentence in the measured Kokoro passage. With eight threads
+  and the shorter boundary, the final controlled benchmark averaged 1.22
+  seconds for 6.24 seconds of audio (`RTF 0.196`), about 10.7 times faster than
+  the reproduced baseline. Speech rate itself remains `1.0`.
+- The performance restart also exposed a Windows process-start race in the
+  Reader fallback service controller: immediately after starting PowerShell,
+  `Process.MainModule` can temporarily be unavailable. The ownership lease now
+  falls back to the exact executable path from the `ProcessStartInfo` created
+  by Reader. The service was then restarted through Reader with both its
+  launcher PID and service PID recorded; unrelated processes remain outside the
+  stop boundary.
+- Kokoro latency/rhythm validation passed on 2026-08-05: all 403 Python tests,
+  all 78 .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the
+  complete Windows desktop integration check passed. The latter again covered
+  live Reader stream/resume, WASAPI output, clipboard/hotkey/tray behavior,
+  self-contained packaging, and WPF rendering. The optimized real Kokoro
+  service remains local on port 7777; Reader Milestone 10 remains deferred.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

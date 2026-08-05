@@ -370,6 +370,31 @@ def test_sherpa_backend_real_mode_can_synthesize_with_fake_runtime(tmp_path, mon
     assert backend.snapshot()["loaded_real_voices"] == ["sherpa-en-debug"]
 
 
+def test_sherpa_backend_applies_configured_generation_silence_scale(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    module = build_fake_sherpa_onnx_module()
+    backend = build_real_backend(tmp_path, monkeypatch, module)
+    backend.settings = SherpaOnnxBackendSettings(
+        runtime_mode="real",
+        num_threads=8,
+        silence_scale=0.06,
+    )
+    runtime_config = backend._get_runtime_config("sherpa-en-debug")
+
+    assert runtime_config is not None
+    generation_config = backend._build_generation_config(
+        module,
+        SynthesisRequest(text="Hello", voice="sherpa-en-debug"),
+        runtime_config,
+    )
+
+    assert generation_config.silence_scale == pytest.approx(0.06)
+    assert backend.snapshot()["num_threads"] == 8
+    assert backend.snapshot()["silence_scale"] == pytest.approx(0.06)
+
+
 def test_sherpa_backend_real_stream_uses_runtime_callback(tmp_path, monkeypatch) -> None:
     module, callback_returns = build_fake_sherpa_onnx_callback_module()
     backend = build_real_backend(tmp_path, monkeypatch, module)

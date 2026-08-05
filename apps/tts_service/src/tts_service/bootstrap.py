@@ -71,6 +71,7 @@ def build_application_state(
             num_threads=config.backend.num_threads,
             debug=config.backend.debug,
             max_num_sentences=config.backend.max_num_sentences,
+            silence_scale=config.backend.silence_scale,
         ),
         voice_runtime_configs=manifest_bundle.backend_configs,
     )
