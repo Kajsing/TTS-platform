@@ -97,6 +97,28 @@ This file is the live status log and shared memory for future Codex loops.
   `git diff --check`, and the complete Windows desktop integration check passed.
   The integration check covered live Reader stream/resume, WASAPI output,
   clipboard/hotkey/tray behavior, self-contained packaging, and WPF rendering.
+- Completed played-audio highlight synchronization after the first reproduced
+  Kokoro performance trace. The latest affected run contained 89 PCM packets,
+  maintained an average 1.42-second WASAPI buffer and a 2.0-second maximum,
+  had a maximum packet gap of 78 ms, and recorded one startup underrun. This
+  showed that the visible sentence was moving when audio entered the buffer,
+  up to roughly two seconds before that audio was heard, rather than exposing a
+  sustained Kokoro generation shortfall.
+- The desktop coordinator now schedules each source-span highlight at the first
+  PCM byte submitted for that span and advances it from the conservatively
+  estimated WASAPI played-byte checkpoint on a 20 ms monitor. Repeated backend
+  PCM packets for the same source span are coalesced, so one sentence does not
+  cause redundant visual updates. Durable resume cursors retain their existing
+  fully-played checkpoint semantics. A regression test holds two submitted
+  spans in a simulated output buffer and proves the second highlight stays
+  hidden until its first byte is reported played.
+- Played-audio highlight validation passed on 2026-08-05: all 78 .NET Release
+  tests, all 400 Python tests, Ruff, .NET formatting, `git diff --check`, and
+  the complete Windows desktop integration check passed. The integration check
+  again covered live Reader streaming/resume, WASAPI output, Windows clipboard,
+  hotkey and tray behavior, self-contained packaging, and WPF rendering. The
+  existing two-second backpressure target remains unchanged based on the
+  reproduced trace; this slice changes visual timing only.
 - Completed service-control ownership follow-up: the fallback service launcher
   was previously owned only through an in-memory `Process` handle. If Reader was
   restarted while that service remained alive, the new Reader correctly refused

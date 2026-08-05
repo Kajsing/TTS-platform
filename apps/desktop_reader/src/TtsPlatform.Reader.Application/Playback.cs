@@ -79,14 +79,18 @@ public sealed record PlaybackHighlight(
 public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 {
     private static readonly TimeSpan PositionSaveInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan HighlightPollInterval = TimeSpan.FromMilliseconds(20);
     private readonly IReaderServiceClient _serviceClient;
     private readonly IReaderStreamClient _streamClient;
     private readonly IAudioOutput _audioOutput;
     private readonly IPlaybackPerformanceSink? _performanceSink;
     private readonly SemaphoreSlim _transitionLock = new(1, 1);
-    private readonly object _audioCursorSync = new();
+    private readonly object _audioProgressSync = new();
     private readonly Queue<(AudioPlaybackCheckpoint Checkpoint, ReaderCursor Cursor)>
         _pendingAudioCursors = new();
+    private readonly Queue<(AudioPlaybackCheckpoint Checkpoint, PlaybackHighlight Highlight)>
+        _pendingAudioHighlights = new();
+    private (long Generation, PlaybackHighlight Highlight)? _lastScheduledHighlight;
     private CancellationTokenSource? _runCancellation;
     private Task? _runTask;
     private IReaderStreamSession? _activeSession;
@@ -134,7 +138,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
             _document = document;
             _voice = voice;
-            ClearPendingAudioCursors();
+            ClearPendingAudioProgress();
             if (startCursor is not null)
             {
                 ValidateCursorDocument(startCursor, document.Id);
@@ -204,6 +208,9 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         var runTimer = Stopwatch.StartNew();
         var windowIndex = 0;
         long? previousPacketTimestamp = null;
+        using var highlightCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken);
+        var highlightTask = MonitorPlayedHighlightsAsync(highlightCancellation.Token);
         RecordPerformance(new PlaybackPerformanceEvent(
             "playback_run_start",
             DocumentId: _document?.Id));
@@ -263,13 +270,6 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             var packetFormat = audioFormat
                                 ?? throw new ReaderStreamProtocolException(
                                     "Reader PCM arrived before its audio format.");
-                            HighlightChanged?.Invoke(
-                                this,
-                                new PlaybackHighlight(
-                                    document.Id,
-                                    packet.SourceSpans,
-                                    packet.CursorStart,
-                                    packet.CursorEnd));
                             var before = AudioSnapshot();
                             var submitTimer = Stopwatch.StartNew();
                             await _audioOutput.PlayAsync(
@@ -295,12 +295,21 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                                 SampleRateHz: packetFormat.SampleRateHz,
                                 Channels: packetFormat.Channels));
                             cancellationToken.ThrowIfCancellationRequested();
+                            var submittedCheckpoint = _audioOutput.SubmittedCheckpoint;
+                            ScheduleAudioHighlight(
+                                submittedCheckpoint,
+                                packet.PcmBytes.Length,
+                                new PlaybackHighlight(
+                                    document.Id,
+                                    packet.SourceSpans,
+                                    packet.CursorStart,
+                                    packet.CursorEnd));
+                            AcknowledgePlayedHighlights();
                             if (CursorAdvanced(packet.CursorStart, packet.CursorEnd))
                             {
-                                var checkpoint = _audioOutput.SubmittedCheckpoint;
-                                if (checkpoint.BytePosition > 0)
+                                if (submittedCheckpoint.BytePosition > 0)
                                 {
-                                    EnqueueAudioCursor(checkpoint, packet.CursorEnd);
+                                    EnqueueAudioCursor(submittedCheckpoint, packet.CursorEnd);
                                 }
                             }
                             if (AcknowledgePlayedAudio() &&
@@ -316,6 +325,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             var drainTimer = Stopwatch.StartNew();
                             await _audioOutput.DrainAsync(cancellationToken).ConfigureAwait(false);
                             cancellationToken.ThrowIfCancellationRequested();
+                            AcknowledgePlayedHighlights();
                             AcknowledgePlayedAudio();
                             var afterDrain = AudioSnapshot();
                             RecordPerformance(new PlaybackPerformanceEvent(
@@ -403,6 +413,15 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         }
         finally
         {
+            highlightCancellation.Cancel();
+            try
+            {
+                await highlightTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (highlightCancellation.IsCancellationRequested)
+            {
+                // Playback owns the monitor lifetime.
+            }
             _activeSession = null;
             if (_desiredState == ReaderPlaybackState.Playing)
             {
@@ -557,7 +576,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         AudioPlaybackCheckpoint checkpoint,
         ReaderCursor cursor)
     {
-        lock (_audioCursorSync)
+        lock (_audioProgressSync)
         {
             _pendingAudioCursors.Enqueue((checkpoint, cursor));
         }
@@ -567,7 +586,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     {
         var played = _audioOutput.PlayedCheckpoint;
         var advanced = false;
-        lock (_audioCursorSync)
+        lock (_audioProgressSync)
         {
             while (_pendingAudioCursors.TryPeek(out var pending))
             {
@@ -589,13 +608,93 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         return advanced;
     }
 
-    private void ClearPendingAudioCursors()
+    private void ScheduleAudioHighlight(
+        AudioPlaybackCheckpoint submittedCheckpoint,
+        int pcmByteCount,
+        PlaybackHighlight highlight)
     {
-        lock (_audioCursorSync)
+        if (pcmByteCount <= 0 || submittedCheckpoint.BytePosition < pcmByteCount)
         {
-            _pendingAudioCursors.Clear();
+            return;
+        }
+
+        var startCheckpoint = submittedCheckpoint with
+        {
+            BytePosition = submittedCheckpoint.BytePosition - pcmByteCount,
+        };
+        lock (_audioProgressSync)
+        {
+            if (_lastScheduledHighlight is { } scheduled &&
+                scheduled.Generation == startCheckpoint.Generation &&
+                SameHighlightSource(scheduled.Highlight, highlight))
+            {
+                return;
+            }
+
+            _pendingAudioHighlights.Enqueue((startCheckpoint, highlight));
+            _lastScheduledHighlight = (startCheckpoint.Generation, highlight);
         }
     }
+
+    private void AcknowledgePlayedHighlights()
+    {
+        var played = _audioOutput.PlayedCheckpoint;
+        PlaybackHighlight? latestHighlight = null;
+        lock (_audioProgressSync)
+        {
+            while (_pendingAudioHighlights.TryPeek(out var pending))
+            {
+                if (pending.Checkpoint.Generation < played.Generation)
+                {
+                    _pendingAudioHighlights.Dequeue();
+                    continue;
+                }
+                if (pending.Checkpoint.Generation != played.Generation ||
+                    pending.Checkpoint.BytePosition > played.BytePosition)
+                {
+                    break;
+                }
+
+                _pendingAudioHighlights.Dequeue();
+                latestHighlight = pending.Highlight;
+            }
+        }
+
+        if (latestHighlight is not null)
+        {
+            HighlightChanged?.Invoke(this, latestHighlight);
+        }
+    }
+
+    private async Task MonitorPlayedHighlightsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                AcknowledgePlayedHighlights();
+                await Task.Delay(HighlightPollInterval, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected when playback pauses, stops, completes, or faults.
+        }
+    }
+
+    private void ClearPendingAudioProgress()
+    {
+        lock (_audioProgressSync)
+        {
+            _pendingAudioCursors.Clear();
+            _pendingAudioHighlights.Clear();
+            _lastScheduledHighlight = null;
+        }
+    }
+
+    private static bool SameHighlightSource(PlaybackHighlight left, PlaybackHighlight right) =>
+        string.Equals(left.DocumentId, right.DocumentId, StringComparison.Ordinal) &&
+        left.SourceSpans.SequenceEqual(right.SourceSpans);
 
     private AudioOutputSnapshot? AudioSnapshot() =>
         (_audioOutput as IAudioOutputDiagnostics)?.Snapshot;

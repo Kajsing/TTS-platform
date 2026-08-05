@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using TtsPlatform.Reader.Application;
@@ -113,6 +114,32 @@ public sealed class PlaybackTests
         Assert.DoesNotContain(
             diagnostics.Events,
             item => item.ErrorCategory is not null);
+    }
+
+    [Fact]
+    public async Task Highlights_follow_played_audio_instead_of_submitted_audio()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true));
+        var audio = new FakeAudioOutput(autoAdvance: false, blockDrain: true);
+        var highlights = new ConcurrentQueue<PlaybackHighlight>();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+        playback.HighlightChanged += (_, highlight) => highlights.Enqueue(highlight);
+
+        await playback.PlayAsync(Document());
+        await audio.WaitForDrainAsync();
+        await WaitUntilAsync(() => highlights.Count == 1);
+
+        Assert.Equal(0, highlights.Single().SourceSpans.Single().StartOffset);
+
+        audio.SetPlayedBytes(4);
+        await WaitUntilAsync(() => highlights.Count == 2);
+
+        Assert.Equal(3, highlights.Last().SourceSpans.Single().StartOffset);
+
+        audio.ReleaseDrain();
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
     }
 
     [Fact]
@@ -355,10 +382,17 @@ public sealed class PlaybackTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeAudioOutput(int? blockCall = null) : IAudioOutput, IAudioOutputDiagnostics
+    private sealed class FakeAudioOutput(
+        int? blockCall = null,
+        bool autoAdvance = true,
+        bool blockDrain = false) : IAudioOutput, IAudioOutputDiagnostics
     {
         private readonly TaskCompletionSource _stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<int> _calls = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _drainStarted = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _drainRelease = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _sync = new();
         private int _activeCalls;
         private long _generation = 1;
@@ -421,11 +455,14 @@ public sealed class PlaybackTests
                     await _stop.Task.WaitAsync(cancellationToken);
                 }
                 cancellationToken.ThrowIfCancellationRequested();
-                lock (_sync)
+                if (autoAdvance)
                 {
-                    if (_generation == generation)
+                    lock (_sync)
                     {
-                        _playedBytes = submittedBytes;
+                        if (_generation == generation)
+                        {
+                            _playedBytes = submittedBytes;
+                        }
                     }
                 }
             }
@@ -451,6 +488,7 @@ public sealed class PlaybackTests
         public Task StopAsync(CancellationToken cancellationToken = default)
         {
             _stop.TrySetResult();
+            _drainRelease.TrySetResult();
             lock (_sync)
             {
                 _generation++;
@@ -460,16 +498,36 @@ public sealed class PlaybackTests
             return Task.CompletedTask;
         }
 
-        public Task DrainAsync(CancellationToken cancellationToken = default)
+        public async Task DrainAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            DrainCount++;
+            _drainStarted.TrySetResult();
+            if (blockDrain)
+            {
+                await _drainRelease.Task.WaitAsync(cancellationToken);
+            }
             lock (_sync)
             {
-                DrainCount++;
                 _playedBytes = _submittedBytes;
             }
-            return Task.CompletedTask;
         }
+
+        public async Task WaitForDrainAsync()
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _drainStarted.Task.WaitAsync(timeout.Token);
+        }
+
+        public void SetPlayedBytes(long bytePosition)
+        {
+            lock (_sync)
+            {
+                _playedBytes = Math.Clamp(bytePosition, 0, _submittedBytes);
+            }
+        }
+
+        public void ReleaseDrain() => _drainRelease.TrySetResult();
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
