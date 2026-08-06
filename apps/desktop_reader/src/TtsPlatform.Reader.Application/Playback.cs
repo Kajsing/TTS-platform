@@ -178,10 +178,16 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     }
 
     public Task PauseAsync(CancellationToken cancellationToken = default) =>
-        InterruptAsync(ReaderPlaybackState.Paused, cancellationToken);
+        InterruptAsync(
+            ReaderPlaybackState.Paused,
+            restartFromBeginning: false,
+            cancellationToken);
 
     public Task StopAsync(CancellationToken cancellationToken = default) =>
-        InterruptAsync(ReaderPlaybackState.Stopped, cancellationToken);
+        InterruptAsync(
+            ReaderPlaybackState.Stopped,
+            restartFromBeginning: true,
+            cancellationToken);
 
     public async Task SeekAsync(
         ReaderDocument document,
@@ -190,13 +196,19 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ValidateCursorDocument(cursor, document.Id);
-        await StopAsync(cancellationToken).ConfigureAwait(false);
+        await InterruptAsync(
+            ReaderPlaybackState.Stopped,
+            restartFromBeginning: false,
+            cancellationToken).ConfigureAwait(false);
         await PlayAsync(document, voice, cursor, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
     {
-        await StopAsync().ConfigureAwait(false);
+        await InterruptAsync(
+            ReaderPlaybackState.Stopped,
+            restartFromBeginning: false,
+            CancellationToken.None).ConfigureAwait(false);
         await _audioOutput.DisposeAsync().ConfigureAwait(false);
         _runCancellation?.Dispose();
         _transitionLock.Dispose();
@@ -382,7 +394,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Pause and stop own the resulting state and durable cursor flush.
+            // The requested Pause or Stop owns the resulting state and position update.
             RecordPerformance(new PlaybackPerformanceEvent(
                 "playback_run_cancelled",
                 DocumentId: _document?.Id,
@@ -438,6 +450,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
     private async Task InterruptAsync(
         ReaderPlaybackState requestedState,
+        bool restartFromBeginning,
         CancellationToken cancellationToken)
     {
         Task? runTask;
@@ -448,13 +461,14 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             if (_runTask is null || _runTask.IsCompleted)
             {
                 _desiredState = requestedState;
-                SetState(requestedState);
+                string? idlePositionMessage = null;
                 if (_lastFullyPlayedCursor is not null)
                 {
-                    await PersistPositionSafelyAsync(
-                        completed: _positionCompleted,
+                    idlePositionMessage = await PersistInterruptedPositionAsync(
+                        restartFromBeginning,
                         cancellationToken).ConfigureAwait(false);
                 }
+                SetState(requestedState, idlePositionMessage);
                 return;
             }
 
@@ -490,10 +504,49 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         {
             // The cancellation is the requested transition.
         }
-        await PersistPositionSafelyAsync(
-            completed: _positionCompleted,
+        var positionMessage = await PersistInterruptedPositionAsync(
+            restartFromBeginning,
             cancellationToken).ConfigureAwait(false);
-        SetState(requestedState);
+        SetState(requestedState, positionMessage);
+    }
+
+    private async Task<string?> PersistInterruptedPositionAsync(
+        bool restartFromBeginning,
+        CancellationToken cancellationToken)
+    {
+        if (restartFromBeginning && _document is not null)
+        {
+            try
+            {
+                _lastFullyPlayedCursor = await FirstCursorAsync(_document, cancellationToken)
+                    .ConfigureAwait(false);
+                _positionCompleted = false;
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or
+                    ReaderServiceUnavailableException or
+                    ReaderStreamProtocolException)
+            {
+                return $"Playback stopped, but its restart position was not reset: {exception.Message}";
+            }
+        }
+
+        if (_lastFullyPlayedCursor is not null)
+        {
+            try
+            {
+                await PersistPositionAsync(
+                    completed: _positionCompleted,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or ReaderServiceUnavailableException)
+            {
+                return $"Playback position was not saved: {exception.Message}";
+            }
+        }
+
+        return null;
     }
 
     private async Task<ReaderCursor> FirstCursorAsync(
@@ -530,21 +583,6 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             cancellationToken).ConfigureAwait(false);
         _positionRowVersion = saved.RowVersion;
         _positionCompleted = completed;
-    }
-
-    private async Task PersistPositionSafelyAsync(
-        bool completed,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await PersistPositionAsync(completed, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (
-            exception is ReaderApiException or ReaderServiceUnavailableException)
-        {
-            SetState(_desiredState, $"Playback position was not saved: {exception.Message}");
-        }
     }
 
     private void SetState(ReaderPlaybackState state, string? message = null)

@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-05
+- Date: 2026-08-06
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,6 +18,20 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed Play/Pause/Stop semantics follow-up: `Pause` preserves the last
+  fully heard cursor and the next Play resumes there. `Stop` now durably resets
+  the next normal Play to the beginning of the article; placing the editable
+  text caret before Play remains an explicit one-time override. Coordinator
+  disposal and section seeking use a position-preserving internal interruption,
+  so closing the app does not accidentally apply the user-facing Stop reset.
+  Button tooltips now describe the distinction.
+- Play/Pause/Stop validation passed on 2026-08-06: all 403 Python tests, all
+  81 .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the
+  complete Windows desktop integration check passed. New coordinator tests
+  cover Pause resume, Stop restart, a caret override after Stop, idempotent Stop,
+  and position preservation during disposal. The integration check passed live
+  edit/stream/resume, Kokoro synthesis, WASAPI, Windows integration, packaging,
+  and WPF rendering.
 - Completed user-requested Kokoro follow-up: the optional committed catalog at
   `models/catalog.kokoro.json` installs the official sherpa-onnx
   `kokoro-multi-lang-v1_0` package as `kokoro-en-v1_0-af-heart`, pins its
@@ -168,8 +182,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Completed smart-Play follow-up: the separate `Play from cursor` button was
   removed. The single `Play` control now consumes a user-selected text cursor for
   the next start, then returns to normal durable resume behavior. Clicking in the
-  text or moving the caret, including `Ctrl+Home`, selects that one-time start;
-  `Stop` continues to preserve the last fully heard position. If either the live
+  text or moving the caret, including `Ctrl+Home`, selects that one-time start.
+  (Since the 2026-08-06 follow-up, `Stop` instead resets normal Play to the
+  beginning.) If either the live
   coordinator or the saved position says the document was completed, the next
   normal Play starts at the document's first cursor instead of reopening at the
   end. Clipboard replay, Pause, compact-controller, and global-hotkey behavior

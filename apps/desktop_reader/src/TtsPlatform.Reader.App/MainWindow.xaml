@@ -200,9 +200,10 @@
                     IsEnabled="False" AutomationProperties.Name="Go to previous section" />
             <Button x:Name="PlayPauseButton" Content="Play" Click="PlayPauseButton_Click"
                     IsEnabled="False" AutomationProperties.Name="Play or pause document"
-                    ToolTip="Continues from your saved position or starts where you last placed the text cursor." />
+                    ToolTip="Resumes after Pause. After Stop, starts at the beginning or where you next place the text cursor." />
             <Button x:Name="StopButton" Content="Stop" Click="StopButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Stop document playback" />
+                    IsEnabled="False" AutomationProperties.Name="Stop document playback"
+                    ToolTip="Stops playback and resets the next Play to the beginning. Move the text cursor first to start there instead." />
             <Button x:Name="NextSectionButton" Content="Next section" Click="NextSectionButton_Click"
                     IsEnabled="False" AutomationProperties.Name="Go to next section" />
             <CheckBox x:Name="AutoAdvanceCheckBox" Content="Auto-advance queue"

@@ -71,6 +71,66 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public async Task Stop_resets_the_next_normal_play_to_the_document_beginning()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true),
+            request => CompletedSession(request));
+        var audio = new FakeAudioOutput(blockCall: 2);
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+
+        await playback.PlayAsync(Document());
+        await audio.WaitForCallAsync(2);
+        await playback.StopAsync();
+
+        Assert.Equal(ReaderPlaybackState.Stopped, playback.State);
+        Assert.Equal(0, playback.LastFullyPlayedCursor?.CharacterOffset);
+        Assert.Equal(0, service.SavedPositions.Last().Cursor.CharacterOffset);
+
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => streams.Requests.Count == 2);
+
+        Assert.Equal(0, streams.Requests[1].Cursor.CharacterOffset);
+    }
+
+    [Fact]
+    public async Task Caret_cursor_overrides_the_beginning_after_stop()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true),
+            request => CompletedSession(request));
+        var audio = new FakeAudioOutput(blockCall: 2);
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+        var caretCursor = new ReaderCursor("doc", "block-0", 0, 4, 1);
+
+        await playback.PlayAsync(Document());
+        await audio.WaitForCallAsync(2);
+        await playback.StopAsync();
+        await playback.PlayAsync(Document(), startCursor: caretCursor);
+        await WaitUntilAsync(() => streams.Requests.Count == 2);
+
+        Assert.Equal(caretCursor, streams.Requests[1].Cursor);
+    }
+
+    [Fact]
+    public async Task Disposing_preserves_the_last_fully_played_position()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(
+            request => SessionWithPackets(request, includeSecondPacket: true));
+        var audio = new FakeAudioOutput(blockCall: 2);
+        var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+
+        await playback.PlayAsync(Document());
+        await audio.WaitForCallAsync(2);
+        await playback.DisposeAsync();
+
+        Assert.Equal(3, service.SavedPositions.Last().Cursor.CharacterOffset);
+    }
+
+    [Fact]
     public async Task Playback_buffers_across_cursor_boundaries_and_drains_once_at_stream_end()
     {
         var service = new PlaybackService();
