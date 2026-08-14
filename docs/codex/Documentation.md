@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-06
+- Date: 2026-08-14
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,10 +18,42 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed the first field-use UI follow-up after several days of normal Reader
+  use. Clipboard prompts now activate topmost at screen center and appear in the
+  taskbar; their owner is attached only when the Reader is already active. This
+  prevents a browser or another foreground application from hiding the modal
+  Add/Create/Ignore decision behind the main Reader window.
+- Removed implicit caret intent from normal Play. Keyboard focus, mouse clicks,
+  selection changes, and a clipboard dialog closing can no longer silently alter
+  the next playback start. Normal Play now only resumes Pause or uses the durable
+  Stop/beginning position. A separate, explicit `Start at cursor` action maps the
+  current full-document caret to its Reader UTF-16 cursor and starts there.
+- Long-document follow mode now asks `ReadingWindowPager` for the next 64-block
+  viewport eight blocks before the current viewport ends, retaining sixteen
+  blocks of preceding context. The visible article therefore continues before
+  playback reaches an apparent page ending instead of replacing the entire view
+  only after the active source span disappears. Follow-off still leaves manual
+  paging under user control.
+- Refreshed the WPF presentation without changing the application/service
+  boundary: a navy status header, quieter connection card, card-based library and
+  reading surfaces, a dedicated bottom playback bar, compact article tools,
+  improved typography/spacing, a truthful service-status dot, and deterministic
+  WPF vector icons replace the dense rows of equal-weight buttons. ImageGen was
+  used for the design reference at
+  `design_doc/assets/reader-ui-refresh-reference.png`; the generated bitmap is
+  not a runtime dependency or a shipped icon asset.
+- Field-use UI validation passed on 2026-08-14: all 403 Python tests, all 82
+  .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the complete
+  Windows desktop integration check passed. The check covered live paging,
+  UTF-16 editing, cursor persistence, stream synthesis, clipboard append/Undo,
+  safe structured import, speech rules, WASAPI, Windows clipboard/hotkey/tray
+  integration, self-contained packaging, and the refreshed WPF render. A focused
+  application test proves context-preserving prefetch for a 150-block article.
 - Completed Play/Pause/Stop semantics follow-up: `Pause` preserves the last
   fully heard cursor and the next Play resumes there. `Stop` now durably resets
-  the next normal Play to the beginning of the article; placing the editable
-  text caret before Play remains an explicit one-time override. Coordinator
+  the next normal Play to the beginning of the article. Since the 2026-08-14
+  field-use follow-up, caret starts require the explicit `Start at cursor`
+  action rather than changing ordinary Play. Coordinator
   disposal and section seeking use a position-preserving internal interruption,
   so closing the app does not accidentally apply the user-facing Stop reset.
   Button tooltips now describe the distinction.
@@ -189,6 +221,10 @@ This file is the live status log and shared memory for future Codex loops.
   normal Play starts at the document's first cursor instead of reopening at the
   end. Clipboard replay, Pause, compact-controller, and global-hotkey behavior
   retain their existing semantics.
+- The 2026-08-14 field-use follow-up deliberately supersedes the implicit-caret
+  portion of that smart-Play experiment. Real clipboard use showed that focus
+  restoration and click position made implicit intent indistinguishable from an
+  accidental start. Explicit `Start at cursor` is now the supported behavior.
 - Smart-Play validation passed on 2026-07-29: 71 .NET Release tests (including
   live-completion and persisted-completion restart regressions), all 394 Python
   tests, Ruff, .NET formatting, and `git diff --check` passed. The complete

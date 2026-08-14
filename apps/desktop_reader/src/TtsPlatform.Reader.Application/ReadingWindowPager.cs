@@ -71,6 +71,47 @@ public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize
         CancellationToken cancellationToken = default) =>
         LoadAsync(documentId, Math.Max(0, Current.StartOrdinal - pageSize), cancellationToken);
 
+    public Task<ReadingWindowPage> FollowPlaybackAsync(
+        string documentId,
+        int blockOrdinal,
+        int contextBlocks = 16,
+        int prefetchThreshold = 8,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        if (blockOrdinal < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(blockOrdinal));
+        }
+        if (contextBlocks < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(contextBlocks));
+        }
+        if (prefetchThreshold < 1 || prefetchThreshold >= pageSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(prefetchThreshold));
+        }
+
+        var blockIndex = -1;
+        for (var index = 0; index < Current.Blocks.Count; index++)
+        {
+            if (Current.Blocks[index].Ordinal == blockOrdinal)
+            {
+                blockIndex = index;
+                break;
+            }
+        }
+        var needsAnotherWindow = blockIndex < 0 ||
+            (Current.HasNext && blockIndex >= Current.Blocks.Count - prefetchThreshold);
+        var startOrdinal = Math.Max(0, blockOrdinal - contextBlocks);
+        if (!needsAnotherWindow || startOrdinal == Current.StartOrdinal)
+        {
+            return Task.FromResult(Current);
+        }
+
+        return LoadAsync(documentId, startOrdinal, cancellationToken);
+    }
+
     private ReadingWindowPage CreateLoadedPage(int startOrdinal)
     {
         if (startOrdinal < 0)

@@ -169,3 +169,23 @@ The Reader may be shared publicly. New dependencies and copied code therefore
 need recorded, distribution-compatible licenses. The repository license must be
 chosen before publishing a desktop binary. The .NET test projects use xUnit,
 and portable publishing is exercised before the final installer milestone.
+
+## 2026-08-14: Make cursor playback explicit and prefetch reading context
+
+Normal Play must not infer playback intent from text focus, selection, or caret
+movement. Play resumes a Pause or uses the durable document position; a separate
+`Start at cursor` action is the only way to override it with the editor caret.
+
+When follow-reading is enabled, the desktop may replace its bounded visual
+viewport before playback reaches the last visible blocks, retaining preceding
+context around the active block. The service streaming window and canonical
+cursor contracts remain unchanged.
+
+Reasoning:
+
+- Clipboard-dialog focus restoration and mouse position made implicit caret
+  starts unpredictable during the primary copy/append workflow.
+- A distinct action is visible, reversible, keyboard-accessible, and easier to
+  explain than hidden one-shot intent.
+- Early viewport prefetch prevents a long article from appearing to end and then
+  abruptly revealing more text while speech continues.

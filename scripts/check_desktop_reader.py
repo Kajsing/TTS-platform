@@ -271,9 +271,13 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "InvisibleReadingBlockContainerStyle",
         "UseLoadedDocument",
         "Reader will retry automatically in one minute",
-        "_useTextCursorOnNextPlay",
-        "startCursor: requestedCursor",
+        "PlayFromCursorButton",
+        "startCursor: cursor",
         "After Stop, starts at the beginning",
+        'Topmost="True"',
+        'ShowInTaskbar="True"',
+        "FollowPlaybackAsync",
+        "PrimaryButtonStyle",
         "restartFromBeginning: true",
         "Start local TTS service",
         "Stop local TTS service",
@@ -283,7 +287,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "stopped after reconnecting to it",
         "No unrelated Python process was terminated",
         "DeleteDocumentAsync",
-        "Delete article...",
+        "Delete selected article",
         "JsonlPlaybackPerformanceSink",
         "SuspectedUnderrunCount",
     ]
@@ -297,7 +301,6 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             "Service control, inline editing, or cursor playback features are missing: "
             f"{missing_workstation_usability_features}"
         )
-    obsolete_cursor_button = "PlayFromCursor" + "Button"
     main_window_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
@@ -305,9 +308,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
             reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml.cs",
         )
     )
-    if obsolete_cursor_button in main_window_source:
+    if "_useTextCursorOnNextPlay" in main_window_source:
         raise DesktopReaderCheckError(
-            "The obsolete separate Play from cursor button is still present."
+            "Implicit caret playback intent is still present."
         )
     return {
         "required_files": len(required),

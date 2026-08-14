@@ -21,12 +21,14 @@ The Milestone 9 Reader beta provides:
   checkpoints for a truthful Pause resume position;
 - Play/Pause/Stop, bounded section navigation, a 64-block reading viewport,
   source-span highlighting, durable Pause resume from the last fully played
-  UTF-16 cursor, and Stop-to-beginning behavior with an explicit caret override;
+  UTF-16 cursor, Stop-to-beginning behavior, and a separate explicit
+  `Start at cursor` action;
 - active-stream content leases, next-window continuation, and a consistent
   SQLite preview-snapshot command;
 - explicit Read Clipboard without monitoring or document persistence;
 - clipboard prompt mode, off by default, with Read, append, create, Inbox,
-  ignore, and executable-block actions;
+  ignore, and executable-block actions; the prompt is activated above other
+  windows and appears in the taskbar so a browser cannot hide it behind Reader;
 - opt-in Copy Selection and Read with a one-second timeout, secure-desktop
   refusal, one-shot `Ctrl+C`, loop prevention, and best-effort safe clipboard
   restoration;
@@ -47,8 +49,12 @@ The Milestone 9 Reader beta provides:
 - non-fetching HTML import, archive/XML safety limits, and active-content
   removal before anything reaches the Reader library;
 - structure-aware read-only rendering with 64-block pages, recycling WPF
-  virtualization, optional follow-reading scroll, and duplicate-as-editable
-  plain text.
+  virtualization, optional follow-reading scroll, ahead-of-playback page
+  prefetch with retained reading context, and duplicate-as-editable plain text.
+- a refreshed high-contrast WPF shell with a focused two-card library/reader
+  layout, a dedicated bottom playback bar, restrained article tools, and
+  code-native vector icons; the ImageGen reference mockup is design-only and is
+  not loaded by the application at runtime.
 - engine-independent speech-rule sets with deterministic scope, stage, priority,
   enable/disable, language/engine/voice/document filters, and durable versions;
 - literal and regex replacement, skip, spell, pause, and preserved phoneme rules

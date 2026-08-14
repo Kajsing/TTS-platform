@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using TtsPlatform.Reader.Application;
@@ -70,7 +71,6 @@ public partial class MainWindow : Window
     private int _documentLoadGeneration;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
-    private bool _useTextCursorOnNextPlay;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -403,6 +403,7 @@ public partial class MainWindow : Window
 
             StatusText.Text = message;
             ServiceStatusText.Text = "Service: starting";
+            ServiceStatusDot.Fill = new SolidColorBrush(Color.FromRgb(224, 165, 43));
             await WaitForServiceAvailabilityAsync(shouldBeAvailable: true);
             await RefreshConnectionAsync();
         }
@@ -437,6 +438,7 @@ public partial class MainWindow : Window
 
             StatusText.Text = message;
             ServiceStatusText.Text = "Service: stopping";
+            ServiceStatusDot.Fill = new SolidColorBrush(Color.FromRgb(224, 165, 43));
             await WaitForServiceAvailabilityAsync(shouldBeAvailable: false);
             await RefreshConnectionAsync();
         }
@@ -633,6 +635,11 @@ public partial class MainWindow : Window
             : result.State is ConnectionState.NotChecked or ConnectionState.Checking
                 ? "Service: checking"
                 : "Service: running";
+        ServiceStatusDot.Fill = serviceUnavailable
+            ? new SolidColorBrush(Color.FromRgb(213, 83, 83))
+            : result.State is ConnectionState.NotChecked or ConnectionState.Checking
+                ? new SolidColorBrush(Color.FromRgb(224, 165, 43))
+                : new SolidColorBrush(Color.FromRgb(52, 199, 138));
         StartServiceButton.IsEnabled = serviceUnavailable;
         StopServiceButton.IsEnabled = !serviceUnavailable || ScheduledServiceController.OwnsRunningService;
         FooterText.Text = result.State.ToString();
@@ -828,7 +835,7 @@ public partial class MainWindow : Window
                 change.SourceExecutable,
                 _settings.PrivacyMode)
             {
-                Owner = IsVisible ? this : null,
+                Owner = IsActive ? this : null,
             };
             _ = dialog.ShowDialog();
             await HandleClipboardActionAsync(
@@ -1430,15 +1437,15 @@ public partial class MainWindow : Window
             }
 
             _textCursor = null;
-            _useTextCursorOnNextPlay = false;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
             EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
             EditorTextBox.IsReadOnly = _continuousDocument is null;
+            ReadingRangeText.Text = $"{document.TotalCharacters:N0} characters · {document.TotalBlocks:N0} block(s)";
             EditorHintText.Text = document.IsEditable
                 ? _continuousDocument is null
                     ? $"This document is too large for the continuous editor. Reading remains page-based above {ContinuousEditorMaxCharacters:N0} characters."
-                    : "Select and copy across the whole document, or click anywhere to edit and place the playback cursor. Save one paragraph before editing another."
+                    : "Select and copy across the whole document, or click anywhere to edit. Use Start at cursor when you want playback to begin at the caret. Save one paragraph before editing another."
                 : DescribeStructuredDocument(document);
             if (_continuousDocument is not null)
             {
@@ -1646,7 +1653,6 @@ public partial class MainWindow : Window
         _editor?.Clear();
         _continuousDocument = null;
         _textCursor = null;
-        _useTextCursorOnNextPlay = false;
         _readingBlocks.Clear();
         _updatingEditor = true;
         try
@@ -1654,6 +1660,7 @@ public partial class MainWindow : Window
             DocumentTitleText.Text = "Select a document";
             EditorHintText.Text = "Editable text will appear here.";
             EditorTextBox.Text = string.Empty;
+            ReadingRangeText.Text = "No article selected";
         }
         finally
         {
@@ -1740,32 +1747,16 @@ public partial class MainWindow : Window
         }
         _editor.SetWorkingText(edit.ReplacementText);
         UpdateTextCursorFromContinuousEditor();
-        _useTextCursorOnNextPlay = _textCursor is not null;
         UpdateEditorButtons();
         UpdatePlaybackControls();
-    }
-
-    private void EditorTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (!_updatingEditor)
-        {
-            MarkTextCursorForNextPlayback();
-        }
     }
 
     private void EditorTextBox_SelectionChanged(object sender, RoutedEventArgs e)
     {
         if (!_updatingEditor)
         {
-            MarkTextCursorForNextPlayback();
+            UpdateTextCursorFromContinuousEditor();
         }
-    }
-
-    private void MarkTextCursorForNextPlayback()
-    {
-        UpdateTextCursorFromContinuousEditor();
-        _useTextCursorOnNextPlay = _textCursor is not null;
-        UpdatePlaybackControls();
     }
 
     private void RestoreContinuousWorkingText(string message)
@@ -2027,9 +2018,7 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
-            var requestedCursor = _useTextCursorOnNextPlay ? _textCursor : null;
-            await _playback.PlayAsync(_editor.Document, startCursor: requestedCursor);
-            _useTextCursorOnNextPlay = false;
+            await _playback.PlayAsync(_editor.Document);
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2043,6 +2032,40 @@ public partial class MainWindow : Window
 
     private async void StopButton_Click(object sender, RoutedEventArgs e) =>
         await StopUnifiedPlaybackAsync();
+
+    private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_playback is null || _editor?.Document is not ReaderDocument document)
+        {
+            return;
+        }
+        if (_editor.HasUnsavedChanges)
+        {
+            FooterText.Text = "Save or revert the local edit before playback.";
+            return;
+        }
+
+        UpdateTextCursorFromContinuousEditor();
+        if (_textCursor is not ReaderCursor cursor)
+        {
+            FooterText.Text = "Place the text cursor in an editable article first.";
+            return;
+        }
+
+        try
+        {
+            await StopEphemeralAsync(clearReplay: true);
+            await _playback.PlayAsync(document, startCursor: cursor);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Playback: {exception.Message}";
+        }
+    }
 
     private async void PreviousSectionButton_Click(object sender, RoutedEventArgs e) =>
         await NavigateSectionAsync(next: false);
@@ -2133,6 +2156,12 @@ public partial class MainWindow : Window
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
         NextReadingPageButton.IsEnabled = page.HasNext;
         var pageNumber = page.StartOrdinal / 64 + 1;
+        var document = _editor?.Document;
+        ReadingRangeText.Text = page.Blocks.Count == 0
+            ? "No readable text"
+            : document is null
+                ? $"Blocks {page.Blocks[0].Ordinal + 1:N0}–{page.Blocks[^1].Ordinal + 1:N0}"
+                : $"Blocks {page.Blocks[0].Ordinal + 1:N0}–{page.Blocks[^1].Ordinal + 1:N0} of {document.TotalBlocks:N0}";
         FooterText.Text = page.Blocks.Count == 0
             ? "This document contains no readable blocks."
             : $"Showing document page {pageNumber:N0}.";
@@ -2212,9 +2241,16 @@ public partial class MainWindow : Window
         }
 
         var firstSpan = highlight.SourceSpans[0];
-        if (_readingBlocks.All(item => !string.Equals(item.Id, firstSpan.BlockId, StringComparison.Ordinal)))
+        if (FollowReadingCheckBox.IsChecked == true && _readingWindow is not null)
         {
-            await LoadReadingWindowAsync(document, firstSpan.BlockOrdinal);
+            var priorStartOrdinal = _readingWindow.Current.StartOrdinal;
+            var page = await _readingWindow.FollowPlaybackAsync(
+                document.Id,
+                firstSpan.BlockOrdinal);
+            if (page.StartOrdinal != priorStartOrdinal || _readingBlocks.Count == 0)
+            {
+                await ShowReadingPageAsync(page);
+            }
         }
 
         foreach (var block in _readingBlocks)
@@ -2250,14 +2286,23 @@ public partial class MainWindow : Window
         var ephemeralPaused = !_ephemeralPlaying && _ephemeralReplayText is not null;
         var hasPlayback = _ephemeralPlaying || ephemeralPaused ||
             (hasDocument && _playback?.State is not ReaderPlaybackState.Stopped);
-        PlayPauseButton.Content = _ephemeralPlaying || documentActive ? "Pause" : "Play";
-        PlayPauseButton.IsEnabled = hasDocument || _ephemeralPlaying || ephemeralPaused;
-        StopButton.IsEnabled = hasPlayback;
-        PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         var continuousEditableDocument = hasDocument &&
             _editor?.Document?.IsEditable == true &&
             _continuousDocument is not null;
+        var pauseVisible = _ephemeralPlaying || documentActive;
+        PlayPauseLabel.Text = pauseVisible ? "Pause" : "Play";
+        PlayPauseIcon.Data = (Geometry)FindResource(
+            pauseVisible ? "PauseGeometry" : "PlayGeometry");
+        PlayPauseButton.IsEnabled = hasDocument || _ephemeralPlaying || ephemeralPaused;
+        PlayFromCursorButton.IsEnabled = continuousEditableDocument &&
+            !documentActive &&
+            !_ephemeralPlaying &&
+            !ephemeralPaused &&
+            _textCursor is not null &&
+            _editor?.HasUnsavedChanges != true;
+        StopButton.IsEnabled = hasPlayback;
+        PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
+        NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
         var showContinuousEditor = continuousEditableDocument && !documentActive;
         var showReadingView = hasDocument && !showContinuousEditor;
         ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource("ReadingBlockTemplate");

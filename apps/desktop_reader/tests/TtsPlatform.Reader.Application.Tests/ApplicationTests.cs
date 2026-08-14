@@ -205,6 +205,25 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Reading_window_prefetches_with_context_before_playback_reaches_the_page_end()
+    {
+        var blocks = Enumerable.Range(0, 150).Select(index => Block($"Block {index}", index)).ToArray();
+        var client = new StubClient();
+        var pager = new ReadingWindowPager(client);
+        pager.UseLoadedDocument("document", blocks);
+
+        var unchanged = await pager.FollowPlaybackAsync("document", 40);
+        var advanced = await pager.FollowPlaybackAsync("document", 56);
+
+        Assert.Equal(0, unchanged.StartOrdinal);
+        Assert.Equal(40, advanced.StartOrdinal);
+        Assert.Equal(40, advanced.Blocks.First().Ordinal);
+        Assert.Equal(103, advanced.Blocks.Last().Ordinal);
+        Assert.Contains(56, advanced.Blocks.Select(block => block.Ordinal));
+        Assert.Empty(client.ReceivedBlockAfterOrdinals);
+    }
+
+    [Fact]
     public async Task Editor_preserves_unsaved_text_when_row_version_conflicts()
     {
         var client = new StubClient

@@ -5,7 +5,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="TTS Platform Reader" Height="760" Width="1180" MinHeight="560" MinWidth="860"
+        Title="TTS Platform Reader" Height="800" Width="1240" MinHeight="620" MinWidth="920"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="MainWindow_PreviewKeyDown"
         AllowDrop="True" DragOver="MainWindow_DragOver" Drop="MainWindow_Drop">
   <Window.Resources>
@@ -31,7 +31,8 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Grid Background="White">
+
+  <Grid Background="{StaticResource AppBackgroundBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -39,41 +40,56 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <Border Grid.Row="0" Background="{StaticResource AccentBrush}" Padding="16,12">
+    <Border Grid.Row="0" Background="{StaticResource NavigationBrush}" Padding="18,11">
       <DockPanel LastChildFill="True">
-        <TextBlock Foreground="White" FontSize="22" FontWeight="SemiBold"
-                   Text="TTS Platform Reader" VerticalAlignment="Center" />
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-          <TextBlock x:Name="ServiceStatusText" Foreground="White" Margin="0,5,10,0"
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <Path Data="{StaticResource SpeakerGeometry}" Width="25" Height="25" Stretch="Uniform"
+                Stroke="White" StrokeThickness="1.5" Fill="White" Margin="0,0,11,0" />
+          <StackPanel>
+            <TextBlock Foreground="White" FontSize="20" FontWeight="SemiBold"
+                       Text="TTS Platform Reader" />
+            <TextBlock Foreground="#AFC3D3" FontSize="11" Text="Your local reading workspace" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Ellipse x:Name="ServiceStatusDot" Width="9" Height="9" Fill="#E0A52B" Margin="0,0,7,0" />
+          <TextBlock x:Name="ServiceStatusText" Foreground="White" Margin="0,4,12,0"
                      Text="Service: checking" AutomationProperties.LiveSetting="Polite" />
-          <Button x:Name="StartServiceButton" Content="Start service"
+          <Button x:Name="StartServiceButton" Content="Start service" Style="{StaticResource HeaderButtonStyle}"
                   Click="StartServiceButton_Click" IsEnabled="False"
                   AutomationProperties.Name="Start local TTS service" />
-          <Button x:Name="StopServiceButton" Content="Stop service"
+          <Button x:Name="StopServiceButton" Content="Stop service" Style="{StaticResource HeaderButtonStyle}"
                   Click="StopServiceButton_Click" IsEnabled="False"
                   AutomationProperties.Name="Stop local TTS service" />
-          <TextBlock x:Name="ClipboardStatusText" Foreground="White" Margin="0,5,10,0"
-                     Text="Clipboard prompt: Off" AutomationProperties.LiveSetting="Polite" />
-          <Button x:Name="ReadClipboardButton" Content="Read Clipboard" Click="ReadClipboardButton_Click"
-                  AutomationProperties.Name="Read clipboard without saving" />
-          <Button x:Name="CompactButton" Content="Compact" Click="CompactButton_Click"
-                  AutomationProperties.Name="Open compact playback controller" />
-          <Button x:Name="SpeechRulesButton" Content="Speech rules…" Click="SpeechRulesButton_Click"
-                  AutomationProperties.Name="Manage speech rules" />
-          <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
-                  AutomationProperties.Name="Check local service connection" />
-          <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
-                  AutomationProperties.Name="Run suggested connection action" />
         </StackPanel>
       </DockPanel>
     </Border>
 
-    <Border Grid.Row="1" x:Name="StatusBorder" Background="#FFF4D6" Padding="12">
+    <Border Grid.Row="1" x:Name="StatusBorder" Style="{StaticResource CardStyle}" Margin="16,10,16,0"
+            Padding="12" Background="#FFF8E8">
       <StackPanel>
-        <TextBlock x:Name="StatusText" Text="Connection has not been checked." FontWeight="SemiBold"
-                   TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-        <Expander Header="Connection settings" Margin="0,8,0,0">
-          <StackPanel Margin="0,4,0,0">
+        <DockPanel LastChildFill="True">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button x:Name="ReadClipboardButton" Content="Read clipboard" Click="ReadClipboardButton_Click"
+                    AutomationProperties.Name="Read clipboard without saving" />
+            <Button x:Name="CompactButton" Content="Compact player" Click="CompactButton_Click"
+                    AutomationProperties.Name="Open compact playback controller" />
+            <Button x:Name="SpeechRulesButton" Content="Speech rules…" Click="SpeechRulesButton_Click"
+                    AutomationProperties.Name="Manage speech rules" />
+            <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
+                    AutomationProperties.Name="Check local service connection" />
+            <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
+                    AutomationProperties.Name="Run suggested connection action" />
+          </StackPanel>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock x:Name="StatusText" Text="Connection has not been checked." FontWeight="SemiBold"
+                       TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+            <TextBlock x:Name="ClipboardStatusText" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,8,0"
+                       Text="Clipboard prompt: Off" AutomationProperties.LiveSetting="Polite" />
+          </StackPanel>
+        </DockPanel>
+        <Expander Header="Connection and keyboard settings" Margin="0,7,0,0">
+          <StackPanel Margin="0,5,0,0">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -88,18 +104,18 @@
               <TextBox Grid.Column="3" x:Name="TokenPathTextBox" AutomationProperties.Name="Token file path" />
               <StackPanel Grid.Column="4" Orientation="Horizontal">
                 <Button Content="Browse…" Click="BrowseTokenButton_Click" />
-                <Button Content="Save" Click="SaveSettingsButton_Click" />
+                <Button Content="Save" Click="SaveSettingsButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
               </StackPanel>
             </Grid>
-            <WrapPanel Margin="0,8,0,0">
+            <WrapPanel Margin="0,7,0,0">
               <CheckBox x:Name="ClipboardMonitoringCheckBox" Content="Clipboard prompt mode"
-                        Click="ClipboardMonitoringCheckBox_Click" />
-              <CheckBox x:Name="CopySelectionCheckBox" Content="Enable Copy Selection and Read" />
-              <CheckBox x:Name="PrivacyModeCheckBox" Content="Privacy mode" />
-              <CheckBox x:Name="MinimizeToTrayCheckBox" Content="Minimize to tray on close" />
-              <CheckBox x:Name="CompactEnabledCheckBox" Content="Remember compact controller" />
+                        Click="ClipboardMonitoringCheckBox_Click" Margin="4" />
+              <CheckBox x:Name="CopySelectionCheckBox" Content="Enable Copy Selection and Read" Margin="4" />
+              <CheckBox x:Name="PrivacyModeCheckBox" Content="Privacy mode" Margin="4" />
+              <CheckBox x:Name="MinimizeToTrayCheckBox" Content="Minimize to tray on close" Margin="4" />
+              <CheckBox x:Name="CompactEnabledCheckBox" Content="Remember compact controller" Margin="4" />
             </WrapPanel>
-            <Grid Margin="0,8,0,0">
+            <Grid Margin="0,7,0,0">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="2*" />
@@ -124,7 +140,7 @@
               <TextBlock Grid.Column="8" Text="Stop" VerticalAlignment="Center" Margin="8,0,4,0" />
               <TextBox Grid.Column="9" x:Name="StopHotkeyTextBox" Width="85" />
             </Grid>
-            <TextBlock x:Name="HotkeyStatusText" Margin="0,6,0,0" Foreground="#555"
+            <TextBlock x:Name="HotkeyStatusText" Margin="3,5,0,0" Foreground="{StaticResource TextMutedBrush}"
                        Text="Global hotkeys are not registered yet." TextWrapping="Wrap"
                        AutomationProperties.LiveSetting="Polite" />
           </StackPanel>
@@ -132,133 +148,208 @@
       </StackPanel>
     </Border>
 
-    <Grid Grid.Row="2" Margin="12">
+    <Grid Grid.Row="2" Margin="16,12,16,12">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="2*" MinWidth="300" />
-        <ColumnDefinition Width="8" />
-        <ColumnDefinition Width="3*" MinWidth="380" />
+        <ColumnDefinition Width="360" MinWidth="310" />
+        <ColumnDefinition Width="12" />
+        <ColumnDefinition Width="*" MinWidth="500" />
       </Grid.ColumnDefinitions>
 
-      <Grid Grid.Column="0">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <DockPanel Margin="0,0,0,8">
-          <Button DockPanel.Dock="Right" Content="Search" Click="SearchButton_Click" />
-          <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Import..."
-                  Click="ImportButton_Click" AutomationProperties.Name="Import document file" />
-          <ComboBox DockPanel.Dock="Right" x:Name="LibraryStateComboBox" Width="105"
-                    SelectedIndex="0" SelectionChanged="LibraryStateComboBox_SelectionChanged"
-                    AutomationProperties.Name="Library state filter">
-            <ComboBoxItem Content="All" Tag="" />
-            <ComboBoxItem Content="Inbox" Tag="inbox" />
-            <ComboBoxItem Content="Reading" Tag="active" />
-            <ComboBoxItem Content="Finished" Tag="finished" />
-            <ComboBoxItem Content="Archive" Tag="archived" />
-          </ComboBox>
-          <TextBox x:Name="SearchTextBox" AutomationProperties.Name="Search library"
-                   ToolTip="Search document titles and content" />
-        </DockPanel>
-        <DataGrid Grid.Row="1" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                  SelectionMode="Single" SelectionChanged="DocumentsGrid_SelectionChanged"
-                  EnableRowVirtualization="True" AutomationProperties.Name="Reader library">
-          <DataGrid.Columns>
-            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-            <DataGridTextColumn Header="Source" Binding="{Binding SourceType}" Width="110" />
-            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" />
-          </DataGrid.Columns>
-        </DataGrid>
-        <Button Grid.Row="2" x:Name="LoadMoreButton" Content="Load more" Click="LoadMoreButton_Click"
-                HorizontalAlignment="Left" IsEnabled="False" />
-      </Grid>
-
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
-
-      <Grid Grid.Column="2">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <StackPanel>
-          <DockPanel>
-            <Button DockPanel.Dock="Right" x:Name="DeleteDocumentButton" Content="Delete article..."
-                    Click="DeleteDocumentButton_Click" IsEnabled="False" Foreground="#9C1C1C"
-                    AutomationProperties.Name="Delete selected article" />
-            <Button DockPanel.Dock="Right" x:Name="RenameDocumentButton" Content="Rename"
-                    Click="RenameDocumentButton_Click" IsEnabled="False"
-                    AutomationProperties.Name="Rename selected document" />
-            <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="20"
-                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+      <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="0">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <DockPanel Margin="15,13,12,8">
+            <Button DockPanel.Dock="Right" x:Name="ImportButton" Click="ImportButton_Click"
+                    Style="{StaticResource PrimaryButtonStyle}" AutomationProperties.Name="Import document file">
+              <StackPanel Orientation="Horizontal">
+                <Path Data="{StaticResource PlusGeometry}" Width="14" Height="14" Stretch="Uniform"
+                      Fill="White" Margin="0,0,6,0" />
+                <TextBlock Text="Import" />
+              </StackPanel>
+            </Button>
+            <TextBlock Text="Library" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" />
           </DockPanel>
-          <TextBlock x:Name="EditorHintText" Foreground="#555" Margin="0,3,0,8"
-                     Text="Editable text will appear here." TextWrapping="Wrap" />
-          <WrapPanel Margin="0,0,0,8">
-            <Button x:Name="PreviousSectionButton" Content="Previous section" Click="PreviousSectionButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Go to previous section" />
-            <Button x:Name="PlayPauseButton" Content="Play" Click="PlayPauseButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Play or pause document"
-                    ToolTip="Resumes after Pause. After Stop, starts at the beginning or where you next place the text cursor." />
-            <Button x:Name="StopButton" Content="Stop" Click="StopButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Stop document playback"
-                    ToolTip="Stops playback and resets the next Play to the beginning. Move the text cursor first to start there instead." />
-            <Button x:Name="NextSectionButton" Content="Next section" Click="NextSectionButton_Click"
-                    IsEnabled="False" AutomationProperties.Name="Go to next section" />
-            <CheckBox x:Name="AutoAdvanceCheckBox" Content="Auto-advance queue"
-                      VerticalAlignment="Center" Margin="8,0" />
-            <TextBlock x:Name="PlaybackStatusText" Text="Stopped" Margin="10,5,0,0"
-                       AutomationProperties.LiveSetting="Polite" />
-          </WrapPanel>
-        </StackPanel>
-        <Grid Grid.Row="1">
-          <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True" Visibility="Collapsed"
-                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                   TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
-                   Padding="12" BorderThickness="1" BorderBrush="#CCC"
-                   GotKeyboardFocus="EditorTextBox_GotKeyboardFocus"
-                   SelectionChanged="EditorTextBox_SelectionChanged"
-                   TextChanged="EditorTextBox_TextChanged"
-                   AutomationProperties.Name="Continuous document text" />
-          <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
-                   BorderBrush="#CCC" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                   SelectionMode="Single" SelectionChanged="ReadingBlocksList_SelectionChanged"
-                   ItemTemplate="{StaticResource ReadingBlockTemplate}"
-                   ItemContainerStyle="{StaticResource InvisibleReadingBlockContainerStyle}"
-                   AutomationProperties.Name="Document text" />
+          <Grid Grid.Row="1" Margin="10,0,10,9">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="112" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchTextBox" AutomationProperties.Name="Search library"
+                     ToolTip="Search document titles and content" />
+            <ComboBox Grid.Column="1" x:Name="LibraryStateComboBox"
+                      SelectedIndex="0" SelectionChanged="LibraryStateComboBox_SelectionChanged"
+                      AutomationProperties.Name="Library state filter">
+              <ComboBoxItem Content="All" Tag="" />
+              <ComboBoxItem Content="Inbox" Tag="inbox" />
+              <ComboBoxItem Content="Reading" Tag="active" />
+              <ComboBoxItem Content="Finished" Tag="finished" />
+              <ComboBoxItem Content="Archive" Tag="archived" />
+            </ComboBox>
+            <Button Grid.Column="2" Click="SearchButton_Click" ToolTip="Search">
+              <Path Data="{StaticResource SearchGeometry}" Width="16" Height="16"
+                    Stretch="Uniform" Stroke="{StaticResource TextBrush}" StrokeThickness="1.5" />
+            </Button>
+          </Grid>
+          <DataGrid Grid.Row="2" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    BorderThickness="0,1,0,1" SelectionMode="Single"
+                    SelectionChanged="DocumentsGrid_SelectionChanged"
+                    EnableRowVirtualization="True" AutomationProperties.Name="Reader library">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+              <DataGridTextColumn Header="State" Binding="{Binding State}" Width="82" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <Button Grid.Row="3" x:Name="LoadMoreButton" Content="Load more" Click="LoadMoreButton_Click"
+                  HorizontalAlignment="Left" IsEnabled="False" Margin="12,8" />
         </Grid>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-          <Button x:Name="PreviousReadingPageButton" Content="Previous page"
-                  Click="PreviousReadingPageButton_Click" IsEnabled="False" />
-          <Button x:Name="NextReadingPageButton" Content="Next page"
-                  Click="NextReadingPageButton_Click" IsEnabled="False" />
-          <CheckBox x:Name="FollowReadingCheckBox" Content="Follow reading" IsChecked="True"
-                    VerticalAlignment="Center" Margin="6,0" />
-          <Button x:Name="DuplicateEditableButton" Content="Duplicate as editable text"
-                  Click="DuplicateEditableButton_Click" IsEnabled="False" />
-          <Button x:Name="CreateRuleFromSelectionButton" Content="Create rule from selection"
-                  Click="CreateRuleFromSelectionButton_Click"
-                  AutomationProperties.Name="Create speech rule from selected text" />
-          <Button x:Name="LibraryWorkflowButton" Content="Queue / bookmarks / WAV"
-                  Click="LibraryWorkflowButton_Click" />
-          <Button x:Name="FinishDocumentButton" Content="Mark finished"
-                  Click="FinishDocumentButton_Click" IsEnabled="False" />
-          <Button x:Name="ArchiveDocumentButton" Content="Archive"
-                  Click="ArchiveDocumentButton_Click" IsEnabled="False" />
-          <Button x:Name="RestoreDocumentButton" Content="Restore to inbox"
-                  Click="RestoreDocumentButton_Click" IsEnabled="False" />
-          <Button x:Name="SaveEditButton" Content="Save changes" Click="SaveEditButton_Click" IsEnabled="False" />
-          <Button x:Name="RevertEditButton" Content="Revert changes" Click="RevertEditButton_Click" IsEnabled="False" />
-          <Button x:Name="UndoButton" Content="Undo" Click="UndoButton_Click" IsEnabled="False" />
-          <Button x:Name="RedoButton" Content="Redo" Click="RedoButton_Click" IsEnabled="False" />
-        </StackPanel>
-      </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="12" HorizontalAlignment="Stretch" Background="Transparent" />
+
+      <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="0">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <StackPanel Margin="19,15,16,10">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="RenameDocumentButton" Content="Rename"
+                        Click="RenameDocumentButton_Click" IsEnabled="False"
+                        AutomationProperties.Name="Rename selected document" />
+                <Button x:Name="DeleteDocumentButton" Content="Delete…"
+                        Click="DeleteDocumentButton_Click" IsEnabled="False"
+                        Style="{StaticResource DangerButtonStyle}"
+                        AutomationProperties.Name="Delete selected article" />
+              </StackPanel>
+              <TextBlock x:Name="DocumentTitleText" Text="Select a document" FontSize="24"
+                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock x:Name="EditorHintText" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"
+                       Text="Choose an article from the library." TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Grid Grid.Row="1" Margin="16,0,16,10">
+            <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True" Visibility="Collapsed"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                     TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
+                     TextBlock.LineHeight="27" Padding="18" BorderThickness="1" BorderBrush="{StaticResource BorderBrush}"
+                     SelectionChanged="EditorTextBox_SelectionChanged"
+                     TextChanged="EditorTextBox_TextChanged"
+                     AutomationProperties.Name="Continuous document text" />
+            <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
+                     BorderBrush="{StaticResource BorderBrush}" Padding="18"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                     SelectionMode="Single" SelectionChanged="ReadingBlocksList_SelectionChanged"
+                     ItemTemplate="{StaticResource ReadingBlockTemplate}"
+                     ItemContainerStyle="{StaticResource InvisibleReadingBlockContainerStyle}"
+                     AutomationProperties.Name="Document text" />
+          </Grid>
+
+          <Border Grid.Row="2" Margin="16,0,16,10" Padding="12,9"
+                  Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1" CornerRadius="8">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" x:Name="ReadingRangeText" Foreground="{StaticResource TextMutedBrush}"
+                           Text="No article selected" Margin="10,3,2,0" />
+                <TextBlock x:Name="PlaybackStatusText" Text="Stopped" FontWeight="SemiBold" Margin="3,3,0,0"
+                           AutomationProperties.LiveSetting="Polite" />
+              </DockPanel>
+              <WrapPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,5,0,0">
+                <Button x:Name="PreviousSectionButton" Click="PreviousSectionButton_Click"
+                        IsEnabled="False" AutomationProperties.Name="Go to previous section" ToolTip="Previous section">
+                  <Path Data="{StaticResource PreviousGeometry}" Width="15" Height="15" Stretch="Uniform"
+                        Fill="{StaticResource TextBrush}" />
+                </Button>
+                <Button x:Name="PlayPauseButton" Click="PlayPauseButton_Click"
+                        Style="{StaticResource PrimaryButtonStyle}" IsEnabled="False"
+                        AutomationProperties.Name="Play or pause document"
+                        ToolTip="Resumes after Pause. After Stop, starts at the beginning.">
+                  <StackPanel Orientation="Horizontal">
+                    <Path x:Name="PlayPauseIcon" Data="{StaticResource PlayGeometry}" Width="16" Height="16"
+                          Stretch="Uniform" Fill="White" Margin="0,0,7,0" />
+                    <TextBlock x:Name="PlayPauseLabel" Text="Play" />
+                  </StackPanel>
+                </Button>
+                <Button x:Name="StopButton" Click="StopButton_Click" IsEnabled="False"
+                        AutomationProperties.Name="Stop document playback"
+                        ToolTip="Stops playback and resets the next Play to the beginning.">
+                  <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource StopGeometry}" Width="14" Height="14" Stretch="Uniform"
+                          Fill="{StaticResource TextBrush}" Margin="0,0,7,0" />
+                    <TextBlock Text="Stop" />
+                  </StackPanel>
+                </Button>
+                <Button x:Name="NextSectionButton" Click="NextSectionButton_Click"
+                        IsEnabled="False" AutomationProperties.Name="Go to next section" ToolTip="Next section">
+                  <Path Data="{StaticResource NextGeometry}" Width="15" Height="15" Stretch="Uniform"
+                        Fill="{StaticResource TextBrush}" />
+                </Button>
+                <Button x:Name="PlayFromCursorButton" Click="PlayFromCursorButton_Click" IsEnabled="False"
+                        AutomationProperties.Name="Start document playback at text cursor"
+                        ToolTip="Starts at the current text cursor instead of the saved playback position.">
+                  <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource CursorGeometry}" Width="15" Height="16" Stretch="Uniform"
+                          Fill="{StaticResource TextBrush}" Margin="0,0,7,0" />
+                    <TextBlock Text="Start at cursor" />
+                  </StackPanel>
+                </Button>
+                <CheckBox x:Name="AutoAdvanceCheckBox" Content="Auto-advance queue"
+                          VerticalAlignment="Center" Margin="9,0,4,0" />
+              </WrapPanel>
+            </Grid>
+          </Border>
+
+          <Expander Grid.Row="3" Header="Article tools" Margin="16,0,16,12">
+            <WrapPanel Margin="0,5,0,0">
+              <Button x:Name="PreviousReadingPageButton" Content="Previous page"
+                      Click="PreviousReadingPageButton_Click" IsEnabled="False" />
+              <Button x:Name="NextReadingPageButton" Content="Next page"
+                      Click="NextReadingPageButton_Click" IsEnabled="False" />
+              <CheckBox x:Name="FollowReadingCheckBox" Content="Follow reading" IsChecked="True"
+                        VerticalAlignment="Center" Margin="6,0" />
+              <Button x:Name="DuplicateEditableButton" Content="Create editable copy"
+                      Click="DuplicateEditableButton_Click" IsEnabled="False" />
+              <Button x:Name="CreateRuleFromSelectionButton" Content="Create rule from selection"
+                      Click="CreateRuleFromSelectionButton_Click"
+                      AutomationProperties.Name="Create speech rule from selected text" />
+              <Button x:Name="LibraryWorkflowButton" Content="Queue / bookmarks / WAV"
+                      Click="LibraryWorkflowButton_Click" />
+              <Button x:Name="FinishDocumentButton" Content="Mark finished"
+                      Click="FinishDocumentButton_Click" IsEnabled="False" />
+              <Button x:Name="ArchiveDocumentButton" Content="Archive"
+                      Click="ArchiveDocumentButton_Click" IsEnabled="False" />
+              <Button x:Name="RestoreDocumentButton" Content="Restore to inbox"
+                      Click="RestoreDocumentButton_Click" IsEnabled="False" />
+              <Button x:Name="SaveEditButton" Content="Save changes" Click="SaveEditButton_Click"
+                      IsEnabled="False" Style="{StaticResource PrimaryButtonStyle}" />
+              <Button x:Name="RevertEditButton" Content="Revert changes" Click="RevertEditButton_Click" IsEnabled="False" />
+              <Button x:Name="UndoButton" Content="Undo" Click="UndoButton_Click" IsEnabled="False" />
+              <Button x:Name="RedoButton" Content="Redo" Click="RedoButton_Click" IsEnabled="False" />
+            </WrapPanel>
+          </Expander>
+        </Grid>
+      </Border>
     </Grid>
 
-    <StatusBar Grid.Row="3">
-      <StatusBarItem><TextBlock x:Name="FooterText" Text="Ready" /></StatusBarItem>
+    <StatusBar Grid.Row="3" Background="{StaticResource NavigationBrush}" Foreground="White" Padding="8,2">
+      <StatusBarItem Foreground="White"><TextBlock x:Name="FooterText" Text="Ready" /></StatusBarItem>
     </StatusBar>
   </Grid>
 </Window>
