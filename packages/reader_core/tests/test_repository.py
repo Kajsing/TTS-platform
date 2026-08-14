@@ -10,6 +10,7 @@ from reader_core import (
     Bookmark,
     DocumentState,
     ExportAudioFormat,
+    ExportPhase,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -650,14 +651,40 @@ def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:
     running = repository.claim_export_job(job.id)
     assert running.status is ExportStatus.RUNNING
     assert running.audio_format is ExportAudioFormat.MP3
+    assert running.progress_phase is ExportPhase.PREPARING
+    assert running.progress_percent == 0
+
+    running = repository.update_export_progress(
+        job.id,
+        completed_documents=0,
+        current_document_id=document.id,
+        output_files=(),
+        progress_phase=ExportPhase.SYNTHESIZING,
+        progress_percent=37,
+    )
+    assert running.progress_phase is ExportPhase.SYNTHESIZING
+    assert running.progress_percent == 37
+
+    with pytest.raises(ReaderValidationError, match="monotonic"):
+        repository.update_export_progress(
+            job.id,
+            completed_documents=0,
+            current_document_id=document.id,
+            output_files=(),
+            progress_phase=ExportPhase.SYNTHESIZING,
+            progress_percent=36,
+        )
 
     reopened = SqliteReaderRepository(repository.database_path)
     recovered = reopened.recover_export_jobs()
     assert [item.id for item in recovered] == [job.id]
     assert reopened.get_export_job(job.id).status is ExportStatus.QUEUED
     assert reopened.get_export_job(job.id).audio_format is ExportAudioFormat.MP3
+    assert reopened.get_export_job(job.id).progress_phase is ExportPhase.QUEUED
+    assert reopened.get_export_job(job.id).progress_percent == 0
 
     cancelled = reopened.request_export_cancel(job.id)
     assert cancelled.status is ExportStatus.CANCELLED
+    assert cancelled.progress_phase is ExportPhase.CANCELLED
     assert cancelled.cancel_requested is True
     assert cancelled.completed_at is not None

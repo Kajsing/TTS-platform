@@ -31,6 +31,7 @@ from ..models import (
     DocumentState,
     EditOperation,
     ExportAudioFormat,
+    ExportPhase,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -1027,11 +1028,12 @@ class SqliteReaderRepository:
                 INSERT INTO reader_export_jobs(
                     id, status, document_ids_json, section_ids_json,
                     start_cursor_json, end_cursor_json, voice_id, audio_format,
-                    output_basename, overwrite_existing, total_documents, completed_documents,
+                    progress_phase, progress_percent, output_basename,
+                    overwrite_existing, total_documents, completed_documents,
                     current_document_id, output_files_json, error_type,
                     error_message, cancel_requested, created_at, updated_at,
                     completed_at, row_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _export_values(job),
             )
@@ -1084,7 +1086,10 @@ class SqliteReaderRepository:
             connection.execute(
                 """
                 UPDATE reader_export_jobs
-                SET status = 'running', updated_at = ?, row_version = row_version + 1
+                SET status = 'running', progress_phase = 'preparing',
+                    progress_percent = 0, completed_documents = 0,
+                    current_document_id = NULL, output_files_json = '[]',
+                    updated_at = ?, row_version = row_version + 1
                 WHERE id = ?
                 """,
                 (_time_dump(utc_now()), job_id),
@@ -1098,6 +1103,8 @@ class SqliteReaderRepository:
         completed_documents: int,
         current_document_id: str | None,
         output_files: tuple[str, ...],
+        progress_phase: ExportPhase,
+        progress_percent: int,
     ) -> ReaderExportJob:
         with self._write() as connection:
             current = _require_export_job(connection, job_id)
@@ -1105,17 +1112,22 @@ class SqliteReaderRepository:
                 return current
             if not 0 <= completed_documents <= current.total_documents:
                 raise ReaderValidationError("export progress is invalid")
+            if not current.progress_percent <= progress_percent <= 100:
+                raise ReaderValidationError("export percentage must be monotonic")
             connection.execute(
                 """
                 UPDATE reader_export_jobs
                 SET completed_documents = ?, current_document_id = ?,
-                    output_files_json = ?, updated_at = ?, row_version = row_version + 1
+                    output_files_json = ?, progress_phase = ?, progress_percent = ?,
+                    updated_at = ?, row_version = row_version + 1
                 WHERE id = ?
                 """,
                 (
                     completed_documents,
                     current_document_id,
                     _json_dump(output_files),
+                    progress_phase.value,
+                    progress_percent,
                     _time_dump(utc_now()),
                     job_id,
                 ),
@@ -1151,7 +1163,8 @@ class SqliteReaderRepository:
                 UPDATE reader_export_jobs
                 SET status = ?, completed_documents = ?, current_document_id = NULL,
                     output_files_json = ?, error_type = ?, error_message = ?,
-                    updated_at = ?, completed_at = ?, row_version = row_version + 1
+                    progress_phase = ?, progress_percent = ?, updated_at = ?,
+                    completed_at = ?, row_version = row_version + 1
                 WHERE id = ?
                 """,
                 (
@@ -1164,6 +1177,8 @@ class SqliteReaderRepository:
                     _json_dump(output_files),
                     error_type,
                     error_message,
+                    status.value,
+                    100 if status is ExportStatus.COMPLETED else current.progress_percent,
                     _time_dump(now),
                     _time_dump(now),
                     job_id,
@@ -1186,6 +1201,7 @@ class SqliteReaderRepository:
                     """
                     UPDATE reader_export_jobs
                     SET status = 'cancelled', cancel_requested = 1,
+                        progress_phase = 'cancelled',
                         updated_at = ?, completed_at = ?, row_version = row_version + 1
                     WHERE id = ?
                     """,
@@ -1207,7 +1223,9 @@ class SqliteReaderRepository:
             connection.execute(
                 """
                 UPDATE reader_export_jobs
-                SET status = 'queued', current_document_id = NULL,
+                SET status = 'queued', completed_documents = 0,
+                    current_document_id = NULL, output_files_json = '[]',
+                    progress_phase = 'queued', progress_percent = 0,
                     updated_at = ?, row_version = row_version + 1
                 WHERE status = 'running' AND cancel_requested = 0
                 """,
@@ -1217,6 +1235,7 @@ class SqliteReaderRepository:
                 """
                 UPDATE reader_export_jobs
                 SET status = 'cancelled', current_document_id = NULL,
+                    progress_phase = 'cancelled',
                     completed_at = ?, updated_at = ?, row_version = row_version + 1
                 WHERE status IN ('queued', 'running') AND cancel_requested = 1
                 """,
@@ -2249,6 +2268,8 @@ def _export_from_row(row: sqlite3.Row) -> ReaderExportJob:
         end_cursor=_cursor_load(row["end_cursor_json"]),
         voice_id=row["voice_id"],
         audio_format=ExportAudioFormat(row["audio_format"]),
+        progress_phase=ExportPhase(row["progress_phase"]),
+        progress_percent=int(row["progress_percent"]),
         output_basename=row["output_basename"],
         overwrite_existing=bool(row["overwrite_existing"]),
         total_documents=int(row["total_documents"]),
@@ -2277,6 +2298,8 @@ def _export_values(job: ReaderExportJob) -> tuple[Any, ...]:
         _cursor_dump(job.end_cursor),
         job.voice_id,
         job.audio_format.value,
+        job.progress_phase.value,
+        job.progress_percent,
         job.output_basename,
         int(job.overwrite_existing),
         job.total_documents,

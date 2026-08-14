@@ -461,7 +461,7 @@ public sealed class ReaderServiceClientTests
         {
           "id":"job","status":"queued","document_ids":["doc"],"section_ids":[],
           "voice_id":"voice","audio_format":"mp3","output_basename":null,"overwrite_existing":false,
-          "total_documents":1,"completed_documents":0,"current_document_id":null,
+          "total_documents":1,"completed_documents":0,"progress_phase":"queued","progress_percent":0,"current_document_id":null,
           "output_files":[],"error_type":null,"error_message":null,"cancel_requested":false,
           "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z",
           "completed_at":null,"row_version":1

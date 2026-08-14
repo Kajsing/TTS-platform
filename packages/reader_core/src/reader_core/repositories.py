@@ -8,6 +8,7 @@ from .models import (
     DocumentEdit,
     DocumentPage,
     DocumentState,
+    ExportPhase,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -191,6 +192,8 @@ class ReaderRepository(Protocol):
         completed_documents: int,
         current_document_id: str | None,
         output_files: tuple[str, ...],
+        progress_phase: ExportPhase,
+        progress_percent: int,
     ) -> ReaderExportJob: ...
 
     def finish_export_job(

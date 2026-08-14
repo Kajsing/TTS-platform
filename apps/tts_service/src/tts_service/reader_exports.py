@@ -5,6 +5,7 @@ import re
 import threading
 import uuid
 import wave
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from time import monotonic
 
 from reader_core import (
     ExportAudioFormat,
+    ExportPhase,
     ExportStatus,
     ReaderBlock,
     ReaderCursor,
@@ -181,6 +183,39 @@ class ReaderExportManager:
                 )
             destinations = self._destinations(job)
             self._ensure_destinations_available(destinations, job.overwrite_existing)
+            total_documents = len(job.document_ids)
+            last_progress: tuple[ExportPhase, int, int, str | None] | None = None
+
+            def overall_percent(document_index: int, document_fraction: float) -> int:
+                completed_fraction = (document_index + document_fraction) / total_documents
+                return min(96, max(0, int(completed_fraction * 96)))
+
+            def report_progress(
+                phase: ExportPhase,
+                percent: int,
+                completed_documents: int,
+                current_document_id: str | None,
+            ) -> None:
+                nonlocal last_progress
+                snapshot = (
+                    phase,
+                    min(99, max(0, percent)),
+                    completed_documents,
+                    current_document_id,
+                )
+                if snapshot == last_progress:
+                    return
+                self.service.repository.update_export_progress(
+                    job_id,
+                    completed_documents=completed_documents,
+                    current_document_id=current_document_id,
+                    output_files=(),
+                    progress_phase=phase,
+                    progress_percent=snapshot[1],
+                )
+                last_progress = snapshot
+
+            report_progress(ExportPhase.PREPARING, 0, 0, job.document_ids[0])
             for index, (document_id, destination) in enumerate(
                 zip(job.document_ids, destinations, strict=True)
             ):
@@ -189,19 +224,55 @@ class ReaderExportManager:
                     f".{job.id}-{index:03d}.{job.audio_format.value}.part"
                 )
                 temporary.unlink(missing_ok=True)
+                synthesis_share = (
+                    0.85 if job.audio_format is ExportAudioFormat.MP3 else 0.95
+                )
+
+                def report_fragment_progress(
+                    completed: int,
+                    total: int,
+                    *,
+                    share: float = synthesis_share,
+                    document_index: int = index,
+                    current_document_id: str = document_id,
+                ) -> None:
+                    fraction = share * completed / max(total, 1)
+                    report_progress(
+                        ExportPhase.SYNTHESIZING,
+                        overall_percent(document_index, fraction),
+                        document_index,
+                        current_document_id,
+                    )
+
                 if job.audio_format is ExportAudioFormat.WAV:
-                    self._render_document(job, document_id, temporary)
+                    self._render_document(
+                        job,
+                        document_id,
+                        temporary,
+                        progress_callback=report_fragment_progress,
+                    )
                 else:
                     source_wav = self.output_directory / (
                         f".{job.id}-{index:03d}.source.wav.part"
                     )
                     source_wav.unlink(missing_ok=True)
-                    self._render_document(job, document_id, source_wav)
+                    self._render_document(
+                        job,
+                        document_id,
+                        source_wav,
+                        progress_callback=report_fragment_progress,
+                    )
                     encoder = self._mp3_encoder
                     if encoder is None:
                         raise ReaderValidationError(
                             "MP3 export is not available on this service"
                         )
+                    report_progress(
+                        ExportPhase.ENCODING,
+                        overall_percent(index, 0.90),
+                        index,
+                        document_id,
+                    )
                     encoder.encode(
                         source_wav,
                         temporary,
@@ -210,17 +281,23 @@ class ReaderExportManager:
                     )
                     source_wav.unlink(missing_ok=True)
                 staged.append(_StagedExport(temporary, destination))
-                self.service.repository.update_export_progress(
-                    job_id,
-                    completed_documents=index + 1,
-                    current_document_id=(
-                        job.document_ids[index + 1]
-                        if index + 1 < len(job.document_ids)
-                        else None
+                next_document_id = (
+                    job.document_ids[index + 1]
+                    if index + 1 < total_documents
+                    else None
+                )
+                report_progress(
+                    (
+                        ExportPhase.PREPARING
+                        if next_document_id is not None
+                        else ExportPhase.FINALIZING
                     ),
-                    output_files=(),
+                    overall_percent(index, 1.0),
+                    index + 1,
+                    next_document_id,
                 )
             self._raise_if_cancelled(job_id)
+            report_progress(ExportPhase.FINALIZING, 98, total_documents, None)
             self._ensure_destinations_available(destinations, job.overwrite_existing)
             for item in staged:
                 if job.overwrite_existing:
@@ -269,7 +346,14 @@ class ReaderExportManager:
                 (monotonic() - started_at) * 1000,
             )
 
-    def _render_document(self, job: ReaderExportJob, document_id: str, target: Path) -> None:
+    def _render_document(
+        self,
+        job: ReaderExportJob,
+        document_id: str,
+        target: Path,
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> None:
         bundle = self.service.get_document_bundle(document_id)
         voice_id = job.voice_id or self._default_voice_id()
         voice = self.voice_registry.get(voice_id)
@@ -293,10 +377,13 @@ class ReaderExportManager:
             content_revision=bundle.document.content_revision,
             language_hint=bundle.document.language_hint,
         )
+        total_fragments = max(len(fragments), 1)
+        if progress_callback is not None:
+            progress_callback(0, total_fragments)
         sample_rate: int | None = None
         channels: int | None = None
         with wave.open(str(target), "wb") as output:
-            for fragment in fragments:
+            for fragment_index, fragment in enumerate(fragments, start=1):
                 self._raise_if_cancelled(job.id)
                 result = self.backend.synthesize(
                     SynthesisRequest(
@@ -325,11 +412,15 @@ class ReaderExportManager:
                 pause_frames = int(chunk_rate * min(fragment.pause_ms_hint, 5000) / 1000)
                 if pause_frames:
                     output.writeframesraw(b"\0" * pause_frames * chunk_channels * 2)
+                if progress_callback is not None:
+                    progress_callback(fragment_index, total_fragments)
             if sample_rate is None:
                 output.setnchannels(1)
                 output.setsampwidth(2)
                 output.setframerate(voice.sample_rate_hz)
                 output.writeframes(b"")
+                if progress_callback is not None:
+                    progress_callback(1, 1)
         with target.open("rb+") as completed:
             completed.flush()
             os.fsync(completed.fileno())

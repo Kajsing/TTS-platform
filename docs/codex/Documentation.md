@@ -11,8 +11,26 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: the user-approved persistent MP3 article-export slice is
-  complete.
+- Completed the field-reported export-progress and polling correction. Export
+  jobs now persist a phase and integer percentage in Reader schema 6. Synthesis
+  advances by completed speech fragments, MP3 encoding and final publication
+  have explicit phases, and 100% is reserved for a completed, available file.
+  The Audio exports grid renders a real progress bar with phase, percentage, and
+  document count instead of only `0/1` to `1/1` text.
+- Export refresh is now rate-safe and non-overlapping: active jobs poll every
+  four seconds, terminal/empty lists every 15 seconds, and a service 429 applies
+  a 61-second automatic backoff. Together with the main window's ten-second
+  desktop-open poll, steady active use remains below the shared default limit of
+  30 localhost requests per minute.
+- Export-progress validation passed on 2026-08-15: all 414 Python tests and all
+  89 .NET Release tests passed, as did Ruff, .NET formatting, Reader contract
+  fixtures, `git diff --check`, and the complete Windows desktop integration
+  check. That check covered live Reader paging/edit/streaming, WASAPI,
+  clipboard/hotkey/tray integration, schema-6 preview storage, self-contained
+  packaging, and packaged WPF rendering. Focused tests cover monotonic durable
+  progress, progress observed during a blocked second synthesis fragment, and
+  active/idle polling intervals. No architecture, security, licensing, model,
+  or deployment direction changed.
 - Extended the existing service-owned WAV job pipeline with a durable
   `audio_format` contract and schema migration 005. WAV and MP3 now share
   bounded synthesis, speech rules, voice selection, progress, cancellation,

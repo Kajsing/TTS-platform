@@ -12,6 +12,7 @@ from reader_core import (
     DocumentState,
     EditOperation,
     ExportAudioFormat,
+    ExportPhase,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -496,6 +497,8 @@ class ReaderExportJobResponse(BaseModel):
     overwrite_existing: bool
     total_documents: int
     completed_documents: int
+    progress_phase: ExportPhase
+    progress_percent: int
     current_document_id: str | None
     output_files: list[str]
     error_type: str | None
@@ -519,6 +522,8 @@ class ReaderExportJobResponse(BaseModel):
             overwrite_existing=job.overwrite_existing,
             total_documents=job.total_documents,
             completed_documents=job.completed_documents,
+            progress_phase=job.progress_phase,
+            progress_percent=job.progress_percent,
             current_document_id=job.current_document_id,
             output_files=list(job.output_files),
             error_type=job.error_type,

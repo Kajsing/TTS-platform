@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
 
 namespace TtsPlatform.Reader.App;
@@ -16,6 +17,7 @@ public partial class LibraryWorkflowDialog : Window
     private readonly ObservableCollection<ReaderBookmark> _bookmarks = [];
     private readonly ObservableCollection<ExportDisplayItem> _exports = [];
     private readonly DispatcherTimer _refreshTimer;
+    private bool _refreshingExports;
 
     public LibraryWorkflowDialog(
         IReaderServiceClient client,
@@ -29,7 +31,10 @@ public partial class LibraryWorkflowDialog : Window
         QueueGrid.ItemsSource = _queue;
         BookmarkGrid.ItemsSource = _bookmarks;
         ExportGrid.ItemsSource = _exports;
-        _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _refreshTimer = new DispatcherTimer
+        {
+            Interval = ExportPollingPolicy.IdleInterval,
+        };
         _refreshTimer.Tick += async (_, _) => await RefreshExportsAsync();
         Loaded += async (_, _) =>
         {
@@ -126,6 +131,11 @@ public partial class LibraryWorkflowDialog : Window
 
     private async Task RefreshExportsAsync()
     {
+        if (_refreshingExports)
+        {
+            return;
+        }
+        _refreshingExports = true;
         try
         {
             var page = await _client.GetExportsAsync();
@@ -134,10 +144,23 @@ public partial class LibraryWorkflowDialog : Window
             {
                 _exports.Add(new ExportDisplayItem(job));
             }
+            _refreshTimer.Interval = ExportPollingPolicy.NextInterval(
+                page.Jobs.Select(job => job.Status));
+        }
+        catch (ReaderApiException exception) when (
+            string.Equals(exception.ErrorType, "rate_limited", StringComparison.OrdinalIgnoreCase))
+        {
+            _refreshTimer.Interval = ExportPollingPolicy.RateLimitBackoff;
+            StatusText.Text =
+                "The service is busy. Export progress will refresh automatically in about a minute.";
         }
         catch (Exception exception) when (IsServiceError(exception))
         {
             StatusText.Text = exception.Message;
+        }
+        finally
+        {
+            _refreshingExports = false;
         }
     }
 
@@ -439,9 +462,24 @@ public partial class LibraryWorkflowDialog : Window
         public DateTimeOffset CreatedAt => Job.CreatedAt;
         public string Format => (Job.AudioFormat ?? "wav").ToUpperInvariant();
         public string Status => Job.Status;
-        public string Progress => $"{Job.CompletedDocuments}/{Job.TotalDocuments}";
+        public int ProgressPercent => Math.Clamp(Job.ProgressPercent, 0, 100);
+        public string ProgressLabel =>
+            $"{PhaseLabel(Job.ProgressPhase)} · {ProgressPercent}% " +
+            $"({Job.CompletedDocuments}/{Job.TotalDocuments})";
         public string OutputSummary => Job.OutputFiles.Count > 0
             ? string.Join(", ", Job.OutputFiles)
             : Job.ErrorMessage ?? string.Empty;
+
+        private static string PhaseLabel(string? phase) => phase?.ToLowerInvariant() switch
+        {
+            "preparing" => "Preparing",
+            "synthesizing" => "Generating speech",
+            "encoding" => "Encoding MP3",
+            "finalizing" => "Saving file",
+            "completed" => "Completed",
+            "failed" => "Failed",
+            "cancelled" => "Cancelled",
+            _ => "Queued",
+        };
     }
 }

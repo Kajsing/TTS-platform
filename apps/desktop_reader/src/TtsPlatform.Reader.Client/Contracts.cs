@@ -527,6 +527,8 @@ public sealed record ReaderExportJob(
     bool OverwriteExisting,
     int TotalDocuments,
     int CompletedDocuments,
+    [property: JsonPropertyName("progress_phase")] string? ProgressPhase,
+    [property: JsonPropertyName("progress_percent")] int ProgressPercent,
     string? CurrentDocumentId,
     IReadOnlyList<string> OutputFiles,
     string? ErrorType,

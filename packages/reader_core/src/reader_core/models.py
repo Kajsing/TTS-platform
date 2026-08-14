@@ -66,6 +66,17 @@ class ExportAudioFormat(str, Enum):
     MP3 = "mp3"
 
 
+class ExportPhase(str, Enum):
+    QUEUED = "queued"
+    PREPARING = "preparing"
+    SYNTHESIZING = "synthesizing"
+    ENCODING = "encoding"
+    FINALIZING = "finalizing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class EditOperation(str, Enum):
     REPLACE = "replace"
     APPEND = "append"
@@ -106,6 +117,8 @@ class ReaderExportJob:
     end_cursor: ReaderCursor | None = None
     voice_id: str | None = None
     audio_format: ExportAudioFormat = ExportAudioFormat.WAV
+    progress_phase: ExportPhase = ExportPhase.QUEUED
+    progress_percent: int = 0
     output_basename: str | None = None
     overwrite_existing: bool = False
     total_documents: int = 1
@@ -130,6 +143,8 @@ class ReaderExportJob:
             raise ReaderValidationError("export document total must match document IDs")
         if not 0 <= self.completed_documents <= self.total_documents:
             raise ReaderValidationError("export progress is invalid")
+        if not 0 <= self.progress_percent <= 100:
+            raise ReaderValidationError("export percentage is invalid")
         if self.row_version <= 0:
             raise ReaderValidationError("export row version must be positive")
         if self.output_basename is not None and len(self.output_basename) > 200:

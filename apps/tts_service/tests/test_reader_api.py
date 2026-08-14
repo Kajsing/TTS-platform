@@ -102,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 5,
+        "schema_version": 6,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -111,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 5,
+        "schema_version": 6,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -1064,6 +1064,8 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert created.status_code == 202, created.text
     job = wait_for_export(client, headers, created.json()["id"])
     assert job["status"] == "completed", job
+    assert job["progress_phase"] == "completed"
+    assert job["progress_percent"] == 100
     assert len(job["output_files"]) == 2
     export_directory = tmp_path / "reader" / "data" / "exports"
     assert all((export_directory / name).is_file() for name in job["output_files"])
@@ -1093,7 +1095,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 5
+    assert diagnostics.json()["schema_version"] == 6
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,
@@ -1139,6 +1141,56 @@ def test_cancelled_export_removes_temporary_and_final_files(
     export_directory = tmp_path / "reader" / "data" / "exports"
     assert not (export_directory / "cancelled.wav").exists()
     assert list(export_directory.glob("*.part")) == []
+
+
+def test_export_reports_synthesis_progress_before_completion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, headers, app = build_reader_bundle(tmp_path)
+    document = create_document(
+        client,
+        headers,
+        title="Progress",
+        text="First sentence.\n\nSecond sentence.\n\nThird sentence.",
+    )
+    backend = app.state.container.backend
+    original_synthesize = backend.synthesize
+    entered_second_fragment = threading.Event()
+    release = threading.Event()
+    synthesis_calls = 0
+
+    def slow_second_synthesis(_, request):
+        nonlocal synthesis_calls
+        synthesis_calls += 1
+        if synthesis_calls == 2:
+            entered_second_fragment.set()
+            release.wait(timeout=3)
+        return original_synthesize(request)
+
+    monkeypatch.setattr(type(backend), "synthesize", slow_second_synthesis)
+    created = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={"document_ids": [document["id"]], "output_basename": "progress"},
+    )
+    assert created.status_code == 202, created.text
+    assert entered_second_fragment.wait(timeout=2)
+
+    running = client.get(
+        f"/v1/reader/exports/{created.json()['id']}",
+        headers=headers,
+    )
+    assert running.status_code == 200
+    assert running.json()["status"] == "running"
+    assert running.json()["progress_phase"] == "synthesizing"
+    assert 0 < running.json()["progress_percent"] < 96
+
+    release.set()
+    completed = wait_for_export(client, headers, created.json()["id"])
+    assert completed["status"] == "completed"
+    assert completed["progress_phase"] == "completed"
+    assert completed["progress_percent"] == 100
 
 
 def test_mp3_export_uses_ready_encoder_and_returns_mpeg(

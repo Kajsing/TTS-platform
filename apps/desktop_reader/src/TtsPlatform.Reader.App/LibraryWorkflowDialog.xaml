@@ -69,7 +69,19 @@
               <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="145" />
               <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="70" />
               <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
-              <DataGridTextColumn Header="Progress" Binding="{Binding Progress}" Width="90" />
+              <DataGridTemplateColumn Header="Progress" Width="190">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Grid Margin="4,2">
+                      <ProgressBar Minimum="0" Maximum="100" Height="16"
+                                   Value="{Binding ProgressPercent}"
+                                   AutomationProperties.Name="{Binding ProgressLabel}" />
+                      <TextBlock Text="{Binding ProgressLabel}" FontSize="10"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <DataGridTextColumn Header="Files" Binding="{Binding OutputSummary}" Width="*" />
             </DataGrid.Columns>
           </DataGrid>
