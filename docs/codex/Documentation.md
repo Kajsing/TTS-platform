@@ -25,9 +25,17 @@ This file is the live status log and shared memory for future Codex loops.
 - The same field export later exposed a separate terminal-bookkeeping anomaly:
   the database row reported `failed` with `PermissionError`, while service
   metrics recorded one completed export and FFprobe verified a complete MP3 in
-  the private export directory. The generated audio is usable, but the failed
-  row cannot use **Save selected as...**. Root-cause investigation and a safe
-  reconciliation path remain a follow-up; no database row was edited manually.
+  the private export directory. The collision came from `tts_service.main`
+  eagerly creating its conventional ASGI `app` during import. The desktop
+  integration checker imported `create_app`, unintentionally opened the user's
+  real Reader database, recovered the active job in a second export manager,
+  and then created its intended isolated app. The default ASGI app is now lazy:
+  importing the factory has no runtime/database side effect, while
+  `tts_service.main:app` remains compatible and materializes once on demand.
+  Focused import and CLI tests cover the boundary, and all 416 Python tests plus
+  Ruff pass. The already-generated MP3 is usable, but its collided historical
+  row remains failed and cannot use **Save selected as...**; no database row was
+  edited manually.
 - Completed the desktop export-request hotfix after field use exposed that
   nullable unused collection fields were serialized as JSON `null` and rejected
   by the service's list contract. Current-article exports now omit unused queue

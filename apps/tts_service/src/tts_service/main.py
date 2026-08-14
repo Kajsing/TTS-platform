@@ -670,4 +670,19 @@ async def _receive_stream_control(
             return
 
 
-app = create_app()
+_default_app: FastAPI | None = None
+
+
+def _get_default_app() -> FastAPI:
+    """Create the conventional ASGI app only when a caller requests it."""
+    global _default_app
+    if _default_app is None:
+        _default_app = create_app()
+    return _default_app
+
+
+def __getattr__(name: str) -> FastAPI:
+    """Keep ``tts_service.main:app`` without import-time application startup."""
+    if name == "app":
+        return _get_default_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
