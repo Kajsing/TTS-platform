@@ -167,6 +167,11 @@ public interface IReaderServiceClient
     Task<ReaderExportJob> CancelExportAsync(
         string jobId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task DownloadExportResultAsync(
+        string jobId,
+        int index,
+        Stream destination,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<byte[]> SynthesizeAsync(
         EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default);
@@ -507,6 +512,7 @@ public sealed record CreateExportRequest(
     [property: JsonPropertyName("queue_item_ids")] IReadOnlyList<string>? QueueItemIds = null,
     [property: JsonPropertyName("section_ids")] IReadOnlyList<string>? SectionIds = null,
     [property: JsonPropertyName("voice_id")] string? VoiceId = null,
+    [property: JsonPropertyName("audio_format")] string AudioFormat = "wav",
     [property: JsonPropertyName("output_basename")] string? OutputBasename = null,
     [property: JsonPropertyName("overwrite_existing")] bool OverwriteExisting = false);
 
@@ -516,6 +522,7 @@ public sealed record ReaderExportJob(
     IReadOnlyList<string> DocumentIds,
     IReadOnlyList<string> SectionIds,
     string? VoiceId,
+    string? AudioFormat,
     string? OutputBasename,
     bool OverwriteExisting,
     int TotalDocuments,

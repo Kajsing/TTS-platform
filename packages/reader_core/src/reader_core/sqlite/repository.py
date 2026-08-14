@@ -30,6 +30,7 @@ from ..models import (
     DocumentPage,
     DocumentState,
     EditOperation,
+    ExportAudioFormat,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -1025,12 +1026,12 @@ class SqliteReaderRepository:
                 """
                 INSERT INTO reader_export_jobs(
                     id, status, document_ids_json, section_ids_json,
-                    start_cursor_json, end_cursor_json, voice_id, output_basename,
-                    overwrite_existing, total_documents, completed_documents,
+                    start_cursor_json, end_cursor_json, voice_id, audio_format,
+                    output_basename, overwrite_existing, total_documents, completed_documents,
                     current_document_id, output_files_json, error_type,
                     error_message, cancel_requested, created_at, updated_at,
                     completed_at, row_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _export_values(job),
             )
@@ -2247,6 +2248,7 @@ def _export_from_row(row: sqlite3.Row) -> ReaderExportJob:
         start_cursor=_cursor_load(row["start_cursor_json"]),
         end_cursor=_cursor_load(row["end_cursor_json"]),
         voice_id=row["voice_id"],
+        audio_format=ExportAudioFormat(row["audio_format"]),
         output_basename=row["output_basename"],
         overwrite_existing=bool(row["overwrite_existing"]),
         total_documents=int(row["total_documents"]),
@@ -2274,6 +2276,7 @@ def _export_values(job: ReaderExportJob) -> tuple[Any, ...]:
         _cursor_dump(job.start_cursor),
         _cursor_dump(job.end_cursor),
         job.voice_id,
+        job.audio_format.value,
         job.output_basename,
         int(job.overwrite_existing),
         job.total_documents,

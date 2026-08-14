@@ -2074,6 +2074,12 @@ security handling are documented. An external encoder adapter must accept a
 validated executable path plus an argument array; never execute a user-supplied
 shell command string.
 
+The first post-v1 adapter is MP3 through a separately installed FFmpeg command.
+The service validates FFmpeg identity with a bounded version probe, invokes it
+without a shell through a fixed argument array, and advertises MP3 only when the
+probe succeeds. The application does not bundle or redistribute FFmpeg. See
+`docs/mp3_export.md` for the operational and licensing boundary.
+
 ### 18.4 Metadata
 
 Exports can include:

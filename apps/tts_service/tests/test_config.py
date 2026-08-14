@@ -30,6 +30,7 @@ def test_load_config_reads_toml_file(tmp_path: Path) -> None:
     assert config.streaming.prebuffer_ms == 200
     assert config.backend.num_threads == 4
     assert config.backend.silence_scale == 0.06
+    assert config.reader.exports.formats == ("wav", "mp3")
 
 
 def test_load_config_applies_environment_overrides(tmp_path: Path) -> None:
@@ -215,6 +216,8 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
     assert config.reader.exports.output_directory == "audio"
     assert config.reader.exports.max_concurrent_exports == 2
     assert config.reader.exports.formats == ("wav",)
+    assert config.reader.exports.ffmpeg_path is None
+    assert config.reader.exports.mp3_bitrate_kbps == 96
 
 
 @pytest.mark.parametrize(
@@ -223,7 +226,10 @@ def test_load_config_reads_reader_core_settings(tmp_path: Path) -> None:
         ("output_directory", '""'),
         ("output_directory", '"../outside"'),
         ("max_concurrent_exports", "0"),
-        ("formats", '["mp3"]'),
+        ("formats", '["mp3", "mp3"]'),
+        ("formats", '["flac"]'),
+        ("ffmpeg_path", '"relative/ffmpeg.exe"'),
+        ("mp3_bitrate_kbps", "16"),
     ],
 )
 def test_load_config_rejects_unsafe_reader_export_settings(

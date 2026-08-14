@@ -12,6 +12,7 @@ from pathlib import Path
 from time import monotonic
 
 from reader_core import (
+    ExportAudioFormat,
     ExportStatus,
     ReaderBlock,
     ReaderCursor,
@@ -26,6 +27,7 @@ from tts_core.models import AudioFormat, ProsodySettings, SynthesisOptions, Synt
 from tts_core.registry import VoiceRegistry
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer
 
+from .audio_encoders import AudioEncodingCancelled, FfmpegMp3Encoder
 from .observability import ObservabilityState
 from .reader_service import ReaderApplicationService
 from .reader_streaming import ReaderBlockSlice, ReaderSpeechCompiler
@@ -52,7 +54,7 @@ class _StagedExport:
 
 
 class ReaderExportManager:
-    """Runs persistent Reader WAV exports independently of desktop connections."""
+    """Runs persistent Reader audio exports independently of desktop connections."""
 
     def __init__(
         self,
@@ -66,6 +68,8 @@ class ReaderExportManager:
         output_directory: Path,
         max_workers: int,
         observability: ObservabilityState,
+        configured_formats: tuple[str, ...] = ("wav",),
+        mp3_encoder: FfmpegMp3Encoder | None = None,
     ) -> None:
         self.service = service
         self.backend = backend
@@ -76,6 +80,12 @@ class ReaderExportManager:
         self._segmenter = segmenter
         self._chunk_planner = chunk_planner
         self._observability = observability
+        self._mp3_encoder = mp3_encoder
+        self.available_formats = tuple(
+            value
+            for value in configured_formats
+            if value == "wav" or (value == "mp3" and mp3_encoder is not None)
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix="reader-export",
@@ -93,6 +103,7 @@ class ReaderExportManager:
         start_cursor: ReaderCursor | None = None,
         end_cursor: ReaderCursor | None = None,
         voice_id: str | None = None,
+        audio_format: ExportAudioFormat = ExportAudioFormat.WAV,
         output_basename: str | None = None,
         overwrite_existing: bool = False,
     ) -> ReaderExportJob:
@@ -102,6 +113,10 @@ class ReaderExportManager:
             raise ReaderValidationError("export document IDs must be unique")
         if (section_ids or start_cursor or end_cursor) and len(document_ids) != 1:
             raise ReaderValidationError("sections and source ranges require one document")
+        if audio_format.value not in self.available_formats:
+            raise ReaderValidationError(
+                f"{audio_format.value.upper()} export is not available on this service"
+            )
         resolved_voice = voice_id or self._default_voice_id()
         self.voice_registry.get(resolved_voice)
         now = datetime.now(timezone.utc)
@@ -114,6 +129,7 @@ class ReaderExportManager:
                 start_cursor=start_cursor,
                 end_cursor=end_cursor,
                 voice_id=resolved_voice,
+                audio_format=audio_format,
                 output_basename=output_basename,
                 overwrite_existing=overwrite_existing,
                 total_documents=len(document_ids),
@@ -159,15 +175,40 @@ class ReaderExportManager:
             if job.status is not ExportStatus.RUNNING:
                 outcome = job.status.value
                 return
+            if job.audio_format.value not in self.available_formats:
+                raise ReaderValidationError(
+                    f"{job.audio_format.value.upper()} export is not available on this service"
+                )
             destinations = self._destinations(job)
             self._ensure_destinations_available(destinations, job.overwrite_existing)
             for index, (document_id, destination) in enumerate(
                 zip(job.document_ids, destinations, strict=True)
             ):
                 self._raise_if_cancelled(job_id)
-                temporary = self.output_directory / f".{job.id}-{index:03d}.wav.part"
+                temporary = self.output_directory / (
+                    f".{job.id}-{index:03d}.{job.audio_format.value}.part"
+                )
                 temporary.unlink(missing_ok=True)
-                self._render_document(job, document_id, temporary)
+                if job.audio_format is ExportAudioFormat.WAV:
+                    self._render_document(job, document_id, temporary)
+                else:
+                    source_wav = self.output_directory / (
+                        f".{job.id}-{index:03d}.source.wav.part"
+                    )
+                    source_wav.unlink(missing_ok=True)
+                    self._render_document(job, document_id, source_wav)
+                    encoder = self._mp3_encoder
+                    if encoder is None:
+                        raise ReaderValidationError(
+                            "MP3 export is not available on this service"
+                        )
+                    encoder.encode(
+                        source_wav,
+                        temporary,
+                        title=self.service.get_document(document_id).title,
+                        should_cancel=lambda: self._is_cancel_requested(job.id),
+                    )
+                    source_wav.unlink(missing_ok=True)
                 staged.append(_StagedExport(temporary, destination))
                 self.service.repository.update_export_progress(
                     job_id,
@@ -194,7 +235,7 @@ class ReaderExportManager:
                 output_files=names,
             )
             outcome = "completed"
-        except ReaderExportCancelled:
+        except (ReaderExportCancelled, AudioEncodingCancelled):
             self.service.repository.finish_export_job(job_id, status=ExportStatus.CANCELLED)
             outcome = "cancelled"
         except Exception as exc:
@@ -211,14 +252,14 @@ class ReaderExportManager:
                         job_id,
                         status=ExportStatus.FAILED,
                         error_type=type(exc).__name__,
-                        error_message="Export failed during audio generation.",
+                        error_message="Export failed during audio generation or encoding.",
                     )
             except ReaderError:
                 pass
         finally:
             for item in staged:
                 item.temporary.unlink(missing_ok=True)
-            for temporary in self.output_directory.glob(f".{job_id}-*.wav.part"):
+            for temporary in self.output_directory.glob(f".{job_id}-*.part"):
                 temporary.unlink(missing_ok=True)
             clear_cancel = getattr(self.backend, "clear_cancel", None)
             if clear_cancel is not None:
@@ -354,7 +395,9 @@ class ReaderExportManager:
             base = _safe_basename(requested or document.title)
             if len(job.document_ids) > 1:
                 base = f"{index + 1:03d}-{base}"
-            candidate = (self.output_directory / f"{base}.wav").resolve()
+            candidate = (
+                self.output_directory / f"{base}.{job.audio_format.value}"
+            ).resolve()
             if candidate.parent != self.output_directory:
                 raise ReaderValidationError("export filename escapes the output directory")
             result.append(candidate)
@@ -371,8 +414,11 @@ class ReaderExportManager:
             raise FileExistsError("an export destination already exists")
 
     def _raise_if_cancelled(self, job_id: str) -> None:
-        if self.service.repository.get_export_job(job_id).cancel_requested:
+        if self._is_cancel_requested(job_id):
             raise ReaderExportCancelled()
+
+    def _is_cancel_requested(self, job_id: str) -> bool:
+        return self.service.repository.get_export_job(job_id).cancel_requested
 
     def _default_voice_id(self) -> str:
         voice = self.voice_registry.default_voice
@@ -388,7 +434,7 @@ def resolve_export_directory(service: ReaderApplicationService) -> Path:
 
 def _safe_basename(value: str) -> str:
     leaf = Path(value.strip()).name
-    if leaf.lower().endswith(".wav"):
+    if leaf.lower().endswith((".wav", ".mp3")):
         leaf = leaf[:-4]
     cleaned = _UNSAFE_FILENAME.sub("_", leaf).strip(" ._")[:120]
     cleaned = cleaned or "reader-export"

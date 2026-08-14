@@ -71,4 +71,7 @@ max_rule_time_per_block_ms = 250
 enabled = true
 output_directory = "./data/exports"
 max_concurrent_exports = 1
-formats = ["wav"]
+formats = ["wav", "mp3"]
+# Optional absolute path. When empty, Reader discovers ffmpeg on PATH.
+ffmpeg_path = ""
+mp3_bitrate_kbps = 96

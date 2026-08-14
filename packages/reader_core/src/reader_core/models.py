@@ -61,6 +61,11 @@ class ExportStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ExportAudioFormat(str, Enum):
+    WAV = "wav"
+    MP3 = "mp3"
+
+
 class EditOperation(str, Enum):
     REPLACE = "replace"
     APPEND = "append"
@@ -100,6 +105,7 @@ class ReaderExportJob:
     start_cursor: ReaderCursor | None = None
     end_cursor: ReaderCursor | None = None
     voice_id: str | None = None
+    audio_format: ExportAudioFormat = ExportAudioFormat.WAV
     output_basename: str | None = None
     overwrite_existing: bool = False
     total_documents: int = 1

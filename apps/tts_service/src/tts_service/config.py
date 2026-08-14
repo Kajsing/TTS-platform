@@ -62,7 +62,8 @@ DEFAULT_READER_RULE_MAX_TIME_PER_BLOCK_MS = 250
 DEFAULT_READER_EXPORTS_ENABLED = True
 DEFAULT_READER_EXPORT_OUTPUT_DIRECTORY = "./data/exports"
 DEFAULT_READER_EXPORT_MAX_CONCURRENT = 1
-DEFAULT_READER_EXPORT_FORMATS = ("wav",)
+DEFAULT_READER_EXPORT_FORMATS = ("wav", "mp3")
+DEFAULT_READER_EXPORT_MP3_BITRATE_KBPS = 96
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,6 +339,8 @@ class ReaderExportConfig:
     output_directory: str = DEFAULT_READER_EXPORT_OUTPUT_DIRECTORY
     max_concurrent_exports: int = DEFAULT_READER_EXPORT_MAX_CONCURRENT
     formats: tuple[str, ...] = DEFAULT_READER_EXPORT_FORMATS
+    ffmpeg_path: str | None = None
+    mp3_bitrate_kbps: int = DEFAULT_READER_EXPORT_MP3_BITRATE_KBPS
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "ReaderExportConfig":
@@ -345,6 +348,7 @@ class ReaderExportConfig:
         if not isinstance(raw_formats, (list, tuple)):
             raise ValueError("reader.exports.formats must be an array")
         formats = tuple(str(value).strip().lower() for value in raw_formats)
+        raw_ffmpeg_path = str(data.get("ffmpeg_path", "")).strip()
         config = cls(
             enabled=bool(data.get("enabled", DEFAULT_READER_EXPORTS_ENABLED)),
             output_directory=str(
@@ -354,6 +358,10 @@ class ReaderExportConfig:
                 data.get("max_concurrent_exports", DEFAULT_READER_EXPORT_MAX_CONCURRENT)
             ),
             formats=formats,
+            ffmpeg_path=raw_ffmpeg_path or None,
+            mp3_bitrate_kbps=int(
+                data.get("mp3_bitrate_kbps", DEFAULT_READER_EXPORT_MP3_BITRATE_KBPS)
+            ),
         )
         if not config.output_directory.strip():
             raise ValueError("reader.exports.output_directory must not be empty")
@@ -364,8 +372,20 @@ class ReaderExportConfig:
             )
         if config.max_concurrent_exports <= 0:
             raise ValueError("reader.exports.max_concurrent_exports must be positive")
-        if not config.formats or set(config.formats) != {"wav"}:
-            raise ValueError("reader.exports.formats currently supports only ['wav']")
+        if (
+            not config.formats
+            or len(set(config.formats)) != len(config.formats)
+            or not set(config.formats).issubset({"wav", "mp3"})
+        ):
+            raise ValueError(
+                "reader.exports.formats must contain unique 'wav' and/or 'mp3' values"
+            )
+        if config.ffmpeg_path is not None and not Path(config.ffmpeg_path).is_absolute():
+            raise ValueError("reader.exports.ffmpeg_path must be an absolute path")
+        if not 32 <= config.mp3_bitrate_kbps <= 320:
+            raise ValueError(
+                "reader.exports.mp3_bitrate_kbps must be between 32 and 320"
+            )
         return config
 
 

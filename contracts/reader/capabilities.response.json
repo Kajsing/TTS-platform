@@ -3,7 +3,7 @@
   "enabled": true,
   "database": {
     "ready": true,
-    "schema_version": 4,
+    "schema_version": 5,
     "search_available": true
   },
   "imports": {
@@ -29,7 +29,7 @@
     "max_source_chars_per_window": 32000
   },
   "exports": {
-    "formats": ["wav"]
+    "formats": ["wav", "mp3"]
   },
   "browser_capture": {
     "available": true,

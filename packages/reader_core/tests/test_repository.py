@@ -9,6 +9,7 @@ import pytest
 from reader_core import (
     Bookmark,
     DocumentState,
+    ExportAudioFormat,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -639,6 +640,7 @@ def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:
             id=str(uuid.uuid4()),
             status=ExportStatus.QUEUED,
             document_ids=(document.id,),
+            audio_format=ExportAudioFormat.MP3,
             total_documents=1,
             output_basename="sample",
             created_at=now,
@@ -647,11 +649,13 @@ def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:
     )
     running = repository.claim_export_job(job.id)
     assert running.status is ExportStatus.RUNNING
+    assert running.audio_format is ExportAudioFormat.MP3
 
     reopened = SqliteReaderRepository(repository.database_path)
     recovered = reopened.recover_export_jobs()
     assert [item.id for item in recovered] == [job.id]
     assert reopened.get_export_job(job.id).status is ExportStatus.QUEUED
+    assert reopened.get_export_job(job.id).audio_format is ExportAudioFormat.MP3
 
     cancelled = reopened.request_export_cancel(job.id)
     assert cancelled.status is ExportStatus.CANCELLED

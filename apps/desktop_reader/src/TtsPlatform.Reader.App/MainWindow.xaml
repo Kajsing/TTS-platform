@@ -332,7 +332,7 @@
               <Button x:Name="CreateRuleFromSelectionButton" Content="Create rule from selection"
                       Click="CreateRuleFromSelectionButton_Click"
                       AutomationProperties.Name="Create speech rule from selected text" />
-              <Button x:Name="LibraryWorkflowButton" Content="Queue / bookmarks / WAV"
+              <Button x:Name="LibraryWorkflowButton" Content="Queue / bookmarks / audio"
                       Click="LibraryWorkflowButton_Click" />
               <Button x:Name="FinishDocumentButton" Content="Mark finished"
                       Click="FinishDocumentButton_Click" IsEnabled="False" />

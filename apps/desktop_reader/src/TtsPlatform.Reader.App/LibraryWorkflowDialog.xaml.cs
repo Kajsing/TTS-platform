@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using TtsPlatform.Reader.Client;
 
 namespace TtsPlatform.Reader.App;
@@ -42,9 +44,44 @@ public partial class LibraryWorkflowDialog : Window
 
     private async Task RefreshAllAsync()
     {
+        await RefreshExportFormatsAsync();
         await RefreshQueueAsync();
         await RefreshBookmarksAsync();
         await RefreshExportsAsync();
+    }
+
+    private async Task RefreshExportFormatsAsync()
+    {
+        try
+        {
+            var selected = ExportFormatComboBox.SelectedItem as string;
+            var capabilities = await _client.GetCapabilitiesAsync();
+            var formats = capabilities.Exports?.Formats
+                .Where(value => value is "wav" or "mp3")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray() ?? [];
+            ExportFormatComboBox.Items.Clear();
+            foreach (var format in formats)
+            {
+                ExportFormatComboBox.Items.Add(format.ToUpperInvariant());
+            }
+            var preferred = formats.Contains("mp3", StringComparer.OrdinalIgnoreCase)
+                ? "MP3"
+                : formats.FirstOrDefault()?.ToUpperInvariant();
+            ExportFormatComboBox.SelectedItem = selected is not null &&
+                formats.Contains(selected, StringComparer.OrdinalIgnoreCase)
+                    ? selected
+                    : preferred;
+            ExportCurrentButton.IsEnabled = formats.Length > 0;
+            ExportQueueButton.IsEnabled = formats.Length > 0;
+        }
+        catch (Exception exception) when (IsServiceError(exception))
+        {
+            ExportFormatComboBox.Items.Clear();
+            ExportCurrentButton.IsEnabled = false;
+            ExportQueueButton.IsEnabled = false;
+            StatusText.Text = exception.Message;
+        }
     }
 
     private async Task RefreshQueueAsync()
@@ -248,7 +285,10 @@ public partial class LibraryWorkflowDialog : Window
             StatusText.Text = "Select a document first.";
             return;
         }
-        await CreateExportAsync(new CreateExportRequest(DocumentIds: [_currentDocument.Id]));
+        await CreateExportAsync(
+            new CreateExportRequest(
+                DocumentIds: [_currentDocument.Id],
+                AudioFormat: SelectedExportFormat()));
     }
 
     private async void ExportQueue_Click(object sender, RoutedEventArgs e)
@@ -259,7 +299,9 @@ public partial class LibraryWorkflowDialog : Window
             return;
         }
         await CreateExportAsync(
-            new CreateExportRequest(QueueItemIds: _queue.Select(item => item.Item.Id).ToArray()));
+            new CreateExportRequest(
+                QueueItemIds: _queue.Select(item => item.Item.Id).ToArray(),
+                AudioFormat: SelectedExportFormat()));
     }
 
     private async Task CreateExportAsync(CreateExportRequest request)
@@ -267,7 +309,9 @@ public partial class LibraryWorkflowDialog : Window
         try
         {
             var job = await _client.CreateExportAsync(request);
-            StatusText.Text = $"WAV export {job.Id[..8]} queued; it continues if this window closes.";
+            StatusText.Text =
+                $"{(job.AudioFormat ?? "wav").ToUpperInvariant()} export {job.Id[..8]} queued; " +
+                "it continues if this window closes.";
             WorkflowTabs.SelectedIndex = 2;
             await RefreshExportsAsync();
         }
@@ -276,6 +320,11 @@ public partial class LibraryWorkflowDialog : Window
             StatusText.Text = exception.Message;
         }
     }
+
+    private string SelectedExportFormat() =>
+        ExportFormatComboBox.SelectedItem is string format
+            ? format.ToLowerInvariant()
+            : "wav";
 
     private async void CancelExport_Click(object sender, RoutedEventArgs e)
     {
@@ -294,6 +343,87 @@ public partial class LibraryWorkflowDialog : Window
         }
     }
 
+    private async void SaveExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (ExportGrid.SelectedItem is not ExportDisplayItem selected)
+        {
+            StatusText.Text = "Select a completed export first.";
+            return;
+        }
+        if (!string.Equals(selected.Job.Status, "completed", StringComparison.OrdinalIgnoreCase) ||
+            selected.Job.OutputFiles.Count != 1)
+        {
+            StatusText.Text = "Save as is available for a completed single-article export.";
+            return;
+        }
+        var extension = string.Equals(
+            selected.Job.AudioFormat,
+            "mp3",
+            StringComparison.OrdinalIgnoreCase)
+            ? ".mp3"
+            : ".wav";
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save Reader audio export",
+            FileName = selected.Job.OutputFiles[0],
+            DefaultExt = extension,
+            AddExtension = true,
+            OverwritePrompt = true,
+            Filter = extension == ".mp3"
+                ? "MP3 audio (*.mp3)|*.mp3|All files (*.*)|*.*"
+                : "WAV audio (*.wav)|*.wav|All files (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+        string? temporary = null;
+        try
+        {
+            var destination = Path.GetFullPath(dialog.FileName);
+            var directory = Path.GetDirectoryName(destination) ??
+                throw new InvalidOperationException("The selected export folder is invalid.");
+            temporary = Path.Combine(
+                directory,
+                $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.part");
+            await using (var output = new FileStream(
+                temporary,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await _client.DownloadExportResultAsync(selected.Job.Id, 0, output);
+                await output.FlushAsync();
+            }
+            File.Move(temporary, destination, overwrite: true);
+            StatusText.Text = $"Saved {Path.GetFileName(destination)}.";
+        }
+        catch (Exception exception) when (
+            IsServiceError(exception) ||
+            exception is IOException or UnauthorizedAccessException or
+                ArgumentException or NotSupportedException)
+        {
+            StatusText.Text = $"Could not save the export: {exception.Message}";
+        }
+        finally
+        {
+            if (temporary is not null)
+            {
+                try
+                {
+                    File.Delete(temporary);
+                }
+                catch (Exception cleanupException) when (
+                    cleanupException is IOException or UnauthorizedAccessException)
+                {
+                    // The save error is already shown; do not replace it with cleanup noise.
+                }
+            }
+        }
+    }
+
     private static bool IsServiceError(Exception exception) =>
         exception is ReaderApiException or ReaderServiceUnavailableException or
             ReaderTokenUnavailableException or NotSupportedException;
@@ -307,6 +437,7 @@ public partial class LibraryWorkflowDialog : Window
     private sealed record ExportDisplayItem(ReaderExportJob Job)
     {
         public DateTimeOffset CreatedAt => Job.CreatedAt;
+        public string Format => (Job.AudioFormat ?? "wav").ToUpperInvariant();
         public string Status => Job.Status;
         public string Progress => $"{Job.CompletedDocuments}/{Job.TotalDocuments}";
         public string OutputSummary => Job.OutputFiles.Count > 0

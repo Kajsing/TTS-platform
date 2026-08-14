@@ -14,6 +14,7 @@ from tts_core.manifest import VoiceManifestBundle, load_voice_manifest_bundle
 from tts_core.registry import VoiceRegistry
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer, TextPipeline
 
+from .audio_encoders import FfmpegMp3Encoder
 from .auth import AuthState, initialize_auth
 from .config import AppConfig
 from .jobs import InMemoryJobManager
@@ -93,6 +94,14 @@ def build_application_state(
     reader = initialize_reader_runtime(config.reader, observability=observability)
     reader_exports = None
     if reader.service is not None and config.reader.exports.enabled:
+        mp3_encoder = (
+            FfmpegMp3Encoder.discover(
+                config.reader.exports.ffmpeg_path,
+                bitrate_kbps=config.reader.exports.mp3_bitrate_kbps,
+            )
+            if "mp3" in config.reader.exports.formats
+            else None
+        )
         reader_exports = ReaderExportManager(
             service=reader.service,
             backend=backend,
@@ -103,6 +112,8 @@ def build_application_state(
             output_directory=resolve_export_directory(reader.service),
             max_workers=config.reader.exports.max_concurrent_exports,
             observability=observability,
+            configured_formats=config.reader.exports.formats,
+            mp3_encoder=mp3_encoder,
         )
     job_manager = InMemoryJobManager(
         max_workers=config.limits.max_concurrent_jobs,

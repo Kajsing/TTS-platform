@@ -241,6 +241,10 @@ public sealed class ReaderServiceClientTests
                 Json(HttpStatusCode.OK, $"{{\"jobs\":[{ExportJobJson}]}}"),
             "/v1/reader/exports" => Json(HttpStatusCode.Accepted, ExportJobJson),
             "/v1/reader/exports/job" => Json(HttpStatusCode.OK, ExportJobJson),
+            "/v1/reader/exports/job/result" => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([73, 68, 51, 4]),
+            },
             _ => Json(HttpStatusCode.NotFound, "{}"),
         });
         var client = new ReaderServiceClient(
@@ -259,9 +263,12 @@ public sealed class ReaderServiceClientTests
         var next = await client.AdvanceQueueAsync("doc");
         var openRequest = await client.GetNextDesktopOpenRequestAsync();
         await client.AcknowledgeDesktopOpenRequestAsync(openRequest!.Id);
-        var export = await client.CreateExportAsync(new CreateExportRequest(DocumentIds: ["doc"]));
+        var export = await client.CreateExportAsync(
+            new CreateExportRequest(DocumentIds: ["doc"], AudioFormat: "mp3"));
         var exports = await client.GetExportsAsync();
         await client.CancelExportAsync("job");
+        using var exportAudio = new MemoryStream();
+        await client.DownloadExportResultAsync("job", 0, exportAudio);
 
         Assert.Equal("Mark", bookmark.Label);
         Assert.Single(queue.Items);
@@ -269,9 +276,11 @@ public sealed class ReaderServiceClientTests
         Assert.Equal("doc", openRequest.DocumentId);
         Assert.Equal("job", export.Id);
         Assert.Single(exports.Jobs);
+        Assert.Equal([73, 68, 51, 4], exportAudio.ToArray());
         Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
         Assert.Contains("\"state\":\"finished\"", handler.Requests[1].Body, StringComparison.Ordinal);
         Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[9].Body, StringComparison.Ordinal);
+        Assert.Contains("\"audio_format\":\"mp3\"", handler.Requests[9].Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -451,7 +460,7 @@ public sealed class ReaderServiceClientTests
     private const string ExportJobJson = """
         {
           "id":"job","status":"queued","document_ids":["doc"],"section_ids":[],
-          "voice_id":"voice","output_basename":null,"overwrite_existing":false,
+          "voice_id":"voice","audio_format":"mp3","output_basename":null,"overwrite_existing":false,
           "total_documents":1,"completed_documents":0,"current_document_id":null,
           "output_files":[],"error_type":null,"error_message":null,"cancel_requested":false,
           "created_at":"2026-07-27T12:00:00Z","updated_at":"2026-07-27T12:00:00Z",

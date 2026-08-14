@@ -11,6 +11,7 @@ from reader_core import (
     DocumentEdit,
     DocumentState,
     EditOperation,
+    ExportAudioFormat,
     ExportStatus,
     PlaybackPosition,
     QueueItem,
@@ -479,6 +480,7 @@ class CreateReaderExportRequest(BaseModel):
     start_cursor: ReaderCursorPayload | None = None
     end_cursor: ReaderCursorPayload | None = None
     voice_id: str | None = Field(default=None, max_length=200)
+    audio_format: ExportAudioFormat = ExportAudioFormat.WAV
     output_basename: str | None = Field(default=None, max_length=200)
     overwrite_existing: bool = False
 
@@ -489,6 +491,7 @@ class ReaderExportJobResponse(BaseModel):
     document_ids: list[str]
     section_ids: list[str]
     voice_id: str | None
+    audio_format: ExportAudioFormat
     output_basename: str | None
     overwrite_existing: bool
     total_documents: int
@@ -511,6 +514,7 @@ class ReaderExportJobResponse(BaseModel):
             document_ids=list(job.document_ids),
             section_ids=list(job.section_ids),
             voice_id=job.voice_id,
+            audio_format=job.audio_format,
             output_basename=job.output_basename,
             overwrite_existing=job.overwrite_existing,
             total_documents=job.total_documents,

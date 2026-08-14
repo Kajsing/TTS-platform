@@ -5,6 +5,7 @@
   "start_cursor": null,
   "end_cursor": null,
   "voice_id": "sherpa-en-debug",
+  "audio_format": "mp3",
   "output_basename": "chapter-one",
   "overwrite_existing": false
 }

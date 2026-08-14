@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from reader_core import ReaderDatabaseError
+from tts_service.audio_encoders import FfmpegMp3Encoder
 from tts_service.config import AppConfig
 from tts_service.main import create_app
 
@@ -22,7 +23,10 @@ def build_reader_bundle(
     reader_config: dict[str, object] | None = None,
     security_config: dict[str, object] | None = None,
 ) -> tuple[TestClient, dict[str, str], object]:
-    reader = {"home_path": str(tmp_path / "reader")}
+    reader = {
+        "home_path": str(tmp_path / "reader"),
+        "exports": {"formats": ["wav"]},
+    }
     if reader_config:
         reader.update(reader_config)
     config_data: dict[str, object] = {
@@ -98,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 4,
+        "schema_version": 5,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -107,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 4,
+        "schema_version": 5,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -1089,7 +1093,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 4
+    assert diagnostics.json()["schema_version"] == 5
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,
@@ -1135,3 +1139,93 @@ def test_cancelled_export_removes_temporary_and_final_files(
     export_directory = tmp_path / "reader" / "data" / "exports"
     assert not (export_directory / "cancelled.wav").exists()
     assert list(export_directory.glob("*.part")) == []
+
+
+def test_mp3_export_uses_ready_encoder_and_returns_mpeg(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    encoded_titles: list[str] = []
+
+    class FakeMp3Encoder:
+        def encode(
+            self,
+            source_wav: Path,
+            target_mp3: Path,
+            *,
+            title: str,
+            should_cancel,
+        ) -> None:
+            assert source_wav.read_bytes().startswith(b"RIFF")
+            assert should_cancel() is False
+            encoded_titles.append(title)
+            target_mp3.write_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x00fake-mp3")
+
+    monkeypatch.setattr(
+        FfmpegMp3Encoder,
+        "discover",
+        classmethod(lambda cls, configured_path=None, *, bitrate_kbps=96: FakeMp3Encoder()),
+    )
+    client, headers, _ = build_reader_bundle(
+        tmp_path,
+        reader_config={"exports": {"formats": ["wav", "mp3"]}},
+    )
+    capabilities = client.get("/v1/reader/capabilities", headers=headers)
+    assert capabilities.json()["exports"]["formats"] == ["wav", "mp3"]
+    document = create_document(
+        client,
+        headers,
+        title="MP3 article title",
+        text="This article becomes an audio file.",
+    )
+
+    created = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={
+            "document_ids": [document["id"]],
+            "audio_format": "mp3",
+            "output_basename": "spoken-article.mp3",
+        },
+    )
+    assert created.status_code == 202, created.text
+    job = wait_for_export(client, headers, created.json()["id"])
+
+    assert job["status"] == "completed", job
+    assert job["audio_format"] == "mp3"
+    assert job["output_files"] == ["spoken-article.mp3"]
+    assert encoded_titles == ["MP3 article title"]
+    result = client.get(
+        f"/v1/reader/exports/{job['id']}/result",
+        headers=headers,
+    )
+    assert result.status_code == 200
+    assert result.headers["content-type"] == "audio/mpeg"
+    assert result.content.startswith(b"ID3")
+
+
+def test_mp3_export_is_rejected_when_ffmpeg_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        FfmpegMp3Encoder,
+        "discover",
+        classmethod(lambda cls, configured_path=None, *, bitrate_kbps=96: None),
+    )
+    client, headers, _ = build_reader_bundle(
+        tmp_path,
+        reader_config={"exports": {"formats": ["wav", "mp3"]}},
+    )
+    document = create_document(client, headers)
+
+    capabilities = client.get("/v1/reader/capabilities", headers=headers)
+    created = client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={"document_ids": [document["id"]], "audio_format": "mp3"},
+    )
+
+    assert capabilities.json()["exports"]["formats"] == ["wav"]
+    assert created.status_code == 503
+    assert "MP3 export is not available" in created.json()["error"]["message"]

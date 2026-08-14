@@ -56,24 +56,34 @@
           </WrapPanel>
         </Grid>
       </TabItem>
-      <TabItem Header="WAV exports">
+      <TabItem Header="Audio exports">
         <Grid Margin="8">
           <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
           <DataGrid x:Name="ExportGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                    SelectionMode="Single" AutomationProperties.Name="Persistent WAV exports">
+                    SelectionMode="Single" AutomationProperties.Name="Persistent audio exports">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="145" />
+              <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="70" />
               <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
               <DataGridTextColumn Header="Progress" Binding="{Binding Progress}" Width="90" />
               <DataGridTextColumn Header="Files" Binding="{Binding OutputSummary}" Width="*" />
             </DataGrid.Columns>
           </DataGrid>
-          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
-            <Button Content="Export current" Click="ExportCurrent_Click" />
-            <Button Content="Export queue" Click="ExportQueue_Click" />
+          <StackPanel Grid.Row="1" Margin="0,8,0,0" Orientation="Horizontal">
+            <TextBlock Text="Format" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox x:Name="ExportFormatComboBox" Width="100"
+                      AutomationProperties.Name="Audio export format" />
+            <TextBlock Text="MP3 uses 96 kbps mono and includes the article title."
+                       VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#526071" />
+          </StackPanel>
+          <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+            <Button x:Name="ExportCurrentButton" Content="Export current" Click="ExportCurrent_Click" />
+            <Button x:Name="ExportQueueButton" Content="Export queue" Click="ExportQueue_Click" />
+            <Button Content="Save selected as..." Click="SaveExport_Click" />
             <Button Content="Cancel selected" Click="CancelExport_Click" />
             <Button Content="Refresh" Click="Refresh_Click" />
           </WrapPanel>

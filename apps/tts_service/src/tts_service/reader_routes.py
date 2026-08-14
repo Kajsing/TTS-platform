@@ -149,7 +149,11 @@ def build_reader_router() -> APIRouter:
                 max_source_chars_per_window=config.max_source_chars_per_stream_window,
             ),
             exports=ReaderExportCapability(
-                formats=list(config.exports.formats) if config.exports.enabled else []
+                formats=(
+                    list(runtime_manager.available_formats)
+                    if (runtime_manager := request.app.state.container.reader_exports)
+                    else []
+                )
             ),
             browser_capture=ReaderBrowserCaptureCapability(
                 available=runtime.database_ready,
@@ -922,6 +926,17 @@ def build_reader_router() -> APIRouter:
     ) -> ReaderExportJobResponse:
         service = _service(request)
         manager = _export_manager(request)
+        if payload.audio_format.value not in manager.available_formats:
+            raise reader_api_error(
+                "reader_export_format_unavailable",
+                status_code=503,
+                message=(
+                    f"{payload.audio_format.value.upper()} export is not available on "
+                    "this service."
+                ),
+                param="audio_format",
+                details={"available_formats": list(manager.available_formats)},
+            )
         if payload.document_ids and payload.queue_item_ids:
             raise reader_api_error(
                 "reader_conflict",
@@ -980,6 +995,7 @@ def build_reader_router() -> APIRouter:
                 start_cursor=start_cursor,
                 end_cursor=end_cursor,
                 voice_id=payload.voice_id,
+                audio_format=payload.audio_format,
                 output_basename=payload.output_basename,
                 overwrite_existing=payload.overwrite_existing,
             )
@@ -1015,7 +1031,8 @@ def build_reader_router() -> APIRouter:
             missing_entity="export job",
         )
         path = _run_reader(lambda: _export_manager(request).result_path(job, index))
-        return FileResponse(path, filename=path.name, media_type="audio/wav")
+        media_type = "audio/mpeg" if job.audio_format.value == "mp3" else "audio/wav"
+        return FileResponse(path, filename=path.name, media_type=media_type)
 
     @router.get("/diagnostics", response_model=ReaderDiagnosticsResponse)
     async def reader_diagnostics(request: Request) -> ReaderDiagnosticsResponse:
@@ -1290,7 +1307,7 @@ def _export_manager(request: Request):
         raise reader_api_error(
             "reader_export_unavailable",
             status_code=503,
-            message="Reader WAV export is disabled or unavailable.",
+            message="Reader audio export is disabled or unavailable.",
         )
     return manager
 

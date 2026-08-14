@@ -619,6 +619,54 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public async Task DownloadExportResultAsync(
+        string jobId,
+        int index,
+        Stream destination,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException("Export destination must be writable.", nameof(destination));
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/reader/exports/{Uri.EscapeDataString(jobId)}/result?index={index}");
+        await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service could not be reached. Start the service and try again.",
+                exception);
+        }
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ReaderServiceUnavailableException(
+                "The local TTS service did not respond in time. Check the service and try again.",
+                exception);
+        }
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+            }
+            await response.Content.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     public async Task<byte[]> SynthesizeAsync(
         EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default)

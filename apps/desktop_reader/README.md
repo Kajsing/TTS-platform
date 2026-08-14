@@ -75,8 +75,9 @@ The Milestone 9 Reader beta provides:
 - a durable, reorderable reading queue with single-item activation and optional
   auto-advance;
 - bookmark creation, listing, deletion, and position jumps for the open document;
-- persistent single-document and queue WAV exports with progress, cancellation,
-  safe output names, and service-owned completion after the desktop closes;
+- persistent single-document and queue WAV/MP3 exports with format discovery,
+  progress, cancellation, safe output names, and service-owned completion after
+  the desktop closes; MP3 uses a separately installed, validated FFmpeg command;
 - Reader diagnostics for database integrity, search capability, document states,
   stream leases, queue size, export states, and low-sensitivity metrics.
 - bounded JSONL playback diagnostics containing chunk arrival gaps, submission

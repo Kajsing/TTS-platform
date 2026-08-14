@@ -205,6 +205,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "CreateBookmarkAsync",
         "CreateExportAsync",
         "CancelExportAsync",
+        "DownloadExportResultAsync",
+        "Audio export format",
+        "AudioFormat",
     ]
     missing_library_features = [
         value for value in library_features if value.casefold() not in source_text.casefold()

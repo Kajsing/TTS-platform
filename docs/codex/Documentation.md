@@ -4,18 +4,34 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-14
+- Date: 2026-08-15
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
-- Current loop target: Reader Workstation Milestone 9 is complete; stop before
-  Milestone 10 as requested.
-- Current loop result: Milestones 6 through 9 are complete and validated. No
-  product-direction, architecture, security, licensing, or material UX decision
-  required user input during Milestone 9.
+- Current loop target: the user-approved persistent MP3 article-export slice is
+  complete.
+- Extended the existing service-owned WAV job pipeline with a durable
+  `audio_format` contract and schema migration 005. WAV and MP3 now share
+  bounded synthesis, speech rules, voice selection, progress, cancellation,
+  safe filenames, no-overwrite checks, temporary files, and atomic publication.
+- MP3 uses a validated local FFmpeg executable and `libmp3lame` through a fixed
+  argument array with no shell. The default is 96 kbps mono with article-title
+  metadata. FFmpeg is not bundled; a failed identity/encoder probe removes MP3
+  from service capabilities while WAV remains usable.
+- The desktop's **Audio exports** workflow obtains ready formats from the
+  service, prefers MP3 when available, shows the job format, and can stream a
+  completed single-article result through **Save selected as...** to a
+  user-chosen location using another temporary-file/atomic-move boundary.
+- MP3 implementation validation passed on 2026-08-15: all 413 Python tests, all
+  85 .NET Release tests, Ruff, .NET formatting, Reader contract fixtures,
+  `git diff --check`, application build, and the complete Windows desktop
+  integration check passed. The encoder tests include a real installed-FFmpeg
+  round trip that produced a decodable MP3 with title metadata. The actual
+  Reader service migrated to schema 5 and reported ready export formats
+  `wav,mp3` with the Kokoro backend healthy.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
 - Completed the Reader application-icon follow-up. The transparent source PNG
