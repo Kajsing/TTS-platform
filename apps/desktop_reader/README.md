@@ -55,6 +55,9 @@ The Milestone 9 Reader beta provides:
   layout, a dedicated bottom playback bar, restrained article tools, and
   code-native vector icons; the ImageGen reference mockup is design-only and is
   not loaded by the application at runtime.
+- a multi-resolution navy/teal Reader application icon, embedded in the Windows
+  executable and used by the main window, taskbar, clipboard prompt, shortcuts,
+  and portable package; its transparent source PNG remains beside the `.ico`.
 - engine-independent speech-rule sets with deterministic scope, stage, priority,
   enable/disable, language/engine/voice/document filters, and durable versions;
 - literal and regex replacement, skip, spell, pause, and preserved phoneme rules

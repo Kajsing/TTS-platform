@@ -6,6 +6,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="TTS Platform Reader" Height="800" Width="1240" MinHeight="620" MinWidth="920"
+        Icon="Assets/TtsPlatformReader.ico"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="MainWindow_PreviewKeyDown"
         AllowDrop="True" DragOver="MainWindow_DragOver" Drop="MainWindow_Drop">
   <Window.Resources>

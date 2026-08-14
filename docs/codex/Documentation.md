@@ -18,6 +18,28 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed the Reader application-icon follow-up. The transparent source PNG
+  and multi-resolution Windows ICO now live under the WPF application's
+  `Assets` directory. The ICO contains 16, 20, 24, 32, 40, 48, 64, 128, and
+  256-pixel frames, is embedded as the executable application icon, and is used
+  explicitly by the main window and taskbar-visible clipboard prompt. Existing
+  project-root shortcuts inherit the icon from their Reader executable target,
+  and self-contained publishing carries the embedded resource into the portable
+  package.
+- The icon was generated with the built-in ImageGen workflow as a simple
+  navy/teal/white open-book and sound-wave mark, with no text or third-party
+  branding. The result arrived with a clean alpha channel, so the planned local
+  chroma-key removal was unnecessary. Pillow was used only as a local build-time
+  asset tool to create and inspect the multi-resolution ICO; it is not a Reader
+  runtime or distribution dependency. The embedded icon was extracted back from
+  the built executable and visually verified at Windows' 32-pixel size.
+- Application-icon validation passed on 2026-08-14: all 403 Python tests, all 85
+  .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the complete
+  Windows desktop integration check passed. The integration check verified live
+  Reader flows, WASAPI, Windows clipboard/hotkey/tray integration,
+  self-contained packaging, the new source-shape icon contract, and WPF
+  rendering. No API, service, persistence, security, licensing, or model
+  configuration changed.
 - Completed the section-navigation field-use correction. The desktop now hides
   previous/next-section controls for articles whose document summary reports
   only one section. For structured articles with multiple sections, navigation

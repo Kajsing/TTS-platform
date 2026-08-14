@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\TtsPlatformReader.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TtsPlatform.Reader.Client\TtsPlatform.Reader.Client.csproj" />
@@ -12,6 +13,7 @@
     <ProjectReference Include="..\TtsPlatform.Reader.Windows\TtsPlatform.Reader.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Resource Include="Assets\TtsPlatformReader.ico" />
     <None Include="..\..\..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
