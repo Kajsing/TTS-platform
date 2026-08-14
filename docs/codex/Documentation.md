@@ -31,6 +31,11 @@ This file is the live status log and shared memory for future Codex loops.
   progress, progress observed during a blocked second synthesis fragment, and
   active/idle polling intervals. No architecture, security, licensing, model,
   or deployment direction changed.
+- The actual Reader-owned service was restarted after validation and migrated
+  the user's existing database to schema 6. Its configured port 7777 reported
+  status `ok`, the `sherpa_onnx` backend with Kokoro `af_heart` as the default
+  voice, and ready `wav,mp3` export formats; the rebuilt Reader was left open and
+  connected with its ownership lease intact.
 - Extended the existing service-owned WAV job pipeline with a durable
   `audio_format` contract and schema migration 005. WAV and MP3 now share
   bounded synthesis, speech rules, voice selection, progress, cancellation,
@@ -43,12 +48,12 @@ This file is the live status log and shared memory for future Codex loops.
   service, prefers MP3 when available, shows the job format, and can stream a
   completed single-article result through **Save selected as...** to a
   user-chosen location using another temporary-file/atomic-move boundary.
-- MP3 implementation validation passed on 2026-08-15: all 413 Python tests, all
+- MP3 implementation validation passed earlier on 2026-08-15: all 413 Python tests, all
   85 .NET Release tests, Ruff, .NET formatting, Reader contract fixtures,
   `git diff --check`, application build, and the complete Windows desktop
   integration check passed. The encoder tests include a real installed-FFmpeg
   round trip that produced a decodable MP3 with title metadata. The actual
-  Reader service migrated to schema 5 and reported ready export formats
+  Reader service had migrated to schema 5 and reported ready export formats
   `wav,mp3` with the Kokoro backend healthy.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
