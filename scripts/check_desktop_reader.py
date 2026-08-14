@@ -208,6 +208,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "DownloadExportResultAsync",
         "Audio export format",
         "AudioFormat",
+        'Value="{Binding ProgressPercent, Mode=OneWay}"',
     ]
     missing_library_features = [
         value for value in library_features if value.casefold() not in source_text.casefold()

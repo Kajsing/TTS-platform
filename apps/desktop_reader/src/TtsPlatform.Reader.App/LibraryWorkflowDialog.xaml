@@ -74,7 +74,7 @@
                   <DataTemplate>
                     <Grid Margin="4,2">
                       <ProgressBar Minimum="0" Maximum="100" Height="16"
-                                   Value="{Binding ProgressPercent}"
+                                   Value="{Binding ProgressPercent, Mode=OneWay}"
                                    AutomationProperties.Name="{Binding ProgressLabel}" />
                       <TextBlock Text="{Binding ProgressLabel}" FontSize="10"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" />

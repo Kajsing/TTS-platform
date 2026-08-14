@@ -10,6 +10,24 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the progress-template crash hotfix. Field use populated the new
+  progress template and exposed WPF's default TwoWay binding for
+  `ProgressBar.Value`; WPF attempted to write into the read-only display
+  percentage and terminated the Reader. The binding is now explicitly OneWay,
+  and the desktop source gate requires that safety property.
+- Crash-hotfix validation passed on 2026-08-15: Ruff and the complete Windows
+  desktop integration check passed. A field-equivalent manual automation then
+  opened the rebuilt Reader, opened Library, selected Audio exports while the
+  real export row existed, rendered one progress bar, and verified that the
+  Reader remained alive. The service-owned MP3 job continued from 37 to 57
+  percent while the desktop was repaired, proving that the desktop crash did not
+  terminate export work.
+- The same field export later exposed a separate terminal-bookkeeping anomaly:
+  the database row reported `failed` with `PermissionError`, while service
+  metrics recorded one completed export and FFprobe verified a complete MP3 in
+  the private export directory. The generated audio is usable, but the failed
+  row cannot use **Save selected as...**. Root-cause investigation and a safe
+  reconciliation path remain a follow-up; no database row was edited manually.
 - Completed the desktop export-request hotfix after field use exposed that
   nullable unused collection fields were serialized as JSON `null` and rejected
   by the service's list contract. Current-article exports now omit unused queue
