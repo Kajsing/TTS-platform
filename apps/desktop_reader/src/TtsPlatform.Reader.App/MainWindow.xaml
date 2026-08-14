@@ -273,7 +273,8 @@
               </DockPanel>
               <WrapPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,5,0,0">
                 <Button x:Name="PreviousSectionButton" Click="PreviousSectionButton_Click"
-                        IsEnabled="False" AutomationProperties.Name="Go to previous section" ToolTip="Previous section">
+                        IsEnabled="False" Visibility="Collapsed"
+                        AutomationProperties.Name="Go to previous section" ToolTip="Previous section">
                   <Path Data="{StaticResource PreviousGeometry}" Width="15" Height="15" Stretch="Uniform"
                         Fill="{StaticResource TextBrush}" />
                 </Button>
@@ -297,7 +298,8 @@
                   </StackPanel>
                 </Button>
                 <Button x:Name="NextSectionButton" Click="NextSectionButton_Click"
-                        IsEnabled="False" AutomationProperties.Name="Go to next section" ToolTip="Next section">
+                        IsEnabled="False" Visibility="Collapsed"
+                        AutomationProperties.Name="Go to next section" ToolTip="Next section">
                   <Path Data="{StaticResource NextGeometry}" Width="15" Height="15" Stretch="Uniform"
                         Fill="{StaticResource TextBrush}" />
                 </Button>

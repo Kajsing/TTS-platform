@@ -18,6 +18,25 @@ This file is the live status log and shared memory for future Codex loops.
   required user input during Milestone 9.
 - Reader Workstation resume point: Milestone 10, PDF text extraction, only after
   the user explicitly continues the track.
+- Completed the section-navigation field-use correction. The desktop now hides
+  previous/next-section controls for articles whose document summary reports
+  only one section. For structured articles with multiple sections, navigation
+  walks the entire document in bounded 256-block search pages instead of
+  stopping at the current 64-block display window. Editable documents reuse the
+  already loaded full-document cache without additional service requests.
+  Previous-section navigation resolves the first block of the preceding section,
+  and API/service failures remain visible in the footer instead of escaping an
+  asynchronous WPF event handler.
+- Section-navigation validation passed on 2026-08-14: all 403 Python tests, all
+  85 .NET Release tests, Ruff, .NET formatting, `git diff --check`, the desktop
+  source/package/render check, and the complete Windows integration check
+  passed. Three focused application tests cover forward and backward navigation
+  across multiple API pages plus zero-request navigation from the editable
+  document cache. The first integration attempt reached packaging but correctly
+  failed because the prior Reader instance held the self-contained output DLLs;
+  after closing that verified Reader process, the same check passed including
+  live Reader flows, WASAPI, Windows integration, packaging, and WPF rendering.
+  No API, persistence, security, licensing, or model configuration changed.
 - Completed the first field-use UI follow-up after several days of normal Reader
   use. Clipboard prompts now activate topmost at screen center and appear in the
   taskbar; their owner is attached only when the Reader is already active. This

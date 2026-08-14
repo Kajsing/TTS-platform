@@ -19,10 +19,10 @@ The Milestone 9 Reader beta provides:
 - NAudio 2.3 shared-mode WASAPI PCM output with a continuous two-second target
   across speech fragments, a hard ten-second memory limit, and played-byte
   checkpoints for a truthful Pause resume position;
-- Play/Pause/Stop, bounded section navigation, a 64-block reading viewport,
-  source-span highlighting, durable Pause resume from the last fully played
-  UTF-16 cursor, Stop-to-beginning behavior, and a separate explicit
-  `Start at cursor` action;
+- Play/Pause/Stop, whole-document section navigation that stays hidden for
+  single-section articles, a 64-block reading viewport, source-span
+  highlighting, durable Pause resume from the last fully played UTF-16 cursor,
+  Stop-to-beginning behavior, and a separate explicit `Start at cursor` action;
 - active-stream content leases, next-window continuation, and a consistent
   SQLite preview-snapshot command;
 - explicit Read Clipboard without monitoring or document persistence;

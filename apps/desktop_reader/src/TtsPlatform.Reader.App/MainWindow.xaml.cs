@@ -2075,7 +2075,9 @@ public partial class MainWindow : Window
 
     private async Task NavigateSectionAsync(bool next)
     {
-        if (_playback is null || _client is null || _editor?.Document is not ReaderDocument document)
+        if (_playback is null ||
+            _readingWindow is null ||
+            _editor?.Document is not ReaderDocument document)
         {
             return;
         }
@@ -2085,54 +2087,43 @@ public partial class MainWindow : Window
             return;
         }
 
-        var currentOrdinal = _playback.LastFullyPlayedCursor?.BlockOrdinal ?? 0;
-        var startOrdinal = next ? currentOrdinal : Math.Max(0, currentOrdinal - 63);
-        var page = await _client.GetBlocksAsync(
-            document.Id,
-            afterOrdinal: startOrdinal - 1,
-            limit: 64);
-        var current = page.Blocks.FirstOrDefault(item => item.Ordinal == currentOrdinal)
-            ?? page.Blocks.FirstOrDefault();
-        if (current is null)
+        try
         {
-            return;
-        }
-
-        ReaderBlock? target;
-        if (next)
-        {
-            target = page.Blocks.FirstOrDefault(item =>
-                item.Ordinal > currentOrdinal &&
-                !string.Equals(item.SectionId, current.SectionId, StringComparison.Ordinal));
-        }
-        else
-        {
-            var prior = page.Blocks.LastOrDefault(item =>
-                item.Ordinal < currentOrdinal &&
-                !string.Equals(item.SectionId, current.SectionId, StringComparison.Ordinal));
-            target = prior;
-            if (prior is not null)
+            var currentOrdinal = _playback.LastFullyPlayedCursor?.BlockOrdinal ?? 0;
+            FooterText.Text = next
+                ? "Finding the next section..."
+                : "Finding the previous section...";
+            var target = next
+                ? await _readingWindow.FindNextSectionAsync(document.Id, currentOrdinal)
+                : await _readingWindow.FindPreviousSectionAsync(document.Id, currentOrdinal);
+            if (target is null)
             {
-                target = page.Blocks.First(item =>
-                    item.Ordinal <= prior.Ordinal &&
-                    string.Equals(item.SectionId, prior.SectionId, StringComparison.Ordinal));
+                FooterText.Text = next
+                    ? "No next section in this article."
+                    : "No previous section in this article.";
+                return;
             }
-        }
 
-        if (target is null)
+            await _playback.SeekAsync(
+                document,
+                new ReaderCursor(
+                    document.Id,
+                    target.Id,
+                    target.Ordinal,
+                    0,
+                    document.ContentRevision));
+            FooterText.Text = next
+                ? "Started the next section."
+                : "Started the previous section.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderStreamProtocolException or
+                ReaderTokenUnavailableException)
         {
-            FooterText.Text = next ? "No next section in the current window." : "No previous section in the current window.";
-            return;
+            FooterText.Text = $"Section navigation: {exception.Message}";
         }
-
-        await _playback.SeekAsync(
-            document,
-            new ReaderCursor(
-                document.Id,
-                target.Id,
-                target.Ordinal,
-                0,
-                document.ContentRevision));
     }
 
     private async Task LoadReadingWindowAsync(ReaderDocument document, int startOrdinal)
@@ -2301,8 +2292,19 @@ public partial class MainWindow : Window
             _textCursor is not null &&
             _editor?.HasUnsavedChanges != true;
         StopButton.IsEnabled = hasPlayback;
-        PreviousSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
-        NextSectionButton.IsEnabled = hasDocument && !_ephemeralPlaying && !ephemeralPaused;
+        var showSectionNavigation = _editor?.Document?.TotalSections > 1;
+        PreviousSectionButton.Visibility = showSectionNavigation
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        NextSectionButton.Visibility = showSectionNavigation
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        PreviousSectionButton.IsEnabled = showSectionNavigation &&
+            !_ephemeralPlaying &&
+            !ephemeralPaused;
+        NextSectionButton.IsEnabled = showSectionNavigation &&
+            !_ephemeralPlaying &&
+            !ephemeralPaused;
         var showContinuousEditor = continuousEditableDocument && !documentActive;
         var showReadingView = hasDocument && !showContinuousEditor;
         ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource("ReadingBlockTemplate");

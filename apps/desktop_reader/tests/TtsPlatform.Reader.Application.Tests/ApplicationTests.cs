@@ -224,6 +224,78 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Reading_window_finds_the_next_section_beyond_the_current_api_page()
+    {
+        var blocks = Enumerable.Range(0, 600)
+            .Select(index => Block($"Block {index}", index) with
+            {
+                Id = $"block-{index}",
+                SectionId = index < 400 ? "section-a" : "section-b",
+            })
+            .ToArray();
+        var client = new StubClient { PaginatedBlocks = blocks };
+        var pager = new ReadingWindowPager(client);
+
+        var target = await pager.FindNextSectionAsync("document", 20);
+
+        Assert.NotNull(target);
+        Assert.Equal(400, target.Ordinal);
+        Assert.Equal("section-b", target.SectionId);
+        Assert.Equal([19, 275], client.ReceivedBlockAfterOrdinals);
+    }
+
+    [Fact]
+    public async Task Reading_window_finds_the_start_of_a_previous_section_across_api_pages()
+    {
+        var blocks = Enumerable.Range(0, 600)
+            .Select(index => Block($"Block {index}", index) with
+            {
+                Id = $"block-{index}",
+                SectionId = index < 20
+                    ? "section-a"
+                    : index < 500
+                        ? "section-b"
+                        : "section-c",
+            })
+            .ToArray();
+        var client = new StubClient { PaginatedBlocks = blocks };
+        var pager = new ReadingWindowPager(client);
+
+        var target = await pager.FindPreviousSectionAsync("document", 530);
+
+        Assert.NotNull(target);
+        Assert.Equal(20, target.Ordinal);
+        Assert.Equal("section-b", target.SectionId);
+        Assert.Equal([529, 273, 17], client.ReceivedBlockAfterOrdinals);
+    }
+
+    [Fact]
+    public async Task Reading_window_uses_loaded_blocks_for_section_navigation()
+    {
+        var blocks = Enumerable.Range(0, 9)
+            .Select(index => Block($"Block {index}", index) with
+            {
+                Id = $"block-{index}",
+                SectionId = index < 3
+                    ? "section-a"
+                    : index < 6
+                        ? "section-b"
+                        : "section-c",
+            })
+            .ToArray();
+        var client = new StubClient();
+        var pager = new ReadingWindowPager(client);
+        pager.UseLoadedDocument("document", blocks);
+
+        var next = await pager.FindNextSectionAsync("document", 4);
+        var previous = await pager.FindPreviousSectionAsync("document", 4);
+
+        Assert.Equal(6, next?.Ordinal);
+        Assert.Equal(0, previous?.Ordinal);
+        Assert.Empty(client.ReceivedBlockAfterOrdinals);
+    }
+
+    [Fact]
     public async Task Editor_preserves_unsaved_text_when_row_version_conflicts()
     {
         var client = new StubClient
@@ -367,6 +439,7 @@ public sealed class ApplicationTests
         public Task<DocumentPage>? PendingDocumentPage { get; init; }
         public BlockPage Blocks { get; init; } = new([], null);
         public Queue<BlockPage> BlockPages { get; init; } = new();
+        public IReadOnlyList<ReaderBlock>? PaginatedBlocks { get; init; }
         public ReaderApiException? ReplaceException { get; init; }
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
         public UpdateDocumentRequest? LastUpdateRequest { get; private set; }
@@ -424,6 +497,19 @@ public sealed class ApplicationTests
         {
             ReceivedBlockAfterOrdinals.Add(afterOrdinal);
             ReceivedBlockLimits.Add(limit);
+            if (PaginatedBlocks is not null)
+            {
+                var blocks = PaginatedBlocks
+                    .Where(block => block.Ordinal > afterOrdinal)
+                    .OrderBy(block => block.Ordinal)
+                    .Take(limit)
+                    .ToArray();
+                var hasNext = blocks.Length > 0 &&
+                    PaginatedBlocks.Any(block => block.Ordinal > blocks[^1].Ordinal);
+                return Task.FromResult(new BlockPage(
+                    blocks,
+                    hasNext ? blocks[^1].Ordinal : null));
+            }
             return Task.FromResult(BlockPages.Count > 0 ? BlockPages.Dequeue() : Blocks);
         }
 
