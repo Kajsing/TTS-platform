@@ -931,6 +931,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient
                 }
             }
 
+            message = IncludeFirstValidationIssue(message, details);
             throw new ReaderApiException(type, message, (int)response.StatusCode, requestId, details);
         }
         catch (ReaderApiException)
@@ -957,6 +958,31 @@ public sealed class ReaderServiceClient : IReaderServiceClient
         JsonValueKind.Null => null,
         _ => value.Clone(),
     };
+
+    private static string IncludeFirstValidationIssue(
+        string message,
+        IReadOnlyDictionary<string, object?> details)
+    {
+        if (!details.TryGetValue("issues", out var value) ||
+            value is not JsonElement { ValueKind: JsonValueKind.Array } issues)
+        {
+            return message;
+        }
+        foreach (var issue in issues.EnumerateArray())
+        {
+            var parameter = issue.TryGetProperty("param", out var parameterElement)
+                ? parameterElement.GetString()
+                : null;
+            var explanation = issue.TryGetProperty("message", out var messageElement)
+                ? messageElement.GetString()
+                : null;
+            if (!string.IsNullOrWhiteSpace(parameter) && !string.IsNullOrWhiteSpace(explanation))
+            {
+                return $"{message} ({parameter}: {explanation})";
+            }
+        }
+        return message;
+    }
 
     private static void AddQueryValue(ICollection<string> values, string name, string? value)
     {

@@ -10,6 +10,19 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the desktop export-request hotfix after field use exposed that
+  nullable unused collection fields were serialized as JSON `null` and rejected
+  by the service's list contract. Current-article exports now omit unused queue
+  and section collections; queue exports omit unused document and section
+  collections. API validation errors also surface their first rejected field
+  and explanation instead of only the generic validation message.
+- Export-request hotfix validation passed on 2026-08-15: 91 .NET Release tests,
+  .NET formatting, and the complete Windows desktop integration check passed,
+  including schema-6 preview storage, live Reader flows, WASAPI,
+  clipboard/hotkey/tray integration, self-contained packaging, and packaged WPF
+  rendering. The actual schema-6 service remained healthy during the Reader
+  rebuild. No Python/service behavior, persistence, architecture, security,
+  licensing, model, or deployment direction changed.
 - Runtime context: the intended end platform is Windows. Codex sessions may run from Windows PowerShell or WSL, so commands and docs should avoid assuming only one shell.
 - Completed the field-reported export-progress and polling correction. Export
   jobs now persist a phase and integer percentage in Reader schema 6. Synthesis

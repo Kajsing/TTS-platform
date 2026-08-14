@@ -508,8 +508,11 @@ public sealed record ReaderDesktopOpenRequest(
     DateTimeOffset CreatedAt);
 
 public sealed record CreateExportRequest(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [property: JsonPropertyName("document_ids")] IReadOnlyList<string>? DocumentIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [property: JsonPropertyName("queue_item_ids")] IReadOnlyList<string>? QueueItemIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [property: JsonPropertyName("section_ids")] IReadOnlyList<string>? SectionIds = null,
     [property: JsonPropertyName("voice_id")] string? VoiceId = null,
     [property: JsonPropertyName("audio_format")] string AudioFormat = "wav",

@@ -281,6 +281,63 @@ public sealed class ReaderServiceClientTests
         Assert.Contains("\"state\":\"finished\"", handler.Requests[1].Body, StringComparison.Ordinal);
         Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.Contains("\"audio_format\":\"mp3\"", handler.Requests[9].Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("queue_item_ids", handler.Requests[9].Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("section_ids", handler.Requests[9].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Validation_error_message_includes_the_first_rejected_field()
+    {
+        const string validationError = """
+            {
+              "error": {
+                "type": "invalid_request",
+                "message": "Request body validation failed.",
+                "param": "queue_item_ids",
+                "request_id": "request-validation",
+                "details": {
+                  "issues": [
+                    {
+                      "param": "queue_item_ids",
+                      "message": "Input should be a valid list",
+                      "type": "list_type"
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.BadRequest, validationError));
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var exception = await Assert.ThrowsAsync<ReaderApiException>(() =>
+            client.CreateExportAsync(
+                new CreateExportRequest(DocumentIds: ["doc"], AudioFormat: "mp3")));
+
+        Assert.Equal(
+            "Request body validation failed. (queue_item_ids: Input should be a valid list)",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Queue_export_omits_unused_document_and_section_collections()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.Accepted, ExportJobJson));
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        await client.CreateExportAsync(
+            new CreateExportRequest(QueueItemIds: ["queue-item"], AudioFormat: "mp3"));
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("\"queue_item_ids\":[\"queue-item\"]", request.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("document_ids", request.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("section_ids", request.Body, StringComparison.Ordinal);
     }
 
     [Fact]
