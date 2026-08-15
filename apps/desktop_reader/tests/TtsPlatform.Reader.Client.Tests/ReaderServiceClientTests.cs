@@ -240,6 +240,8 @@ public sealed class ReaderServiceClientTests
             "/v1/reader/exports" when request.Method == HttpMethod.Get =>
                 Json(HttpStatusCode.OK, $"{{\"jobs\":[{ExportJobJson}]}}"),
             "/v1/reader/exports" => Json(HttpStatusCode.Accepted, ExportJobJson),
+            "/v1/reader/exports/job/history" =>
+                new HttpResponseMessage(HttpStatusCode.NoContent),
             "/v1/reader/exports/job" => Json(HttpStatusCode.OK, ExportJobJson),
             "/v1/reader/exports/job/result" => new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -267,6 +269,7 @@ public sealed class ReaderServiceClientTests
             new CreateExportRequest(DocumentIds: ["doc"], AudioFormat: "mp3"));
         var exports = await client.GetExportsAsync();
         await client.CancelExportAsync("job");
+        await client.DeleteExportAsync("job");
         using var exportAudio = new MemoryStream();
         await client.DownloadExportResultAsync("job", 0, exportAudio);
 
@@ -283,6 +286,10 @@ public sealed class ReaderServiceClientTests
         Assert.Contains("\"audio_format\":\"mp3\"", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("queue_item_ids", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("section_ids", handler.Requests[9].Body, StringComparison.Ordinal);
+        Assert.Contains(
+            handler.Requests,
+            request => request.Method == HttpMethod.Delete &&
+                request.Uri.AbsolutePath == "/v1/reader/exports/job/history");
     }
 
     [Fact]

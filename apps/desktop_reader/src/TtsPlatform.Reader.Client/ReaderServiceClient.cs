@@ -619,6 +619,17 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             cancellationToken);
     }
 
+    public Task DeleteExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobId);
+        return SendNoContentAsync(
+            HttpMethod.Delete,
+            $"v1/reader/exports/{Uri.EscapeDataString(jobId)}/history",
+            cancellationToken);
+    }
+
     public async Task DownloadExportResultAsync(
         string jobId,
         int index,

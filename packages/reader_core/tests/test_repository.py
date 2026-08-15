@@ -21,6 +21,7 @@ from reader_core import (
     ReaderEditHistoryError,
     ReaderExportJob,
     ReaderLibrary,
+    ReaderNotFoundError,
     ReaderStaleCursorError,
     ReaderValidationError,
     RuleScope,
@@ -683,8 +684,14 @@ def test_export_jobs_persist_recover_and_cancel(repository, document) -> None:
     assert reopened.get_export_job(job.id).progress_phase is ExportPhase.QUEUED
     assert reopened.get_export_job(job.id).progress_percent == 0
 
+    with pytest.raises(ReaderValidationError, match="cancelled before deletion"):
+        reopened.delete_export_job(job.id)
+
     cancelled = reopened.request_export_cancel(job.id)
     assert cancelled.status is ExportStatus.CANCELLED
     assert cancelled.progress_phase is ExportPhase.CANCELLED
     assert cancelled.cancel_requested is True
     assert cancelled.completed_at is not None
+    reopened.delete_export_job(job.id)
+    with pytest.raises(ReaderNotFoundError):
+        reopened.get_export_job(job.id)

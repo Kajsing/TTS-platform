@@ -1105,6 +1105,17 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     }
     assert app.state.container.reader.service.repository.search_available is True
 
+    deleted = client.delete(
+        f"/v1/reader/exports/{job['id']}/history",
+        headers=headers,
+    )
+    assert deleted.status_code == 204
+    assert all(not (export_directory / name).exists() for name in job["output_files"])
+    assert (
+        client.get(f"/v1/reader/exports/{job['id']}", headers=headers).status_code
+        == 404
+    )
+
 
 def test_cancelled_export_removes_temporary_and_final_files(
     tmp_path: Path,
@@ -1130,6 +1141,11 @@ def test_cancelled_export_removes_temporary_and_final_files(
     )
     assert created.status_code == 202, created.text
     assert entered.wait(timeout=2)
+    active_delete = client.delete(
+        f"/v1/reader/exports/{created.json()['id']}/history",
+        headers=headers,
+    )
+    assert active_delete.status_code == 400
     cancelled = client.delete(
         f"/v1/reader/exports/{created.json()['id']}",
         headers=headers,
@@ -1141,6 +1157,11 @@ def test_cancelled_export_removes_temporary_and_final_files(
     export_directory = tmp_path / "reader" / "data" / "exports"
     assert not (export_directory / "cancelled.wav").exists()
     assert list(export_directory.glob("*.part")) == []
+    deleted = client.delete(
+        f"/v1/reader/exports/{created.json()['id']}/history",
+        headers=headers,
+    )
+    assert deleted.status_code == 204
 
 
 def test_export_reports_synthesis_progress_before_completion(

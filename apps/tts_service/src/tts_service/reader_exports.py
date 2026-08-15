@@ -18,6 +18,7 @@ from reader_core import (
     ExportStatus,
     ReaderBlock,
     ReaderCursor,
+    ReaderDatabaseError,
     ReaderError,
     ReaderExportJob,
     ReaderValidationError,
@@ -153,10 +154,25 @@ class ReaderExportManager:
             raise ReaderValidationError("export result is not ready")
         if index < 0 or index >= len(job.output_files):
             raise ReaderValidationError("export result index is invalid")
-        candidate = (self.output_directory / job.output_files[index]).resolve()
-        if candidate.parent != self.output_directory or not candidate.is_file():
+        candidate = self._output_path(job.output_files[index])
+        if not candidate.is_file():
             raise ReaderValidationError("export result is unavailable")
         return candidate
+
+    def delete(self, job_id: str) -> None:
+        job = self.service.repository.get_export_job(job_id)
+        if job.status in {ExportStatus.QUEUED, ExportStatus.RUNNING}:
+            raise ReaderValidationError(
+                "active exports must be cancelled before deletion"
+            )
+        try:
+            for filename in job.output_files:
+                self._output_path(filename).unlink(missing_ok=True)
+        except OSError as exc:
+            raise ReaderDatabaseError("Reader export output could not be removed") from exc
+        self.service.repository.delete_export_job(job_id)
+        with self._lock:
+            self._futures.pop(job_id, None)
 
     def shutdown(self, *, wait: bool = True) -> None:
         self._executor.shutdown(wait=wait, cancel_futures=False)
@@ -167,6 +183,12 @@ class ReaderExportManager:
             if current is not None and not current.done():
                 return
             self._futures[job_id] = self._executor.submit(self._run, job_id)
+
+    def _output_path(self, filename: str) -> Path:
+        candidate = (self.output_directory / filename).resolve()
+        if candidate.parent != self.output_directory:
+            raise ReaderValidationError("export result path is invalid")
+        return candidate
 
     def _run(self, job_id: str) -> None:
         started_at = monotonic()

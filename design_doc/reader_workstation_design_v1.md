@@ -2052,11 +2052,15 @@ Milestone 8 adds:
 - `POST /v1/reader/exports`
 - `GET /v1/reader/exports/{job_id}`
 - `DELETE /v1/reader/exports/{job_id}`
+- `DELETE /v1/reader/exports/{job_id}/history`
 - `GET /v1/reader/exports/{job_id}/result`
 
 Export jobs may be persistent because long books can outlive one desktop
 session. This persistence is separate from the existing short-lived in-memory
-TTS job manager.
+TTS job manager. Deleting terminal export history also deletes output files
+owned by that job. Active jobs must be cancelled before their history can be
+deleted; copies previously saved outside the service export directory are not
+affected.
 
 ### 18.3 Additional encoders
 

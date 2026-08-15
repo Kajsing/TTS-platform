@@ -33,6 +33,12 @@ single-article job, select the completed row in **Audio exports** and choose
 desktop also writes this copy to a temporary sibling file before publishing it,
 so a failed download does not leave a file that looks complete.
 
+To remove an export, select its terminal row and choose **Delete selected...**.
+After confirmation, Reader removes the persistent history row and every tracked
+service-owned output file for that job. A queued or running export must be
+cancelled first. Copies created with **Save selected as...** are outside Reader's
+private export directory and are never deleted by history cleanup.
+
 ## Execution and data handling
 
 - The service synthesizes the article into a private temporary WAV, then runs

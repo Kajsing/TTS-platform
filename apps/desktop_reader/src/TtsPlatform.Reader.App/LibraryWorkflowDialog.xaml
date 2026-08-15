@@ -97,6 +97,7 @@
             <Button x:Name="ExportQueueButton" Content="Export queue" Click="ExportQueue_Click" />
             <Button Content="Save selected as..." Click="SaveExport_Click" />
             <Button Content="Cancel selected" Click="CancelExport_Click" />
+            <Button Content="Delete selected..." Click="DeleteExport_Click" />
             <Button Content="Refresh" Click="Refresh_Click" />
           </WrapPanel>
         </Grid>

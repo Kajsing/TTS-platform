@@ -366,6 +366,42 @@ public partial class LibraryWorkflowDialog : Window
         }
     }
 
+    private async void DeleteExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (ExportGrid.SelectedItem is not ExportDisplayItem selected)
+        {
+            StatusText.Text = "Select an export first.";
+            return;
+        }
+        if (selected.Job.Status is "queued" or "running")
+        {
+            StatusText.Text = "Cancel the active export before deleting it.";
+            return;
+        }
+        var confirmation = MessageBox.Show(
+            this,
+            "Delete this export from history? Any service-owned audio files for " +
+                "this export will also be deleted. Copies saved elsewhere are not affected.",
+            "Delete audio export",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        try
+        {
+            await _client.DeleteExportAsync(selected.Job.Id);
+            StatusText.Text = "Export deleted.";
+            await RefreshExportsAsync();
+        }
+        catch (Exception exception) when (IsServiceError(exception))
+        {
+            StatusText.Text = exception.Message;
+        }
+    }
+
     private async void SaveExport_Click(object sender, RoutedEventArgs e)
     {
         if (ExportGrid.SelectedItem is not ExportDisplayItem selected)

@@ -10,6 +10,22 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the field-requested export cleanup workflow. Terminal completed,
+  failed, and cancelled export rows can now be removed through **Delete
+  selected...** after an explicit confirmation. The service deletes the
+  persistent job and each path-confined output file tracked by it; copies saved
+  elsewhere remain untouched. Queued or running jobs are refused until they are
+  cancelled. Repository, service API, .NET client, WPF source gates, MP3
+  operations documentation, and the workstation design contract cover the new
+  behavior.
+- Export-cleanup validation passed on 2026-08-15: all 416 Python tests and all
+  91 .NET Release tests passed, as did Ruff, .NET formatting, the explicit WPF
+  application build, `git diff --check`, and the complete Windows desktop
+  integration check. The latter covered live Reader edit/stream/import/rules,
+  WASAPI, clipboard/hotkey/tray integration, schema-6 preview storage,
+  self-contained packaging, and packaged WPF rendering. The actual service was
+  restarted onto the new route and reported healthy; a rebuilt Reader rendered
+  the new delete control without mutating any user export rows.
 - Completed the progress-template crash hotfix. Field use populated the new
   progress template and exposed WPF's default TwoWay binding for
   `ProgressBar.Value`; WPF attempted to write into the read-only display

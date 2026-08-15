@@ -1019,6 +1019,17 @@ def build_reader_router() -> APIRouter:
         )
         return ReaderExportJobResponse.from_domain(job)
 
+    @router.delete(
+        "/exports/{job_id}/history",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def delete_export_history(request: Request, job_id: str) -> Response:
+        _run_reader(
+            lambda: _export_manager(request).delete(job_id),
+            missing_entity="export job",
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     @router.get("/exports/{job_id}/result")
     async def get_export_result(
         request: Request,

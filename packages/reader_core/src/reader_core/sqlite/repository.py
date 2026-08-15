@@ -1218,6 +1218,18 @@ class SqliteReaderRepository:
                 )
             return _require_export_job(connection, job_id)
 
+    def delete_export_job(self, job_id: str) -> None:
+        with self._write() as connection:
+            current = _require_export_job(connection, job_id)
+            if current.status in {ExportStatus.QUEUED, ExportStatus.RUNNING}:
+                raise ReaderValidationError(
+                    "active exports must be cancelled before deletion"
+                )
+            connection.execute(
+                "DELETE FROM reader_export_jobs WHERE id = ?",
+                (job_id,),
+            )
+
     def recover_export_jobs(self) -> tuple[ReaderExportJob, ...]:
         with self._write() as connection:
             connection.execute(

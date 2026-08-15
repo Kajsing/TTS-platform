@@ -167,6 +167,9 @@ public interface IReaderServiceClient
     Task<ReaderExportJob> CancelExportAsync(
         string jobId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task DeleteExportAsync(
+        string jobId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task DownloadExportResultAsync(
         string jobId,
         int index,
