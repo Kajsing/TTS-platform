@@ -474,20 +474,31 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RefreshConnectionAsync()
+    private async Task RefreshConnectionAsync(bool rebuildClient = false)
     {
         SetBusy(true, "Checking the local service…");
         try
         {
-            await StopEphemeralAsync(clearReplay: true);
-            if (_playback is not null)
+            var clientWasRebuilt = rebuildClient || _client is null;
+            if (clientWasRebuilt)
             {
-                await _playback.StopAsync();
+                RebuildClient();
             }
-            RebuildClient();
             var coordinator = new OnboardingCoordinator(GetClient());
             _onboarding = await coordinator.CheckAsync();
-            UpdateVoiceOptions(_onboarding.Voices);
+            var preserveConnectedData =
+                _onboarding.State == ConnectionState.RateLimited && !clientWasRebuilt;
+            if (preserveConnectedData)
+            {
+                _onboarding = _onboarding with
+                {
+                    Message = "The local service is busy. Current library and voice selection are kept; retry in about a minute.",
+                };
+            }
+            else
+            {
+                UpdateVoiceOptions(_onboarding.Voices);
+            }
             ShowOnboarding(_onboarding);
             if (_onboarding.State is ConnectionState.Ready or ConnectionState.BackendDegraded)
             {
@@ -697,11 +708,16 @@ public partial class MainWindow : Window
         try
         {
             var normalizedUrl = ServiceBaseUrl.Parse(ServiceUrlTextBox.Text).AbsoluteUri;
+            var tokenPath = TokenPathTextBox.Text.Trim();
+            var reconnectRequired = DesktopConnectionPolicy.RequiresReconnect(
+                _settings,
+                normalizedUrl,
+                tokenPath);
             _settings = _settings with
             {
                 ServiceBaseUrl = normalizedUrl,
-                TokenSource = new TokenSourceSettings("file", TokenPathTextBox.Text.Trim()),
-                PreferredVoiceId = SelectedVoiceId(),
+                TokenSource = new TokenSourceSettings("file", tokenPath),
+                PreferredVoiceId = SelectedVoiceId() ?? _settings.PreferredVoiceId,
                 ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
                 CopySelectionAndReadEnabled = CopySelectionCheckBox.IsChecked == true,
                 PrivacyMode = PrivacyModeCheckBox.IsChecked == true,
@@ -720,7 +736,10 @@ public partial class MainWindow : Window
             };
             await _settingsStore.SaveAsync(_settings);
             FooterText.Text = $"Settings saved to {_settingsStore.SettingsPath}";
-            await RefreshConnectionAsync();
+            if (reconnectRequired || _client is null)
+            {
+                await RefreshConnectionAsync(rebuildClient: true);
+            }
             if (_windowSource is not null)
             {
                 RegisterHotkeys(new WindowInteropHelper(this).Handle);

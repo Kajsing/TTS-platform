@@ -46,6 +46,28 @@ public sealed record DesktopSettings(
         CompactController ?? new CompactControllerSettings();
 }
 
+public static class DesktopConnectionPolicy
+{
+    public static bool RequiresReconnect(
+        DesktopSettings current,
+        string serviceBaseUrl,
+        string tokenPath)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(serviceBaseUrl);
+        ArgumentNullException.ThrowIfNull(tokenPath);
+
+        return !string.Equals(
+                   current.ServiceBaseUrl,
+                   serviceBaseUrl,
+                   StringComparison.OrdinalIgnoreCase) ||
+               !string.Equals(
+                   current.EffectiveTokenSource.Path,
+                   tokenPath,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 public interface IDesktopSettingsStore
 {
     string SettingsPath { get; }

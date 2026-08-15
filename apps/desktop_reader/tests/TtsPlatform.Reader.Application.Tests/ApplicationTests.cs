@@ -85,6 +85,47 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Onboarding_reports_rate_limit_as_transient()
+    {
+        var client = new StubClient
+        {
+            Health = Healthy(),
+            CapabilitiesException = new ReaderApiException(
+                "rate_limited",
+                "Rate limit exceeded.",
+                429),
+        };
+
+        var result = await new OnboardingCoordinator(client).CheckAsync();
+
+        Assert.Equal(ConnectionState.RateLimited, result.State);
+        Assert.Equal(SuggestedAction.Retry, result.Action);
+        Assert.Contains("about a minute", result.Message);
+    }
+
+    [Fact]
+    public void Desktop_connection_policy_only_reconnects_for_service_or_token_changes()
+    {
+        var settings = new DesktopSettings(
+            ServiceBaseUrl: "http://127.0.0.1:7777/",
+            TokenSource: new TokenSourceSettings("file", @"C:\safe\token.txt"),
+            PreferredVoiceId: "voice-a");
+
+        Assert.False(DesktopConnectionPolicy.RequiresReconnect(
+            settings with { PreferredVoiceId = "voice-b" },
+            "http://127.0.0.1:7777/",
+            @"C:\SAFE\TOKEN.TXT"));
+        Assert.True(DesktopConnectionPolicy.RequiresReconnect(
+            settings,
+            "http://127.0.0.1:7788/",
+            @"C:\safe\token.txt"));
+        Assert.True(DesktopConnectionPolicy.RequiresReconnect(
+            settings,
+            "http://127.0.0.1:7777/",
+            @"C:\safe\other-token.txt"));
+    }
+
+    [Fact]
     public async Task Library_uses_opaque_next_cursor_for_paging()
     {
         var client = new StubClient

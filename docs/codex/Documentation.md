@@ -10,6 +10,27 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the field-reported voice-save/rate-limit fix. Selecting and saving
+  `Piper en_US Lessac High` had persisted the correct voice, but Save also ran an
+  unnecessary full onboarding check. A shared localhost 429 then replaced the
+  connected voice/library presentation with an empty error state even though
+  the original Reader process and service remained alive. Local-only settings,
+  including voice selection, now save without reconnecting; URL or token-path
+  changes still rebuild the client. A transient 429 during an explicit check
+  preserves the current library and voice selection when the existing client is
+  still valid, pauses the normal connection-dependent polling, and offers a
+  one-minute retry. An unavailable voice list can no longer erase the saved
+  preferred voice.
+- Voice-save/rate-limit validation passed on 2026-08-15: all 96 .NET Release
+  tests, .NET formatting, Ruff, `git diff --check`, and the complete Windows
+  desktop integration check passed, including live Reader flows, WASAPI,
+  clipboard/hotkeys/tray, self-contained packaging, and packaged WPF rendering.
+  Both local Piper model directories remained installed. A live
+  `Piper en_US Lessac High` smoke passed sync, background-job, and streaming
+  synthesis, and manual UI automation verified that Save kept the process,
+  connected status, library, enabled voice selector, and selected Piper voice.
+  No backend, model, public API, security, licensing, or deployment behavior
+  changed.
 - Implemented the field-requested installed-voice selector in the desktop
   connection/settings panel. It shows friendly names from `/v1/voices`, marks
   the service default, displays language/quality/engine metadata, and persists

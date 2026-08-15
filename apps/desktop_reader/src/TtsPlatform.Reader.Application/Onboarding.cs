@@ -14,6 +14,7 @@ public enum ConnectionState
     ReaderDisabled,
     ReaderDegraded,
     UnsupportedContract,
+    RateLimited,
     Error,
 }
 
@@ -127,6 +128,15 @@ public sealed class OnboardingCoordinator(IReaderServiceClient client)
                 ConnectionState.TokenInvalid,
                 "The token was rejected. Choose the current service token file and retry.",
                 SuggestedAction.ChooseTokenFile);
+        }
+        catch (ReaderApiException exception) when (
+            exception.StatusCode == 429 ||
+            string.Equals(exception.ErrorType, "rate_limited", StringComparison.Ordinal))
+        {
+            return new OnboardingResult(
+                ConnectionState.RateLimited,
+                "The local service is busy. Wait about a minute and retry.",
+                SuggestedAction.Retry);
         }
         catch (ReaderApiException exception)
         {
