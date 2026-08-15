@@ -10,6 +10,23 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Implemented the field-requested installed-voice selector in the desktop
+  connection/settings panel. It shows friendly names from `/v1/voices`, marks
+  the service default, displays language/quality/engine metadata, and persists
+  the selected identifier in desktop settings. The choice is passed to normal
+  and cursor-start document streams, section navigation, queue auto-advance,
+  clipboard/copy-selection synthesis, and newly created current/queue audio
+  exports. A removed saved voice falls back deterministically to the service
+  default and then the first advertised voice; existing exports are unchanged.
+- Voice-selector validation passed on 2026-08-15: all 94 .NET Release tests,
+  .NET formatting, the explicit WPF application build, Ruff for the desktop
+  source gate, `git diff --check`, and the complete Windows desktop integration
+  check passed. The live rebuilt Reader rendered five unique friendly choices,
+  selected `Kokoro English af_heart (service default)`, and exposed clean
+  accessibility names. The integration check also passed live Reader
+  edit/stream/import/rules, WASAPI, clipboard/hotkey/tray behavior,
+  self-contained packaging, and packaged WPF rendering. No user voice setting
+  was changed during the field check.
 - Completed the field-requested export cleanup workflow. Terminal completed,
   failed, and cancelled export rows can now be removed through **Delete
   selected...** after an explicit confirmation. The service deletes the

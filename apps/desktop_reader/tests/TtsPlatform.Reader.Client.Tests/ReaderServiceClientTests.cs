@@ -79,7 +79,8 @@ public sealed class ReaderServiceClientTests
 
         var document = await client.CreateDocumentAsync(
             new CreateDocumentRequest("Clipboard", "clipboard", "Saved", AllowDuplicate: true));
-        var audio = await client.SynthesizeAsync(new EphemeralSynthesisRequest("Read only"));
+        var audio = await client.SynthesizeAsync(
+            new EphemeralSynthesisRequest("Read only", Voice: "voice-two"));
 
         Assert.Equal("clipboard", document.SourceType);
         Assert.Equal(wave, audio);
@@ -89,6 +90,7 @@ public sealed class ReaderServiceClientTests
         Assert.Contains("\"source_type\":\"clipboard\"", handler.Requests[0].Body, StringComparison.Ordinal);
         Assert.Contains("\"allow_duplicate\":true", handler.Requests[0].Body, StringComparison.Ordinal);
         Assert.Contains("\"text\":\"Read only\"", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.Contains("\"voice\":\"voice-two\"", handler.Requests[1].Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -266,7 +268,10 @@ public sealed class ReaderServiceClientTests
         var openRequest = await client.GetNextDesktopOpenRequestAsync();
         await client.AcknowledgeDesktopOpenRequestAsync(openRequest!.Id);
         var export = await client.CreateExportAsync(
-            new CreateExportRequest(DocumentIds: ["doc"], AudioFormat: "mp3"));
+            new CreateExportRequest(
+                DocumentIds: ["doc"],
+                VoiceId: "voice-two",
+                AudioFormat: "mp3"));
         var exports = await client.GetExportsAsync();
         await client.CancelExportAsync("job");
         await client.DeleteExportAsync("job");
@@ -284,6 +289,7 @@ public sealed class ReaderServiceClientTests
         Assert.Contains("\"state\":\"finished\"", handler.Requests[1].Body, StringComparison.Ordinal);
         Assert.Contains("\"document_ids\":[\"doc\"]", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.Contains("\"audio_format\":\"mp3\"", handler.Requests[9].Body, StringComparison.Ordinal);
+        Assert.Contains("\"voice_id\":\"voice-two\"", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("queue_item_ids", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("section_ids", handler.Requests[9].Body, StringComparison.Ordinal);
         Assert.Contains(

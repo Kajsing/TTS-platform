@@ -1610,6 +1610,15 @@ First-run logic:
 
 The desktop app must not require administrator rights.
 
+After onboarding succeeds, the desktop populates a global reading-voice selector
+from `/v1/voices`. The selected installed voice applies to document playback,
+ephemeral clipboard reading, and newly created audio exports. Its identifier is
+stored in desktop settings, not in the service configuration. If that identifier
+is no longer available, the UI falls back to the advertised service default and
+then the first available voice; it never sends a removed voice identifier.
+Changing this selection affects the next playback start or export and does not
+rewrite existing export jobs or audio files.
+
 ### 14.5 Playback state machine
 
 ```text

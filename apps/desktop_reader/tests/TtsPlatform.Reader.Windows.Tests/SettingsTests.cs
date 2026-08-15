@@ -16,7 +16,8 @@ public sealed class SettingsTests : IDisposable
         var settingsPath = Path.Combine(_temporaryDirectory, "settings.json");
         var store = new JsonDesktopSettingsStore(settingsPath);
         var settings = new DesktopSettings(
-            TokenSource: new TokenSourceSettings("file", @"C:\safe\token.txt"));
+            TokenSource: new TokenSourceSettings("file", @"C:\safe\token.txt"),
+            PreferredVoiceId: " voice-id ");
 
         await store.SaveAsync(settings);
         var json = await File.ReadAllTextAsync(settingsPath);
@@ -29,6 +30,7 @@ public sealed class SettingsTests : IDisposable
         Assert.DoesNotContain("effectiveTokenSource", json, StringComparison.Ordinal);
         Assert.DoesNotContain("effectiveHotkeys", json, StringComparison.Ordinal);
         Assert.Equal(@"C:\safe\token.txt", loaded.EffectiveTokenSource.Path);
+        Assert.Equal("voice-id", loaded.PreferredVoiceId);
         Assert.False(loaded.ClipboardMonitoringEnabled);
         Assert.True(loaded.PrivacyMode);
         Assert.False(loaded.CopySelectionAndReadEnabled);

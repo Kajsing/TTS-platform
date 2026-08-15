@@ -19,6 +19,7 @@ public sealed record CompactControllerSettings(
 public sealed record DesktopSettings(
     string ServiceBaseUrl = "http://127.0.0.1:7777/",
     TokenSourceSettings? TokenSource = null,
+    string? PreferredVoiceId = null,
     string Theme = "system",
     string ReadingFontFamily = "Segoe UI",
     double ReadingFontSize = 20,

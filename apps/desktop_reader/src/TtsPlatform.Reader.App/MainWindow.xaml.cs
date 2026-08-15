@@ -487,6 +487,7 @@ public partial class MainWindow : Window
             RebuildClient();
             var coordinator = new OnboardingCoordinator(GetClient());
             _onboarding = await coordinator.CheckAsync();
+            UpdateVoiceOptions(_onboarding.Voices);
             ShowOnboarding(_onboarding);
             if (_onboarding.State is ConnectionState.Ready or ConnectionState.BackendDegraded)
             {
@@ -700,6 +701,7 @@ public partial class MainWindow : Window
             {
                 ServiceBaseUrl = normalizedUrl,
                 TokenSource = new TokenSourceSettings("file", TokenPathTextBox.Text.Trim()),
+                PreferredVoiceId = SelectedVoiceId(),
                 ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
                 CopySelectionAndReadEnabled = CopySelectionCheckBox.IsChecked == true,
                 PrivacyMode = PrivacyModeCheckBox.IsChecked == true,
@@ -757,6 +759,40 @@ public partial class MainWindow : Window
         StopHotkeyTextBox.Text = settings.EffectiveHotkeys.Stop;
         UpdateClipboardStatus();
     }
+
+    private void UpdateVoiceOptions(VoicePage? page)
+    {
+        var requestedVoiceId = SelectedVoiceId() ?? _settings.PreferredVoiceId;
+        VoiceComboBox.Items.Clear();
+        if (page is null || page.Voices.Count == 0)
+        {
+            VoiceComboBox.IsEnabled = false;
+            VoiceDetailsText.Text = "Connect to load installed voices.";
+            return;
+        }
+
+        foreach (var voice in page.Voices)
+        {
+            VoiceComboBox.Items.Add(new VoiceChoice(
+                voice,
+                string.Equals(voice.Id, page.DefaultVoice, StringComparison.Ordinal)));
+        }
+        var selected = VoiceSelectionPolicy.Resolve(page, requestedVoiceId);
+        VoiceComboBox.SelectedItem = VoiceComboBox.Items
+            .OfType<VoiceChoice>()
+            .First(item => string.Equals(item.Id, selected!.Id, StringComparison.Ordinal));
+        VoiceComboBox.IsEnabled = true;
+    }
+
+    private void VoiceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        VoiceDetailsText.Text = VoiceComboBox.SelectedItem is VoiceChoice selected
+            ? selected.Details
+            : "Connect to load installed voices.";
+    }
+
+    private string? SelectedVoiceId() =>
+        (VoiceComboBox.SelectedItem as VoiceChoice)?.Id;
 
     private static IReadOnlyList<string> ParseBlockedApplications(string value) =>
         value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -1071,14 +1107,16 @@ public partial class MainWindow : Window
             text,
             _ephemeralCancellation,
             _synthesisClient,
-            _ephemeralAudio);
+            _ephemeralAudio,
+            SelectedVoiceId());
     }
 
     private async Task RunEphemeralPlaybackAsync(
         string text,
         CancellationTokenSource cancellation,
         IReaderServiceClient client,
-        WasapiAudioOutput audio)
+        WasapiAudioOutput audio,
+        string? voiceId)
     {
         var completed = false;
         try
@@ -1086,7 +1124,7 @@ public partial class MainWindow : Window
             foreach (var chunk in EphemeralTextChunker.Chunk(text))
             {
                 var wave = await client.SynthesizeAsync(
-                    new EphemeralSynthesisRequest(chunk),
+                    new EphemeralSynthesisRequest(chunk, Voice: voiceId),
                     cancellation.Token);
                 var decoded = WavePcmDecoder.Decode(wave);
                 var frameBytes = Math.Max(
@@ -1512,7 +1550,14 @@ public partial class MainWindow : Window
             }
         }
 
-        var dialog = new LibraryWorkflowDialog(GetClient(), document, cursor) { Owner = this };
+        var dialog = new LibraryWorkflowDialog(
+            GetClient(),
+            document,
+            cursor,
+            SelectedVoiceId())
+        {
+            Owner = this,
+        };
         if (dialog.ShowDialog() == true && dialog.SelectedDocumentId is string documentId)
         {
             await OpenQueuedOrBookmarkedDocumentAsync(documentId, dialog.SelectedCursor);
@@ -1529,7 +1574,10 @@ public partial class MainWindow : Window
             await LoadDocumentAsync(document);
             if (_playback is not null)
             {
-                await _playback.PlayAsync(document, startCursor: cursor);
+                await _playback.PlayAsync(
+                    document,
+                    voice: SelectedVoiceId(),
+                    startCursor: cursor);
             }
             FooterText.Text = cursor is null
                 ? "Playing the selected queue item."
@@ -1688,7 +1736,7 @@ public partial class MainWindow : Window
             await LoadDocumentAsync(document);
             if (_playback is not null)
             {
-                await _playback.PlayAsync(document);
+                await _playback.PlayAsync(document, voice: SelectedVoiceId());
             }
             FooterText.Text = "Advanced to the next queue item.";
         }
@@ -2018,7 +2066,7 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
-            await _playback.PlayAsync(_editor.Document);
+            await _playback.PlayAsync(_editor.Document, voice: SelectedVoiceId());
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2055,7 +2103,10 @@ public partial class MainWindow : Window
         try
         {
             await StopEphemeralAsync(clearReplay: true);
-            await _playback.PlayAsync(document, startCursor: cursor);
+            await _playback.PlayAsync(
+                document,
+                voice: SelectedVoiceId(),
+                startCursor: cursor);
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2111,7 +2162,8 @@ public partial class MainWindow : Window
                     target.Id,
                     target.Ordinal,
                     0,
-                    document.ContentRevision));
+                    document.ContentRevision),
+                voice: SelectedVoiceId());
             FooterText.Text = next
                 ? "Started the next section."
                 : "Started the previous section.";
@@ -2377,6 +2429,17 @@ public partial class MainWindow : Window
         {
             StatusText.Text = text;
         }
+    }
+
+    private sealed record VoiceChoice(VoiceDescriptor Voice, bool IsServiceDefault)
+    {
+        public string Id => Voice.Id;
+        public string DisplayName => IsServiceDefault
+            ? $"{Voice.Name} (service default)"
+            : Voice.Name;
+        public string Details =>
+            $"{Voice.Language} · {Voice.QualityTier} quality · {Voice.Engine}";
+        public override string ToString() => DisplayName;
     }
 
     private static string DescribeStructuredDocument(ReaderDocument document)

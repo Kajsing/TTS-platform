@@ -44,10 +44,11 @@ public sealed class PlaybackTests
         var audio = new FakeAudioOutput();
         await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
 
-        await playback.PlayAsync(Document());
+        await playback.PlayAsync(Document(), voice: "voice-two");
         await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
 
         Assert.Equal(2, streams.Requests.Count);
+        Assert.All(streams.Requests, request => Assert.Equal("voice-two", request.Voice));
         Assert.Equal(1, streams.Requests[1].Cursor.BlockOrdinal);
         Assert.True(service.SavedPositions.Last().Completed);
     }

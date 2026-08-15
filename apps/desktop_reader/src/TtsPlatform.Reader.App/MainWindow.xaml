@@ -108,6 +108,22 @@
                 <Button Content="Save" Click="SaveSettingsButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
               </StackPanel>
             </Grid>
+            <Grid Margin="0,7,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Voice" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <ComboBox Grid.Column="1" x:Name="VoiceComboBox" Width="300"
+                        DisplayMemberPath="DisplayName" IsEnabled="False"
+                        SelectionChanged="VoiceComboBox_SelectionChanged"
+                        ToolTip="Used for the next playback and new exports. Choose Save to keep it for the next launch."
+                        AutomationProperties.Name="Reading voice" />
+              <TextBlock Grid.Column="2" x:Name="VoiceDetailsText" Margin="12,0,0,0"
+                         VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}"
+                         Text="Connect to load installed voices." TextWrapping="Wrap" />
+            </Grid>
             <WrapPanel Margin="0,7,0,0">
               <CheckBox x:Name="ClipboardMonitoringCheckBox" Content="Clipboard prompt mode"
                         Click="ClipboardMonitoringCheckBox_Click" Margin="4" />

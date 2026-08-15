@@ -80,6 +80,15 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
             throw new ReaderClientConfigurationException("Reading font size must be between 10 and 72.");
         }
 
+        var preferredVoiceId = string.IsNullOrWhiteSpace(settings.PreferredVoiceId)
+            ? null
+            : settings.PreferredVoiceId.Trim();
+        if (preferredVoiceId?.Length > 256)
+        {
+            throw new ReaderClientConfigurationException(
+                "The preferred voice identifier is too long.");
+        }
+
         var blockedApplications = settings.EffectiveClipboardBlockedApplications
             .Select(item => item.Trim())
             .Where(item => item.Length > 0)
@@ -89,6 +98,7 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
         return settings with
         {
             TokenSource = tokenSource,
+            PreferredVoiceId = preferredVoiceId,
             Hotkeys = settings.EffectiveHotkeys,
             ClipboardBlockedApplications = blockedApplications,
             CompactController = settings.EffectiveCompactController,

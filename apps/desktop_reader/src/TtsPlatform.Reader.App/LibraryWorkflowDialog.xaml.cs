@@ -13,6 +13,7 @@ public partial class LibraryWorkflowDialog : Window
     private readonly IReaderServiceClient _client;
     private readonly ReaderDocument? _currentDocument;
     private readonly ReaderCursor? _currentCursor;
+    private readonly string? _voiceId;
     private readonly ObservableCollection<QueueDisplayItem> _queue = [];
     private readonly ObservableCollection<ReaderBookmark> _bookmarks = [];
     private readonly ObservableCollection<ExportDisplayItem> _exports = [];
@@ -22,11 +23,13 @@ public partial class LibraryWorkflowDialog : Window
     public LibraryWorkflowDialog(
         IReaderServiceClient client,
         ReaderDocument? currentDocument,
-        ReaderCursor? currentCursor)
+        ReaderCursor? currentCursor,
+        string? voiceId = null)
     {
         _client = client;
         _currentDocument = currentDocument;
         _currentCursor = currentCursor;
+        _voiceId = voiceId;
         InitializeComponent();
         QueueGrid.ItemsSource = _queue;
         BookmarkGrid.ItemsSource = _bookmarks;
@@ -311,6 +314,7 @@ public partial class LibraryWorkflowDialog : Window
         await CreateExportAsync(
             new CreateExportRequest(
                 DocumentIds: [_currentDocument.Id],
+                VoiceId: _voiceId,
                 AudioFormat: SelectedExportFormat()));
     }
 
@@ -324,6 +328,7 @@ public partial class LibraryWorkflowDialog : Window
         await CreateExportAsync(
             new CreateExportRequest(
                 QueueItemIds: _queue.Select(item => item.Item.Id).ToArray(),
+                VoiceId: _voiceId,
                 AudioFormat: SelectedExportFormat()));
     }
 
