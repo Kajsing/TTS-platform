@@ -12,8 +12,9 @@ The Milestone 9 Reader beta provides:
 - a token-file source (the bearer token is never copied into settings JSON);
 - actionable service, token, Reader, and voice readiness states;
 - paged library browsing and title search;
-- direct block editing for plain-text, clipboard, selection, and text-file
-  documents, including durable Undo and Redo through integer row versions;
+- continuous editing for plain-text, clipboard, selection, and text-file
+  documents, including atomic cross-paragraph selection deletion plus durable
+  Undo and Redo through integer row versions;
 - read-only display for structured source types;
 - protected Reader WebSocket playback with strict mark/binary validation;
 - NAudio 2.3 shared-mode WASAPI PCM output with a continuous two-second target

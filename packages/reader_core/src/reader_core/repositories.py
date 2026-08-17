@@ -90,6 +90,17 @@ class ReaderRepository(Protocol):
         expected_row_version: int,
     ) -> tuple[ReaderDocument, DocumentEdit]: ...
 
+    def delete_block_range(
+        self,
+        document_id: str,
+        start_block_id: str,
+        end_block_id: str,
+        *,
+        start_offset: int,
+        end_offset: int,
+        expected_row_version: int,
+    ) -> tuple[ReaderDocument, DocumentEdit]: ...
+
     def append_text(
         self,
         document_id: str,

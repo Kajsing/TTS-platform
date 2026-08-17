@@ -788,6 +788,74 @@ def test_content_edit_uses_utf16_offsets_at_the_http_boundary(tmp_path: Path) ->
     assert invalid.json()["error"]["type"] == "reader_invalid_offset"
 
 
+def test_cross_block_selection_delete_is_atomic_and_uses_utf16_offsets(
+    tmp_path: Path,
+) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    document = create_document(
+        client,
+        headers,
+        text="A😀 remove.\n\nMiddle gone.\n\nEnd 😀tail.\n\nLast untouched.",
+    )
+    blocks = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+    start_offset = len("A😀 remove".encode("utf-16-le")) // 2
+    end_offset = len("End 😀".encode("utf-16-le")) // 2
+    invalid_replacement = client.patch(
+        f"/v1/reader/documents/{document['id']}/content",
+        headers=headers,
+        json={
+            "expected_row_version": document["row_version"],
+            "block_id": blocks[0]["id"],
+            "end_block_id": blocks[2]["id"],
+            "start_offset": start_offset,
+            "end_offset": end_offset,
+            "replacement_text": "replacement",
+        },
+    )
+    deleted = client.patch(
+        f"/v1/reader/documents/{document['id']}/content",
+        headers=headers,
+        json={
+            "expected_row_version": document["row_version"],
+            "block_id": blocks[0]["id"],
+            "end_block_id": blocks[2]["id"],
+            "start_offset": start_offset,
+            "end_offset": end_offset,
+            "replacement_text": "",
+        },
+    )
+    remaining = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+    undone = client.post(
+        f"/v1/reader/documents/{document['id']}/undo",
+        headers=headers,
+        json={"expected_row_version": deleted.json()["document"]["row_version"]},
+    )
+    restored = client.get(
+        f"/v1/reader/documents/{document['id']}/blocks",
+        headers=headers,
+    ).json()["blocks"]
+
+    assert invalid_replacement.status_code == 400
+    assert invalid_replacement.json()["error"]["type"] == "reader_invalid_range"
+    assert deleted.status_code == 200
+    assert deleted.json()["document"]["total_blocks"] == 2
+    assert deleted.json()["edit"]["start_offset"] == start_offset
+    assert deleted.json()["edit"]["end_offset"] == end_offset
+    assert deleted.json()["edit"]["end_block_id"] == blocks[2]["id"]
+    assert [block["text"] for block in remaining] == [
+        "A😀 removetail.",
+        "Last untouched.",
+    ]
+    assert undone.json()["document"]["total_blocks"] == 4
+    assert [block["text"] for block in restored] == [block["text"] for block in blocks]
+
+
 def test_content_mutations_are_rejected_while_reader_lease_is_active(
     tmp_path: Path,
 ) -> None:

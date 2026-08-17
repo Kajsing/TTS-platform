@@ -284,6 +284,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
     workstation_usability_features = [
         "ContinuousDocumentText",
         "TryGetCharacterOffset",
+        "TryMapCrossBlockDeletion",
         "RestorePausedEditorViewport",
         "BringHighlightedTextIntoView",
         "Continuous document text",
@@ -468,6 +469,7 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
     if (
         payload.get("live_clipboard_no_persist") is not True
         or payload.get("live_clipboard_append_undo") is not True
+        or payload.get("live_cross_block_delete_undo") is not True
     ):
         raise DesktopReaderCheckError(
             "The .NET client did not confirm private immediate speech and clipboard append/undo."

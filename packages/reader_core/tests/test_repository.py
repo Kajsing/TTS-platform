@@ -325,6 +325,107 @@ def test_multi_paragraph_append_is_one_undoable_action(repository, document) -> 
     ]
 
 
+def test_cross_block_delete_is_one_undoable_action(repository) -> None:
+    document = ReaderLibrary(repository).create_plain_text_document(
+        title="Delete selection",
+        text=(
+            "First keep and remove.\n\n"
+            "Middle gone.\n\n"
+            "Third remove and keep.\n\n"
+            "Last untouched."
+        ),
+    )
+    original_blocks = repository.list_blocks(document.id)
+    start_offset = len("First keep and ")
+    end_offset = len("Third remove ")
+    now = datetime.now(timezone.utc)
+    repository.save_position(
+        PlaybackPosition(
+            document_id=document.id,
+            cursor=_cursor(document, original_blocks[2], end_offset + 3),
+            updated_at=now,
+            completed=False,
+        )
+    )
+    middle_bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(document, original_blocks[1], 4),
+            label="Removed text",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    later_bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(document, original_blocks[3], 2),
+            label="Later text",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    old_suffix_cursor = _cursor(document, original_blocks[2], end_offset + 3)
+
+    deleted, edit = repository.delete_block_range(
+        document.id,
+        original_blocks[0].id,
+        original_blocks[2].id,
+        start_offset=start_offset,
+        end_offset=end_offset,
+        expected_row_version=document.row_version,
+    )
+
+    current_blocks = repository.list_blocks(document.id)
+    assert edit.operation_type.value == "replace"
+    assert edit.metadata["range_delete"] is True
+    assert edit.end_offset == start_offset
+    assert edit.metadata["range_end_offset"] == end_offset
+    assert deleted.total_blocks == 2
+    assert [block.text for block in current_blocks] == [
+        "First keep and and keep.",
+        "Last untouched.",
+    ]
+    assert [block.ordinal for block in current_blocks] == [0, 1]
+    position = repository.get_position(document.id)
+    assert position is not None
+    assert position.cursor.block_id == original_blocks[0].id
+    assert position.cursor.character_offset == start_offset + 3
+    assert repository.get_bookmark(middle_bookmark.id).cursor.character_offset == start_offset
+    shifted_later = repository.get_bookmark(later_bookmark.id)
+    assert shifted_later.cursor.block_id == original_blocks[3].id
+    assert shifted_later.cursor.block_ordinal == 1
+    resolved_suffix = repository.resolve_cursor(old_suffix_cursor)
+    assert resolved_suffix.block_id == original_blocks[0].id
+    assert resolved_suffix.character_offset == start_offset + 3
+
+    undone = repository.undo(document.id, expected_row_version=deleted.row_version)
+
+    restored_blocks = repository.list_blocks(document.id)
+    assert undone.total_blocks == 4
+    assert [block.id for block in restored_blocks] == [
+        block.id for block in original_blocks
+    ]
+    assert [block.text for block in restored_blocks] == [
+        block.text for block in original_blocks
+    ]
+    restored_position = repository.get_position(document.id)
+    assert restored_position is not None
+    assert restored_position.cursor.block_id == original_blocks[2].id
+    assert restored_position.cursor.character_offset == end_offset + 3
+    assert repository.get_bookmark(later_bookmark.id).cursor.block_ordinal == 3
+
+    redone = repository.redo(document.id, expected_row_version=undone.row_version)
+
+    assert redone.total_blocks == 2
+    assert [block.text for block in repository.list_blocks(document.id)] == [
+        "First keep and and keep.",
+        "Last untouched.",
+    ]
+
+
 def test_new_edit_after_undo_discards_redo_branch(repository, document) -> None:
     block = repository.list_blocks(document.id)[0]
     edited, _ = repository.replace_block_text(

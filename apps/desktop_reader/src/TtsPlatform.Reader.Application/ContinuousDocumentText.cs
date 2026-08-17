@@ -4,6 +4,12 @@ using TtsPlatform.Reader.Client;
 namespace TtsPlatform.Reader.Application;
 
 public sealed record ContinuousBlockEdit(ReaderBlock Block, string ReplacementText);
+public sealed record ContinuousRangeDeletion(
+    ReaderBlock StartBlock,
+    int StartOffset,
+    ReaderBlock EndBlock,
+    int EndOffset,
+    string ResultingStartBlockText);
 
 public sealed class ContinuousDocumentText
 {
@@ -110,6 +116,49 @@ public sealed class ContinuousDocumentText
         return true;
     }
 
+    public bool TryMapCrossBlockDeletion(
+        string editedText,
+        out ContinuousRangeDeletion? deletion)
+    {
+        ArgumentNullException.ThrowIfNull(editedText);
+        deletion = null;
+        if (editedText.Length >= Text.Length)
+        {
+            return false;
+        }
+
+        var prefixLength = CommonPrefixLength(Text, editedText);
+        var suffixLength = CommonSuffixLength(Text, editedText, prefixLength);
+        var originalEnd = Text.Length - suffixLength;
+        var editedEnd = editedText.Length - suffixLength;
+        if (editedEnd != prefixLength)
+        {
+            return false;
+        }
+
+        var startIndex = SpanIndexAtOrBefore(prefixLength);
+        var endIndex = SpanIndexAtOrAfter(originalEnd);
+        if (startIndex < 0 || endIndex <= startIndex)
+        {
+            return false;
+        }
+
+        var startSpan = _spans[startIndex];
+        var endSpan = _spans[endIndex];
+        var startOffset = Math.Clamp(prefixLength - startSpan.Start, 0, startSpan.Length);
+        var endOffset = Math.Clamp(originalEnd - endSpan.Start, 0, endSpan.Length);
+        var resultingStartBlockText = string.Concat(
+            startSpan.Block.Text.AsSpan(0, startOffset),
+            endSpan.Block.Text.AsSpan(endOffset));
+        deletion = new ContinuousRangeDeletion(
+            startSpan.Block,
+            startOffset,
+            endSpan.Block,
+            endOffset,
+            resultingStartBlockText);
+        return true;
+    }
+
     public ContinuousDocumentText ReplaceBlock(ReaderBlock replacement)
     {
         ArgumentNullException.ThrowIfNull(replacement);
@@ -128,6 +177,66 @@ public sealed class ContinuousDocumentText
             throw new ArgumentException("The replacement block is not part of this document.", nameof(replacement));
         }
         return new ContinuousDocumentText(blocks);
+    }
+
+    public ContinuousDocumentText ApplyRangeDeletion(ContinuousRangeDeletion deletion)
+    {
+        ArgumentNullException.ThrowIfNull(deletion);
+        var startIndex = Blocks.ToList().FindIndex(block =>
+            string.Equals(block.Id, deletion.StartBlock.Id, StringComparison.Ordinal));
+        var endIndex = Blocks.ToList().FindIndex(block =>
+            string.Equals(block.Id, deletion.EndBlock.Id, StringComparison.Ordinal));
+        if (startIndex < 0 || endIndex <= startIndex)
+        {
+            throw new ArgumentException(
+                "The deletion range is not part of this document.",
+                nameof(deletion));
+        }
+
+        var removedCount = endIndex - startIndex;
+        var blocks = Blocks
+            .Where((_, index) => index <= startIndex || index > endIndex)
+            .Select(block =>
+            {
+                if (string.Equals(block.Id, deletion.StartBlock.Id, StringComparison.Ordinal))
+                {
+                    return block with
+                    {
+                        Text = deletion.ResultingStartBlockText,
+                        CharacterCount = deletion.ResultingStartBlockText.Length,
+                        RowVersion = block.RowVersion + 1,
+                    };
+                }
+                return block.Ordinal > deletion.EndBlock.Ordinal
+                    ? block with { Ordinal = block.Ordinal - removedCount }
+                    : block;
+            })
+            .ToArray();
+        return new ContinuousDocumentText(blocks);
+    }
+
+    private int SpanIndexAtOrBefore(int characterOffset)
+    {
+        for (var index = _spans.Count - 1; index >= 0; index--)
+        {
+            if (_spans[index].Start <= characterOffset)
+            {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private int SpanIndexAtOrAfter(int characterOffset)
+    {
+        for (var index = 0; index < _spans.Count; index++)
+        {
+            if (characterOffset <= _spans[index].End)
+            {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private static ReaderCursor ToCursor(

@@ -10,6 +10,24 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the cross-paragraph selection-delete field fix (2026-08-17). The
+  continuous editor now accepts ordinary Delete/Backspace changes spanning
+  hidden Reader block boundaries, preserves the local TextBox result until
+  Save, commits every affected paragraph as one atomic revisioned edit, and
+  restores the complete range with one Undo. Removed-block cursors, bookmarks,
+  row ordinals, later content, and UTF-16 API offsets remap transactionally.
+  Ordinary typing remains a one-paragraph saved edit, and replacing a
+  cross-paragraph selection with new text is still rejected explicitly.
+- Cross-paragraph delete validation passed on 2026-08-17: all 419 Python tests,
+  all 100 .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the
+  complete Windows desktop integration check passed. The live C# client check
+  deleted a selection across three appended paragraphs and restored all three
+  with one Undo; Windows integration, packaging, and packaged WPF rendering
+  also passed. The first live check exposed an end offset smaller than the start
+  offset across different blocks; range metadata now preserves the true end
+  while the existing schema-compatible history columns remain valid. No
+  migration, dependency, security, licensing, model, voice, or deployment
+  change was introduced.
 - Completed the clipboard-page and pause-position field fix (2026-08-17).
   Future multi-paragraph clipboard appends are persisted as ordinary paragraph
   blocks, allowing the bounded reading window to turn pages normally, while the
@@ -460,6 +478,9 @@ This file is the live status log and shared memory for future Codex loops.
   preserve the existing atomic block-edit and Undo contract, one saved edit may
   change one paragraph. A cross-paragraph mutation is restored locally with a
   clear message, although selection and copying may cross every paragraph.
+  The 2026-08-17 field follow-up later replaced that deletion limitation with
+  one atomic cross-paragraph selection-delete operation; cross-paragraph typed
+  replacement remains intentionally unsupported.
   Continuous editing is bounded at 1,000,000 characters and 20,000 blocks so an
   extreme book cannot freeze WPF; larger documents retain the virtualized reader.
 - Continuous-editor validation passed on 2026-07-29:

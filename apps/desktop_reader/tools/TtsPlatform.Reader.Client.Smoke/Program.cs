@@ -140,6 +140,35 @@ if (undoneBlocks.Blocks.Count != 3 ||
     return 11;
 }
 
+var rangeDeleted = await client.ReplaceContentAsync(
+    clipboardDocument.Id,
+    new ReplaceContentRequest(
+        undone.Document.RowVersion,
+        undoneBlocks.Blocks[0].Id,
+        "Initial ".Length,
+        "Second ".Length,
+        string.Empty,
+        undoneBlocks.Blocks[2].Id));
+var rangeDeletedBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
+if (rangeDeletedBlocks.Blocks.Count != 1 ||
+    rangeDeletedBlocks.Blocks[0].Text != "Initial selected excerpt")
+{
+    Console.Error.WriteLine("A cross-paragraph selection was not deleted atomically.");
+    return 12;
+}
+var rangeRestored = await client.UndoAsync(
+    clipboardDocument.Id,
+    new ExpectedVersionRequest(rangeDeleted.Document.RowVersion));
+var rangeRestoredBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
+if (rangeRestoredBlocks.Blocks.Count != 3 ||
+    !rangeRestoredBlocks.Blocks.Select(item => item.Text).SequenceEqual(
+        new[] { "Initial paragraph", selections[0], selections[1] }) ||
+    rangeRestored.Document.RowVersion <= rangeDeleted.Document.RowVersion)
+{
+    Console.Error.WriteLine("One Undo did not restore the cross-paragraph deletion.");
+    return 13;
+}
+
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
@@ -150,6 +179,7 @@ Console.WriteLine(JsonSerializer.Serialize(new
     live_position_resume = true,
     live_clipboard_no_persist = true,
     live_clipboard_append_undo = true,
+    live_cross_block_delete_undo = true,
     pcm_frames = pcmFrames,
     pcm_bytes = pcmBytes,
     source_spans = sourceSpans,

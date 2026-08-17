@@ -193,6 +193,7 @@ class ExpectedReaderVersionRequest(BaseModel):
 
 class ReplaceReaderContentRequest(ExpectedReaderVersionRequest):
     block_id: str
+    end_block_id: str | None = None
     start_offset: int = Field(ge=0)
     end_offset: int = Field(ge=0)
     replacement_text: str = Field(max_length=10_000_000)
@@ -282,6 +283,7 @@ class ReaderEditResponse(BaseModel):
     base_content_revision: int
     result_content_revision: int
     block_id: str
+    end_block_id: str | None = None
     start_offset: int
     end_offset: int
     operation_type: EditOperation
@@ -293,12 +295,16 @@ class ReaderEditResponse(BaseModel):
         edit: DocumentEdit,
         *,
         source_text: str | None = None,
+        end_source_text: str | None = None,
     ) -> "ReaderEditResponse":
         start_offset = edit.start_offset
-        end_offset = edit.end_offset
+        end_offset = int(edit.metadata.get("range_end_offset", edit.end_offset))
         if source_text is not None:
             start_offset = python_offset_to_utf16(source_text, edit.start_offset)
-            end_offset = python_offset_to_utf16(source_text, edit.end_offset)
+            end_offset = python_offset_to_utf16(
+                end_source_text if end_source_text is not None else source_text,
+                end_offset,
+            )
         return cls(
             id=edit.id,
             document_id=edit.document_id,
@@ -306,6 +312,11 @@ class ReaderEditResponse(BaseModel):
             base_content_revision=edit.base_content_revision,
             result_content_revision=edit.result_content_revision,
             block_id=edit.block_id,
+            end_block_id=(
+                str(edit.metadata["end_block_id"])
+                if edit.metadata.get("end_block_id") is not None
+                else None
+            ),
             start_offset=start_offset,
             end_offset=end_offset,
             operation_type=edit.operation_type,

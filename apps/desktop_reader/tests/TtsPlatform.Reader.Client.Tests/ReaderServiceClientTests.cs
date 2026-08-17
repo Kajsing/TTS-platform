@@ -43,7 +43,7 @@ public sealed class ReaderServiceClientTests
     }
 
     [Fact]
-    public async Task Replace_content_serializes_integer_row_version()
+    public async Task Replace_content_serializes_integer_version_and_optional_range_end()
     {
         var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK, MutationJson));
         var client = new ReaderServiceClient(
@@ -53,10 +53,20 @@ public sealed class ReaderServiceClientTests
 
         await client.ReplaceContentAsync(
             "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            new ReplaceContentRequest(7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 0, 3, "new"));
+            new ReplaceContentRequest(
+                7,
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                0,
+                3,
+                string.Empty,
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc"));
 
         Assert.Contains("\"expected_row_version\":7", handler.Requests.Single().Body, StringComparison.Ordinal);
         Assert.DoesNotContain("\"expected_row_version\":\"7\"", handler.Requests.Single().Body, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"end_block_id\":\"cccccccc-cccc-4ccc-8ccc-cccccccccccc\"",
+            handler.Requests.Single().Body,
+            StringComparison.Ordinal);
     }
 
     [Fact]

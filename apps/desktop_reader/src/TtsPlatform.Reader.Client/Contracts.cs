@@ -439,7 +439,8 @@ public sealed record ReplaceContentRequest(
     [property: JsonPropertyName("block_id")] string BlockId,
     [property: JsonPropertyName("start_offset")] int StartOffset,
     [property: JsonPropertyName("end_offset")] int EndOffset,
-    [property: JsonPropertyName("replacement_text")] string ReplacementText);
+    [property: JsonPropertyName("replacement_text")] string ReplacementText,
+    [property: JsonPropertyName("end_block_id")] string? EndBlockId = null);
 
 public sealed record AppendContentRequest(
     [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion,
@@ -460,7 +461,8 @@ public sealed record ReaderEdit(
     int StartOffset,
     int EndOffset,
     string OperationType,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? EndBlockId = null);
 
 public sealed record ReaderCursor(
     string DocumentId,

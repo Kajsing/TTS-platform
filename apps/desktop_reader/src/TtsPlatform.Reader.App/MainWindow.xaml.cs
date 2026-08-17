@@ -1792,30 +1792,59 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!_continuousDocument.TryMapSingleBlockEdit(EditorTextBox.Text, out var edit) || edit is null)
+        if (_continuousDocument.TryMapSingleBlockEdit(EditorTextBox.Text, out var edit) &&
+            edit is not null)
         {
-            RestoreContinuousWorkingText(
-                "A saved edit may change one paragraph at a time. Selection and copying can span the whole document.");
+            if (_editor.HasUnsavedChanges &&
+                _editor.PendingRangeDeletion is null &&
+                _editor.Block is ReaderBlock activeBlock &&
+                !string.Equals(activeBlock.Id, edit.Block.Id, StringComparison.Ordinal))
+            {
+                RestoreContinuousWorkingText(
+                    "Save or revert the current paragraph before editing another one.");
+                return;
+            }
+
+            if (_editor.Block is not ReaderBlock loadedBlock ||
+                !string.Equals(loadedBlock.Id, edit.Block.Id, StringComparison.Ordinal))
+            {
+                _editor.LoadBlock(document, edit.Block);
+            }
+            _editor.SetWorkingText(edit.ReplacementText);
+            UpdateTextCursorFromContinuousEditor();
+            UpdateEditorButtons();
+            UpdatePlaybackControls();
             return;
         }
 
-        if (_editor.HasUnsavedChanges &&
-            _editor.Block is ReaderBlock activeBlock &&
-            !string.Equals(activeBlock.Id, edit.Block.Id, StringComparison.Ordinal))
+        if (_continuousDocument.TryMapCrossBlockDeletion(
+                EditorTextBox.Text,
+                out var rangeDeletion) &&
+            rangeDeletion is not null)
         {
-            RestoreContinuousWorkingText("Save or revert the current paragraph before editing another one.");
+            if (_editor.HasUnsavedChanges && _editor.PendingRangeDeletion is null)
+            {
+                RestoreContinuousWorkingText(
+                    "Save or revert the current paragraph before deleting across paragraphs.");
+                return;
+            }
+            if (_editor.Block is not ReaderBlock loadedBlock ||
+                !string.Equals(
+                    loadedBlock.Id,
+                    rangeDeletion.StartBlock.Id,
+                    StringComparison.Ordinal))
+            {
+                _editor.LoadBlock(document, rangeDeletion.StartBlock);
+            }
+            _editor.SetRangeDeletion(rangeDeletion);
+            UpdateTextCursorFromContinuousEditor();
+            UpdateEditorButtons();
+            UpdatePlaybackControls();
             return;
         }
 
-        if (_editor.Block is not ReaderBlock loadedBlock ||
-            !string.Equals(loadedBlock.Id, edit.Block.Id, StringComparison.Ordinal))
-        {
-            _editor.LoadBlock(document, edit.Block);
-        }
-        _editor.SetWorkingText(edit.ReplacementText);
-        UpdateTextCursorFromContinuousEditor();
-        UpdateEditorButtons();
-        UpdatePlaybackControls();
+        RestoreContinuousWorkingText(
+            "Selection deletion may span paragraphs. Other saved edits change one paragraph at a time.");
     }
 
     private void EditorTextBox_SelectionChanged(object sender, RoutedEventArgs e)
@@ -1842,9 +1871,15 @@ public partial class MainWindow : Window
 
     private ContinuousDocumentText? CurrentContinuousDocument()
     {
-        if (_continuousDocument is null ||
-            _editor?.HasUnsavedChanges != true ||
-            _editor.Block is not ReaderBlock block)
+        if (_continuousDocument is null || _editor?.HasUnsavedChanges != true)
+        {
+            return _continuousDocument;
+        }
+        if (_editor.PendingRangeDeletion is { } rangeDeletion)
+        {
+            return _continuousDocument.ApplyRangeDeletion(rangeDeletion);
+        }
+        if (_editor.Block is not ReaderBlock block)
         {
             return _continuousDocument;
         }
@@ -1892,19 +1927,29 @@ public partial class MainWindow : Window
             if (_continuousDocument is not null && _editor.Block is ReaderBlock savedBlock)
             {
                 _updatingEditor = true;
-                _continuousDocument = _continuousDocument.ReplaceBlock(savedBlock);
+                _continuousDocument = result.AppliedRangeDeletion is { } rangeDeletion
+                    ? _continuousDocument.ApplyRangeDeletion(rangeDeletion)
+                    : _continuousDocument.ReplaceBlock(savedBlock);
                 EditorTextBox.Text = _continuousDocument.Text;
                 EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
                 _updatingEditor = false;
                 if (_readingWindow is not null && _editor.Document is ReaderDocument document)
                 {
-                    _readingWindow.UseLoadedDocument(
+                    var page = _readingWindow.UseLoadedDocument(
                         document.Id,
                         _continuousDocument.Blocks,
                         _readingWindow.Current.StartOrdinal);
+                    if (result.AppliedRangeDeletion is not null)
+                    {
+                        await ShowReadingPageAsync(page);
+                    }
                 }
-                _readingBlocks.FirstOrDefault(item =>
-                    string.Equals(item.Id, savedBlock.Id, StringComparison.Ordinal))?.ApplySavedBlock(savedBlock);
+                if (result.AppliedRangeDeletion is null)
+                {
+                    _readingBlocks.FirstOrDefault(item =>
+                        string.Equals(item.Id, savedBlock.Id, StringComparison.Ordinal))
+                        ?.ApplySavedBlock(savedBlock);
+                }
             }
             UpdateTextCursorFromContinuousEditor();
             UpdatePlaybackControls();

@@ -2,7 +2,11 @@ using TtsPlatform.Reader.Client;
 
 namespace TtsPlatform.Reader.Application;
 
-public sealed record EditorSaveResult(bool Saved, bool Conflict, string? Message = null);
+public sealed record EditorSaveResult(
+    bool Saved,
+    bool Conflict,
+    string? Message = null,
+    ContinuousRangeDeletion? AppliedRangeDeletion = null);
 
 public sealed class DocumentEditor(IReaderServiceClient client)
 {
@@ -10,9 +14,12 @@ public sealed class DocumentEditor(IReaderServiceClient client)
     public ReaderBlock? Block { get; private set; }
     public string OriginalText { get; private set; } = string.Empty;
     public string WorkingText { get; private set; } = string.Empty;
+    public ContinuousRangeDeletion? PendingRangeDeletion { get; private set; }
     public string? LastError { get; private set; }
     public bool IsEditable => Document?.IsEditable == true && Block is not null;
-    public bool HasUnsavedChanges => IsEditable && !string.Equals(WorkingText, OriginalText, StringComparison.Ordinal);
+    public bool HasUnsavedChanges => IsEditable && (
+        PendingRangeDeletion is not null ||
+        !string.Equals(WorkingText, OriginalText, StringComparison.Ordinal));
 
     public async Task LoadAsync(ReaderDocument document, CancellationToken cancellationToken = default)
     {
@@ -33,6 +40,7 @@ public sealed class DocumentEditor(IReaderServiceClient client)
         Block = block;
         OriginalText = Block?.Text ?? string.Empty;
         WorkingText = OriginalText;
+        PendingRangeDeletion = null;
     }
 
     public void Clear()
@@ -41,6 +49,7 @@ public sealed class DocumentEditor(IReaderServiceClient client)
         Block = null;
         OriginalText = string.Empty;
         WorkingText = string.Empty;
+        PendingRangeDeletion = null;
         LastError = null;
     }
 
@@ -95,11 +104,26 @@ public sealed class DocumentEditor(IReaderServiceClient client)
         }
 
         WorkingText = text;
+        PendingRangeDeletion = null;
+    }
+
+    public void SetRangeDeletion(ContinuousRangeDeletion deletion)
+    {
+        ArgumentNullException.ThrowIfNull(deletion);
+        if (!IsEditable || Block is null ||
+            !string.Equals(Block.Id, deletion.StartBlock.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        PendingRangeDeletion = deletion;
+        WorkingText = deletion.ResultingStartBlockText;
     }
 
     public void RevertLocalChanges()
     {
         WorkingText = OriginalText;
+        PendingRangeDeletion = null;
         LastError = null;
     }
 
@@ -117,14 +141,16 @@ public sealed class DocumentEditor(IReaderServiceClient client)
 
         try
         {
+            var rangeDeletion = PendingRangeDeletion;
             var response = await client.ReplaceContentAsync(
                 Document.Id,
                 new ReplaceContentRequest(
                     Document.RowVersion,
                     Block.Id,
-                    0,
-                    OriginalText.Length,
-                    WorkingText),
+                    rangeDeletion?.StartOffset ?? 0,
+                    rangeDeletion?.EndOffset ?? OriginalText.Length,
+                    rangeDeletion is null ? WorkingText : string.Empty,
+                    rangeDeletion?.EndBlock.Id),
                 cancellationToken).ConfigureAwait(false);
             Document = response.Document;
             Block = Block with
@@ -134,8 +160,12 @@ public sealed class DocumentEditor(IReaderServiceClient client)
                 RowVersion = Block.RowVersion + 1,
             };
             OriginalText = WorkingText;
+            PendingRangeDeletion = null;
             LastError = null;
-            return new EditorSaveResult(true, false);
+            return new EditorSaveResult(
+                true,
+                false,
+                AppliedRangeDeletion: rangeDeletion);
         }
         catch (ReaderApiException exception) when (exception.ErrorType == "reader_revision_conflict")
         {

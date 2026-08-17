@@ -1250,7 +1250,9 @@ document in one transaction.
 #### Editable content
 
 - `PATCH /v1/reader/documents/{document_id}/content` applies bounded edit
-  operations to editable plain-text blocks.
+  operations to editable plain-text blocks. Supplying `end_block_id` with an
+  empty replacement deletes one contiguous cross-block selection atomically;
+  the ordinary single-block request remains unchanged.
 - `POST /v1/reader/documents/{document_id}/append` appends one bounded text
   selection. Blank-line paragraph boundaries become separate display blocks,
   while the complete selection remains one atomic edit.
@@ -1696,10 +1698,11 @@ and caret placement behave like a conventional text editor. This continuous
 editor is limited to 1,000,000 source characters and 20,000 blocks; larger
 documents and all active playback continue to use the virtualized block view.
 Block separators have no visible containers. The desktop maps the global caret
-back to the stable block cursor, and the current block-based mutation/Undo
-contract permits one paragraph to be changed per saved edit. Cross-paragraph
-selection and copying remain supported; a mutation crossing a separator is
-rejected and restored locally rather than being split into non-atomic edits.
+back to the stable block cursor. Ordinary typing still changes one paragraph per
+saved edit. A contiguous selection may be deleted across hidden paragraph
+boundaries as one atomic range edit, and one Undo restores every affected block.
+Cross-paragraph replacement text remains rejected rather than being split into
+non-atomic edits. Selection and copying continue to span the complete article.
 
 ---
 

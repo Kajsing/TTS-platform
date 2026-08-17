@@ -428,9 +428,29 @@ def build_reader_router() -> APIRouter:
                 status_code=404,
                 message="Reader block was not found.",
             )
+        end_block = source_block
+        if payload.end_block_id is not None:
+            end_block = next(
+                (block for block in bundle.blocks if block.id == payload.end_block_id),
+                None,
+            )
+            if end_block is None:
+                raise reader_api_error(
+                    "reader_block_not_found",
+                    status_code=404,
+                    message="Reader range end block was not found.",
+                )
+        cross_block_delete = end_block.id != source_block.id
+        if cross_block_delete and payload.replacement_text:
+            raise reader_api_error(
+                "reader_invalid_range",
+                status_code=400,
+                message="Cross-paragraph edits currently support selection deletion only.",
+                param="replacement_text",
+            )
         try:
             start_offset = utf16_offset_to_python(source_block.text, payload.start_offset)
-            end_offset = utf16_offset_to_python(source_block.text, payload.end_offset)
+            end_offset = utf16_offset_to_python(end_block.text, payload.end_offset)
         except ReaderOffsetError as error:
             raise reader_api_error(
                 "reader_invalid_offset",
@@ -438,19 +458,34 @@ def build_reader_router() -> APIRouter:
                 message="Reader edit offsets must be valid UTF-16 code-unit boundaries.",
                 param="start_offset/end_offset",
             ) from error
-        document, edit = _run_content_mutation(
-            service,
-            document_id,
-            lambda: service.repository.replace_block_text(
+        if cross_block_delete:
+            document, edit = _run_content_mutation(
+                service,
                 document_id,
-                payload.block_id,
-                start_offset=start_offset,
-                end_offset=end_offset,
-                replacement_text=payload.replacement_text,
-                expected_row_version=payload.expected_row_version,
-            ),
-            missing_entity="block",
-        )
+                lambda: service.repository.delete_block_range(
+                    document_id,
+                    source_block.id,
+                    end_block.id,
+                    start_offset=start_offset,
+                    end_offset=end_offset,
+                    expected_row_version=payload.expected_row_version,
+                ),
+                missing_entity="block",
+            )
+        else:
+            document, edit = _run_content_mutation(
+                service,
+                document_id,
+                lambda: service.repository.replace_block_text(
+                    document_id,
+                    payload.block_id,
+                    start_offset=start_offset,
+                    end_offset=end_offset,
+                    replacement_text=payload.replacement_text,
+                    expected_row_version=payload.expected_row_version,
+                ),
+                missing_entity="block",
+            )
         service.log_mutation(
             "replace_content",
             document,
@@ -459,7 +494,11 @@ def build_reader_router() -> APIRouter:
         )
         return ReaderMutationResponse(
             document=ReaderDocumentResponse.from_domain(document),
-            edit=ReaderEditResponse.from_domain(edit, source_text=source_block.text),
+            edit=ReaderEditResponse.from_domain(
+                edit,
+                source_text=source_block.text,
+                end_source_text=end_block.text,
+            ),
         )
 
     @router.post("/documents/{document_id}/append", response_model=ReaderMutationResponse)

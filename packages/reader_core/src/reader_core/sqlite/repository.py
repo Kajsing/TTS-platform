@@ -66,6 +66,17 @@ class _AppendedBlockSpec:
     text: str
 
 
+@dataclass(frozen=True)
+class _RangeBlockSnapshot:
+    id: str
+    ordinal: int
+    section_id: str | None
+    kind: str
+    text: str
+    row_version: int
+    metadata: Mapping[str, Any]
+
+
 def _appended_block_metadata(
     specs: tuple[_AppendedBlockSpec, ...],
 ) -> list[dict[str, Any]]:
@@ -151,6 +162,162 @@ def _appended_block_specs(edit: DocumentEdit) -> tuple[_AppendedBlockSpec, ...]:
     ):
         raise ReaderStaleCursorError("append history block metadata is inconsistent")
     return result
+
+
+def _range_delete_metadata(
+    snapshots: tuple[_RangeBlockSnapshot, ...],
+) -> tuple[str, dict[str, Any]]:
+    original_text = "\n\n".join(snapshot.text for snapshot in snapshots)
+    text_start = 0
+    blocks: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        blocks.append(
+            {
+                "id": snapshot.id,
+                "ordinal": snapshot.ordinal,
+                "section_id": snapshot.section_id,
+                "kind": snapshot.kind,
+                "text_start": text_start,
+                "text_length": len(snapshot.text),
+                "row_version": snapshot.row_version,
+                "metadata": dict(snapshot.metadata),
+            }
+        )
+        text_start += len(snapshot.text) + 2
+    return original_text, {
+        "range_delete": True,
+        "end_block_id": snapshots[-1].id,
+        "blocks": blocks,
+    }
+
+
+def _is_range_delete(edit: DocumentEdit) -> bool:
+    return edit.operation_type is EditOperation.REPLACE and edit.metadata.get(
+        "range_delete"
+    ) is True
+
+
+def _range_delete_end_offset(edit: DocumentEdit) -> int:
+    try:
+        end_offset = int(edit.metadata["range_end_offset"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReaderStaleCursorError("range-delete end offset is invalid") from exc
+    if end_offset < 0:
+        raise ReaderStaleCursorError("range-delete end offset is invalid")
+    return end_offset
+
+
+def _range_delete_snapshots(edit: DocumentEdit) -> tuple[_RangeBlockSnapshot, ...]:
+    raw_blocks = edit.metadata.get("blocks")
+    if not _is_range_delete(edit) or not isinstance(raw_blocks, list) or len(raw_blocks) < 2:
+        raise ReaderStaleCursorError("range-delete history metadata is invalid")
+
+    snapshots: list[_RangeBlockSnapshot] = []
+    try:
+        for raw in raw_blocks:
+            if not isinstance(raw, Mapping):
+                raise TypeError("block snapshot must be an object")
+            text_start = int(raw["text_start"])
+            text_length = int(raw["text_length"])
+            text = edit.original_text[text_start : text_start + text_length]
+            metadata = raw.get("metadata", {})
+            if (
+                text_start < 0
+                or text_length < 0
+                or len(text) != text_length
+                or not isinstance(metadata, Mapping)
+            ):
+                raise ValueError("block snapshot is outside its valid range")
+            snapshots.append(
+                _RangeBlockSnapshot(
+                    id=str(raw["id"]),
+                    ordinal=int(raw["ordinal"]),
+                    section_id=(
+                        str(raw["section_id"])
+                        if raw.get("section_id") is not None
+                        else None
+                    ),
+                    kind=BlockKind(str(raw["kind"])).value,
+                    text=text,
+                    row_version=int(raw["row_version"]),
+                    metadata=dict(metadata),
+                )
+            )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReaderStaleCursorError("range-delete history metadata is invalid") from exc
+
+    result = tuple(snapshots)
+    range_end_offset = _range_delete_end_offset(edit)
+    if (
+        result[0].id != edit.block_id
+        or edit.metadata.get("end_block_id") != result[-1].id
+        or len({snapshot.id for snapshot in result}) != len(result)
+        or any(
+            snapshot.ordinal != result[0].ordinal + index
+            for index, snapshot in enumerate(result)
+        )
+        or any(snapshot.section_id != result[0].section_id for snapshot in result)
+        or "\n\n".join(snapshot.text for snapshot in result) != edit.original_text
+        or edit.start_offset > len(result[0].text)
+        or range_end_offset > len(result[-1].text)
+        or edit.replacement_text
+        != result[0].text[: edit.start_offset] + result[-1].text[range_end_offset:]
+    ):
+        raise ReaderStaleCursorError("range-delete history metadata is inconsistent")
+    return result
+
+
+def _remap_cursor_for_range_delete(
+    cursor: ReaderCursor,
+    edit: DocumentEdit,
+    snapshots: tuple[_RangeBlockSnapshot, ...],
+    *,
+    forward: bool,
+    new_revision: int,
+) -> ReaderCursor:
+    first = snapshots[0]
+    last = snapshots[-1]
+    range_end_offset = _range_delete_end_offset(edit)
+    snapshot_ids = {snapshot.id for snapshot in snapshots}
+    if forward:
+        if cursor.block_id == first.id:
+            offset = min(cursor.character_offset, edit.start_offset)
+            mapped = replace(
+                cursor,
+                block_id=first.id,
+                block_ordinal=first.ordinal,
+                character_offset=offset,
+            )
+        elif cursor.block_id == last.id and cursor.character_offset > range_end_offset:
+            mapped = replace(
+                cursor,
+                block_id=first.id,
+                block_ordinal=first.ordinal,
+                character_offset=(
+                    edit.start_offset + cursor.character_offset - range_end_offset
+                ),
+            )
+        elif cursor.block_id in snapshot_ids:
+            mapped = replace(
+                cursor,
+                block_id=first.id,
+                block_ordinal=first.ordinal,
+                character_offset=edit.start_offset,
+            )
+        else:
+            mapped = cursor
+    elif cursor.block_id == first.id and cursor.character_offset > edit.start_offset:
+        mapped = replace(
+            cursor,
+            block_id=last.id,
+            block_ordinal=last.ordinal,
+            character_offset=(
+                range_end_offset + cursor.character_offset - edit.start_offset
+            ),
+        )
+    else:
+        mapped = cursor
+    return replace(mapped, content_revision=new_revision, segment_index=None)
 
 
 class SqliteReaderRepository:
@@ -509,6 +676,113 @@ class SqliteReaderRepository:
             self._trim_history(connection, document_id)
             return self._require_document(connection, document_id), edit
 
+    def delete_block_range(
+        self,
+        document_id: str,
+        start_block_id: str,
+        end_block_id: str,
+        *,
+        start_offset: int,
+        end_offset: int,
+        expected_row_version: int,
+    ) -> tuple[ReaderDocument, DocumentEdit]:
+        if start_block_id == end_block_id:
+            return self.replace_block_text(
+                document_id,
+                start_block_id,
+                start_offset=start_offset,
+                end_offset=end_offset,
+                replacement_text="",
+                expected_row_version=expected_row_version,
+            )
+
+        with self._write() as connection:
+            document = self._require_editable_document(connection, document_id)
+            _check_version(document, expected_row_version)
+            endpoints = list(
+                connection.execute(
+                    """
+                    SELECT * FROM reader_blocks
+                    WHERE document_id = ? AND id IN (?, ?)
+                    ORDER BY ordinal
+                    """,
+                    (document_id, start_block_id, end_block_id),
+                )
+            )
+            if len(endpoints) != 2:
+                missing = start_block_id if not endpoints else end_block_id
+                raise ReaderNotFoundError(f"Reader block not found: {missing}")
+            start_block = _block_from_row(endpoints[0])
+            end_block = _block_from_row(endpoints[1])
+            if start_block.id != start_block_id or end_block.id != end_block_id:
+                raise ReaderValidationError("range-delete blocks are in reverse order")
+            if start_block.section_id != end_block.section_id:
+                raise ReaderValidationError("range deletion cannot cross document sections")
+            if start_offset < 0 or start_offset > len(start_block.text):
+                raise ReaderValidationError("range-delete start offset exceeds block text")
+            if end_offset < 0 or end_offset > len(end_block.text):
+                raise ReaderValidationError("range-delete end offset exceeds block text")
+
+            rows = list(
+                connection.execute(
+                    """
+                    SELECT * FROM reader_blocks
+                    WHERE document_id = ? AND ordinal BETWEEN ? AND ?
+                    ORDER BY ordinal
+                    """,
+                    (document_id, start_block.ordinal, end_block.ordinal),
+                )
+            )
+            snapshots = tuple(
+                _RangeBlockSnapshot(
+                    id=block.id,
+                    ordinal=block.ordinal,
+                    section_id=block.section_id,
+                    kind=block.kind.value,
+                    text=block.text,
+                    row_version=block.row_version,
+                    metadata=block.metadata,
+                )
+                for block in (_block_from_row(row) for row in rows)
+            )
+            original_text, metadata = _range_delete_metadata(snapshots)
+            metadata["range_end_offset"] = end_offset
+            merged_text = start_block.text[:start_offset] + end_block.text[end_offset:]
+            new_revision = document.content_revision + 1
+            now = utc_now()
+            self._discard_redo(connection, document_id)
+            edit = DocumentEdit(
+                id=str(uuid.uuid4()),
+                document_id=document_id,
+                sequence=self._next_edit_sequence(connection, document_id),
+                base_content_revision=document.content_revision,
+                result_content_revision=new_revision,
+                block_id=start_block_id,
+                start_offset=start_offset,
+                end_offset=max(start_offset, end_offset),
+                original_text=original_text,
+                replacement_text=merged_text,
+                operation_type=EditOperation.REPLACE,
+                created_at=now,
+                metadata=metadata,
+            )
+            block_delta, character_delta = self._apply_range_delete_forward(
+                connection,
+                edit,
+                new_revision,
+            )
+            self._update_document_content(
+                connection,
+                document,
+                new_revision=new_revision,
+                block_delta=block_delta,
+                character_delta=character_delta,
+                now=now,
+            )
+            self._insert_edit(connection, edit)
+            self._trim_history(connection, document_id)
+            return self._require_document(connection, document_id), edit
+
     def append_text(
         self,
         document_id: str,
@@ -621,9 +895,16 @@ class SqliteReaderRepository:
             new_revision = document.content_revision + 1
             now = utc_now()
             if edit.operation_type is EditOperation.REPLACE:
-                self._apply_replace_inverse(connection, edit, new_revision)
-                character_delta = len(edit.original_text) - len(edit.replacement_text)
-                block_delta = 0
+                if _is_range_delete(edit):
+                    block_delta, character_delta = self._apply_range_delete_inverse(
+                        connection,
+                        edit,
+                        new_revision,
+                    )
+                else:
+                    self._apply_replace_inverse(connection, edit, new_revision)
+                    character_delta = len(edit.original_text) - len(edit.replacement_text)
+                    block_delta = 0
             else:
                 block_count, character_count = self._remove_appended_blocks(
                     connection,
@@ -664,9 +945,16 @@ class SqliteReaderRepository:
             new_revision = document.content_revision + 1
             now = utc_now()
             if edit.operation_type is EditOperation.REPLACE:
-                self._apply_replace_forward(connection, edit, new_revision)
-                character_delta = len(edit.replacement_text) - len(edit.original_text)
-                block_delta = 0
+                if _is_range_delete(edit):
+                    block_delta, character_delta = self._apply_range_delete_forward(
+                        connection,
+                        edit,
+                        new_revision,
+                    )
+                else:
+                    self._apply_replace_forward(connection, edit, new_revision)
+                    character_delta = len(edit.replacement_text) - len(edit.original_text)
+                    block_delta = 0
             else:
                 block_count, character_count = self._restore_appended_blocks(connection, edit)
                 self._advance_saved_cursor_revisions(connection, document_id, new_revision)
@@ -2049,6 +2337,275 @@ class SqliteReaderRepository:
             new_revision=new_revision,
         )
 
+    def _apply_range_delete_forward(
+        self,
+        connection: sqlite3.Connection,
+        edit: DocumentEdit,
+        new_revision: int,
+    ) -> tuple[int, int]:
+        snapshots = _range_delete_snapshots(edit)
+        first_ordinal = snapshots[0].ordinal
+        last_ordinal = snapshots[-1].ordinal
+        rows = list(
+            connection.execute(
+                """
+                SELECT id, ordinal, text FROM reader_blocks
+                WHERE document_id = ? AND ordinal BETWEEN ? AND ?
+                ORDER BY ordinal
+                """,
+                (edit.document_id, first_ordinal, last_ordinal),
+            )
+        )
+        if len(rows) != len(snapshots) or any(
+            str(row["id"]) != snapshot.id
+            or int(row["ordinal"]) != snapshot.ordinal
+            or str(row["text"]) != snapshot.text
+            for row, snapshot in zip(rows, snapshots, strict=True)
+        ):
+            raise ReaderStaleCursorError("range-delete blocks no longer match edit history")
+
+        self._remap_saved_cursors_for_range_delete(
+            connection,
+            edit,
+            snapshots,
+            forward=True,
+            new_revision=new_revision,
+        )
+        connection.execute(
+            """
+            UPDATE reader_blocks
+            SET text = ?, character_count = ?, content_sha256 = ?,
+                row_version = row_version + 1
+            WHERE id = ? AND document_id = ?
+            """,
+            (
+                edit.replacement_text,
+                len(edit.replacement_text),
+                _sha256(edit.replacement_text),
+                edit.block_id,
+                edit.document_id,
+            ),
+        )
+        connection.execute(
+            """
+            DELETE FROM reader_blocks
+            WHERE document_id = ? AND ordinal > ? AND ordinal <= ?
+            """,
+            (edit.document_id, first_ordinal, last_ordinal),
+        )
+        removed_count = len(snapshots) - 1
+        self._shift_following_block_ordinals(
+            connection,
+            edit.document_id,
+            after_ordinal=last_ordinal,
+            delta=-removed_count,
+        )
+        connection.execute(
+            """
+            UPDATE reader_sections
+            SET first_block_ordinal = first_block_ordinal - ?
+            WHERE document_id = ? AND first_block_ordinal > ?
+            """,
+            (removed_count, edit.document_id, last_ordinal),
+        )
+        return 1 - len(snapshots), len(edit.replacement_text) - sum(
+            len(snapshot.text) for snapshot in snapshots
+        )
+
+    def _apply_range_delete_inverse(
+        self,
+        connection: sqlite3.Connection,
+        edit: DocumentEdit,
+        new_revision: int,
+    ) -> tuple[int, int]:
+        snapshots = _range_delete_snapshots(edit)
+        first = snapshots[0]
+        row = connection.execute(
+            """
+            SELECT text FROM reader_blocks
+            WHERE id = ? AND document_id = ? AND ordinal = ?
+            """,
+            (first.id, edit.document_id, first.ordinal),
+        ).fetchone()
+        if row is None or str(row["text"]) != edit.replacement_text:
+            raise ReaderStaleCursorError("range-delete result no longer matches undo history")
+        for snapshot in snapshots[1:]:
+            if connection.execute(
+                "SELECT 1 FROM reader_blocks WHERE id = ? AND document_id = ?",
+                (snapshot.id, edit.document_id),
+            ).fetchone() is not None:
+                raise ReaderStaleCursorError("range-delete blocks already exist during undo")
+
+        restored_count = len(snapshots) - 1
+        self._shift_following_block_ordinals(
+            connection,
+            edit.document_id,
+            after_ordinal=first.ordinal,
+            delta=restored_count,
+        )
+        connection.execute(
+            """
+            UPDATE reader_sections
+            SET first_block_ordinal = first_block_ordinal + ?
+            WHERE document_id = ? AND first_block_ordinal > ?
+            """,
+            (restored_count, edit.document_id, first.ordinal),
+        )
+        connection.execute(
+            """
+            UPDATE reader_blocks
+            SET text = ?, character_count = ?, content_sha256 = ?,
+                row_version = row_version + 1
+            WHERE id = ? AND document_id = ?
+            """,
+            (
+                first.text,
+                len(first.text),
+                _sha256(first.text),
+                first.id,
+                edit.document_id,
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO reader_blocks(
+                id, document_id, section_id, ordinal, kind, text,
+                character_count, content_sha256, row_version, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    snapshot.id,
+                    edit.document_id,
+                    snapshot.section_id,
+                    snapshot.ordinal,
+                    snapshot.kind,
+                    snapshot.text,
+                    len(snapshot.text),
+                    _sha256(snapshot.text),
+                    snapshot.row_version + 1,
+                    _json_dump(snapshot.metadata),
+                )
+                for snapshot in snapshots[1:]
+            ],
+        )
+        self._remap_saved_cursors_for_range_delete(
+            connection,
+            edit,
+            snapshots,
+            forward=False,
+            new_revision=new_revision,
+        )
+        return restored_count, sum(len(snapshot.text) for snapshot in snapshots) - len(
+            edit.replacement_text
+        )
+
+    @staticmethod
+    def _shift_following_block_ordinals(
+        connection: sqlite3.Connection,
+        document_id: str,
+        *,
+        after_ordinal: int,
+        delta: int,
+    ) -> None:
+        if delta == 0:
+            return
+        temporary_offset = 1_000_000_000
+        connection.execute(
+            """
+            UPDATE reader_blocks SET ordinal = ordinal + ?
+            WHERE document_id = ? AND ordinal > ?
+            """,
+            (temporary_offset, document_id, after_ordinal),
+        )
+        connection.execute(
+            """
+            UPDATE reader_blocks SET ordinal = ordinal - ? + ?
+            WHERE document_id = ? AND ordinal > ?
+            """,
+            (
+                temporary_offset,
+                delta,
+                document_id,
+                after_ordinal + temporary_offset,
+            ),
+        )
+
+    def _remap_saved_cursors_for_range_delete(
+        self,
+        connection: sqlite3.Connection,
+        edit: DocumentEdit,
+        snapshots: tuple[_RangeBlockSnapshot, ...],
+        *,
+        forward: bool,
+        new_revision: int,
+    ) -> None:
+        removed_count = len(snapshots) - 1
+        snapshot_ids = {snapshot.id for snapshot in snapshots}
+
+        def remap(cursor: ReaderCursor) -> ReaderCursor:
+            mapped = _remap_cursor_for_range_delete(
+                cursor,
+                edit,
+                snapshots,
+                forward=forward,
+                new_revision=new_revision,
+            )
+            if mapped.block_id not in snapshot_ids:
+                if forward and mapped.block_ordinal > snapshots[-1].ordinal:
+                    mapped = replace(mapped, block_ordinal=mapped.block_ordinal - removed_count)
+                elif not forward and mapped.block_ordinal > snapshots[0].ordinal:
+                    mapped = replace(mapped, block_ordinal=mapped.block_ordinal + removed_count)
+            return mapped
+
+        position = connection.execute(
+            "SELECT * FROM reader_playback_positions WHERE document_id = ?",
+            (edit.document_id,),
+        ).fetchone()
+        if position is not None:
+            mapped = remap(_cursor_from_row(position))
+            connection.execute(
+                """
+                UPDATE reader_playback_positions SET block_id = ?, block_ordinal = ?,
+                    character_offset = ?, content_revision = ?, segment_index = NULL,
+                    row_version = row_version + 1
+                WHERE document_id = ?
+                """,
+                (
+                    mapped.block_id,
+                    mapped.block_ordinal,
+                    mapped.character_offset,
+                    new_revision,
+                    edit.document_id,
+                ),
+            )
+
+        now = _time_dump(utc_now())
+        bookmark_rows = list(
+            connection.execute(
+                "SELECT * FROM reader_bookmarks WHERE document_id = ?",
+                (edit.document_id,),
+            )
+        )
+        for row in bookmark_rows:
+            mapped = remap(_cursor_from_row(row))
+            connection.execute(
+                """
+                UPDATE reader_bookmarks SET block_id = ?, block_ordinal = ?,
+                    character_offset = ?, content_revision = ?, segment_index = NULL,
+                    updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (
+                    mapped.block_id,
+                    mapped.block_ordinal,
+                    mapped.character_offset,
+                    new_revision,
+                    now,
+                    row["id"],
+                ),
+            )
+
     def _remove_appended_blocks(
         self,
         connection: sqlite3.Connection,
@@ -2179,14 +2736,23 @@ class SqliteReaderRepository:
                 if edit.base_content_revision != revision:
                     raise ReaderStaleCursorError("cursor edit history is incomplete or branched")
                 if edit.operation_type is EditOperation.REPLACE:
-                    remapped = remap_cursor_for_edit(
-                        remapped,
-                        edited_block_id=edit.block_id,
-                        start_offset=edit.start_offset,
-                        end_offset=edit.end_offset,
-                        replacement_length=len(edit.replacement_text),
-                        new_content_revision=edit.result_content_revision,
-                    )
+                    if _is_range_delete(edit):
+                        remapped = _remap_cursor_for_range_delete(
+                            remapped,
+                            edit,
+                            _range_delete_snapshots(edit),
+                            forward=True,
+                            new_revision=edit.result_content_revision,
+                        )
+                    else:
+                        remapped = remap_cursor_for_edit(
+                            remapped,
+                            edited_block_id=edit.block_id,
+                            start_offset=edit.start_offset,
+                            end_offset=edit.end_offset,
+                            replacement_length=len(edit.replacement_text),
+                            new_content_revision=edit.result_content_revision,
+                        )
                 else:
                     remapped = replace(
                         remapped,

@@ -95,6 +95,34 @@ public sealed class ContinuousDocumentTextTests
         Assert.Null(edit);
     }
 
+    [Fact]
+    public void Maps_and_applies_a_deletion_across_hidden_block_boundaries()
+    {
+        var document = new ContinuousDocumentText([
+            Block("first", 0),
+            Block("second", 1),
+            Block("third", 2),
+            Block("fourth", 3),
+        ]);
+        var start = document.Text.IndexOf("rst", StringComparison.Ordinal);
+        var end = document.Text.IndexOf("ird", StringComparison.Ordinal);
+        var editedText = document.Text.Remove(start, end - start);
+
+        var mapped = document.TryMapCrossBlockDeletion(editedText, out var deletion);
+        var changed = document.ApplyRangeDeletion(deletion!);
+
+        Assert.True(mapped);
+        Assert.NotNull(deletion);
+        Assert.Equal("block-0", deletion.StartBlock.Id);
+        Assert.Equal(2, deletion.StartOffset);
+        Assert.Equal("block-2", deletion.EndBlock.Id);
+        Assert.Equal(2, deletion.EndOffset);
+        Assert.Equal("fiird", deletion.ResultingStartBlockText);
+        Assert.Equal(["fiird", "fourth"], changed.Blocks.Select(block => block.Text));
+        Assert.Equal([0, 1], changed.Blocks.Select(block => block.Ordinal));
+        Assert.Equal("fiird\r\n\r\nfourth", changed.Text);
+    }
+
     private static ReaderBlock Block(string text, int ordinal) => new(
         $"block-{ordinal}",
         "doc",

@@ -400,6 +400,30 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Editor_saves_cross_paragraph_deletion_as_one_range_request()
+    {
+        var first = Block("first", 0);
+        var last = Block("third", 2) with { Id = "last-block" };
+        var client = new StubClient { Blocks = new BlockPage([first], null) };
+        var editor = new DocumentEditor(client);
+        await editor.LoadAsync(Document("doc", 4));
+        var deletion = new ContinuousRangeDeletion(first, 2, last, 2, "fiird");
+        editor.SetRangeDeletion(deletion);
+
+        var result = await editor.SaveAsync();
+
+        Assert.True(result.Saved);
+        Assert.Same(deletion, result.AppliedRangeDeletion);
+        Assert.Equal(first.Id, client.LastReplaceRequest?.BlockId);
+        Assert.Equal(last.Id, client.LastReplaceRequest?.EndBlockId);
+        Assert.Equal(2, client.LastReplaceRequest?.StartOffset);
+        Assert.Equal(2, client.LastReplaceRequest?.EndOffset);
+        Assert.Equal(string.Empty, client.LastReplaceRequest?.ReplacementText);
+        Assert.Equal("fiird", editor.WorkingText);
+        Assert.Null(editor.PendingRangeDeletion);
+    }
+
+    [Fact]
     public async Task Rename_trims_the_title_and_uses_the_document_row_version()
     {
         var document = Document("doc", 4);
