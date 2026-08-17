@@ -2,7 +2,8 @@
 
 ## Status
 
-The user approved this upgrade track on 2026-08-17. U1 is the active target.
+The user approved this upgrade track on 2026-08-17. U1 is complete. U2 is the
+next planned target but has not started.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -29,7 +30,7 @@ protected baselines.
 
 ## Execution order
 
-### U1: Current-article Find panel
+### U1: Current-article Find panel — complete
 
 **Purpose:** Find a word or phrase inside the open article without confusing it
 with library-wide search.
@@ -266,5 +267,5 @@ track.
 
 ## Current resume point
 
-Start U1. Do not begin U2 until U1 acceptance criteria and validation pass or
-the user deliberately reorders the track.
+U1 passed its acceptance criteria and validation on 2026-08-17. Resume at U2
+only when the user asks to continue this upgrade track.

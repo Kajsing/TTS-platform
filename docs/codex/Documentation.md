@@ -1996,6 +1996,44 @@ python3 scripts/package_extension.py
 python3 scripts/package_windows_bundle.py
 ```
 
+## Reader Upgrade U1: Current-Article Find (2026-08-17)
+
+- U1 is complete. The WPF Reader now has a compact current-article Find bar
+  under Article tools and opens it globally with `Ctrl+F`.
+- Literal words and phrases are case-insensitive by default. Match case, whole
+  word, and bounded regex modes are available without changing article text.
+- `Enter` or `F3` moves to the next result, `Shift+F3` moves to the previous
+  result, and `Escape` closes Find. Navigation wraps and reports `x of y`.
+- Search covers the complete article. Page-based structured or oversized
+  documents are materialized through bounded Reader API paging and cached by
+  document id plus content revision.
+- Regex input is limited to 1,024 characters, matching has a 200 ms timeout,
+  document work is capped at 32 million characters, and results are capped at
+  10,000. Invalid and timed-out expressions remain non-fatal.
+- Find uses a teal, non-layout-changing overlay. The playback overlay is drawn
+  above it, and Find navigation does not select or edit article text or change
+  the playback cursor.
+- Automated validation passed:
+  - `py -3 -m pytest -q` (`419 passed`);
+  - `py -3 -m ruff check .`;
+  - the .NET solution (`116 passed`: 67 application, 29 client, 20 Windows);
+  - `dotnet format ... --verify-no-changes`;
+  - Release self-contained `win-x64` publish;
+  - `py -3 scripts\check_desktop_reader.py --require-windows-integration`,
+    including Windows audio, clipboard/hotkey/tray lifecycle, portable package,
+    and WPF rendering.
+- Live Windows UI verification used a 105,328-character, 445-block article. It
+  confirmed phrase count and next/previous navigation, case and whole-word
+  behavior, valid and invalid regex handling, `Ctrl+F`, close, unchanged editor
+  caret/selection, and simultaneous playback plus Find highlighting.
+- The first packaging attempt was blocked only because the live test Reader
+  held its own Release files open. Closing that test window and rerunning the
+  exact full check passed; this was an environmental file lock, not a product
+  failure.
+- No architecture, security, licensing, or product-direction deviation was
+  made. The existing local `models/MANIFEST.json` change remains user-owned and
+  excluded from U1.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2059,10 +2097,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Resume at Reader Workstation Milestone 10 only after the user explicitly
-   asks to continue. Add PDF text extraction and preview while preserving the
-   completed browser/library, import, rule, queue, export, clipboard, and
-   playback behavior.
+4. U1 in `docs/reader_upgrade_plan.md` is complete. Resume at U2 only after the
+   user explicitly asks to continue the upgrade track. Reader Workstation
+   Milestones 10 and 11 remain deferred until the upgrade track is completed or
+   deliberately paused.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

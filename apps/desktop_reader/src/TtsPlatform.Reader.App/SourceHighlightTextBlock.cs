@@ -11,7 +11,10 @@ namespace TtsPlatform.Reader.App;
 
 public sealed class SourceHighlightTextBlock : TextBlock
 {
+    private static readonly Brush PlaybackBrush = CreateFrozenBrush(Color.FromRgb(255, 224, 130));
+    private static readonly Brush FindBrush = CreateFrozenBrush(Color.FromRgb(190, 225, 226));
     private Run? _highlightedRun;
+    private Run? _findRun;
 
     public static readonly DependencyProperty SourceTextProperty = DependencyProperty.Register(
         nameof(SourceText),
@@ -27,6 +30,18 @@ public sealed class SourceHighlightTextBlock : TextBlock
 
     public static readonly DependencyProperty HighlightLengthProperty = DependencyProperty.Register(
         nameof(HighlightLength),
+        typeof(int),
+        typeof(SourceHighlightTextBlock),
+        new FrameworkPropertyMetadata(0, OnDisplayPropertyChanged));
+
+    public static readonly DependencyProperty FindStartProperty = DependencyProperty.Register(
+        nameof(FindStart),
+        typeof(int),
+        typeof(SourceHighlightTextBlock),
+        new FrameworkPropertyMetadata(-1, OnDisplayPropertyChanged));
+
+    public static readonly DependencyProperty FindLengthProperty = DependencyProperty.Register(
+        nameof(FindLength),
         typeof(int),
         typeof(SourceHighlightTextBlock),
         new FrameworkPropertyMetadata(0, OnDisplayPropertyChanged));
@@ -49,14 +64,36 @@ public sealed class SourceHighlightTextBlock : TextBlock
         set => SetValue(HighlightLengthProperty, value);
     }
 
+    public int FindStart
+    {
+        get => (int)GetValue(FindStartProperty);
+        set => SetValue(FindStartProperty, value);
+    }
+
+    public int FindLength
+    {
+        get => (int)GetValue(FindLengthProperty);
+        set => SetValue(FindLengthProperty, value);
+    }
+
     public bool BringHighlightedTextIntoView()
     {
-        if (_highlightedRun is null)
+        return BringRunIntoView(_highlightedRun);
+    }
+
+    public bool BringFindTextIntoView()
+    {
+        return BringRunIntoView(_findRun);
+    }
+
+    private bool BringRunIntoView(Run? run)
+    {
+        if (run is null)
         {
             return false;
         }
 
-        var characterRect = _highlightedRun.ContentStart.GetCharacterRect(
+        var characterRect = run.ContentStart.GetCharacterRect(
             LogicalDirection.Forward);
         if (characterRect.IsEmpty)
         {
@@ -87,30 +124,70 @@ public sealed class SourceHighlightTextBlock : TextBlock
     {
         Inlines.Clear();
         _highlightedRun = null;
+        _findRun = null;
         var text = SourceText ?? string.Empty;
-        var start = Math.Clamp(HighlightStart, 0, text.Length);
-        var length = Math.Clamp(HighlightLength, 0, text.Length - start);
-        if (HighlightStart < 0 || length == 0)
+        var playbackStart = Math.Clamp(HighlightStart, 0, text.Length);
+        var playbackLength = Math.Clamp(HighlightLength, 0, text.Length - playbackStart);
+        var playbackEnd = playbackStart + playbackLength;
+        var findStart = Math.Clamp(FindStart, 0, text.Length);
+        var findLength = Math.Clamp(FindLength, 0, text.Length - findStart);
+        var findEnd = findStart + findLength;
+        var hasPlayback = HighlightStart >= 0 && playbackLength > 0;
+        var hasFind = FindStart >= 0 && findLength > 0;
+        if (!hasPlayback && !hasFind)
         {
             Inlines.Add(new Run(text));
             AutomationProperties.SetHelpText(this, string.Empty);
             return;
         }
 
-        if (start > 0)
+        var boundaries = new SortedSet<int> { 0, text.Length };
+        if (hasPlayback)
         {
-            Inlines.Add(new Run(text[..start]));
+            boundaries.Add(playbackStart);
+            boundaries.Add(playbackEnd);
         }
-        _highlightedRun = new Run(text.Substring(start, length))
+        if (hasFind)
         {
-            Background = new SolidColorBrush(Color.FromRgb(255, 224, 130)),
-        };
-        Inlines.Add(_highlightedRun);
-        if (start + length < text.Length)
-        {
-            Inlines.Add(new Run(text[(start + length)..]));
+            boundaries.Add(findStart);
+            boundaries.Add(findEnd);
         }
-        AutomationProperties.SetHelpText(this, "Currently spoken source text");
+
+        var ordered = boundaries.ToArray();
+        for (var index = 0; index + 1 < ordered.Length; index++)
+        {
+            var start = ordered[index];
+            var end = ordered[index + 1];
+            if (end <= start)
+            {
+                continue;
+            }
+            var run = new Run(text.Substring(start, end - start));
+            if (hasPlayback && start < playbackEnd && end > playbackStart)
+            {
+                run.Background = PlaybackBrush;
+                _highlightedRun ??= run;
+            }
+            else if (hasFind && start < findEnd && end > findStart)
+            {
+                run.Background = FindBrush;
+                _findRun ??= run;
+            }
+            Inlines.Add(run);
+        }
+        var help = hasPlayback && hasFind
+            ? "Currently spoken source text and current Find result"
+            : hasPlayback
+                ? "Currently spoken source text"
+                : "Current Find result";
+        AutomationProperties.SetHelpText(this, help);
+    }
+
+    private static Brush CreateFrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 }
 
@@ -118,6 +195,8 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
 {
     private int _highlightStart = -1;
     private int _highlightLength;
+    private int _findStart = -1;
+    private int _findLength;
     private string _text = block.Text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -180,6 +259,34 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
                 return;
             }
             _highlightLength = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int FindStart
+    {
+        get => _findStart;
+        set
+        {
+            if (_findStart == value)
+            {
+                return;
+            }
+            _findStart = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int FindLength
+    {
+        get => _findLength;
+        set
+        {
+            if (_findLength == value)
+            {
+                return;
+            }
+            _findLength = value;
             OnPropertyChanged();
         }
     }

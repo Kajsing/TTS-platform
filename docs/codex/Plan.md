@@ -622,7 +622,7 @@ and validation are in `docs/reader_upgrade_plan.md`.
 Execute these upgrades in order unless `Documentation.md` records a deliberate
 user-approved reorder:
 
-- [ ] U1: Current-article Find panel.
+- [x] U1: Current-article Find panel.
 - [ ] U2: Clipboard prompt threshold and five-minute snooze.
 - [ ] U3: Persistent Word Highlighter.
 - [ ] U4: Folder-backed library organization.
@@ -634,5 +634,5 @@ user-approved reorder:
 This track is prioritized ahead of Reader Milestones 10 and 11. Those original
 milestones remain incomplete and are not removed from the 1.0 plan.
 
-U1 is the current Codex resume point. Do not begin U2 until U1 is validated or
-the user deliberately reorders the track.
+U1 is complete. U2 is the next Codex resume point, but do not begin it until
+the user asks to continue the upgrade track.

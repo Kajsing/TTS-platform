@@ -72,6 +72,13 @@ public partial class MainWindow : Window
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
     private PlaybackHighlightAdorner? _continuousHighlightAdorner;
+    private ArticleFindDocumentLoader? _findLoader;
+    private ArticleFindDocument? _findDocument;
+    private ArticleFindResult _findResult = ArticleFindResult.Empty;
+    private CancellationTokenSource? _findCancellation;
+    private int _findMatchIndex = -1;
+    private int _findGeneration;
+    private bool _findSearchPending;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -380,6 +387,8 @@ public partial class MainWindow : Window
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playbackPerformance?.Dispose();
         _continuousHighlightAdorner?.Dispose();
+        _findCancellation?.Cancel();
+        _findCancellation?.Dispose();
         _desktopOpenTimer.Stop();
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
@@ -588,6 +597,7 @@ public partial class MainWindow : Window
 
     private void RebuildClient()
     {
+        CancelFindWork(clearHighlights: true);
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
         _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -607,6 +617,8 @@ public partial class MainWindow : Window
             tokenProvider);
         _library = new LibraryPager(_client);
         _readingWindow = new ReadingWindowPager(_client);
+        _findLoader = new ArticleFindDocumentLoader(_client);
+        _findDocument = null;
         _editor = new DocumentEditor(_client);
         _clipboardCapture = new ClipboardDocumentCapture(_client);
         _ephemeralAudio = new WasapiAudioOutput();
@@ -1471,6 +1483,8 @@ public partial class MainWindow : Window
         }
         try
         {
+            CancelFindWork(clearHighlights: true);
+            _findDocument = null;
             if (_playback?.IsActive == true)
             {
                 await _playback.StopAsync();
@@ -1517,6 +1531,7 @@ public partial class MainWindow : Window
             }
             UpdateEditorButtons();
             UpdatePlaybackControls();
+            ScheduleFindRefresh();
         }
         finally
         {
@@ -1724,6 +1739,8 @@ public partial class MainWindow : Window
     private void ClearDocumentDisplay()
     {
         ++_documentLoadGeneration;
+        CancelFindWork(clearHighlights: true);
+        _findDocument = null;
         _editor?.Clear();
         _continuousDocument = null;
         _textCursor = null;
@@ -1782,6 +1799,10 @@ public partial class MainWindow : Window
 
     private void EditorTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        if (!_updatingEditor)
+        {
+            ScheduleFindRefresh();
+        }
         if (_updatingEditor ||
             _editor?.Document is not ReaderDocument document ||
             _continuousDocument is null ||
@@ -2266,6 +2287,7 @@ public partial class MainWindow : Window
         {
             _readingBlocks.Add(new ReaderBlockDisplay(block));
         }
+        ApplyCurrentFindToReadingBlocks();
         ReadingBlocksList.SelectedItem = _readingBlocks.FirstOrDefault();
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
         NextReadingPageButton.IsEnabled = page.HasNext;
@@ -2528,6 +2550,379 @@ public partial class MainWindow : Window
         return null;
     }
 
+    private void OpenFindButton_Click(object sender, RoutedEventArgs e) => OpenFindPanel();
+
+    private void OpenFindPanel()
+    {
+        if (_editor?.Document is null)
+        {
+            FooterText.Text = "Open an article before using Find.";
+            return;
+        }
+
+        FindPanel.Visibility = Visibility.Visible;
+        if (string.IsNullOrEmpty(FindTextBox.Text) &&
+            EditorAdornerDecorator.Visibility == Visibility.Visible &&
+            EditorTextBox.SelectionLength > 0)
+        {
+            var selected = EditorTextBox.SelectedText;
+            if (selected.Length <= ArticleFindEngine.MaxPatternCharacters &&
+                !selected.Contains('\r') &&
+                !selected.Contains('\n'))
+            {
+                FindTextBox.Text = selected;
+            }
+        }
+        FindTextBox.Focus();
+        FindTextBox.SelectAll();
+        ScheduleFindRefresh();
+    }
+
+    private void CloseFindButton_Click(object sender, RoutedEventArgs e) => CloseFindPanel();
+
+    private void CloseFindPanel()
+    {
+        FindPanel.Visibility = Visibility.Collapsed;
+        CancelFindWork(clearHighlights: true);
+        FindStatusText.Text = string.Empty;
+    }
+
+    private async void PreviousFindButton_Click(object sender, RoutedEventArgs e) =>
+        await NavigateFindAsync(-1);
+
+    private async void NextFindButton_Click(object sender, RoutedEventArgs e) =>
+        await NavigateFindAsync(1);
+
+    private async void FindTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+        e.Handled = true;
+        await NavigateFindAsync(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
+    }
+
+    private void FindTextBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        ScheduleFindRefresh();
+
+    private void FindOption_Changed(object sender, RoutedEventArgs e) =>
+        ScheduleFindRefresh();
+
+    private void ScheduleFindRefresh()
+    {
+        if (FindPanel.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        CancelFindWork(clearHighlights: true);
+        if (_editor?.Document is null)
+        {
+            FindStatusText.Text = "No article selected";
+            return;
+        }
+        if (FindTextBox.Text.Length == 0)
+        {
+            FindStatusText.Text = string.Empty;
+            return;
+        }
+
+        FindStatusText.Text = "Searching…";
+        _findSearchPending = true;
+        var generation = _findGeneration;
+        _findCancellation = new CancellationTokenSource();
+        _ = RunFindAfterDelayAsync(generation, _findCancellation.Token);
+    }
+
+    private async Task RunFindAfterDelayAsync(int generation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(180), cancellationToken);
+            await ExecuteFindAsync(generation, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RunFindNowAsync()
+    {
+        CancelFindWork(clearHighlights: true);
+        if (_editor?.Document is null || FindTextBox.Text.Length == 0)
+        {
+            FindStatusText.Text = _editor?.Document is null ? "No article selected" : string.Empty;
+            return;
+        }
+
+        FindStatusText.Text = "Searching…";
+        _findSearchPending = true;
+        var generation = _findGeneration;
+        _findCancellation = new CancellationTokenSource();
+        try
+        {
+            await ExecuteFindAsync(generation, _findCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task ExecuteFindAsync(int generation, CancellationToken cancellationToken)
+    {
+        if (_editor?.Document is not ReaderDocument document)
+        {
+            return;
+        }
+
+        var query = FindTextBox.Text;
+        var options = new ArticleFindOptions(
+            CaseSensitive: FindCaseSensitiveCheckBox.IsChecked == true,
+            WholeWord: FindWholeWordCheckBox.IsChecked == true,
+            UseRegex: FindRegexCheckBox.IsChecked == true);
+        ArticleFindDocument? findDocument = null;
+        string searchText;
+        try
+        {
+            if (_continuousDocument is not null)
+            {
+                searchText = EditorTextBox.Text;
+            }
+            else
+            {
+                if (_findLoader is null)
+                {
+                    FindStatusText.Text = "Connect to the Reader service to search this article.";
+                    return;
+                }
+                findDocument = await _findLoader.LoadAsync(document, cancellationToken);
+                searchText = findDocument.Text;
+            }
+
+            var result = await Task.Run(
+                () => ArticleFindEngine.Search(searchText, query, options),
+                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (generation != _findGeneration ||
+                _editor?.Document is not ReaderDocument current ||
+                !string.Equals(current.Id, document.Id, StringComparison.Ordinal) ||
+                current.ContentRevision != document.ContentRevision)
+            {
+                return;
+            }
+
+            _findDocument = findDocument;
+            _findResult = result;
+            _findMatchIndex = result.Matches.Count > 0 ? 0 : -1;
+            if (!result.Succeeded)
+            {
+                FindStatusText.Text = DescribeFindFailure(result.Failure);
+                ClearFindHighlights();
+                return;
+            }
+            if (result.Matches.Count == 0)
+            {
+                FindStatusText.Text = "No matches";
+                ClearFindHighlights();
+                return;
+            }
+
+            UpdateFindStatus();
+            await ShowCurrentFindMatchAsync();
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            if (generation == _findGeneration)
+            {
+                FindStatusText.Text = $"Find unavailable: {exception.Message}";
+                ClearFindHighlights();
+            }
+        }
+        finally
+        {
+            if (generation == _findGeneration)
+            {
+                _findSearchPending = false;
+            }
+        }
+    }
+
+    private async Task NavigateFindAsync(int delta)
+    {
+        if (FindPanel.Visibility != Visibility.Visible || FindTextBox.Text.Length == 0)
+        {
+            return;
+        }
+        if (_findSearchPending || _findResult.Matches.Count == 0)
+        {
+            await RunFindNowAsync();
+            return;
+        }
+
+        _findMatchIndex = ArticleFindNavigator.Move(
+            _findMatchIndex,
+            _findResult.Matches.Count,
+            delta);
+        UpdateFindStatus();
+        await ShowCurrentFindMatchAsync();
+    }
+
+    private async Task ShowCurrentFindMatchAsync()
+    {
+        if (_findMatchIndex < 0 ||
+            _findMatchIndex >= _findResult.Matches.Count ||
+            _editor?.Document is not ReaderDocument document)
+        {
+            ClearFindHighlights();
+            return;
+        }
+
+        var match = _findResult.Matches[_findMatchIndex];
+        if (_continuousDocument is not null)
+        {
+            if (match.End > EditorTextBox.Text.Length)
+            {
+                ScheduleFindRefresh();
+                return;
+            }
+            foreach (var block in _readingBlocks)
+            {
+                block.FindStart = -1;
+                block.FindLength = 0;
+            }
+            _continuousHighlightAdorner?.ShowFind(match.Start, match.Length);
+            BringContinuousHighlightIntoView(match.Start);
+            return;
+        }
+
+        if (_findDocument is null || _readingWindow is null)
+        {
+            ClearFindHighlights();
+            return;
+        }
+        var location = _findDocument.Locate(match);
+        var currentPageContainsMatch = _readingWindow.Current.Blocks.Any(block =>
+            block.Ordinal == location.StartCursor.BlockOrdinal);
+        if (!currentPageContainsMatch)
+        {
+            var page = await _readingWindow.LoadAsync(
+                document.Id,
+                Math.Max(0, location.StartCursor.BlockOrdinal - 8));
+            await ShowReadingPageAsync(page);
+        }
+        else
+        {
+            ApplyCurrentFindToReadingBlocks();
+        }
+
+        var firstBlock = _readingBlocks.FirstOrDefault(block =>
+            block.Ordinal == location.StartCursor.BlockOrdinal);
+        if (firstBlock is not null)
+        {
+            BringReadingFindIntoView(firstBlock);
+        }
+    }
+
+    private void ApplyCurrentFindToReadingBlocks()
+    {
+        foreach (var block in _readingBlocks)
+        {
+            block.FindStart = -1;
+            block.FindLength = 0;
+        }
+        if (_findDocument is null ||
+            _findMatchIndex < 0 ||
+            _findMatchIndex >= _findResult.Matches.Count)
+        {
+            return;
+        }
+
+        var location = _findDocument.Locate(_findResult.Matches[_findMatchIndex]);
+        foreach (var block in _readingBlocks.Where(block =>
+                     block.Ordinal >= location.StartCursor.BlockOrdinal &&
+                     block.Ordinal <= location.EndCursor.BlockOrdinal))
+        {
+            var start = block.Ordinal == location.StartCursor.BlockOrdinal
+                ? location.StartCursor.CharacterOffset
+                : 0;
+            var end = block.Ordinal == location.EndCursor.BlockOrdinal
+                ? location.EndCursor.CharacterOffset
+                : block.Text.Length;
+            start = Math.Clamp(start, 0, block.Text.Length);
+            end = Math.Clamp(end, start, block.Text.Length);
+            if (end > start)
+            {
+                block.FindStart = start;
+                block.FindLength = end - start;
+            }
+        }
+    }
+
+    private void BringReadingFindIntoView(ReaderBlockDisplay block)
+    {
+        ReadingBlocksList.SelectedItem = block;
+        ReadingBlocksList.ScrollIntoView(block);
+        ReadingBlocksList.UpdateLayout();
+        if (ReadingBlocksList.ItemContainerGenerator.ContainerFromItem(block) is
+                DependencyObject container &&
+            FindVisualChild<SourceHighlightTextBlock>(container) is { } textBlock)
+        {
+            _ = textBlock.BringFindTextIntoView();
+        }
+    }
+
+    private void UpdateFindStatus()
+    {
+        if (_findMatchIndex < 0 || _findResult.Matches.Count == 0)
+        {
+            FindStatusText.Text = "No matches";
+            return;
+        }
+        var suffix = _findResult.Truncated ? "+" : string.Empty;
+        FindStatusText.Text =
+            $"{_findMatchIndex + 1:N0} of {_findResult.Matches.Count:N0}{suffix}";
+    }
+
+    private void CancelFindWork(bool clearHighlights)
+    {
+        _findGeneration++;
+        _findCancellation?.Cancel();
+        _findCancellation?.Dispose();
+        _findCancellation = null;
+        _findSearchPending = false;
+        _findResult = ArticleFindResult.Empty;
+        _findMatchIndex = -1;
+        if (clearHighlights)
+        {
+            ClearFindHighlights();
+        }
+    }
+
+    private void ClearFindHighlights()
+    {
+        _continuousHighlightAdorner?.ClearFind();
+        foreach (var block in _readingBlocks)
+        {
+            block.FindStart = -1;
+            block.FindLength = 0;
+        }
+    }
+
+    private static string DescribeFindFailure(ArticleFindFailure failure) => failure switch
+    {
+        ArticleFindFailure.PatternTooLong =>
+            $"Find text is limited to {ArticleFindEngine.MaxPatternCharacters:N0} characters.",
+        ArticleFindFailure.DocumentTooLarge =>
+            $"This article exceeds the {ArticleFindEngine.MaxDocumentCharacters:N0}-character Find safety limit.",
+        ArticleFindFailure.InvalidRegex => "Invalid regular expression.",
+        ArticleFindFailure.RegexTimedOut => "The regular expression took too long and was stopped.",
+        _ => string.Empty,
+    };
+
     private void UpdatePlaybackControls()
     {
         var hasDocument = _editor?.Document is not null;
@@ -2603,6 +2998,25 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            e.Handled = true;
+            OpenFindPanel();
+            return;
+        }
+        if (e.Key == Key.F3 && FindPanel.Visibility == Visibility.Visible)
+        {
+            e.Handled = true;
+            await NavigateFindAsync(
+                Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
+            return;
+        }
+        if (e.Key == Key.Escape && FindPanel.Visibility == Visibility.Visible)
+        {
+            e.Handled = true;
+            CloseFindPanel();
+            return;
+        }
         if (e.Key == Key.Escape &&
             (_ephemeralPlaying || _ephemeralReplayText is not null ||
                 _playback?.State is not ReaderPlaybackState.Stopped))
@@ -2611,7 +3025,9 @@ public partial class MainWindow : Window
             await StopUnifiedPlaybackAsync();
             return;
         }
-        if (e.Key == Key.Space && Keyboard.FocusedElement is not TextBox)
+        if (e.Key == Key.Space &&
+            !FindPanel.IsKeyboardFocusWithin &&
+            Keyboard.FocusedElement is not TextBox)
         {
             e.Handled = true;
             await ToggleUnifiedPlaybackAsync();

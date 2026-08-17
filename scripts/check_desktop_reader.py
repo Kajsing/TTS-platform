@@ -120,6 +120,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ClipboardCapture.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ReadingWindowPager.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ContinuousDocumentText.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "ArticleFind.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.ico",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.png",
@@ -322,6 +323,14 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "Delete selected article",
         "JsonlPlaybackPerformanceSink",
         "SuspectedUnderrunCount",
+        "ArticleFindEngine",
+        "ArticleFindDocumentLoader",
+        "OpenFindPanel",
+        "FindPanel.Visibility",
+        "Key.F3",
+        "ShowFind",
+        "FindStart",
+        "BringFindTextIntoView",
     ]
     missing_workstation_usability_features = [
         value
@@ -362,6 +371,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "service_controls": "implemented",
         "article_deletion": "implemented",
         "playback_performance_logging": "implemented",
+        "article_find": "implemented",
     }
 
 

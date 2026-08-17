@@ -227,6 +227,35 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Find_loader_materializes_every_paged_block_and_caches_the_revision()
+    {
+        var blocks = Enumerable.Range(0, 7)
+            .Select(index => Block(index == 6 ? "final needle" : $"Block {index}", index) with
+            {
+                Id = $"block-{index}",
+            })
+            .ToArray();
+        var client = new StubClient { PaginatedBlocks = blocks };
+        var document = Document("doc", 3, "html") with
+        {
+            ContentRevision = 8,
+            TotalBlocks = blocks.Length,
+            TotalCharacters = blocks.Sum(block => block.Text.Length),
+        };
+        var loader = new ArticleFindDocumentLoader(client, pageSize: 2);
+
+        var loaded = await loader.LoadAsync(document);
+        var result = ArticleFindEngine.Search(loaded.Text, "needle");
+        var location = loaded.Locate(Assert.Single(result.Matches));
+        _ = await loader.LoadAsync(document);
+
+        Assert.Equal(7, loaded.Blocks.Count);
+        Assert.Equal(6, location.StartCursor.BlockOrdinal);
+        Assert.Equal([-1, 1, 3, 5], client.ReceivedBlockAfterOrdinals);
+        Assert.All(client.ReceivedBlockLimits, limit => Assert.Equal(2, limit));
+    }
+
+    [Fact]
     public async Task Reading_window_reuses_a_loaded_editable_document_without_more_api_calls()
     {
         var blocks = Enumerable.Range(0, 130).Select(index => Block($"Block {index}", index)).ToArray();

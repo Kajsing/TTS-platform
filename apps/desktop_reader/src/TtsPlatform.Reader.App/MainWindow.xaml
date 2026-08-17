@@ -14,6 +14,8 @@
       <local:SourceHighlightTextBlock SourceText="{Binding Text}"
           HighlightStart="{Binding HighlightStart}"
           HighlightLength="{Binding HighlightLength}"
+          FindStart="{Binding FindStart}"
+          FindLength="{Binding FindLength}"
           TextWrapping="Wrap" FontFamily="{Binding DisplayFontFamily}"
           FontSize="{Binding DisplayFontSize}" FontWeight="{Binding DisplayFontWeight}"
           FontStyle="{Binding DisplayFontStyle}" Margin="{Binding DisplayMargin}" />
@@ -233,6 +235,7 @@
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -256,7 +259,50 @@
                        Text="Choose an article from the library." TextWrapping="Wrap" />
           </StackPanel>
 
-          <Grid Grid.Row="1" Margin="16,0,16,10">
+          <Border Grid.Row="1" x:Name="FindPanel" Visibility="Collapsed"
+                  Margin="16,0,16,10" Padding="10,7"
+                  Background="#EAF4F4" BorderBrush="#9BC6C8"
+                  BorderThickness="1" CornerRadius="7"
+                  AutomationProperties.Name="Find in current article">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Left" Text="Find" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="3,0,8,0" />
+                <Button DockPanel.Dock="Right" Content="×" Click="CloseFindButton_Click"
+                        MinWidth="36" Padding="8,4" Margin="3,0,0,0" ToolTip="Close Find (Esc)"
+                        AutomationProperties.Name="Close Find" />
+                <Button DockPanel.Dock="Right" Content="↓" Click="NextFindButton_Click"
+                        MinWidth="36" Padding="8,4" Margin="3,0,0,0" ToolTip="Next match (Enter or F3)"
+                        AutomationProperties.Name="Find next match" />
+                <Button DockPanel.Dock="Right" Content="↑" Click="PreviousFindButton_Click"
+                        MinWidth="36" Padding="8,4" Margin="3,0,0,0" ToolTip="Previous match (Shift+F3)"
+                        AutomationProperties.Name="Find previous match" />
+                <TextBox x:Name="FindTextBox" MinHeight="32" Padding="7,4" Margin="0"
+                         TextChanged="FindTextBox_TextChanged" KeyDown="FindTextBox_KeyDown"
+                         AutomationProperties.Name="Find text in current article" />
+              </DockPanel>
+              <WrapPanel Grid.Row="1" Margin="56,5,0,0" VerticalAlignment="Center">
+                <CheckBox x:Name="FindCaseSensitiveCheckBox" Content="Match case"
+                          Checked="FindOption_Changed" Unchecked="FindOption_Changed"
+                          Margin="3,0,10,0" />
+                <CheckBox x:Name="FindWholeWordCheckBox" Content="Whole word"
+                          Checked="FindOption_Changed" Unchecked="FindOption_Changed"
+                          Margin="3,0,10,0" />
+                <CheckBox x:Name="FindRegexCheckBox" Content="Regex"
+                          Checked="FindOption_Changed" Unchecked="FindOption_Changed"
+                          Margin="3,0,10,0" />
+                <TextBlock x:Name="FindStatusText" Foreground="{StaticResource TextMutedBrush}"
+                           VerticalAlignment="Center" Margin="6,0,0,0"
+                           AutomationProperties.LiveSetting="Polite" />
+              </WrapPanel>
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="2" Margin="16,0,16,10">
             <AdornerDecorator x:Name="EditorAdornerDecorator" Visibility="Collapsed">
               <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True"
                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
@@ -280,7 +326,7 @@
                      AutomationProperties.Name="Document text" />
           </Grid>
 
-          <Border Grid.Row="2" Margin="16,0,16,10" Padding="12,9"
+          <Border Grid.Row="3" Margin="16,0,16,10" Padding="12,9"
                   Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}"
                   BorderThickness="1" CornerRadius="8">
             <Grid>
@@ -341,8 +387,10 @@
             </Grid>
           </Border>
 
-          <Expander Grid.Row="3" Header="Article tools" Margin="16,0,16,12">
+          <Expander Grid.Row="4" Header="Article tools" Margin="16,0,16,12">
             <WrapPanel Margin="0,5,0,0">
+              <Button Content="Find…" Click="OpenFindButton_Click"
+                      AutomationProperties.Name="Find in current article" />
               <Button x:Name="PreviousReadingPageButton" Content="Previous page"
                       Click="PreviousReadingPageButton_Click" IsEnabled="False" />
               <Button x:Name="NextReadingPageButton" Content="Next page"

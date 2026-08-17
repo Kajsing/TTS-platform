@@ -12,11 +12,15 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     private static readonly Brush HighlightFill = CreateHighlightFill();
     private static readonly Pen HighlightBorderPen = CreateHighlightBorderPen();
     private static readonly Pen UnderlinePen = CreateUnderlinePen();
+    private static readonly Brush FindFill = CreateFindFill();
+    private static readonly Pen FindBorderPen = CreateFindBorderPen();
 
     private readonly TextBox _textBox;
     private readonly ScrollChangedEventHandler _scrollChangedHandler;
     private int _highlightStart = -1;
     private int _highlightLength;
+    private int _findStart = -1;
+    private int _findLength;
     private bool _disposed;
 
     public PlaybackHighlightAdorner(TextBox textBox)
@@ -33,6 +37,8 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
 
     public int HighlightStart => _highlightStart;
     public int HighlightLength => _highlightLength;
+    public int FindStart => _findStart;
+    public int FindLength => _findLength;
 
     public void Show(int start, int length)
     {
@@ -46,6 +52,21 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     {
         _highlightStart = -1;
         _highlightLength = 0;
+        InvalidateVisual();
+    }
+
+    public void ShowFind(int start, int length)
+    {
+        var textLength = _textBox.Text?.Length ?? 0;
+        _findStart = Math.Clamp(start, 0, textLength);
+        _findLength = Math.Clamp(length, 0, textLength - _findStart);
+        InvalidateVisual();
+    }
+
+    public void ClearFind()
+    {
+        _findStart = -1;
+        _findLength = 0;
         InvalidateVisual();
     }
 
@@ -65,23 +86,9 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     {
         base.OnRender(drawingContext);
         var text = _textBox.Text ?? string.Empty;
-        if (_highlightStart < 0 || _highlightLength <= 0 || text.Length == 0)
-        {
-            return;
-        }
-
-        var start = Math.Clamp(_highlightStart, 0, text.Length);
-        var end = Math.Clamp(start + _highlightLength, start, text.Length);
-        if (end <= start)
-        {
-            return;
-        }
-
-        var visualLineRanges = VisualLineRangePlanner.Build(
-            start,
-            end,
-            _textBox.GetLineIndexFromCharacterIndex);
-        if (visualLineRanges.Count == 0)
+        if (text.Length == 0 ||
+            ((_highlightStart < 0 || _highlightLength <= 0) &&
+                (_findStart < 0 || _findLength <= 0)))
         {
             return;
         }
@@ -90,10 +97,22 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
             new Rect(0, 0, ActualWidth, ActualHeight)));
         try
         {
-            foreach (var range in visualLineRanges)
-            {
-                DrawRangeHighlight(drawingContext, text, range.Start, range.End);
-            }
+            DrawHighlight(
+                drawingContext,
+                text,
+                _findStart,
+                _findLength,
+                FindFill,
+                FindBorderPen,
+                underlinePen: null);
+            DrawHighlight(
+                drawingContext,
+                text,
+                _highlightStart,
+                _highlightLength,
+                HighlightFill,
+                HighlightBorderPen,
+                UnderlinePen);
         }
         finally
         {
@@ -101,11 +120,50 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         }
     }
 
+    private void DrawHighlight(
+        DrawingContext drawingContext,
+        string text,
+        int highlightStart,
+        int highlightLength,
+        Brush fill,
+        Pen borderPen,
+        Pen? underlinePen)
+    {
+        if (highlightStart < 0 || highlightLength <= 0)
+        {
+            return;
+        }
+        var start = Math.Clamp(highlightStart, 0, text.Length);
+        var end = Math.Clamp(start + highlightLength, start, text.Length);
+        if (end <= start)
+        {
+            return;
+        }
+        var visualLineRanges = VisualLineRangePlanner.Build(
+            start,
+            end,
+            _textBox.GetLineIndexFromCharacterIndex);
+        foreach (var range in visualLineRanges)
+        {
+            DrawRangeHighlight(
+                drawingContext,
+                text,
+                range.Start,
+                range.End,
+                fill,
+                borderPen,
+                underlinePen);
+        }
+    }
+
     private void DrawRangeHighlight(
         DrawingContext drawingContext,
         string text,
         int segmentStart,
-        int segmentEnd)
+        int segmentEnd,
+        Brush fill,
+        Pen borderPen,
+        Pen? underlinePen)
     {
         while (segmentStart < segmentEnd && text[segmentStart] is '\r' or '\n')
         {
@@ -142,23 +200,32 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
 
         var highlightRect = new Rect(left, top, right - left, bottom - top);
         drawingContext.DrawRoundedRectangle(
-            HighlightFill,
-            HighlightBorderPen,
+            fill,
+            borderPen,
             highlightRect,
             radiusX: 2,
             radiusY: 2);
-        var underlineY = Math.Max(top, bottom - 1.25);
-        drawingContext.DrawLine(
-            UnderlinePen,
-            new Point(left, underlineY),
-            new Point(right, underlineY));
+        if (underlinePen is not null)
+        {
+            var underlineY = Math.Max(top, bottom - 1.25);
+            drawingContext.DrawLine(
+                underlinePen,
+                new Point(left, underlineY),
+                new Point(right, underlineY));
+        }
     }
 
     private void TextBox_LayoutChanged(object sender, SizeChangedEventArgs e) =>
         InvalidateVisual();
 
-    private void TextBox_TextChanged(object sender, TextChangedEventArgs e) =>
-        Clear();
+    private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _highlightStart = -1;
+        _highlightLength = 0;
+        _findStart = -1;
+        _findLength = 0;
+        InvalidateVisual();
+    }
 
     private bool TryGetTrailingCharacterEdge(string text, int characterIndex, out Rect edge)
     {
@@ -218,6 +285,22 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         var brush = new SolidColorBrush(Color.FromRgb(177, 113, 0));
         brush.Freeze();
         var pen = new Pen(brush, 1.25);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Brush CreateFindFill()
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(54, 35, 119, 122));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Pen CreateFindBorderPen()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(35, 119, 122));
+        brush.Freeze();
+        var pen = new Pen(brush, 1.1);
         pen.Freeze();
         return pen;
     }
