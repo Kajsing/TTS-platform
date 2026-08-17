@@ -609,5 +609,30 @@ Locked refinements from the 2026-07-27 product review:
   installer milestone, and preserve a future public-distribution path through
   dependency-license checks.
 
-Reader Milestone 10 is the next incomplete milestone. Do not start it until the
-user explicitly continues past the requested Milestone 9 stop point.
+Reader Milestone 10 remains the next incomplete milestone in the original
+Reader sequence. The user-approved upgrade track below now takes priority, so
+do not start Milestone 10 until that track is completed or deliberately paused.
+
+## Post-v1: Reader Upgrade Track
+
+The user approved a new Reader upgrade track on 2026-08-17 and explicitly made
+U1 the active target. Its durable scope, security gates, acceptance criteria,
+and validation are in `docs/reader_upgrade_plan.md`.
+
+Execute these upgrades in order unless `Documentation.md` records a deliberate
+user-approved reorder:
+
+- [ ] U1: Current-article Find panel.
+- [ ] U2: Clipboard prompt threshold and five-minute snooze.
+- [ ] U3: Persistent Word Highlighter.
+- [ ] U4: Folder-backed library organization.
+- [ ] U5: Batch import and text-only HTML workflow.
+- [ ] U6: Folder privacy lock, after its security decision gate.
+- [ ] U7: Remote Reader security and architecture decision.
+- [ ] U8: Secure LAN server beta, only after U7 approval.
+
+This track is prioritized ahead of Reader Milestones 10 and 11. Those original
+milestones remain incomplete and are not removed from the 1.0 plan.
+
+U1 is the current Codex resume point. Do not begin U2 until U1 is validated or
+the user deliberately reorders the track.

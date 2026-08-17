@@ -10,6 +10,12 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- The user approved `docs/reader_upgrade_plan.md` on 2026-08-17. U1, the
+  current-article Find panel, is the active implementation target. The upgrade
+  track is deliberately prioritized ahead of Reader Milestones 10 and 11,
+  which remain incomplete. U6 retains an explicit privacy-lock-versus-encryption
+  decision gate; U7 must amend the localhost security architecture before any
+  remote server implementation can begin.
 - Completed the stable playback-highlight field fix (2026-08-17). Editable
   documents now keep the same continuous TextBox before, during, and after
   playback. A follow-up added a dedicated non-layout overlay because WPF did not
@@ -216,8 +222,9 @@ This file is the live status log and shared memory for future Codex loops.
   round trip that produced a decodable MP3 with title metadata. The actual
   Reader service had migrated to schema 5 and reported ready export formats
   `wav,mp3` with the Kokoro backend healthy.
-- Reader Workstation resume point: Milestone 10, PDF text extraction, only after
-  the user explicitly continues the track.
+- Reader Workstation resume point: Upgrade U1, current-article Find panel.
+  Milestone 10 PDF extraction and Milestone 11 release-candidate work remain
+  deferred until the user completes or deliberately pauses the upgrade track.
 - Completed the Reader application-icon follow-up. The transparent source PNG
   and multi-resolution Windows ICO now live under the WPF application's
   `Assets` directory. The ICO contains 16, 20, 24, 32, 40, 48, 64, 128, and
