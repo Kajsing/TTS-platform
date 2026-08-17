@@ -10,6 +10,19 @@ This file is the live status log and shared memory for future Codex loops.
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the stable playback-highlight field fix (2026-08-17). Editable
+  documents now keep the same continuous TextBox before, during, and after
+  playback. The spoken source range uses a background color only, so playback
+  no longer introduces bold, underline, different line spacing, or different
+  wrapping. Structured and oversized documents retain the bounded virtualized
+  reading view, whose highlight is now also background-only.
+- Stable-highlight validation passed on 2026-08-17: all 419 Python tests, all
+  100 .NET Release tests, the standalone Release WPF build, Ruff, .NET
+  formatting, `git diff --check`, and the complete Windows desktop integration
+  check passed. A privacy-safe manual UI run confirmed that the same continuous
+  editor remained visible
+  before, during, and after playback while the active source selection advanced;
+  the page-based reading control never replaced it.
 - Completed the cross-paragraph selection-delete field fix (2026-08-17). The
   continuous editor now accepts ordinary Delete/Backspace changes spanning
   hidden Reader block boundaries, preserves the local TextBox result until

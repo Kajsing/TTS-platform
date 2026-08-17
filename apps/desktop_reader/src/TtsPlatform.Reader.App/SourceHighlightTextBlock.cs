@@ -104,8 +104,6 @@ public sealed class SourceHighlightTextBlock : TextBlock
         _highlightedRun = new Run(text.Substring(start, length))
         {
             Background = new SolidColorBrush(Color.FromRgb(255, 224, 130)),
-            FontWeight = FontWeights.Bold,
-            TextDecorations = System.Windows.TextDecorations.Underline,
         };
         Inlines.Add(_highlightedRun);
         if (start + length < text.Length)

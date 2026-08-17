@@ -261,6 +261,9 @@
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                      TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
                      TextBlock.LineHeight="27" Padding="18" BorderThickness="1" BorderBrush="{StaticResource BorderBrush}"
+                     IsInactiveSelectionHighlightEnabled="True"
+                     SelectionBrush="{StaticResource HighlightBrush}"
+                     SelectionTextBrush="{StaticResource TextBrush}" SelectionOpacity="1"
                      SelectionChanged="EditorTextBox_SelectionChanged"
                      TextChanged="EditorTextBox_TextChanged"
                      AutomationProperties.Name="Continuous document text" />

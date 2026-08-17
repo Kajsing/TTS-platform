@@ -363,6 +363,10 @@ Active playback holds a content lease. Editing is rejected until the stream is
 cancelled so generated audio, highlighting, and source cursors cannot silently
 refer to different text.
 
+An editable document keeps the same continuous text surface during playback.
+The active source span changes background color only; highlighting must not
+change font weight, decoration, line height, wrapping, or paragraph spacing.
+
 ### ADR-R14: Use a per-user Reader home and keep sync behind APIs
 
 Installed Windows operation defaults Reader data to

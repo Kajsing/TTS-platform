@@ -286,6 +286,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "TryGetCharacterOffset",
         "TryMapCrossBlockDeletion",
         "RestorePausedEditorViewport",
+        "ShowContinuousEditorHighlight",
+        'IsInactiveSelectionHighlightEnabled="True"',
         "BringHighlightedTextIntoView",
         "Continuous document text",
         "InvisibleReadingBlockContainerStyle",

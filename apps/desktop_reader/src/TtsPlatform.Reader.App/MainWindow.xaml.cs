@@ -2287,7 +2287,7 @@ public partial class MainWindow : Window
             FooterText.Text = change.Message ?? $"Playback {change.State.ToString().ToLowerInvariant()}";
             _trayIcon?.SetStatus(change.State.ToString());
             UpdatePlaybackControls();
-            if (change.State == ReaderPlaybackState.Paused)
+            if (change.State is not ReaderPlaybackState.Playing)
             {
                 RestorePausedEditorViewport(change.Cursor);
             }
@@ -2351,6 +2351,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (document.IsEditable && _continuousDocument is not null)
+        {
+            ShowContinuousEditorHighlight(document, highlight.SourceSpans);
+            return;
+        }
+
         var firstSpan = highlight.SourceSpans[0];
         if (FollowReadingCheckBox.IsChecked == true && _readingWindow is not null)
         {
@@ -2391,6 +2397,49 @@ public partial class MainWindow : Window
         if (followedBlock is not null)
         {
             BringReadingHighlightIntoView(followedBlock);
+        }
+    }
+
+    private void ShowContinuousEditorHighlight(
+        ReaderDocument document,
+        IReadOnlyList<ReaderSourceSpan> sourceSpans)
+    {
+        if (_continuousDocument is null || sourceSpans.Count == 0)
+        {
+            return;
+        }
+
+        var orderedSpans = sourceSpans
+            .OrderBy(span => span.BlockOrdinal)
+            .ThenBy(span => span.StartOffset)
+            .ToArray();
+        var first = orderedSpans[0];
+        var last = orderedSpans[^1];
+        var startCursor = new ReaderCursor(
+            document.Id,
+            first.BlockId,
+            first.BlockOrdinal,
+            first.StartOffset,
+            document.ContentRevision);
+        var endCursor = new ReaderCursor(
+            document.Id,
+            last.BlockId,
+            last.BlockOrdinal,
+            last.EndOffset,
+            document.ContentRevision);
+        if (!_continuousDocument.TryGetCharacterOffset(startCursor, out var start) ||
+            !_continuousDocument.TryGetCharacterOffset(endCursor, out var end))
+        {
+            return;
+        }
+
+        _updatingEditor = true;
+        EditorTextBox.Select(start, Math.Max(0, end - start));
+        _updatingEditor = false;
+        var line = EditorTextBox.GetLineIndexFromCharacterIndex(start);
+        if (line >= 0)
+        {
+            EditorTextBox.ScrollToLine(Math.Max(0, line - 2));
         }
     }
 
@@ -2485,7 +2534,7 @@ public partial class MainWindow : Window
         NextSectionButton.IsEnabled = showSectionNavigation &&
             !_ephemeralPlaying &&
             !ephemeralPaused;
-        var showContinuousEditor = continuousEditableDocument && !documentActive;
+        var showContinuousEditor = continuousEditableDocument;
         var showReadingView = hasDocument && !showContinuousEditor;
         ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource("ReadingBlockTemplate");
         ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
