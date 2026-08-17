@@ -17,10 +17,12 @@ This file is the live status log and shared memory for future Codex loops.
   a yellow background and underline without changing font weight, line spacing,
   or wrapping. Structured and oversized documents retain the bounded
   virtualized reading view, whose highlight remains background-only.
-- The visible-highlight contrast follow-up (2026-08-17) combines a low-opacity
-  native selection with a very light overlay, dark border, and underline. The
-  read-only editor receives focus while the active window is playing so WPF
-  paints the range reliably, and the active range is positioned near the upper
+- The visible-highlight contrast follow-up (2026-08-17) uses an opaque native
+  selection only for normal user selection. Playback itself uses a dedicated
+  translucent overlay while keeping the native selection collapsed, so the
+  glyphs remain dark beneath its pale fill, border, and underline. Playback no
+  longer steals keyboard focus to make WPF paint a native selection, and the
+  active range is positioned near the upper
   third of the viewport instead of barely appearing at its bottom edge. A live
   screen check confirmed the pale highlight retains dark readable text without
   changing wrapping or line positions.

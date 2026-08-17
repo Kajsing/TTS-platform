@@ -2443,12 +2443,8 @@ public partial class MainWindow : Window
         }
 
         _updatingEditor = true;
-        EditorTextBox.Select(start, Math.Max(0, end - start));
+        EditorTextBox.Select(start, 0);
         _updatingEditor = false;
-        if (IsActive && !EditorTextBox.IsKeyboardFocusWithin)
-        {
-            EditorTextBox.Focus();
-        }
         _continuousHighlightAdorner?.Show(start, Math.Max(0, end - start));
         BringContinuousHighlightIntoView(start);
     }

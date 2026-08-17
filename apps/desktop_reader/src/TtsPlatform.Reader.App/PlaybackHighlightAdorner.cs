@@ -167,7 +167,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
 
     private static Brush CreateHighlightFill()
     {
-        var brush = new SolidColorBrush(Color.FromArgb(36, 255, 224, 130));
+        var brush = new SolidColorBrush(Color.FromArgb(28, 255, 224, 130));
         brush.Freeze();
         return brush;
     }
