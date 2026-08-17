@@ -27,7 +27,7 @@ Make the active sentence unambiguous without reflowing the continuous editor.
 
 ## Validation
 
-- 100 .NET Release tests passed.
+- 102 .NET Release tests passed, including forward visual-line range coverage.
 - The Release `win-x64` WPF build passed without warnings.
 - Ruff, .NET formatting, and `git diff --check` passed.
 - The complete Windows desktop integration check passed after the final focus,
@@ -36,3 +36,13 @@ Make the active sentence unambiguous without reflowing the continuous editor.
   readable text and unchanged line wrapping. A second reproduction using the
   user's long article confirmed that collapsing the native playback selection
   removes the washed-out and disappearing-glyph variants.
+- Follow-up screenshots exposed two remaining cases: WPF can return an empty
+  trailing-edge rectangle for the final character of a wrapped line, and the
+  opaque yellow user-selection brush can hide selected glyphs. The renderer now
+  measures a fallback character edge for that final line. An isolated WPF
+  reproduction also proved that reverse line-index lookup returns the first
+  wrapped line's start for later visual lines, so the renderer now groups source
+  characters by their forward visual-line indexes. Normal mouse/keyboard selection
+  uses a translucent teal accent so original dark glyphs remain visible even
+  when WPF suppresses its selection-text layer. It remains independent of the
+  yellow playback overlay.

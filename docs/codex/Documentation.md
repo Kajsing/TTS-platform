@@ -17,8 +17,8 @@ This file is the live status log and shared memory for future Codex loops.
   a yellow background and underline without changing font weight, line spacing,
   or wrapping. Structured and oversized documents retain the bounded
   virtualized reading view, whose highlight remains background-only.
-- The visible-highlight contrast follow-up (2026-08-17) uses an opaque native
-  selection only for normal user selection. Playback itself uses a dedicated
+- The visible-highlight contrast follow-up (2026-08-17) keeps normal user
+  selection separate from playback. Playback itself uses a dedicated
   translucent overlay while keeping the native selection collapsed, so the
   glyphs remain dark beneath its pale fill, border, and underline. Playback no
   longer steals keyboard focus to make WPF paint a native selection, and the
@@ -26,8 +26,17 @@ This file is the live status log and shared memory for future Codex loops.
   third of the viewport instead of barely appearing at its bottom edge. A live
   screen check confirmed the pale highlight retains dark readable text without
   changing wrapping or line positions.
+- The wrapped-highlight correction (2026-08-17) measures a fallback trailing
+  character edge when WPF returns an empty rectangle for the final character of
+  a visual line. WPF can also report two visual line indexes but return the same
+  start character for both; the renderer therefore groups the bounded source
+  span by each character's actual visual line instead of trusting that reverse
+  lookup. This keeps the last wrapped line and following single-line chunks
+  highlighted. Manual text selection now uses a separate translucent teal
+  background, allowing the original dark glyphs to remain visible instead of
+  relying on WPF's suppressed selection-text layer.
 - Stable-highlight validation passed on 2026-08-17: all 419 Python tests, all
-  100 .NET Release tests, the standalone Release WPF build, Ruff, .NET
+  102 .NET Release tests, the standalone Release WPF build, Ruff, .NET
   formatting, `git diff --check`, and the complete Windows desktop integration
   check passed. A privacy-safe manual UI run confirmed that the same continuous
   editor remained visible

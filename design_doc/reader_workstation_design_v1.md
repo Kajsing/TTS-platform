@@ -366,6 +366,8 @@ refer to different text.
 An editable document keeps the same continuous text surface during playback.
 The active source span uses a translucent overlay plus an underline; highlighting
 must not change font weight, line height, wrapping, or paragraph spacing.
+Every wrapped visual line in the source span, including the final line, must be
+painted. Normal user selection uses a separate high-contrast selection palette.
 
 ### ADR-R14: Use a per-user Reader home and keep sync behind APIs
 

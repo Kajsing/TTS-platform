@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using TtsPlatform.Reader.Windows;
 
 namespace TtsPlatform.Reader.App;
 
@@ -75,9 +77,11 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
             return;
         }
 
-        var firstLine = _textBox.GetLineIndexFromCharacterIndex(start);
-        var lastLine = _textBox.GetLineIndexFromCharacterIndex(end - 1);
-        if (firstLine < 0 || lastLine < firstLine)
+        var visualLineRanges = VisualLineRangePlanner.Build(
+            start,
+            end,
+            _textBox.GetLineIndexFromCharacterIndex);
+        if (visualLineRanges.Count == 0)
         {
             return;
         }
@@ -86,9 +90,9 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
             new Rect(0, 0, ActualWidth, ActualHeight)));
         try
         {
-            for (var line = firstLine; line <= lastLine; line++)
+            foreach (var range in visualLineRanges)
             {
-                DrawLineHighlight(drawingContext, text, line, start, end);
+                DrawRangeHighlight(drawingContext, text, range.Start, range.End);
             }
         }
         finally
@@ -97,21 +101,12 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         }
     }
 
-    private void DrawLineHighlight(
+    private void DrawRangeHighlight(
         DrawingContext drawingContext,
         string text,
-        int line,
-        int highlightStart,
-        int highlightEnd)
+        int segmentStart,
+        int segmentEnd)
     {
-        var lineStart = _textBox.GetCharacterIndexFromLineIndex(line);
-        if (lineStart < 0)
-        {
-            return;
-        }
-        var lineEnd = Math.Min(text.Length, lineStart + _textBox.GetLineLength(line));
-        var segmentStart = Math.Max(highlightStart, lineStart);
-        var segmentEnd = Math.Min(highlightEnd, lineEnd);
         while (segmentStart < segmentEnd && text[segmentStart] is '\r' or '\n')
         {
             segmentStart++;
@@ -126,8 +121,8 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         }
 
         var startRect = _textBox.GetRectFromCharacterIndex(segmentStart, trailingEdge: false);
-        var endRect = _textBox.GetRectFromCharacterIndex(segmentEnd - 1, trailingEdge: true);
-        if (startRect.IsEmpty || endRect.IsEmpty)
+        if (startRect.IsEmpty ||
+            !TryGetTrailingCharacterEdge(text, segmentEnd - 1, out var endRect))
         {
             return;
         }
@@ -164,6 +159,43 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
 
     private void TextBox_TextChanged(object sender, TextChangedEventArgs e) =>
         Clear();
+
+    private bool TryGetTrailingCharacterEdge(string text, int characterIndex, out Rect edge)
+    {
+        edge = _textBox.GetRectFromCharacterIndex(characterIndex, trailingEdge: true);
+        if (!edge.IsEmpty)
+        {
+            return true;
+        }
+
+        var leadingEdge = _textBox.GetRectFromCharacterIndex(
+            characterIndex,
+            trailingEdge: false);
+        if (leadingEdge.IsEmpty)
+        {
+            return false;
+        }
+
+        var pixelsPerDip = VisualTreeHelper.GetDpi(_textBox).PixelsPerDip;
+        var measuredCharacter = new FormattedText(
+            text[characterIndex].ToString(),
+            CultureInfo.CurrentUICulture,
+            _textBox.FlowDirection,
+            new Typeface(
+                _textBox.FontFamily,
+                _textBox.FontStyle,
+                _textBox.FontWeight,
+                _textBox.FontStretch),
+            _textBox.FontSize,
+            _textBox.Foreground,
+            pixelsPerDip);
+        edge = new Rect(
+            leadingEdge.X + measuredCharacter.WidthIncludingTrailingWhitespace,
+            leadingEdge.Y,
+            0,
+            leadingEdge.Height);
+        return true;
+    }
 
     private static Brush CreateHighlightFill()
     {
