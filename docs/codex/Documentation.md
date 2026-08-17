@@ -12,10 +12,18 @@ This file is the live status log and shared memory for future Codex loops.
   `design_doc/reader_workstation_design_v1.md`.
 - Completed the stable playback-highlight field fix (2026-08-17). Editable
   documents now keep the same continuous TextBox before, during, and after
-  playback. The spoken source range uses a background color only, so playback
-  no longer introduces bold, underline, different line spacing, or different
-  wrapping. Structured and oversized documents retain the bounded virtualized
-  reading view, whose highlight is now also background-only.
+  playback. A follow-up added a dedicated non-layout overlay because WPF did not
+  reliably paint an inactive TextBox selection. The spoken source range now has
+  a yellow background and underline without changing font weight, line spacing,
+  or wrapping. Structured and oversized documents retain the bounded
+  virtualized reading view, whose highlight remains background-only.
+- The visible-highlight contrast follow-up (2026-08-17) combines a low-opacity
+  native selection with a very light overlay, dark border, and underline. The
+  read-only editor receives focus while the active window is playing so WPF
+  paints the range reliably, and the active range is positioned near the upper
+  third of the viewport instead of barely appearing at its bottom edge. A live
+  screen check confirmed the pale highlight retains dark readable text without
+  changing wrapping or line positions.
 - Stable-highlight validation passed on 2026-08-17: all 419 Python tests, all
   100 .NET Release tests, the standalone Release WPF build, Ruff, .NET
   formatting, `git diff --check`, and the complete Windows desktop integration

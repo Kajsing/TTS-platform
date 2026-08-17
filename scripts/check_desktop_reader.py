@@ -287,6 +287,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "TryMapCrossBlockDeletion",
         "RestorePausedEditorViewport",
         "ShowContinuousEditorHighlight",
+        "PlaybackHighlightAdorner",
         'IsInactiveSelectionHighlightEnabled="True"',
         "BringHighlightedTextIntoView",
         "Continuous document text",

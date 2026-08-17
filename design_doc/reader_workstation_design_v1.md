@@ -364,8 +364,8 @@ cancelled so generated audio, highlighting, and source cursors cannot silently
 refer to different text.
 
 An editable document keeps the same continuous text surface during playback.
-The active source span changes background color only; highlighting must not
-change font weight, decoration, line height, wrapping, or paragraph spacing.
+The active source span uses an overlay background and underline; highlighting
+must not change font weight, line height, wrapping, or paragraph spacing.
 
 ### ADR-R14: Use a per-user Reader home and keep sync behind APIs
 

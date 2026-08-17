@@ -71,6 +71,7 @@ public partial class MainWindow : Window
     private int _documentLoadGeneration;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
+    private PlaybackHighlightAdorner? _continuousHighlightAdorner;
 
     public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
     {
@@ -91,6 +92,11 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_continuousHighlightAdorner is null)
+        {
+            _continuousHighlightAdorner = new PlaybackHighlightAdorner(EditorTextBox);
+            EditorAdornerDecorator.AdornerLayer.Add(_continuousHighlightAdorner);
+        }
         if (!_smokeTest)
         {
             await RefreshConnectionAsync();
@@ -373,6 +379,7 @@ public partial class MainWindow : Window
         }
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playbackPerformance?.Dispose();
+        _continuousHighlightAdorner?.Dispose();
         _desktopOpenTimer.Stop();
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
@@ -2289,6 +2296,7 @@ public partial class MainWindow : Window
             UpdatePlaybackControls();
             if (change.State is not ReaderPlaybackState.Playing)
             {
+                _continuousHighlightAdorner?.Clear();
                 RestorePausedEditorViewport(change.Cursor);
             }
             UpdateEditorButtons();
@@ -2346,7 +2354,8 @@ public partial class MainWindow : Window
     {
         if (_editor?.Document is not ReaderDocument document ||
             !string.Equals(document.Id, highlight.DocumentId, StringComparison.Ordinal) ||
-            highlight.SourceSpans.Count == 0)
+            highlight.SourceSpans.Count == 0 ||
+            _playback?.IsActive != true)
         {
             return;
         }
@@ -2436,11 +2445,36 @@ public partial class MainWindow : Window
         _updatingEditor = true;
         EditorTextBox.Select(start, Math.Max(0, end - start));
         _updatingEditor = false;
-        var line = EditorTextBox.GetLineIndexFromCharacterIndex(start);
-        if (line >= 0)
+        if (IsActive && !EditorTextBox.IsKeyboardFocusWithin)
         {
-            EditorTextBox.ScrollToLine(Math.Max(0, line - 2));
+            EditorTextBox.Focus();
         }
+        _continuousHighlightAdorner?.Show(start, Math.Max(0, end - start));
+        BringContinuousHighlightIntoView(start);
+    }
+
+    private void BringContinuousHighlightIntoView(int characterOffset)
+    {
+        var line = EditorTextBox.GetLineIndexFromCharacterIndex(characterOffset);
+        if (line < 0)
+        {
+            return;
+        }
+
+        EditorTextBox.ScrollToLine(line);
+        EditorTextBox.UpdateLayout();
+        if (FindVisualChild<ScrollViewer>(EditorTextBox) is not { } scrollViewer)
+        {
+            return;
+        }
+        var characterRect = EditorTextBox.GetRectFromCharacterIndex(characterOffset);
+        if (characterRect.IsEmpty)
+        {
+            return;
+        }
+        var targetOffset = scrollViewer.VerticalOffset + characterRect.Top -
+            (scrollViewer.ViewportHeight * 0.32);
+        scrollViewer.ScrollToVerticalOffset(Math.Max(0, targetOffset));
     }
 
     private void BringReadingHighlightIntoView(ReaderBlockDisplay block)
@@ -2538,7 +2572,9 @@ public partial class MainWindow : Window
         var showReadingView = hasDocument && !showContinuousEditor;
         ReadingBlocksList.ItemTemplate = (DataTemplate)FindResource("ReadingBlockTemplate");
         ReadingBlocksList.Visibility = showReadingView ? Visibility.Visible : Visibility.Collapsed;
-        EditorTextBox.Visibility = showContinuousEditor ? Visibility.Visible : Visibility.Collapsed;
+        EditorAdornerDecorator.Visibility = showContinuousEditor
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         FollowReadingCheckBox.Visibility = showReadingView && (documentActive || structuredDocument)
             ? Visibility.Visible
             : Visibility.Collapsed;

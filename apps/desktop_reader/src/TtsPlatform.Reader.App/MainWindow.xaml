@@ -257,16 +257,19 @@
           </StackPanel>
 
           <Grid Grid.Row="1" Margin="16,0,16,10">
-            <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True" Visibility="Collapsed"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                     TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
-                     TextBlock.LineHeight="27" Padding="18" BorderThickness="1" BorderBrush="{StaticResource BorderBrush}"
-                     IsInactiveSelectionHighlightEnabled="True"
-                     SelectionBrush="{StaticResource HighlightBrush}"
-                     SelectionTextBrush="{StaticResource TextBrush}" SelectionOpacity="1"
-                     SelectionChanged="EditorTextBox_SelectionChanged"
-                     TextChanged="EditorTextBox_TextChanged"
-                     AutomationProperties.Name="Continuous document text" />
+            <AdornerDecorator x:Name="EditorAdornerDecorator" Visibility="Collapsed">
+              <TextBox x:Name="EditorTextBox" AcceptsReturn="True" AcceptsTab="True"
+                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                       TextWrapping="Wrap" IsReadOnly="True" FontFamily="Segoe UI" FontSize="18"
+                       TextBlock.LineHeight="27" Padding="18" BorderThickness="1"
+                       BorderBrush="{StaticResource BorderBrush}"
+                       IsInactiveSelectionHighlightEnabled="True"
+                       SelectionBrush="{StaticResource HighlightBrush}"
+                       SelectionTextBrush="{StaticResource TextBrush}" SelectionOpacity="0.32"
+                       SelectionChanged="EditorTextBox_SelectionChanged"
+                       TextChanged="EditorTextBox_TextChanged"
+                       AutomationProperties.Name="Continuous document text" />
+            </AdornerDecorator>
             <ListBox x:Name="ReadingBlocksList" Visibility="Collapsed" BorderThickness="1"
                      BorderBrush="{StaticResource BorderBrush}" Padding="18"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
