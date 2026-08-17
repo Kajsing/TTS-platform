@@ -283,6 +283,9 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         )
     workstation_usability_features = [
         "ContinuousDocumentText",
+        "TryGetCharacterOffset",
+        "RestorePausedEditorViewport",
+        "BringHighlightedTextIntoView",
         "Continuous document text",
         "InvisibleReadingBlockContainerStyle",
         "UseLoadedDocument",

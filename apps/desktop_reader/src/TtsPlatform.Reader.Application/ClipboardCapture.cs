@@ -42,7 +42,7 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
                 cancellationToken).ConfigureAwait(false);
             return new ClipboardCaptureResult(
                 true,
-                "Clipboard text appended as one undoable paragraph.",
+                "Clipboard text appended as one undoable capture.",
                 mutation.Document,
                 OpenDocument: true);
         }

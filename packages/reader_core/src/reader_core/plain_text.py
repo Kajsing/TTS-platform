@@ -16,12 +16,8 @@ def build_plain_text_structure(
     title: str,
     text: str,
 ) -> tuple[tuple[ReaderSection, ...], tuple[ReaderBlock, ...]]:
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not normalized:
-        raise ReaderValidationError("plain-text document text must not be empty")
-
     section_id = str(uuid.uuid4())
-    raw_blocks = [part.strip() for part in _PARAGRAPH_BREAK.split(normalized) if part.strip()]
+    raw_blocks = split_plain_text_paragraphs(text)
     blocks = tuple(
         ReaderBlock(
             id=str(uuid.uuid4()),
@@ -44,6 +40,15 @@ def build_plain_text_structure(
         first_block_ordinal=0,
     )
     return (section,), blocks
+
+
+def split_plain_text_paragraphs(text: str) -> tuple[str, ...]:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        raise ReaderValidationError("plain-text document text must not be empty")
+    return tuple(
+        part.strip() for part in _PARAGRAPH_BREAK.split(normalized) if part.strip()
+    )
 
 
 def _classify_block(text: str, *, ordinal: int) -> BlockKind:

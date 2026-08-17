@@ -4,12 +4,30 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-15
+- Date: 2026-08-17
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
+- Completed the clipboard-page and pause-position field fix (2026-08-17).
+  Future multi-paragraph clipboard appends are persisted as ordinary paragraph
+  blocks, allowing the bounded reading window to turn pages normally, while the
+  entire capture remains one atomic Undo/Redo action. Playback positions and
+  bookmarks inside an undone capture are safely remapped to its predecessor,
+  and legacy single-block edit history remains compatible. Existing unusually
+  large legacy blocks are not migrated; the reading view now scrolls to the
+  exact highlighted sentence within them. Pausing an editable document maps the
+  last fully heard Reader cursor into the continuous editor caret and scrolls
+  that position into view instead of returning to the document top.
+- Clipboard-page/pause validation passed on 2026-08-17: all 417 Python tests,
+  all 98 .NET Release tests, Ruff, .NET formatting, `git diff --check`, and the
+  complete Windows desktop integration check passed. The integration check
+  covered live Reader editing, append/Undo, streaming and saved position,
+  structured import, speech rules, WASAPI, clipboard/hotkeys/tray,
+  self-contained packaging, and packaged WPF rendering. No database migration,
+  public API, model, voice, security, licensing, or deployment change was
+  introduced.
 - Completed the field-reported voice-save/rate-limit fix. Selecting and saving
   `Piper en_US Lessac High` had persisted the correct voice, but Save also ran an
   unnecessary full onboarding check. A shared localhost 429 then replaced the
@@ -781,8 +799,9 @@ This file is the live status log and shared memory for future Codex loops.
     Save to Inbox, Ignore, and Always ignore this app. Privacy mode hides the
     preview, and prompt state retains no text after the action completes;
   - append calls the existing revisioned Reader append endpoint once. Each copy
-    is a separate paragraph/edit, one Undo removes exactly the newest selection,
-    and `reader_document_locked` becomes an actionable pause-or-stop message;
+    is one edit containing its natural paragraph blocks, one Undo removes
+    exactly the newest selection, and `reader_document_locked` becomes an
+    actionable pause-or-stop message;
   - tray, main-window, compact-controller, local keyboard, and configurable
     global hotkey controls share Play/Pause/Stop. Hotkey conflicts are reported
     without disabling other controls; tray Exit performs async playback stop and
@@ -1002,7 +1021,9 @@ This file is the live status log and shared memory for future Codex loops.
     mode, and a 5-second busy timeout; writes use short immediate transactions;
   - document content mutations compare integer `row_version`, increment both
     row and content revisions, and update blocks plus edit history atomically;
-  - one clipboard append creates one paragraph block and one undo entry;
+  - one clipboard append creates one undo entry; since the 2026-08-17 field
+    fix, a multi-paragraph selection creates one block per natural paragraph
+    under that same atomic history entry;
   - edit history is bounded by configurable operation and UTF-8 byte limits and
     can be explicitly cleared; this is ordinary deletion, not a secure-erasure
     guarantee;

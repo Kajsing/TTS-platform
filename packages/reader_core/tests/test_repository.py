@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -213,6 +214,22 @@ def test_edit_append_undo_redo_are_atomic_and_persistent(repository, document) -
     assert appended.row_version == 3
     assert appended.total_blocks == 3
 
+    appended_block = repository.list_blocks(document.id)[-1]
+    with connect_sqlite(repository.database_path) as connection:
+        connection.execute(
+            "UPDATE reader_document_edits SET metadata_json = ? WHERE id = ?",
+            (
+                json.dumps(
+                    {
+                        "section_id": appended_block.section_id,
+                        "ordinal": appended_block.ordinal,
+                        "kind": appended_block.kind.value,
+                    }
+                ),
+                append_edit.id,
+            ),
+        )
+
     after_undo_append = repository.undo(document.id, expected_row_version=appended.row_version)
     assert after_undo_append.content_revision == 4
     assert after_undo_append.row_version == 4
@@ -243,6 +260,69 @@ def test_edit_append_undo_redo_are_atomic_and_persistent(repository, document) -
     reopened = SqliteReaderRepository(repository.database_path)
     assert reopened.get_document(document.id).content_revision == 7
     assert reopened.list_blocks(document.id)[-1].text.startswith("Copied forum")
+
+
+def test_multi_paragraph_append_is_one_undoable_action(repository, document) -> None:
+    original_blocks = repository.list_blocks(document.id)
+    predecessor = original_blocks[-1]
+    appended, append_edit = repository.append_text(
+        document.id,
+        "First copied paragraph.\n\nSecond copied paragraph.\n\nThird copied paragraph.",
+        expected_row_version=document.row_version,
+    )
+    appended_blocks = repository.list_blocks(document.id)[-3:]
+
+    assert appended.total_blocks == document.total_blocks + 3
+    assert [block.text for block in appended_blocks] == [
+        "First copied paragraph.",
+        "Second copied paragraph.",
+        "Third copied paragraph.",
+    ]
+    assert append_edit.block_id == appended_blocks[0].id
+    assert appended.total_characters == document.total_characters + sum(
+        block.character_count for block in appended_blocks
+    )
+
+    now = datetime.now(timezone.utc)
+    repository.save_position(
+        PlaybackPosition(
+            document_id=document.id,
+            cursor=_cursor(appended, appended_blocks[1], 4),
+            updated_at=now,
+            completed=False,
+        )
+    )
+    bookmark = repository.create_bookmark(
+        Bookmark(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            cursor=_cursor(appended, appended_blocks[2], 5),
+            label="Appended text",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    undone = repository.undo(document.id, expected_row_version=appended.row_version)
+
+    assert undone.total_blocks == document.total_blocks
+    assert [block.id for block in repository.list_blocks(document.id)] == [
+        block.id for block in original_blocks
+    ]
+    position = repository.get_position(document.id)
+    assert position is not None
+    assert position.cursor.block_id == predecessor.id
+    assert position.cursor.character_offset == predecessor.character_count
+    stored_bookmark = repository.get_bookmark(bookmark.id)
+    assert stored_bookmark.cursor.block_id == predecessor.id
+    assert stored_bookmark.cursor.character_offset == predecessor.character_count
+
+    redone = repository.redo(document.id, expected_row_version=undone.row_version)
+
+    assert redone.total_blocks == document.total_blocks + 3
+    assert [block.id for block in repository.list_blocks(document.id)[-3:]] == [
+        block.id for block in appended_blocks
+    ]
 
 
 def test_new_edit_after_undo_discards_redo_branch(repository, document) -> None:

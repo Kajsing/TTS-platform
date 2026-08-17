@@ -2242,6 +2242,10 @@ public partial class MainWindow : Window
             FooterText.Text = change.Message ?? $"Playback {change.State.ToString().ToLowerInvariant()}";
             _trayIcon?.SetStatus(change.State.ToString());
             UpdatePlaybackControls();
+            if (change.State == ReaderPlaybackState.Paused)
+            {
+                RestorePausedEditorViewport(change.Cursor);
+            }
             UpdateEditorButtons();
             UpdateCompactController();
             if (change.State == ReaderPlaybackState.Completed &&
@@ -2320,6 +2324,7 @@ public partial class MainWindow : Window
             block.HighlightStart = -1;
             block.HighlightLength = 0;
         }
+        ReaderBlockDisplay? followedBlock = null;
         foreach (var group in highlight.SourceSpans.GroupBy(item => item.BlockId))
         {
             var block = _readingBlocks.FirstOrDefault(item =>
@@ -2332,12 +2337,71 @@ public partial class MainWindow : Window
             var end = group.Max(item => item.EndOffset);
             block.HighlightStart = start;
             block.HighlightLength = Math.Max(0, end - start);
-            if (FollowReadingCheckBox.IsChecked == true)
+            if (FollowReadingCheckBox.IsChecked == true &&
+                string.Equals(block.Id, firstSpan.BlockId, StringComparison.Ordinal))
             {
-                ReadingBlocksList.SelectedItem = block;
-                ReadingBlocksList.ScrollIntoView(block);
+                followedBlock = block;
             }
         }
+        if (followedBlock is not null)
+        {
+            BringReadingHighlightIntoView(followedBlock);
+        }
+    }
+
+    private void BringReadingHighlightIntoView(ReaderBlockDisplay block)
+    {
+        ReadingBlocksList.SelectedItem = block;
+        ReadingBlocksList.ScrollIntoView(block);
+        ReadingBlocksList.UpdateLayout();
+        if (ReadingBlocksList.ItemContainerGenerator.ContainerFromItem(block) is
+                DependencyObject container &&
+            FindVisualChild<SourceHighlightTextBlock>(container) is { } textBlock)
+        {
+            textBlock.BringHighlightedTextIntoView();
+        }
+    }
+
+    private void RestorePausedEditorViewport(ReaderCursor? cursor)
+    {
+        if (cursor is null ||
+            _continuousDocument is null ||
+            _editor?.Document is not ReaderDocument document ||
+            !string.Equals(document.Id, cursor.DocumentId, StringComparison.Ordinal) ||
+            !_continuousDocument.TryGetCharacterOffset(cursor, out var characterOffset))
+        {
+            return;
+        }
+
+        _updatingEditor = true;
+        EditorTextBox.CaretIndex = Math.Clamp(characterOffset, 0, EditorTextBox.Text.Length);
+        EditorTextBox.SelectionLength = 0;
+        _updatingEditor = false;
+        _textCursor = cursor;
+        EditorTextBox.UpdateLayout();
+        var line = EditorTextBox.GetLineIndexFromCharacterIndex(EditorTextBox.CaretIndex);
+        if (line >= 0)
+        {
+            EditorTextBox.ScrollToLine(Math.Max(0, line - 2));
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+            {
+                return match;
+            }
+            if (FindVisualChild<T>(child) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+        return null;
     }
 
     private void UpdatePlaybackControls()

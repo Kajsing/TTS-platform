@@ -374,8 +374,10 @@ copy or merge the live SQLite file.
 ### ADR-R15: Clipboard append is a primary capture workflow
 
 Clipboard prompt mode supports repeated explicit `Ctrl+C` capture into one open
-editable document. Each append is atomic and undoable. This workflow is a core
-Milestone 5 acceptance path, not incidental clipboard polish.
+editable document. Each append is atomic and undoable, while natural paragraph
+boundaries inside the captured selection remain separate display blocks so the
+bounded reading window can advance normally. This workflow is a core Milestone
+5 acceptance path, not incidental clipboard polish.
 
 ### ADR-R16: Keep 1.0 independent of TextAloud and OCR
 
@@ -1250,7 +1252,8 @@ document in one transaction.
 - `PATCH /v1/reader/documents/{document_id}/content` applies bounded edit
   operations to editable plain-text blocks.
 - `POST /v1/reader/documents/{document_id}/append` appends one bounded text
-  selection with an explicit paragraph separator.
+  selection. Blank-line paragraph boundaries become separate display blocks,
+  while the complete selection remains one atomic edit.
 - `POST /v1/reader/documents/{document_id}/undo`
 - `POST /v1/reader/documents/{document_id}/redo`
 

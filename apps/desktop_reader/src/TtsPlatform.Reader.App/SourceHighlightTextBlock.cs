@@ -11,6 +11,8 @@ namespace TtsPlatform.Reader.App;
 
 public sealed class SourceHighlightTextBlock : TextBlock
 {
+    private Run? _highlightedRun;
+
     public static readonly DependencyProperty SourceTextProperty = DependencyProperty.Register(
         nameof(SourceText),
         typeof(string),
@@ -47,6 +49,32 @@ public sealed class SourceHighlightTextBlock : TextBlock
         set => SetValue(HighlightLengthProperty, value);
     }
 
+    public bool BringHighlightedTextIntoView()
+    {
+        if (_highlightedRun is null)
+        {
+            return false;
+        }
+
+        var characterRect = _highlightedRun.ContentStart.GetCharacterRect(
+            LogicalDirection.Forward);
+        if (characterRect.IsEmpty)
+        {
+            return false;
+        }
+
+        var lineHeight = double.IsNaN(LineHeight) || LineHeight <= 0
+            ? Math.Max(characterRect.Height, FontSize * 1.35)
+            : LineHeight;
+        var contextRect = new Rect(
+            0,
+            Math.Max(0, characterRect.Top - (lineHeight * 2)),
+            Math.Max(1, ActualWidth),
+            Math.Max(lineHeight * 5, characterRect.Height));
+        BringIntoView(contextRect);
+        return true;
+    }
+
     private static void OnDisplayPropertyChanged(
         DependencyObject dependencyObject,
         DependencyPropertyChangedEventArgs eventArgs)
@@ -58,6 +86,7 @@ public sealed class SourceHighlightTextBlock : TextBlock
     private void RebuildInlines()
     {
         Inlines.Clear();
+        _highlightedRun = null;
         var text = SourceText ?? string.Empty;
         var start = Math.Clamp(HighlightStart, 0, text.Length);
         var length = Math.Clamp(HighlightLength, 0, text.Length - start);
@@ -72,12 +101,13 @@ public sealed class SourceHighlightTextBlock : TextBlock
         {
             Inlines.Add(new Run(text[..start]));
         }
-        Inlines.Add(new Run(text.Substring(start, length))
+        _highlightedRun = new Run(text.Substring(start, length))
         {
             Background = new SolidColorBrush(Color.FromRgb(255, 224, 130)),
             FontWeight = FontWeights.Bold,
             TextDecorations = System.Windows.TextDecorations.Underline,
-        });
+        };
+        Inlines.Add(_highlightedRun);
         if (start + length < text.Length)
         {
             Inlines.Add(new Run(text[(start + length)..]));

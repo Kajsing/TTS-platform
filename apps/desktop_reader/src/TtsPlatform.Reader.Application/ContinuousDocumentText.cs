@@ -61,6 +61,22 @@ public sealed class ContinuousDocumentText
         return ToCursor(documentId, contentRevision, last, last.Length);
     }
 
+    public bool TryGetCharacterOffset(ReaderCursor cursor, out int characterOffset)
+    {
+        ArgumentNullException.ThrowIfNull(cursor);
+        var span = _spans.FirstOrDefault(candidate =>
+            string.Equals(candidate.Block.Id, cursor.BlockId, StringComparison.Ordinal) &&
+            string.Equals(candidate.Block.DocumentId, cursor.DocumentId, StringComparison.Ordinal));
+        if (span is null)
+        {
+            characterOffset = 0;
+            return false;
+        }
+
+        characterOffset = span.Start + Math.Clamp(cursor.CharacterOffset, 0, span.Length);
+        return true;
+    }
+
     public bool TryMapSingleBlockEdit(string editedText, out ContinuousBlockEdit? edit)
     {
         ArgumentNullException.ThrowIfNull(editedText);

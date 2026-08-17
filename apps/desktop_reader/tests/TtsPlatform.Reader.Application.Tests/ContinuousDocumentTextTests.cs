@@ -37,6 +37,33 @@ public sealed class ContinuousDocumentTextTests
     }
 
     [Fact]
+    public void Maps_playback_cursor_back_to_document_caret()
+    {
+        var document = new ContinuousDocumentText([
+            Block("first", 0),
+            Block("second", 1),
+        ]);
+        var cursor = new ReaderCursor("doc", "block-1", 1, 3, 7, null);
+
+        var mapped = document.TryGetCharacterOffset(cursor, out var characterOffset);
+
+        Assert.True(mapped);
+        Assert.Equal(document.Text.IndexOf("ond", StringComparison.Ordinal), characterOffset);
+    }
+
+    [Fact]
+    public void Rejects_playback_cursor_from_another_document()
+    {
+        var document = new ContinuousDocumentText([Block("first", 0)]);
+        var cursor = new ReaderCursor("other", "block-0", 0, 2, 1, null);
+
+        var mapped = document.TryGetCharacterOffset(cursor, out var characterOffset);
+
+        Assert.False(mapped);
+        Assert.Equal(0, characterOffset);
+    }
+
+    [Fact]
     public void Maps_an_edit_inside_one_block_back_to_that_block()
     {
         var document = new ContinuousDocumentText([

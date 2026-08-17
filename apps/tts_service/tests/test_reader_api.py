@@ -705,7 +705,7 @@ def test_content_edit_append_undo_redo_and_typed_failures(tmp_path: Path) -> Non
         headers=headers,
         json={
             "expected_row_version": edited.json()["document"]["row_version"],
-            "text": "Copied forum selection.",
+            "text": "First copied paragraph.\n\nSecond copied paragraph.",
         },
     )
     undone = client.post(
@@ -738,8 +738,9 @@ def test_content_edit_append_undo_redo_and_typed_failures(tmp_path: Path) -> Non
     assert stale.status_code == 409
     assert stale.json()["error"]["type"] == "reader_revision_conflict"
     assert appended.json()["edit"]["operation_type"] == "append"
+    assert appended.json()["document"]["total_blocks"] == 3
     assert undone.json()["document"]["total_blocks"] == 1
-    assert redone.json()["document"]["total_blocks"] == 2
+    assert redone.json()["document"]["total_blocks"] == 3
     assert missing_block.status_code == 404
     assert missing_block.json()["error"]["type"] == "reader_block_not_found"
 

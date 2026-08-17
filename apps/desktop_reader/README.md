@@ -32,8 +32,8 @@ The Milestone 9 Reader beta provides:
 - opt-in Copy Selection and Read with a one-second timeout, secure-desktop
   refusal, one-shot `Ctrl+C`, loop prevention, and best-effort safe clipboard
   restoration;
-- one-operation paragraph append with durable Undo/Redo and an actionable
-  playback-lock refusal;
+- one-operation clipboard append that preserves paragraph boundaries, with
+  durable Undo/Redo and an actionable playback-lock refusal;
 - configurable nonfatal global hotkeys, a tray menu with clean Exit, and an
   optional always-on-top compact controller;
 - privacy mode enabled by default, with monitoring state kept visible and raw

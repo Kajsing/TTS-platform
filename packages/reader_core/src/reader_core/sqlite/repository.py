@@ -9,7 +9,7 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
@@ -52,8 +52,105 @@ from ..models import (
     SpeechRuleSet,
     utc_now,
 )
+from ..plain_text import split_plain_text_paragraphs
 from .connection import connect_sqlite
 from .migrations import apply_migrations
+
+
+@dataclass(frozen=True)
+class _AppendedBlockSpec:
+    id: str
+    ordinal: int
+    section_id: str | None
+    kind: str
+    text: str
+
+
+def _appended_block_metadata(
+    specs: tuple[_AppendedBlockSpec, ...],
+) -> list[dict[str, Any]]:
+    metadata: list[dict[str, Any]] = []
+    text_start = 0
+    for spec in specs:
+        metadata.append(
+            {
+                "id": spec.id,
+                "ordinal": spec.ordinal,
+                "section_id": spec.section_id,
+                "kind": spec.kind,
+                "text_start": text_start,
+                "text_length": len(spec.text),
+            }
+        )
+        text_start += len(spec.text) + 2
+    return metadata
+
+
+def _appended_block_specs(edit: DocumentEdit) -> tuple[_AppendedBlockSpec, ...]:
+    metadata = dict(edit.metadata)
+    raw_blocks = metadata.get("blocks")
+    if raw_blocks is None:
+        try:
+            kind = BlockKind(str(metadata.get("kind", BlockKind.PARAGRAPH.value))).value
+            ordinal = int(metadata["ordinal"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ReaderStaleCursorError("append history metadata is invalid") from exc
+        return (
+            _AppendedBlockSpec(
+                id=edit.block_id,
+                ordinal=ordinal,
+                section_id=(
+                    str(metadata["section_id"])
+                    if metadata.get("section_id") is not None
+                    else None
+                ),
+                kind=kind,
+                text=edit.replacement_text,
+            ),
+        )
+    if not isinstance(raw_blocks, list) or not raw_blocks:
+        raise ReaderStaleCursorError("append history block metadata is invalid")
+
+    specs: list[_AppendedBlockSpec] = []
+    try:
+        for raw in raw_blocks:
+            if not isinstance(raw, Mapping):
+                raise TypeError("block metadata must be an object")
+            block_id = str(raw["id"])
+            ordinal = int(raw["ordinal"])
+            text_start = int(raw["text_start"])
+            text_length = int(raw["text_length"])
+            kind = BlockKind(str(raw.get("kind", BlockKind.PARAGRAPH.value))).value
+            if not block_id or ordinal < 0 or text_start < 0 or text_length <= 0:
+                raise ValueError("block metadata is outside its valid range")
+            text = edit.replacement_text[text_start : text_start + text_length]
+            if len(text) != text_length:
+                raise ValueError("block metadata extends past the appended text")
+            specs.append(
+                _AppendedBlockSpec(
+                    id=block_id,
+                    ordinal=ordinal,
+                    section_id=(
+                        str(raw["section_id"])
+                        if raw.get("section_id") is not None
+                        else None
+                    ),
+                    kind=kind,
+                    text=text,
+                )
+            )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReaderStaleCursorError("append history block metadata is invalid") from exc
+
+    result = tuple(specs)
+    if (
+        result[0].id != edit.block_id
+        or len({spec.id for spec in result}) != len(result)
+        or any(spec.ordinal != result[0].ordinal + index for index, spec in enumerate(result))
+        or "\n\n".join(spec.text for spec in result) != edit.replacement_text
+    ):
+        raise ReaderStaleCursorError("append history block metadata is inconsistent")
+    return result
 
 
 class SqliteReaderRepository:
@@ -419,9 +516,11 @@ class SqliteReaderRepository:
         *,
         expected_row_version: int,
     ) -> tuple[ReaderDocument, DocumentEdit]:
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-        if not normalized:
-            raise ReaderValidationError("appended text must not be empty")
+        try:
+            paragraphs = split_plain_text_paragraphs(text)
+        except ReaderValidationError:
+            raise ReaderValidationError("appended text must not be empty") from None
+        normalized = "\n\n".join(paragraphs)
         with self._write() as connection:
             document = self._require_editable_document(connection, document_id)
             _check_version(document, expected_row_version)
@@ -434,9 +533,19 @@ class SqliteReaderRepository:
             ).fetchone()
             if last is None:
                 raise ReaderValidationError("cannot append to a document without blocks")
-            block_id = str(uuid.uuid4())
-            ordinal = int(last["ordinal"]) + 1
+            first_ordinal = int(last["ordinal"]) + 1
             section_id = last["section_id"]
+            block_specs = tuple(
+                _AppendedBlockSpec(
+                    id=str(uuid.uuid4()),
+                    ordinal=first_ordinal + index,
+                    section_id=section_id,
+                    kind=BlockKind.PARAGRAPH.value,
+                    text=paragraph,
+                )
+                for index, paragraph in enumerate(paragraphs)
+            )
+            block_id = block_specs[0].id
             new_revision = document.content_revision + 1
             now = utc_now()
             self._discard_redo(connection, document_id)
@@ -455,34 +564,38 @@ class SqliteReaderRepository:
                 created_at=now,
                 metadata={
                     "section_id": section_id,
-                    "ordinal": ordinal,
+                    "ordinal": first_ordinal,
                     "kind": BlockKind.PARAGRAPH.value,
+                    "blocks": _appended_block_metadata(block_specs),
                 },
             )
-            connection.execute(
+            connection.executemany(
                 """
                 INSERT INTO reader_blocks(
                     id, document_id, section_id, ordinal, kind, text,
                     character_count, content_sha256, row_version, metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, '{}')
                 """,
-                (
-                    block_id,
-                    document_id,
-                    section_id,
-                    ordinal,
-                    BlockKind.PARAGRAPH.value,
-                    normalized,
-                    len(normalized),
-                    _sha256(normalized),
-                ),
+                [
+                    (
+                        spec.id,
+                        document_id,
+                        spec.section_id,
+                        spec.ordinal,
+                        spec.kind,
+                        spec.text,
+                        len(spec.text),
+                        _sha256(spec.text),
+                    )
+                    for spec in block_specs
+                ],
             )
             self._update_document_content(
                 connection,
                 document,
                 new_revision=new_revision,
-                block_delta=1,
-                character_delta=len(normalized),
+                block_delta=len(block_specs),
+                character_delta=sum(len(spec.text) for spec in block_specs),
                 now=now,
             )
             self._advance_saved_cursor_revisions(connection, document_id, new_revision)
@@ -512,9 +625,13 @@ class SqliteReaderRepository:
                 character_delta = len(edit.original_text) - len(edit.replacement_text)
                 block_delta = 0
             else:
-                self._remove_appended_block(connection, edit, new_revision)
-                character_delta = -len(edit.replacement_text)
-                block_delta = -1
+                block_count, character_count = self._remove_appended_blocks(
+                    connection,
+                    edit,
+                    new_revision,
+                )
+                character_delta = -character_count
+                block_delta = -block_count
             self._update_document_content(
                 connection,
                 document,
@@ -551,10 +668,10 @@ class SqliteReaderRepository:
                 character_delta = len(edit.replacement_text) - len(edit.original_text)
                 block_delta = 0
             else:
-                self._restore_appended_block(connection, edit)
+                block_count, character_count = self._restore_appended_blocks(connection, edit)
                 self._advance_saved_cursor_revisions(connection, document_id, new_revision)
-                character_delta = len(edit.replacement_text)
-                block_delta = 1
+                character_delta = character_count
+                block_delta = block_count
             self._update_document_content(
                 connection,
                 document,
@@ -1932,46 +2049,60 @@ class SqliteReaderRepository:
             new_revision=new_revision,
         )
 
-    def _remove_appended_block(
+    def _remove_appended_blocks(
         self,
         connection: sqlite3.Connection,
         edit: DocumentEdit,
         new_revision: int,
-    ) -> None:
-        row = connection.execute(
-            "SELECT ordinal, text FROM reader_blocks WHERE id = ? AND document_id = ?",
-            (edit.block_id, edit.document_id),
-        ).fetchone()
-        if row is None or row["text"] != edit.replacement_text:
-            raise ReaderStaleCursorError("appended block no longer matches undo history")
+    ) -> tuple[int, int]:
+        specs = _appended_block_specs(edit)
+        first_ordinal = specs[0].ordinal
+        last_ordinal = specs[-1].ordinal
+        rows = list(
+            connection.execute(
+                """
+                SELECT id, ordinal, text FROM reader_blocks
+                WHERE document_id = ? AND ordinal BETWEEN ? AND ? ORDER BY ordinal
+                """,
+                (edit.document_id, first_ordinal, last_ordinal),
+            )
+        )
+        if len(rows) != len(specs) or any(
+            str(row["id"]) != spec.id
+            or int(row["ordinal"]) != spec.ordinal
+            or str(row["text"]) != spec.text
+            for row, spec in zip(rows, specs, strict=True)
+        ):
+            raise ReaderStaleCursorError("appended blocks no longer match undo history")
         previous = connection.execute(
             """
             SELECT id, ordinal, character_count FROM reader_blocks
             WHERE document_id = ? AND ordinal < ? ORDER BY ordinal DESC LIMIT 1
             """,
-            (edit.document_id, row["ordinal"]),
+            (edit.document_id, first_ordinal),
         ).fetchone()
         if previous is None:
-            raise ReaderStaleCursorError("appended block has no stable predecessor")
+            raise ReaderStaleCursorError("appended blocks have no stable predecessor")
         connection.execute(
             """
             UPDATE reader_playback_positions SET block_id = ?, block_ordinal = ?,
                 character_offset = ?
-            WHERE document_id = ? AND block_id = ?
+            WHERE document_id = ? AND block_ordinal BETWEEN ? AND ?
             """,
             (
                 previous["id"],
                 previous["ordinal"],
                 previous["character_count"],
                 edit.document_id,
-                edit.block_id,
+                first_ordinal,
+                last_ordinal,
             ),
         )
         connection.execute(
             """
             UPDATE reader_bookmarks SET block_id = ?, block_ordinal = ?, character_offset = ?,
                 updated_at = ?
-            WHERE document_id = ? AND block_id = ?
+            WHERE document_id = ? AND block_ordinal BETWEEN ? AND ?
             """,
             (
                 previous["id"],
@@ -1979,32 +2110,48 @@ class SqliteReaderRepository:
                 previous["character_count"],
                 _time_dump(utc_now()),
                 edit.document_id,
-                edit.block_id,
+                first_ordinal,
+                last_ordinal,
             ),
         )
         self._advance_saved_cursor_revisions(connection, edit.document_id, new_revision)
-        connection.execute("DELETE FROM reader_blocks WHERE id = ?", (edit.block_id,))
-
-    def _restore_appended_block(self, connection: sqlite3.Connection, edit: DocumentEdit) -> None:
-        metadata = dict(edit.metadata)
         connection.execute(
+            """
+            DELETE FROM reader_blocks
+            WHERE document_id = ? AND ordinal BETWEEN ? AND ?
+            """,
+            (edit.document_id, first_ordinal, last_ordinal),
+        )
+        return len(specs), sum(len(spec.text) for spec in specs)
+
+    def _restore_appended_blocks(
+        self,
+        connection: sqlite3.Connection,
+        edit: DocumentEdit,
+    ) -> tuple[int, int]:
+        specs = _appended_block_specs(edit)
+        connection.executemany(
             """
             INSERT INTO reader_blocks(
                 id, document_id, section_id, ordinal, kind, text,
                 character_count, content_sha256, row_version, metadata_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, '{}')
             """,
-            (
-                edit.block_id,
-                edit.document_id,
-                metadata.get("section_id"),
-                int(metadata["ordinal"]),
-                str(metadata.get("kind", BlockKind.PARAGRAPH.value)),
-                edit.replacement_text,
-                len(edit.replacement_text),
-                _sha256(edit.replacement_text),
-            ),
+            [
+                (
+                    spec.id,
+                    edit.document_id,
+                    spec.section_id,
+                    spec.ordinal,
+                    spec.kind,
+                    spec.text,
+                    len(spec.text),
+                    _sha256(spec.text),
+                )
+                for spec in specs
+            ],
         )
+        return len(specs), sum(len(spec.text) for spec in specs)
 
     def _resolve_cursor(
         self,
