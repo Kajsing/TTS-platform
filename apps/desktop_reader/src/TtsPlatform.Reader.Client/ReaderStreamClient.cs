@@ -17,11 +17,16 @@ public sealed class ReaderStreamClient : IReaderStreamClient
 
     private readonly Uri _serviceBaseUri;
     private readonly ITokenProvider _tokenProvider;
+    private readonly ReaderPrivacySessionStore? _privacySessions;
 
-    public ReaderStreamClient(string serviceBaseUrl, ITokenProvider tokenProvider)
+    public ReaderStreamClient(
+        string serviceBaseUrl,
+        ITokenProvider tokenProvider,
+        ReaderPrivacySessionStore? privacySessions = null)
     {
         _serviceBaseUri = ServiceBaseUrl.Parse(serviceBaseUrl);
         _tokenProvider = tokenProvider;
+        _privacySessions = privacySessions;
     }
 
     public async Task<IReaderStreamSession> OpenAsync(
@@ -44,6 +49,11 @@ public sealed class ReaderStreamClient : IReaderStreamClient
 
         var socket = new ClientWebSocket();
         socket.Options.SetRequestHeader("Authorization", new AuthenticationHeaderValue("Bearer", token).ToString());
+        var privacyHeader = _privacySessions?.GetHeaderValue();
+        if (!string.IsNullOrWhiteSpace(privacyHeader))
+        {
+            socket.Options.SetRequestHeader(ReaderPrivacySessionStore.HeaderName, privacyHeader);
+        }
         var streamUri = new UriBuilder(_serviceBaseUri)
         {
             Scheme = "ws",

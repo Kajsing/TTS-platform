@@ -9,6 +9,7 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
     <StackPanel>
       <TextBlock Text="Article folders" FontSize="22" FontWeight="SemiBold" />
@@ -21,6 +22,8 @@
       <DataGrid.Columns>
         <DataGridTextColumn Header="Folder" Binding="{Binding Name}" Width="*" />
         <DataGridTextColumn Header="Articles" Binding="{Binding ArticleCount}" Width="90" />
+        <DataGridCheckBoxColumn Header="Locked" Binding="{Binding PrivacyLocked}" Width="70" />
+        <DataGridCheckBoxColumn Header="Open" Binding="{Binding PrivacyUnlocked}" Width="65" />
       </DataGrid.Columns>
     </DataGrid>
     <Grid Grid.Row="2" Margin="0,10,0,0">
@@ -38,7 +41,21 @@
       <Button Grid.Column="3" x:Name="DeleteButton" Content="Delete…" Click="DeleteButton_Click"
               Margin="8,0,0,0" IsEnabled="False" />
     </Grid>
-    <DockPanel Grid.Row="3" Margin="0,12,0,0">
+    <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+      <Button x:Name="SetPrivacyButton" Content="Set Privacy lock…"
+              Click="SetPrivacyButton_Click" IsEnabled="False" />
+      <Button x:Name="UnlockButton" Content="Unlock…" Margin="8,0,0,0"
+              Click="UnlockButton_Click" IsEnabled="False" />
+      <Button x:Name="RelockButton" Content="Relock" Margin="8,0,0,0"
+              Click="RelockButton_Click" IsEnabled="False" />
+      <Button x:Name="ChangeCodeButton" Content="Change code…" Margin="8,0,0,0"
+              Click="ChangeCodeButton_Click" IsEnabled="False" />
+      <Button x:Name="RecoverButton" Content="Recover…" Margin="8,0,0,0"
+              Click="RecoverButton_Click" IsEnabled="False" />
+      <Button x:Name="RemovePrivacyButton" Content="Remove lock…" Margin="8,0,0,0"
+              Click="RemovePrivacyButton_Click" IsEnabled="False" />
+    </WrapPanel>
+    <DockPanel Grid.Row="4" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" Content="Close" IsDefault="True" Click="CloseButton_Click"
               MinWidth="90" />
       <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"

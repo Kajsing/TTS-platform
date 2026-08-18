@@ -13,7 +13,9 @@ public partial class MoveArticlesDialog : Window
         {
             new(null, "All articles (no folder)"),
         };
-        destinations.AddRange(folders.Select(folder => new FolderDestination(folder.Id, folder.Name)));
+        destinations.AddRange(folders
+            .Where(folder => !folder.PrivacyLocked || folder.PrivacyUnlocked)
+            .Select(folder => new FolderDestination(folder.Id, folder.Name)));
         DestinationComboBox.ItemsSource = destinations;
         DestinationComboBox.SelectedIndex = 0;
     }

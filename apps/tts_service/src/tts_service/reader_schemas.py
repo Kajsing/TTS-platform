@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from reader_core import (
     BlockKind,
     Bookmark,
@@ -150,17 +150,29 @@ class ReaderFolderResponse(BaseModel):
     row_version: int
     article_count: int
     privacy_locked: bool
+    privacy_unlocked: bool
 
     @classmethod
-    def from_domain(cls, folder: ReaderFolder) -> "ReaderFolderResponse":
+    def from_domain(
+        cls,
+        folder: ReaderFolder,
+        *,
+        privacy_unlocked: bool | None = None,
+        concealed: bool = False,
+    ) -> "ReaderFolderResponse":
         return cls(
             id=folder.id,
-            name=folder.name,
+            name="Privacy locked folder" if concealed else folder.name,
             created_at=folder.created_at,
             updated_at=folder.updated_at,
             row_version=folder.row_version,
-            article_count=folder.article_count,
+            article_count=0 if concealed else folder.article_count,
             privacy_locked=folder.privacy_locked,
+            privacy_unlocked=(
+                not folder.privacy_locked
+                if privacy_unlocked is None
+                else privacy_unlocked
+            ),
         )
 
 
@@ -211,6 +223,45 @@ class ReaderFolderDeleteResponse(BaseModel):
             deleted_articles=result.deleted_articles,
             mode=mode,
         )
+
+
+class ReaderPrivacySetupRequest(BaseModel):
+    code: SecretStr = Field(min_length=6, max_length=128)
+    expected_row_version: int = Field(gt=0)
+
+
+class ReaderPrivacyChangeRequest(BaseModel):
+    current_code: SecretStr = Field(min_length=6, max_length=128)
+    new_code: SecretStr = Field(min_length=6, max_length=128)
+    expected_row_version: int = Field(gt=0)
+
+
+class ReaderPrivacyUnlockRequest(BaseModel):
+    code: SecretStr = Field(min_length=6, max_length=128)
+
+
+class ReaderPrivacyRecoveryRequest(BaseModel):
+    recovery_key: SecretStr = Field(min_length=30, max_length=100)
+    new_code: SecretStr = Field(min_length=6, max_length=128)
+    expected_row_version: int = Field(gt=0)
+
+
+class ReaderPrivacyRemoveRequest(BaseModel):
+    current_code: SecretStr = Field(min_length=6, max_length=128)
+    expected_row_version: int = Field(gt=0)
+
+
+class ReaderPrivacySessionResponse(BaseModel):
+    folder_id: str
+    session_token: str
+    expires_at: datetime
+    expires_in_seconds: int
+
+
+class ReaderPrivacyLockResponse(BaseModel):
+    folder: ReaderFolderResponse
+    recovery_key: str
+    session: ReaderPrivacySessionResponse
 
 
 class ReaderBrowserCaptureBlock(BaseModel):

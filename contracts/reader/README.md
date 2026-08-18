@@ -48,3 +48,10 @@ Reader Upgrade U4 adds `folders.response.json`, `move_documents.request.json`,
 and `folder_delete.response.json`. Folder membership is a service-owned nullable
 document relationship; multi-article moves and the two explicit deletion modes
 are revisioned and transactional.
+
+Reader Upgrade U6 adds `privacy_lock.response.json` and
+`privacy_session.response.json`. Privacy sessions are opaque, memory-only,
+folder-bound credentials with a 15-minute lifetime. Lock setup, code change,
+and recovery return a one-time recovery key; subsequent folder responses never
+return it. This application-level Privacy lock hides content inside Reader but
+does not encrypt the database, files, or backups.

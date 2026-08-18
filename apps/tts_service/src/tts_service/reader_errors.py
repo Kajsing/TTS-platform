@@ -19,6 +19,11 @@ from reader_core import (
 from speech_rules import SpeechRuleError, SpeechRuleInterchangeError
 
 from .errors import APIError, ErrorBody
+from .reader_privacy import (
+    ReaderPrivacyCredentialError,
+    ReaderPrivacyLockedError,
+    ReaderPrivacyRateLimitedError,
+)
 from .reader_service import (
     ReaderDocumentLockedError,
     ReaderDuplicateDocumentError,
@@ -68,6 +73,26 @@ def translate_reader_error(
     missing_entity: str = "document",
     cursor_input: bool = False,
 ) -> APIError:
+    if isinstance(error, ReaderPrivacyLockedError):
+        return reader_api_error(
+            "reader_privacy_locked",
+            status_code=423,
+            message="This Reader folder is protected by a Privacy lock.",
+            details={"folder_id": error.folder_id},
+        )
+    if isinstance(error, ReaderPrivacyCredentialError):
+        return reader_api_error(
+            "reader_privacy_invalid_credential",
+            status_code=403,
+            message="The Privacy lock code or recovery key is not valid.",
+        )
+    if isinstance(error, ReaderPrivacyRateLimitedError):
+        return reader_api_error(
+            "reader_privacy_rate_limited",
+            status_code=429,
+            message="Too many Privacy lock attempts. Wait before trying again.",
+            details={"retry_after_seconds": error.retry_after_seconds},
+        )
     if isinstance(error, ReaderDuplicateDocumentError):
         return reader_api_error(
             "reader_duplicate_document",

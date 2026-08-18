@@ -20,6 +20,7 @@ from .reader_errors import (
     reader_disabled,
     translate_reader_error,
 )
+from .reader_privacy import PRIVACY_SESSION_HEADER, parse_privacy_session_header
 from .reader_service import ReaderApplicationService
 from .reader_streaming import (
     ReaderSpeechCompiler,
@@ -93,6 +94,16 @@ def build_reader_stream_router() -> APIRouter:
                 )
             payload = ReaderStreamStartPayload.model_validate(initial.get("payload", {}))
             service = _reader_service(websocket)
+            try:
+                privacy_tokens = parse_privacy_session_header(
+                    websocket.headers.get(PRIVACY_SESSION_HEADER)
+                )
+                service.privacy.require_document_access(
+                    payload.document_id,
+                    privacy_tokens,
+                )
+            except ReaderError as error:
+                raise translate_reader_error(error) from error
             stream_id = str(uuid4())
             await _run_reader_stream(
                 websocket,
@@ -100,6 +111,7 @@ def build_reader_stream_router() -> APIRouter:
                 service=service,
                 payload=payload,
                 stream_id=stream_id,
+                privacy_tokens=privacy_tokens,
             )
         except TimeoutError:
             await _send_error(
@@ -137,6 +149,7 @@ async def _run_reader_stream(
     service: ReaderApplicationService,
     payload: ReaderStreamStartPayload,
     stream_id: str,
+    privacy_tokens: tuple[str, ...],
 ) -> None:
     voice_id = payload.voice or container.config.tts.default_voice
     if payload.voice_profile_id is not None:
@@ -275,6 +288,10 @@ async def _run_reader_stream(
             for fragment_index, fragment in enumerate(window.fragments):
                 if cancel_event.is_set():
                     break
+                service.privacy.require_document_access(
+                    payload.document_id,
+                    privacy_tokens,
+                )
                 fragment_started_at = monotonic()
                 request = _synthesis_request(
                     fragment,
@@ -414,6 +431,15 @@ async def _run_reader_stream(
             outcome = "cancelled"
             container.backend.cancel(stream_id)
             container.streaming_metrics.mark_cancelled()
+        except ReaderError as error:
+            outcome = "failure"
+            container.backend.cancel(stream_id)
+            container.streaming_metrics.mark_failed()
+            await _send_error(
+                websocket,
+                translate_reader_error(error),
+                close_code=1008,
+            )
         except BackendError as error:
             outcome = "failure"
             container.backend.cancel(stream_id)

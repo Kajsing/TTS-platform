@@ -49,6 +49,7 @@ from ..models import (
     ReaderDocumentBundle,
     ReaderExportJob,
     ReaderFolder,
+    ReaderFolderPrivacy,
     ReaderSection,
     RuleScope,
     RuleStage,
@@ -444,6 +445,7 @@ class SqliteReaderRepository:
         limit: int = 50,
         cursor: str | None = None,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> DocumentPage:
         if limit <= 0:
             raise ReaderValidationError("document page limit must be positive")
@@ -459,6 +461,17 @@ class SqliteReaderRepository:
             else:
                 clauses.append("folder_id = ?")
                 parameters.append(folder_id)
+        privacy_clause = (
+            "(folder_id IS NULL OR NOT EXISTS ("
+            "SELECT 1 FROM reader_folder_privacy AS privacy "
+            "WHERE privacy.folder_id = reader_documents.folder_id"
+            ")"
+        )
+        if unlocked_folder_ids:
+            placeholders = ",".join("?" for _ in unlocked_folder_ids)
+            privacy_clause += f" OR folder_id IN ({placeholders})"
+            parameters.extend(unlocked_folder_ids)
+        clauses.append(privacy_clause + ")")
         if query is not None and query.strip():
             cleaned_query = query.strip()
             fts_query = _fts_query(cleaned_query) if self._search_available else None
@@ -497,28 +510,59 @@ class SqliteReaderRepository:
             next_cursor = _encode_page_cursor(str(selected[-1]["updated_at"]), selected[-1]["id"])
         return DocumentPage(items=items, next_cursor=next_cursor)
 
-    def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None:
+    def find_document_by_source_hash(
+        self,
+        source_sha256: str,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> ReaderDocument | None:
         if not source_sha256.strip():
             raise ReaderValidationError("source hash must not be empty")
         with self._connection() as connection:
+            privacy_clause = (
+                "(folder_id IS NULL OR NOT EXISTS ("
+                "SELECT 1 FROM reader_folder_privacy AS privacy "
+                "WHERE privacy.folder_id = reader_documents.folder_id)"
+            )
+            parameters: list[object] = [source_sha256]
+            if unlocked_folder_ids:
+                placeholders = ",".join("?" for _ in unlocked_folder_ids)
+                privacy_clause += f" OR folder_id IN ({placeholders})"
+                parameters.extend(unlocked_folder_ids)
+            privacy_clause += ")"
             row = connection.execute(
-                """
-                SELECT * FROM reader_documents
-                WHERE source_sha256 = ? AND deleted_at IS NULL
-                ORDER BY created_at, id LIMIT 1
-                """,
-                (source_sha256,),
+                "SELECT * FROM reader_documents "
+                "WHERE source_sha256 = ? AND deleted_at IS NULL AND "
+                + privacy_clause
+                + " ORDER BY created_at, id LIMIT 1",
+                parameters,
             ).fetchone()
             return _document_from_row(row) if row is not None else None
 
-    def document_counts_by_state(self) -> dict[DocumentState, int]:
+    def document_counts_by_state(
+        self,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> dict[DocumentState, int]:
         counts = {state: 0 for state in DocumentState}
+        privacy_clause = (
+            "(folder_id IS NULL OR NOT EXISTS ("
+            "SELECT 1 FROM reader_folder_privacy AS privacy "
+            "WHERE privacy.folder_id = reader_documents.folder_id)"
+        )
+        parameters: list[object] = []
+        if unlocked_folder_ids:
+            placeholders = ",".join("?" for _ in unlocked_folder_ids)
+            privacy_clause += f" OR folder_id IN ({placeholders})"
+            parameters.extend(unlocked_folder_ids)
+        privacy_clause += ")"
         with self._connection() as connection:
             for row in connection.execute(
-                """
-                SELECT state, COUNT(*) AS total FROM reader_documents
-                WHERE deleted_at IS NULL GROUP BY state
-                """
+                "SELECT state, COUNT(*) AS total FROM reader_documents "
+                "WHERE deleted_at IS NULL AND "
+                + privacy_clause
+                + " GROUP BY state",
+                parameters,
             ):
                 counts[DocumentState(row["state"])] = int(row["total"])
         return counts
@@ -554,7 +598,11 @@ class SqliteReaderRepository:
                 for row in connection.execute(
                     """
                     SELECT folder.*,
-                           COUNT(document.id) AS article_count
+                           COUNT(document.id) AS article_count,
+                           EXISTS(
+                               SELECT 1 FROM reader_folder_privacy AS privacy
+                               WHERE privacy.folder_id = folder.id
+                           ) AS privacy_locked
                     FROM reader_folders AS folder
                     LEFT JOIN reader_documents AS document
                       ON document.folder_id = folder.id
@@ -564,6 +612,77 @@ class SqliteReaderRepository:
                     """
                 )
             )
+
+    def get_folder_privacy(self, folder_id: str) -> ReaderFolderPrivacy | None:
+        with self._connection() as connection:
+            self._require_folder(connection, folder_id)
+            row = connection.execute(
+                "SELECT * FROM reader_folder_privacy WHERE folder_id = ?",
+                (folder_id,),
+            ).fetchone()
+            return _folder_privacy_from_row(row) if row is not None else None
+
+    def set_folder_privacy(
+        self,
+        privacy: ReaderFolderPrivacy,
+        *,
+        expected_row_version: int,
+    ) -> ReaderFolder:
+        with self._write() as connection:
+            folder = self._require_folder(connection, privacy.folder_id)
+            _check_folder_version(folder, expected_row_version)
+            connection.execute(
+                """
+                INSERT INTO reader_folder_privacy(
+                    folder_id, code_hash, recovery_hash, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(folder_id) DO UPDATE SET
+                    code_hash = excluded.code_hash,
+                    recovery_hash = excluded.recovery_hash,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    privacy.folder_id,
+                    privacy.code_hash,
+                    privacy.recovery_hash,
+                    _time_dump(privacy.updated_at),
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE reader_folders
+                SET updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (_time_dump(privacy.updated_at), privacy.folder_id),
+            )
+            return self._require_folder(connection, privacy.folder_id)
+
+    def clear_folder_privacy(
+        self,
+        folder_id: str,
+        *,
+        expected_row_version: int,
+    ) -> ReaderFolder:
+        with self._write() as connection:
+            folder = self._require_folder(connection, folder_id)
+            _check_folder_version(folder, expected_row_version)
+            result = connection.execute(
+                "DELETE FROM reader_folder_privacy WHERE folder_id = ?",
+                (folder_id,),
+            )
+            if result.rowcount == 0:
+                raise ReaderValidationError("folder does not have a privacy lock")
+            now = _time_dump(utc_now())
+            connection.execute(
+                """
+                UPDATE reader_folders
+                SET updated_at = ?, row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (now, folder_id),
+            )
+            return self._require_folder(connection, folder_id)
 
     def update_folder(
         self,
@@ -1588,15 +1707,30 @@ class SqliteReaderRepository:
             )
             return request
 
-    def peek_desktop_open_request(self) -> ReaderDesktopOpenRequest | None:
+    def peek_desktop_open_request(
+        self,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> ReaderDesktopOpenRequest | None:
+        privacy_clause = (
+            "(document.folder_id IS NULL OR NOT EXISTS ("
+            "SELECT 1 FROM reader_folder_privacy AS privacy "
+            "WHERE privacy.folder_id = document.folder_id)"
+        )
+        parameters: list[object] = []
+        if unlocked_folder_ids:
+            placeholders = ",".join("?" for _ in unlocked_folder_ids)
+            privacy_clause += f" OR document.folder_id IN ({placeholders})"
+            parameters.extend(unlocked_folder_ids)
+        privacy_clause += ")"
         with self._connection() as connection:
             row = connection.execute(
-                """
-                SELECT request.* FROM reader_desktop_open_requests AS request
-                JOIN reader_documents AS document ON document.id = request.document_id
-                WHERE document.deleted_at IS NULL
-                ORDER BY request.created_at, request.id LIMIT 1
-                """
+                "SELECT request.* FROM reader_desktop_open_requests AS request "
+                "JOIN reader_documents AS document ON document.id = request.document_id "
+                "WHERE document.deleted_at IS NULL AND "
+                + privacy_clause
+                + " ORDER BY request.created_at, request.id LIMIT 1",
+                parameters,
             ).fetchone()
             return _desktop_open_request_from_row(row) if row is not None else None
 
@@ -2304,7 +2438,11 @@ class SqliteReaderRepository:
             SELECT folder.*,
                    (SELECT COUNT(*) FROM reader_documents AS document
                     WHERE document.folder_id = folder.id
-                      AND document.deleted_at IS NULL) AS article_count
+                      AND document.deleted_at IS NULL) AS article_count,
+                   EXISTS(
+                       SELECT 1 FROM reader_folder_privacy AS privacy
+                       WHERE privacy.folder_id = folder.id
+                   ) AS privacy_locked
             FROM reader_folders AS folder
             WHERE folder.id = ?
             """,
@@ -3156,6 +3294,16 @@ def _folder_from_row(row: sqlite3.Row) -> ReaderFolder:
         updated_at=_time_load(row["updated_at"]),
         row_version=int(row["row_version"]),
         article_count=int(row["article_count"]),
+        privacy_locked=bool(row["privacy_locked"]),
+    )
+
+
+def _folder_privacy_from_row(row: sqlite3.Row) -> ReaderFolderPrivacy:
+    return ReaderFolderPrivacy(
+        folder_id=str(row["folder_id"]),
+        code_hash=str(row["code_hash"]),
+        recovery_hash=str(row["recovery_hash"]),
+        updated_at=_time_load(row["updated_at"]),
     )
 
 

@@ -2,9 +2,10 @@
 
 ## Status
 
-The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) is
-complete. Track B is in progress: U4 and U5 are implemented and validated; U6
-is waiting for the documented forgotten-code recovery decision.
+The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) and
+Track B (U4 through U6) are complete. U7 is the next upgrade, but it is a
+security/architecture decision and feasibility spike rather than authorization
+to expose the current service remotely.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -206,8 +207,25 @@ Minimum privacy-lock requirements:
 - Require an unlocked session to list titles, search, read, move, export, or
   delete protected articles.
 - Require the current code to remove or change the lock.
-- Define forgotten-code and owner-recovery behavior before implementation.
+- Forgotten-code recovery uses a high-entropy one-time recovery key shown only
+  during setup, code change, or a successful recovery. The key can set a new
+  code without the old code, is stored only as a salted slow hash, and is
+  rotated after every use.
 - Label the feature `Privacy lock`, not `Encrypted folder`.
+
+Implemented session and safety boundary:
+
+- Codes and recovery keys use PBKDF2-SHA256 with independent random salts and
+  310,000 iterations; plaintext credentials never enter the database or logs.
+- Successful setup/unlock/recovery creates an opaque, folder-bound session held
+  only in service memory for 15 minutes. Several folders may be unlocked at
+  once, with a hard 32-session request bound.
+- Relock, code change, lock removal, session expiry, and service restart
+  invalidate access. The desktop hides an open protected article when its local
+  session ends and clears sessions when it stops or loses the service.
+- Five failed code/recovery attempts within five minutes are throttled. Locked
+  folders conceal names and article counts, and protected documents are absent
+  from list/search/queue/export/diagnostic/open-request results until unlocked.
 
 ### U7: Remote Reader security and architecture decision
 

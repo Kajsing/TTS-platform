@@ -25,6 +25,7 @@ from reader_core import (
     ReaderEditHistoryError,
     ReaderExportJob,
     ReaderFolder,
+    ReaderFolderPrivacy,
     ReaderLibrary,
     ReaderNotFoundError,
     ReaderStaleCursorError,
@@ -265,6 +266,69 @@ def test_folder_moves_filters_conflicts_and_deletion_are_transactional(
     assert delete_result.deleted_articles == 1
     assert repository.get_document(second.id).deleted_at is not None
     assert repository.list_documents(folder_id="root").items[0].id == document.id
+
+
+def test_folder_privacy_is_revisioned_and_hides_documents_by_default(
+    repository,
+    document,
+) -> None:
+    now = datetime.now(timezone.utc)
+    folder = repository.create_folder(
+        ReaderFolder(
+            id=str(uuid.uuid4()),
+            name="Private",
+            normalized_name="private",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    moved = repository.move_documents(
+        (FolderDocumentVersion(document.id, document.row_version),),
+        folder_id=folder.id,
+    )[0]
+    folder = repository.get_folder(folder.id)
+    locked = repository.set_folder_privacy(
+        ReaderFolderPrivacy(
+            folder_id=folder.id,
+            code_hash="c" * 64,
+            recovery_hash="r" * 64,
+            updated_at=now,
+        ),
+        expected_row_version=folder.row_version,
+    )
+
+    assert locked.privacy_locked is True
+    assert repository.list_documents().items == ()
+    assert repository.list_documents(folder_id=folder.id).items == ()
+    assert repository.find_document_by_source_hash(document.source_sha256) is None
+    assert repository.list_documents(unlocked_folder_ids=(folder.id,)).items[0].id == moved.id
+    assert repository.find_document_by_source_hash(
+        document.source_sha256,
+        unlocked_folder_ids=(folder.id,),
+    ).id == moved.id
+    open_request = repository.request_desktop_open(
+        ReaderDesktopOpenRequest(
+            id=str(uuid.uuid4()),
+            document_id=document.id,
+            created_at=now,
+        )
+    )
+    assert repository.peek_desktop_open_request() is None
+    assert repository.peek_desktop_open_request(
+        unlocked_folder_ids=(folder.id,)
+    ) == open_request
+    stored = repository.get_folder_privacy(folder.id)
+    assert stored is not None
+    assert stored.code_hash == "c" * 64
+
+    reopened = SqliteReaderRepository(repository.database_path)
+    assert reopened.get_folder(folder.id).privacy_locked is True
+    cleared = reopened.clear_folder_privacy(
+        folder.id,
+        expected_row_version=locked.row_version,
+    )
+    assert cleared.privacy_locked is False
+    assert reopened.list_documents().items[0].id == moved.id
 
 
 def test_document_updates_detect_optimistic_concurrency_conflicts(repository, document) -> None:

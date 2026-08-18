@@ -7,7 +7,8 @@
       "updated_at": "2026-08-18T16:05:00Z",
       "row_version": 2,
       "article_count": 12,
-      "privacy_locked": false
+      "privacy_locked": false,
+      "privacy_unlocked": true
     }
   ]
 }

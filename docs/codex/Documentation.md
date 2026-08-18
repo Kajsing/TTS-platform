@@ -11,9 +11,7 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - The user approved `docs/reader_upgrade_plan.md` on 2026-08-17. Reader Upgrade
-  Track A (U1 through U3) is complete. Track B is in progress: U4 folder-backed
-  organization and U5 batch import are implemented and validated; U6 privacy
-  lock is next and awaits the explicit forgotten-code recovery decision. The upgrade
+  Track A (U1 through U3) and Track B (U4 through U6) are complete. The upgrade
   track is deliberately prioritized ahead of Reader Milestones 10 and 11,
   which remain incomplete. U6 is approved as an application-level privacy lock
   without encryption at rest in its first version. U7 must amend the localhost
@@ -2087,6 +2085,43 @@ python3 scripts/package_windows_bundle.py
   was introduced. The pre-existing `models/MANIFEST.json` change remains
   user-owned and excluded.
 
+## Reader Upgrade U6: Folder Privacy Lock (2026-08-18)
+
+- U6 is complete with the user's approved recovery model. A Privacy lock stores
+  independently salted PBKDF2-SHA256 hashes for the folder code and one-time
+  recovery key (310,000 iterations); plaintext credentials are never persisted
+  or logged. Recovery sets a new code, rotates the recovery key, and displays
+  the new key exactly once. The current code remains mandatory for code changes
+  and lock removal.
+- Successful setup, unlock, recovery, and code change issue opaque folder-bound
+  sessions held only in service memory for 15 minutes. Multiple folders may be
+  open concurrently, requests are capped at 32 sessions, five failed attempts
+  in five minutes are throttled, and service restart, expiry, relock, code
+  change, or lock removal invalidates access.
+- Reader schema 9 owns the privacy hashes. Locked folder names/counts are
+  concealed; protected articles are removed from list/search, queue, export,
+  diagnostics, duplicate detection, and desktop-open polling. Direct reads,
+  edits, playback, moves, exports, deletion, bookmarks, positions, queue
+  mutation, imports, and folder mutation require an active session.
+- The WPF Folder manager provides Set lock, Unlock, Relock, Change code,
+  Recover, and Remove lock actions through password controls. It displays an
+  explicit warning that Privacy lock does not encrypt the database, files, or
+  backups. The one-time recovery dialog requires acknowledgement, HTTP and
+  WebSocket clients share memory-only sessions, and the desktop hides an open
+  protected article when a session ends or the local service stops.
+- Validation passed all 430 Python tests and all 129 .NET Release tests (33
+  client, 75 application, 21 Windows), Ruff, .NET formatting, 20 Reader
+  contract fixtures, `git diff --check`, and the required Windows integration
+  check. That check passed live API/edit/playback/import flows, schema-9 preview
+  migration, Windows audio, clipboard/hotkey/tray lifecycle, self-contained
+  packaging, and WPF rendering. Its first run hit one existing three-second
+  playback-test timeout; the isolated test and the complete required rerun both
+  passed.
+- Track B (U4 through U6) is complete. U7 is a separate remote-security design
+  and feasibility spike; this work did not enable remote binding, encryption,
+  a paid/cloud dependency, or a new deployment profile. The user-owned
+  `models/MANIFEST.json` remains excluded.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2150,10 +2185,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Upgrade U1 through U5 are complete. Resume Track B at U6 after the
-   user chooses the forgotten-code recovery policy. Reader Workstation
-   Milestones 10 and 11 remain deferred until the upgrade track is completed or
-   deliberately paused.
+4. Reader Upgrade U1 through U6 are complete. U7 is the next upgrade, but it is
+   a security/architecture decision and feasibility spike. Do not expose the
+   service remotely or begin U8 without a new explicit user request and approval
+   of the U7 design. Reader Workstation Milestones 10 and 11 remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

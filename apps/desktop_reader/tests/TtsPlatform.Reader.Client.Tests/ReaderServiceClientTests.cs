@@ -209,6 +209,52 @@ public sealed class ReaderServiceClientTests
     }
 
     [Fact]
+    public async Task Privacy_unlock_session_is_attached_and_relock_removes_it()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/folders/folder-id/privacy-lock/unlock" =>
+                Json(HttpStatusCode.OK, PrivacySessionJson),
+            "/v1/reader/folders/folder-id/privacy-lock/relock" =>
+                new HttpResponseMessage(HttpStatusCode.NoContent),
+            "/v1/reader/folders" => Json(HttpStatusCode.OK, $"{{\"folders\":[{FolderJson}]}}"),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        using var sessions = new ReaderPrivacySessionStore();
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"),
+            sessions);
+
+        await client.UnlockPrivacyLockAsync(
+            "folder-id",
+            new ReaderPrivacyUnlockRequest("secret code"));
+        await client.GetFoldersAsync();
+        await client.RelockPrivacyLockAsync("folder-id");
+        await client.GetFoldersAsync();
+
+        Assert.Null(handler.Requests[0].PrivacySessions);
+        Assert.Equal("privacy-session-token", handler.Requests[1].PrivacySessions);
+        Assert.Equal("privacy-session-token", handler.Requests[2].PrivacySessions);
+        Assert.Null(handler.Requests[3].PrivacySessions);
+    }
+
+    [Fact]
+    public void Expired_privacy_sessions_are_removed_from_the_header()
+    {
+        using var sessions = new ReaderPrivacySessionStore();
+        sessions.Store(new ReaderPrivacySession(
+            "folder-id",
+            "expired-token",
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            900));
+
+        Assert.Null(sessions.GetHeaderValue());
+        Assert.False(sessions.IsUnlocked("folder-id"));
+    }
+
+    [Fact]
     public async Task Import_preview_commit_cancel_and_duplicate_use_protected_routes()
     {
         var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
@@ -474,7 +520,12 @@ public sealed class ReaderServiceClientTests
                 request.RequestUri!,
                 request.Headers.Authorization?.ToString(),
                 body,
-                request.Method));
+                request.Method,
+                request.Headers.TryGetValues(
+                    ReaderPrivacySessionStore.HeaderName,
+                    out var privacySessions)
+                    ? string.Join(',', privacySessions)
+                    : null));
             return responseFactory(request);
         }
     }
@@ -483,7 +534,8 @@ public sealed class ReaderServiceClientTests
         Uri Uri,
         string? Authorization,
         string Body,
-        HttpMethod Method);
+        HttpMethod Method,
+        string? PrivacySessions = null);
 
     private const string HealthJson = """
         {
@@ -548,7 +600,14 @@ public sealed class ReaderServiceClientTests
     private const string FolderJson = """
         {"id":"folder-id","name":"Books","created_at":"2026-08-18T12:00:00Z",
          "updated_at":"2026-08-18T12:00:00Z","row_version":2,"article_count":3,
-         "privacy_locked":false}
+         "privacy_locked":false,"privacy_unlocked":true}
+        """;
+
+    private const string PrivacySessionJson = """
+        {
+          "folder_id":"folder-id","session_token":"privacy-session-token",
+          "expires_at":"2099-08-18T12:15:00Z","expires_in_seconds":900
+        }
         """;
 
     private const string FolderDeleteJson = """

@@ -26,6 +26,7 @@ from .models import (
     ReaderDocumentBundle,
     ReaderExportJob,
     ReaderFolder,
+    ReaderFolderPrivacy,
     SpeechRule,
     SpeechRuleSet,
 )
@@ -49,6 +50,7 @@ class ReaderRepository(Protocol):
         limit: int = 50,
         cursor: str | None = None,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> DocumentPage: ...
 
     def create_folder(self, folder: ReaderFolder) -> ReaderFolder: ...
@@ -56,6 +58,22 @@ class ReaderRepository(Protocol):
     def get_folder(self, folder_id: str) -> ReaderFolder: ...
 
     def list_folders(self) -> tuple[ReaderFolder, ...]: ...
+
+    def get_folder_privacy(self, folder_id: str) -> ReaderFolderPrivacy | None: ...
+
+    def set_folder_privacy(
+        self,
+        privacy: ReaderFolderPrivacy,
+        *,
+        expected_row_version: int,
+    ) -> ReaderFolder: ...
+
+    def clear_folder_privacy(
+        self,
+        folder_id: str,
+        *,
+        expected_row_version: int,
+    ) -> ReaderFolder: ...
 
     def update_folder(
         self,
@@ -81,9 +99,18 @@ class ReaderRepository(Protocol):
         mode: FolderDeleteMode,
     ) -> FolderDeleteResult: ...
 
-    def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None: ...
+    def find_document_by_source_hash(
+        self,
+        source_sha256: str,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> ReaderDocument | None: ...
 
-    def document_counts_by_state(self) -> dict[DocumentState, int]: ...
+    def document_counts_by_state(
+        self,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> dict[DocumentState, int]: ...
 
     def list_blocks(
         self,
@@ -216,7 +243,11 @@ class ReaderRepository(Protocol):
         request: ReaderDesktopOpenRequest,
     ) -> ReaderDesktopOpenRequest: ...
 
-    def peek_desktop_open_request(self) -> ReaderDesktopOpenRequest | None: ...
+    def peek_desktop_open_request(
+        self,
+        *,
+        unlocked_folder_ids: tuple[str, ...] = (),
+    ) -> ReaderDesktopOpenRequest | None: ...
 
     def acknowledge_desktop_open_request(self, request_id: str) -> None: ...
 

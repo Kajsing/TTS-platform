@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private HttpClient? _synthesisHttpClient;
     private IReaderServiceClient? _client;
     private IReaderServiceClient? _synthesisClient;
+    private ReaderPrivacySessionStore? _privacySessions;
     private LibraryPager? _library;
     private ReadingWindowPager? _readingWindow;
     private DocumentEditor? _editor;
@@ -53,7 +54,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
     private readonly ObservableCollection<FolderFilterItem> _folderFilters =
     [
-        new(null, "All articles"),
+        new(null, "All articles", false, true),
     ];
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
     private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
@@ -420,6 +421,11 @@ public partial class MainWindow : Window
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
+        if (_privacySessions is not null)
+        {
+            _privacySessions.SessionsChanged -= PrivacySessions_SessionsChanged;
+            _privacySessions.Dispose();
+        }
         base.OnClosed(e);
     }
 
@@ -479,6 +485,8 @@ public partial class MainWindow : Window
                 return;
             }
 
+            _privacySessions?.Clear();
+
             StatusText.Text = message;
             ServiceStatusText.Text = "Service: stopping";
             ServiceStatusDot.Fill = new SolidColorBrush(Color.FromRgb(224, 165, 43));
@@ -529,6 +537,10 @@ public partial class MainWindow : Window
             }
             var coordinator = new OnboardingCoordinator(GetClient());
             _onboarding = await coordinator.CheckAsync();
+            if (_onboarding.State == ConnectionState.ServiceUnavailable)
+            {
+                _privacySessions?.Clear();
+            }
             var preserveConnectedData =
                 _onboarding.State == ConnectionState.RateLimited && !clientWasRebuilt;
             if (preserveConnectedData)
@@ -632,17 +644,26 @@ public partial class MainWindow : Window
         _playbackPerformance?.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
+        if (_privacySessions is not null)
+        {
+            _privacySessions.SessionsChanged -= PrivacySessions_SessionsChanged;
+            _privacySessions.Dispose();
+        }
         _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
         _synthesisHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        _privacySessions = new ReaderPrivacySessionStore();
+        _privacySessions.SessionsChanged += PrivacySessions_SessionsChanged;
         var tokenProvider = new FileTokenProvider(_settings.EffectiveTokenSource.Path);
         _client = new ReaderServiceClient(
             _httpClient,
             _settings.ServiceBaseUrl,
-            tokenProvider);
+            tokenProvider,
+            _privacySessions);
         _synthesisClient = new ReaderServiceClient(
             _synthesisHttpClient,
             _settings.ServiceBaseUrl,
-            tokenProvider);
+            tokenProvider,
+            _privacySessions);
         _library = new LibraryPager(_client);
         _readingWindow = new ReadingWindowPager(_client);
         _findLoader = new ArticleFindDocumentLoader(_client);
@@ -655,7 +676,7 @@ public partial class MainWindow : Window
         _playbackPerformance = new JsonlPlaybackPerformanceSink();
         _playback = new ReaderPlaybackCoordinator(
             _client,
-            new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider),
+            new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider, _privacySessions),
             new WasapiAudioOutput(),
             _playbackPerformance);
         _playback.StateChanged += Playback_StateChanged;
@@ -1418,7 +1439,19 @@ public partial class MainWindow : Window
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (!_refreshingFolders)
+        if (_refreshingFolders)
+        {
+            return;
+        }
+        if (FolderFilterComboBox.SelectedItem is FolderFilterItem
+            {
+                PrivacyLocked: true,
+                PrivacyUnlocked: false,
+            } lockedFolder)
+        {
+            await UnlockFolderFilterAsync(lockedFolder);
+        }
+        else
         {
             await RefreshLibraryAsync();
         }
@@ -1441,11 +1474,17 @@ public partial class MainWindow : Window
         {
             var page = await GetClient().GetFoldersAsync();
             _folderFilters.Clear();
-            _folderFilters.Add(new FolderFilterItem(null, "All articles"));
+            _folderFilters.Add(new FolderFilterItem(null, "All articles", false, true));
             foreach (var folder in page.Folders)
             {
                 _folderFilters.Add(
-                    new FolderFilterItem(folder.Id, $"{folder.Name} ({folder.ArticleCount:N0})"));
+                    new FolderFilterItem(
+                        folder.Id,
+                        folder.PrivacyLocked && !folder.PrivacyUnlocked
+                            ? "[Locked] Privacy locked folder"
+                            : $"{folder.Name} ({folder.ArticleCount:N0})",
+                        folder.PrivacyLocked,
+                        folder.PrivacyUnlocked));
             }
             FolderFilterComboBox.SelectedItem = _folderFilters.FirstOrDefault(
                 item => string.Equals(item.Id, selectedId, StringComparison.Ordinal));
@@ -1455,6 +1494,73 @@ public partial class MainWindow : Window
         {
             _refreshingFolders = false;
         }
+    }
+
+    private async Task UnlockFolderFilterAsync(FolderFilterItem folder)
+    {
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Unlock, folder.DisplayName)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            _refreshingFolders = true;
+            FolderFilterComboBox.SelectedItem = _folderFilters[0];
+            _refreshingFolders = false;
+            await RefreshLibraryAsync();
+            return;
+        }
+        try
+        {
+            await GetClient().UnlockPrivacyLockAsync(
+                folder.Id!,
+                new ReaderPrivacyUnlockRequest(dialog.PrimarySecret));
+            await RefreshFoldersAsync();
+            FolderFilterComboBox.SelectedItem = _folderFilters.FirstOrDefault(
+                item => string.Equals(item.Id, folder.Id, StringComparison.Ordinal));
+            await RefreshLibraryAsync();
+            FooterText.Text = "Privacy locked folder unlocked for 15 minutes.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Unlock folder: {exception.Message}";
+            _refreshingFolders = true;
+            FolderFilterComboBox.SelectedItem = _folderFilters[0];
+            _refreshingFolders = false;
+            await RefreshLibraryAsync();
+        }
+    }
+
+    private void PrivacySessions_SessionsChanged(
+        object? sender,
+        ReaderPrivacySessionsChangedEventArgs e)
+    {
+        if (e.RemovedFolderIds.Count == 0 || _closed)
+        {
+            return;
+        }
+        _ = Dispatcher.InvokeAsync(async () =>
+        {
+            var currentFolderId = _editor?.Document?.FolderId;
+            if (currentFolderId is not null && e.RemovedFolderIds.Contains(currentFolderId))
+            {
+                await StopUnifiedPlaybackAsync();
+                DocumentsGrid.SelectedItem = null;
+                ClearDocumentDisplay();
+                FooterText.Text = "The Privacy lock session ended. The folder is hidden again.";
+            }
+            try
+            {
+                await RefreshFoldersAsync();
+                await RefreshLibraryAsync();
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or ReaderServiceUnavailableException)
+            {
+                FooterText.Text = $"Privacy lock refresh: {exception.Message}";
+            }
+        });
     }
 
     private async void ImportButton_Click(object sender, RoutedEventArgs e)
@@ -3641,7 +3747,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private sealed record FolderFilterItem(string? Id, string DisplayName);
+    private sealed record FolderFilterItem(
+        string? Id,
+        string DisplayName,
+        bool PrivacyLocked,
+        bool PrivacyUnlocked);
 
     private sealed record VoiceChoice(VoiceDescriptor Voice, bool IsServiceDefault)
     {

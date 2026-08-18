@@ -141,6 +141,11 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "MoveArticlesDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "BatchImportDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "BatchImportDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "FolderPrivacyDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "FolderPrivacyDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "RecoveryKeyDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "RecoveryKeyDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Client" / "ReaderPrivacySessionStore.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
@@ -256,6 +261,26 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         raise DesktopReaderCheckError(
             "Reader folder or batch-import features are missing: "
             f"{missing_organization_features}"
+        )
+    privacy_lock_features = [
+        "ReaderPrivacySessionStore",
+        "SetupPrivacyLockAsync",
+        "UnlockPrivacyLockAsync",
+        "RecoverPrivacyLockAsync",
+        "RelockPrivacyLockAsync",
+        "RemovePrivacyLockAsync",
+        "It does not encrypt the database, files, or backups",
+        "I saved the recovery key",
+    ]
+    missing_privacy_lock_features = [
+        value
+        for value in privacy_lock_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_privacy_lock_features:
+        raise DesktopReaderCheckError(
+            "Reader Privacy lock features are missing: "
+            f"{missing_privacy_lock_features}"
         )
     browser_handoff_features = [
         "GetNextDesktopOpenRequestAsync",
@@ -413,6 +438,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "article_find": "implemented",
         "clipboard_prompt_filters": "implemented",
         "word_highlighter": "implemented",
+        "folder_privacy_lock": "implemented",
     }
 
 

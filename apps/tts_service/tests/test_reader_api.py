@@ -102,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 8,
+            "schema_version": 9,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -111,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 8,
+        "schema_version": 9,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -849,6 +849,193 @@ def test_folder_crud_move_filter_and_delete_modes(tmp_path: Path) -> None:
     )
 
 
+def test_folder_privacy_lock_conceals_content_and_supports_recovery(tmp_path: Path) -> None:
+    client, headers, app = build_reader_bundle(tmp_path)
+    folder_response = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "Secret stories"},
+    )
+    assert folder_response.status_code == 201
+    folder = folder_response.json()
+    document_response = client.post(
+        "/v1/reader/documents",
+        headers=headers,
+        json={
+            "title": "Hidden title",
+            "source_type": "plain_text",
+            "text": "Hidden sentence for privacy search.",
+            "folder_id": folder["id"],
+        },
+    )
+    assert document_response.status_code == 201
+    document = document_response.json()
+    queue_response = client.post(
+        "/v1/reader/queue/items",
+        headers=headers,
+        json={"document_id": document["id"]},
+    )
+    assert queue_response.status_code == 201
+
+    setup = client.put(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock",
+        headers=headers,
+        json={"code": "six secret words", "expected_row_version": folder["row_version"]},
+    )
+    assert setup.status_code == 200, setup.text
+    lock = setup.json()
+    assert lock["recovery_key"].startswith("TTSR-")
+    assert lock["session"]["expires_in_seconds"] == 900
+    privacy = app.state.container.reader.service.repository.get_folder_privacy(folder["id"])
+    assert privacy is not None
+    assert "six secret words" not in privacy.code_hash
+    assert lock["recovery_key"] not in privacy.recovery_hash
+
+    concealed = client.get("/v1/reader/folders", headers=headers).json()["folders"][0]
+    assert concealed["name"] == "Privacy locked folder"
+    assert concealed["article_count"] == 0
+    assert concealed["privacy_locked"] is True
+    assert concealed["privacy_unlocked"] is False
+    assert client.get(
+        "/v1/reader/documents",
+        headers=headers,
+        params={"query": "privacy"},
+    ).json()["documents"] == []
+    blocked = client.get(f"/v1/reader/documents/{document['id']}", headers=headers)
+    assert blocked.status_code == 423
+    assert blocked.json()["error"]["type"] == "reader_privacy_locked"
+    assert client.get(
+        "/v1/reader/documents",
+        headers=headers,
+        params={"folder_id": folder["id"]},
+    ).status_code == 423
+    assert client.get("/v1/reader/queue", headers=headers).json()["items"] == []
+    assert client.post(
+        "/v1/reader/exports",
+        headers=headers,
+        json={"document_ids": [document["id"]]},
+    ).status_code == 423
+    assert client.delete(
+        f"/v1/reader/documents/{document['id']}",
+        headers=headers,
+        params={"expected_row_version": document["row_version"]},
+    ).status_code == 423
+    assert client.post(
+        "/v1/reader/folders/move-documents",
+        headers=headers,
+        json={
+            "target_folder_id": None,
+            "documents": [
+                {
+                    "document_id": document["id"],
+                    "expected_row_version": document["row_version"],
+                }
+            ],
+        },
+    ).status_code == 423
+    concealed_diagnostics = client.get("/v1/reader/diagnostics", headers=headers).json()
+    assert concealed_diagnostics["queue_item_count"] == 0
+    assert sum(concealed_diagnostics["document_counts_by_state"].values()) == 0
+
+    wrong = client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/unlock",
+        headers=headers,
+        json={"code": "wrong secret"},
+    )
+    assert wrong.status_code == 403
+    unlocked = client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/unlock",
+        headers=headers,
+        json={"code": "six secret words"},
+    )
+    assert unlocked.status_code == 200
+    unlocked_headers = {
+        **headers,
+        "X-Reader-Privacy-Sessions": unlocked.json()["session_token"],
+    }
+    visible = client.get("/v1/reader/folders", headers=unlocked_headers).json()["folders"][0]
+    assert visible["name"] == "Secret stories"
+    assert visible["article_count"] == 1
+    assert visible["privacy_unlocked"] is True
+    assert client.get(
+        f"/v1/reader/documents/{document['id']}",
+        headers=unlocked_headers,
+    ).status_code == 200
+    unlocked_diagnostics = client.get(
+        "/v1/reader/diagnostics", headers=unlocked_headers
+    ).json()
+    assert unlocked_diagnostics["queue_item_count"] == 1
+    assert sum(unlocked_diagnostics["document_counts_by_state"].values()) == 1
+
+    relocked = client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/relock",
+        headers=unlocked_headers,
+    )
+    assert relocked.status_code == 204
+    assert client.get(
+        f"/v1/reader/documents/{document['id']}",
+        headers=unlocked_headers,
+    ).status_code == 423
+
+    recovered = client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/recover",
+        headers=headers,
+        json={
+            "recovery_key": lock["recovery_key"],
+            "new_code": "replacement code",
+            "expected_row_version": lock["folder"]["row_version"],
+        },
+    )
+    assert recovered.status_code == 200, recovered.text
+    assert recovered.json()["recovery_key"] != lock["recovery_key"]
+    assert client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/recover",
+        headers=headers,
+        json={
+            "recovery_key": lock["recovery_key"],
+            "new_code": "should not work",
+            "expected_row_version": recovered.json()["folder"]["row_version"],
+        },
+    ).status_code == 403
+    assert client.post(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock/unlock",
+        headers=headers,
+        json={"code": "six secret words"},
+    ).status_code == 403
+
+    changed = client.put(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock",
+        headers=headers,
+        json={
+            "current_code": "replacement code",
+            "new_code": "final private code",
+            "expected_row_version": recovered.json()["folder"]["row_version"],
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    assert client.request(
+        "DELETE",
+        f"/v1/reader/folders/{folder['id']}/privacy-lock",
+        headers=headers,
+        json={
+            "current_code": "incorrect final code",
+            "expected_row_version": changed.json()["folder"]["row_version"],
+        },
+    ).status_code == 403
+    removed = client.request(
+        "DELETE",
+        f"/v1/reader/folders/{folder['id']}/privacy-lock",
+        headers=headers,
+        json={
+            "current_code": "final private code",
+            "expected_row_version": changed.json()["folder"]["row_version"],
+        },
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["privacy_locked"] is False
+    assert client.get(f"/v1/reader/documents/{document['id']}", headers=headers).status_code == 200
+
+
 def test_content_edit_append_undo_redo_and_typed_failures(tmp_path: Path) -> None:
     client, headers, _ = build_reader_bundle(tmp_path)
     document = create_document(client, headers, text="Alpha beta gamma.")
@@ -1337,7 +1524,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 8
+    assert diagnostics.json()["schema_version"] == 9
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,

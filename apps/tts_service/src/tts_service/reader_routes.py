@@ -38,6 +38,12 @@ from .reader_errors import (
     translate_rule_error,
 )
 from .reader_offsets import ReaderOffsetError, utf16_offset_to_python
+from .reader_privacy import (
+    PRIVACY_SESSION_HEADER,
+    ReaderPrivacyLockResult,
+    ReaderPrivacySession,
+    parse_privacy_session_header,
+)
 from .reader_schemas import (
     AddReaderQueueItemRequest,
     AppendReaderContentRequest,
@@ -82,6 +88,13 @@ from .reader_schemas import (
     ReaderPlaybackCapability,
     ReaderPositionEnvelope,
     ReaderPositionResponse,
+    ReaderPrivacyChangeRequest,
+    ReaderPrivacyLockResponse,
+    ReaderPrivacyRecoveryRequest,
+    ReaderPrivacyRemoveRequest,
+    ReaderPrivacySessionResponse,
+    ReaderPrivacySetupRequest,
+    ReaderPrivacyUnlockRequest,
     ReaderQueueItemResponse,
     ReaderQueueResponse,
     ReaderRuleCapability,
@@ -176,9 +189,10 @@ def build_reader_router() -> APIRouter:
     @router.get("/folders", response_model=ReaderFolderPageResponse)
     async def list_folders(request: Request) -> ReaderFolderPageResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
         folders = _run_reader(service.repository.list_folders)
         return ReaderFolderPageResponse(
-            folders=[ReaderFolderResponse.from_domain(folder) for folder in folders]
+            folders=[_folder_response(service, folder, tokens) for folder in folders]
         )
 
     @router.post(
@@ -199,6 +213,7 @@ def build_reader_router() -> APIRouter:
         folder_id: str,
         payload: UpdateReaderFolderRequest,
     ) -> ReaderFolderResponse:
+        _require_folder_access(request, folder_id)
         folder = _run_reader(
             lambda: _service(request).update_folder(
                 folder_id,
@@ -209,13 +224,128 @@ def build_reader_router() -> APIRouter:
         )
         return ReaderFolderResponse.from_domain(folder)
 
+    @router.put(
+        "/folders/{folder_id}/privacy-lock",
+        response_model=ReaderPrivacyLockResponse,
+    )
+    async def setup_privacy_lock(
+        request: Request,
+        folder_id: str,
+        payload: ReaderPrivacySetupRequest | ReaderPrivacyChangeRequest,
+    ) -> ReaderPrivacyLockResponse:
+        service = _service(request)
+        if isinstance(payload, ReaderPrivacyChangeRequest):
+            result = await _run_privacy_async(
+                lambda: service.privacy.change_code(
+                    folder_id,
+                    current_code=payload.current_code.get_secret_value(),
+                    new_code=payload.new_code.get_secret_value(),
+                    expected_row_version=payload.expected_row_version,
+                )
+            )
+            operation = "change_folder_privacy_lock"
+        else:
+            result = await _run_privacy_async(
+                lambda: service.privacy.setup(
+                    folder_id,
+                    code=payload.code.get_secret_value(),
+                    expected_row_version=payload.expected_row_version,
+                )
+            )
+            operation = "setup_folder_privacy_lock"
+        service.observability.log_reader_operation(operation=operation)
+        return _privacy_lock_response(service, result)
+
+    @router.post(
+        "/folders/{folder_id}/privacy-lock/unlock",
+        response_model=ReaderPrivacySessionResponse,
+    )
+    async def unlock_privacy_lock(
+        request: Request,
+        folder_id: str,
+        payload: ReaderPrivacyUnlockRequest,
+    ) -> ReaderPrivacySessionResponse:
+        service = _service(request)
+        session = await _run_privacy_async(
+            lambda: service.privacy.unlock(
+                folder_id,
+                code=payload.code.get_secret_value(),
+            )
+        )
+        service.observability.log_reader_operation(operation="unlock_folder_privacy_lock")
+        return _privacy_session_response(service, session)
+
+    @router.post(
+        "/folders/{folder_id}/privacy-lock/recover",
+        response_model=ReaderPrivacyLockResponse,
+    )
+    async def recover_privacy_lock(
+        request: Request,
+        folder_id: str,
+        payload: ReaderPrivacyRecoveryRequest,
+    ) -> ReaderPrivacyLockResponse:
+        service = _service(request)
+        result = await _run_privacy_async(
+            lambda: service.privacy.recover(
+                folder_id,
+                recovery_key=payload.recovery_key.get_secret_value(),
+                new_code=payload.new_code.get_secret_value(),
+                expected_row_version=payload.expected_row_version,
+            )
+        )
+        service.observability.log_reader_operation(operation="recover_folder_privacy_lock")
+        return _privacy_lock_response(service, result)
+
+    @router.post(
+        "/folders/{folder_id}/privacy-lock/relock",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def relock_privacy_lock(request: Request, folder_id: str) -> Response:
+        service = _service(request)
+        tokens = _privacy_tokens(request)
+        _run_reader(lambda: service.privacy.relock(folder_id, tokens))
+        service.observability.log_reader_operation(operation="relock_folder_privacy_lock")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.delete(
+        "/folders/{folder_id}/privacy-lock",
+        response_model=ReaderFolderResponse,
+    )
+    async def remove_privacy_lock(
+        request: Request,
+        folder_id: str,
+        payload: ReaderPrivacyRemoveRequest,
+    ) -> ReaderFolderResponse:
+        service = _service(request)
+        folder = await _run_privacy_async(
+            lambda: service.privacy.remove(
+                folder_id,
+                current_code=payload.current_code.get_secret_value(),
+                expected_row_version=payload.expected_row_version,
+            )
+        )
+        service.observability.log_reader_operation(operation="remove_folder_privacy_lock")
+        return ReaderFolderResponse.from_domain(folder)
+
     @router.post("/folders/move-documents", response_model=ReaderMoveDocumentsResponse)
     async def move_documents(
         request: Request,
         payload: MoveReaderDocumentsRequest,
     ) -> ReaderMoveDocumentsResponse:
+        service = _service(request)
+        tokens = _privacy_tokens(request)
+        _run_reader(
+            lambda: service.privacy.require_folder_access(payload.target_folder_id, tokens)
+        )
+        for item in payload.documents:
+            _run_reader(
+                lambda item=item: service.privacy.require_document_access(
+                    item.document_id,
+                    tokens,
+                )
+            )
         documents = _run_reader(
-            lambda: _service(request).move_documents(
+            lambda: service.move_documents(
                 tuple(
                     FolderDocumentVersion(
                         document_id=item.document_id,
@@ -237,6 +367,7 @@ def build_reader_router() -> APIRouter:
         expected_row_version: Annotated[int, Query(gt=0)],
         mode: Annotated[FolderDeleteMode, Query()] = FolderDeleteMode.MOVE_TO_ROOT,
     ) -> ReaderFolderDeleteResponse:
+        _require_folder_access(request, folder_id)
         result = _run_reader(
             lambda: _service(request).delete_folder(
                 folder_id,
@@ -256,6 +387,7 @@ def build_reader_router() -> APIRouter:
         copy_source_file: Annotated[bool | None, Form()] = None,
     ) -> ReaderImportPreviewResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
         source = await _read_import_source(file, service.config.imports.max_file_bytes)
         preview = await _run_import_async(
             lambda cancellation: service.create_import_preview(
@@ -263,6 +395,7 @@ def build_reader_router() -> APIRouter:
                 options=ImportOptions(title=title, language_hint=language_hint),
                 copy_source_file=copy_source_file,
                 cancellation=cancellation,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             )
         )
         return _import_preview_response(preview)
@@ -278,11 +411,19 @@ def build_reader_router() -> APIRouter:
         payload: ReaderImportCommitRequest,
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
+        _run_reader(
+            lambda: service.privacy.require_folder_access(
+                payload.folder_id,
+                tokens,
+            )
+        )
         document = await _run_import_async(
             lambda _: service.commit_import_preview(
                 preview_id,
                 allow_duplicate=payload.allow_duplicate,
                 folder_id=payload.folder_id,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             )
         )
         return ReaderDocumentResponse.from_domain(document)
@@ -311,6 +452,13 @@ def build_reader_router() -> APIRouter:
         folder_id: Annotated[str | None, Form(max_length=64)] = None,
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
+        _run_reader(
+            lambda: service.privacy.require_folder_access(
+                folder_id,
+                tokens,
+            )
+        )
         source = await _read_import_source(file, service.config.imports.max_file_bytes)
         document = await _run_import_async(
             lambda cancellation: service.import_source(
@@ -320,6 +468,7 @@ def build_reader_router() -> APIRouter:
                 allow_duplicate=allow_duplicate,
                 cancellation=cancellation,
                 folder_id=folder_id,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             )
         )
         return ReaderDocumentResponse.from_domain(document)
@@ -334,6 +483,9 @@ def build_reader_router() -> APIRouter:
         folder_id: Annotated[str | None, Query(max_length=64)] = None,
     ) -> ReaderDocumentPageResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
+        if folder_id not in (None, "root"):
+            _run_reader(lambda: service.privacy.require_folder_access(folder_id, tokens))
         if limit > service.config.max_page_size:
             raise reader_api_error(
                 "reader_conflict",
@@ -349,6 +501,7 @@ def build_reader_router() -> APIRouter:
                 limit=limit,
                 cursor=cursor,
                 folder_id=folder_id,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             ),
             cursor_input=cursor is not None,
         )
@@ -367,6 +520,13 @@ def build_reader_router() -> APIRouter:
         payload: CreateReaderDocumentRequest,
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
+        _run_reader(
+            lambda: service.privacy.require_folder_access(
+                payload.folder_id,
+                tokens,
+            )
+        )
         document = _run_reader(
             lambda: service.create_text_document(
                 title=payload.title,
@@ -375,6 +535,7 @@ def build_reader_router() -> APIRouter:
                 language_hint=payload.language_hint,
                 allow_duplicate=payload.allow_duplicate,
                 folder_id=payload.folder_id,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             )
         )
         return ReaderDocumentResponse.from_domain(document)
@@ -389,6 +550,7 @@ def build_reader_router() -> APIRouter:
         payload: CreateReaderBrowserCaptureRequest,
     ) -> ReaderBrowserCaptureResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
         document, queue_item, open_request, reused_existing = _run_reader(
             lambda: service.create_browser_capture(
                 title=payload.title,
@@ -409,6 +571,7 @@ def build_reader_router() -> APIRouter:
                 reuse_existing=payload.reuse_existing,
                 add_to_queue=payload.add_to_queue,
                 open_in_desktop=payload.open_in_desktop,
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens),
             )
         )
         return ReaderBrowserCaptureResponse(
@@ -436,13 +599,13 @@ def build_reader_router() -> APIRouter:
         document_id: str,
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_reader(lambda: service.duplicate_as_editable_text(document_id))
         return ReaderDocumentResponse.from_domain(document)
 
     @router.get("/documents/{document_id}", response_model=ReaderDocumentResponse)
     async def get_document(request: Request, document_id: str) -> ReaderDocumentResponse:
-        service = _service(request)
-        document = _run_reader(lambda: service.get_document(document_id))
+        document = _require_document_access(request, document_id)
         return ReaderDocumentResponse.from_domain(document)
 
     @router.patch("/documents/{document_id}", response_model=ReaderDocumentResponse)
@@ -458,6 +621,7 @@ def build_reader_router() -> APIRouter:
                 message="At least one document field must be updated.",
             )
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_reader(
             lambda: service.repository.update_document(
                 document_id,
@@ -476,6 +640,7 @@ def build_reader_router() -> APIRouter:
         expected_row_version: Annotated[int, Query(gt=0)],
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_reader(
             lambda: service.repository.soft_delete_document(
                 document_id,
@@ -492,6 +657,7 @@ def build_reader_router() -> APIRouter:
         payload: ExpectedReaderVersionRequest,
     ) -> ReaderDocumentResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_reader(
             lambda: service.repository.restore_document(
                 document_id,
@@ -508,6 +674,7 @@ def build_reader_router() -> APIRouter:
         payload: ReplaceReaderContentRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         bundle = _run_reader(lambda: service.get_document_bundle(document_id))
         source_block = next(
             (block for block in bundle.blocks if block.id == payload.block_id),
@@ -599,6 +766,7 @@ def build_reader_router() -> APIRouter:
         payload: AppendReaderContentRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document, edit = _run_content_mutation(
             service,
             document_id,
@@ -626,6 +794,7 @@ def build_reader_router() -> APIRouter:
         payload: ExpectedReaderVersionRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_content_mutation(
             service,
             document_id,
@@ -644,6 +813,7 @@ def build_reader_router() -> APIRouter:
         payload: ExpectedReaderVersionRequest,
     ) -> ReaderMutationResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         document = _run_content_mutation(
             service,
             document_id,
@@ -663,6 +833,7 @@ def build_reader_router() -> APIRouter:
         limit: Annotated[int, Query(gt=0)] = 200,
     ) -> ReaderBlockPageResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         if limit > service.config.max_page_size:
             raise reader_api_error(
                 "reader_conflict",
@@ -691,7 +862,7 @@ def build_reader_router() -> APIRouter:
     )
     async def get_position(request: Request, document_id: str) -> ReaderPositionEnvelope:
         service = _service(request)
-        _run_reader(lambda: service.get_document(document_id))
+        _require_document_access(request, document_id)
         position = _run_reader(lambda: service.repository.get_position(document_id))
         return ReaderPositionEnvelope(
             position=(
@@ -711,6 +882,7 @@ def build_reader_router() -> APIRouter:
         payload: SaveReaderPositionRequest,
     ) -> ReaderPositionResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         cursor = _run_reader(
             lambda: _api_cursor_to_domain(service, document_id, payload.cursor),
             cursor_input=True,
@@ -746,6 +918,7 @@ def build_reader_router() -> APIRouter:
         document_id: str,
     ) -> ReaderBookmarkListResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         bookmarks = _run_reader(lambda: service.repository.list_bookmarks(document_id))
         return ReaderBookmarkListResponse(
             bookmarks=[
@@ -765,6 +938,7 @@ def build_reader_router() -> APIRouter:
         payload: CreateReaderBookmarkRequest,
     ) -> ReaderBookmarkResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         now = datetime.now(timezone.utc)
         cursor = _run_reader(
             lambda: _api_cursor_to_domain(service, document_id, payload.cursor),
@@ -802,6 +976,7 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.get_bookmark(bookmark_id),
             missing_entity="bookmark",
         )
+        _require_document_access(request, current.document_id)
         cursor = (
             _run_reader(
                 lambda: _api_cursor_to_domain(
@@ -846,6 +1021,7 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.get_bookmark(bookmark_id),
             missing_entity="bookmark",
         )
+        _require_document_access(request, bookmark.document_id)
         _run_reader(
             lambda: service.repository.delete_bookmark(
                 bookmark_id,
@@ -863,7 +1039,12 @@ def build_reader_router() -> APIRouter:
     @router.get("/queue", response_model=ReaderQueueResponse)
     async def list_queue(request: Request) -> ReaderQueueResponse:
         service = _service(request)
-        items = _run_reader(service.repository.list_queue)
+        tokens = _privacy_tokens(request)
+        items = tuple(
+            item
+            for item in _run_reader(service.repository.list_queue)
+            if _can_access_document(service, item.document_id, tokens)
+        )
         return ReaderQueueResponse(
             items=[ReaderQueueItemResponse.from_domain(item) for item in items]
         )
@@ -878,6 +1059,7 @@ def build_reader_router() -> APIRouter:
         payload: AddReaderQueueItemRequest,
     ) -> ReaderQueueItemResponse:
         service = _service(request)
+        _require_document_access(request, payload.document_id)
         now = datetime.now(timezone.utc)
         item = _run_reader(
             lambda: service.repository.add_queue_item(
@@ -904,6 +1086,7 @@ def build_reader_router() -> APIRouter:
         payload: UpdateReaderQueueItemRequest,
     ) -> ReaderQueueItemResponse:
         service = _service(request)
+        _require_queue_item_access(service, item_id, _privacy_tokens(request))
         item = _run_reader(
             lambda: service.repository.update_queue_item(
                 item_id,
@@ -928,6 +1111,7 @@ def build_reader_router() -> APIRouter:
         expected_row_version: Annotated[int, Query(gt=0)],
     ) -> Response:
         service = _service(request)
+        _require_queue_item_access(service, item_id, _privacy_tokens(request))
         _run_reader(
             lambda: service.repository.remove_queue_item(
                 item_id,
@@ -944,6 +1128,7 @@ def build_reader_router() -> APIRouter:
         payload: ReorderReaderQueueRequest,
     ) -> ReaderQueueResponse:
         service = _service(request)
+        _require_complete_queue_access(service, _privacy_tokens(request))
         items = _run_reader(
             lambda: service.repository.reorder_queue(tuple(payload.item_ids)),
             missing_entity="queue item",
@@ -959,6 +1144,7 @@ def build_reader_router() -> APIRouter:
     )
     async def activate_queue_item(request: Request, item_id: str) -> ReaderQueueItemResponse:
         service = _service(request)
+        _require_queue_item_access(service, item_id, _privacy_tokens(request))
         item = _run_reader(
             lambda: service.repository.activate_queue_item(item_id),
             missing_entity="queue item",
@@ -978,6 +1164,8 @@ def build_reader_router() -> APIRouter:
         document_id: str,
     ) -> ReaderQueueItemResponse | None:
         service = _service(request)
+        _require_document_access(request, document_id)
+        _require_complete_queue_access(service, _privacy_tokens(request))
         item = _run_reader(lambda: service.repository.advance_queue(document_id))
         service.observability.log_reader_operation(
             operation="advance_queue",
@@ -995,6 +1183,7 @@ def build_reader_router() -> APIRouter:
         document_id: str,
     ) -> ReaderDesktopOpenRequestResponse:
         service = _service(request)
+        _require_document_access(request, document_id)
         open_request = _run_reader(
             lambda: service.repository.request_desktop_open(
                 ReaderDesktopOpenRequest(
@@ -1015,7 +1204,12 @@ def build_reader_router() -> APIRouter:
         request: Request,
     ) -> ReaderDesktopOpenRequestResponse | None:
         service = _service(request)
-        open_request = _run_reader(service.repository.peek_desktop_open_request)
+        tokens = _privacy_tokens(request)
+        open_request = _run_reader(
+            lambda: service.repository.peek_desktop_open_request(
+                unlocked_folder_ids=service.privacy.unlocked_folder_ids(tokens)
+            )
+        )
         return (
             ReaderDesktopOpenRequestResponse.from_domain(open_request)
             if open_request is not None
@@ -1040,7 +1234,12 @@ def build_reader_router() -> APIRouter:
     @router.get("/exports", response_model=ReaderExportJobListResponse)
     async def list_exports(request: Request) -> ReaderExportJobListResponse:
         service = _service(request)
-        jobs = _run_reader(service.repository.list_export_jobs)
+        tokens = _privacy_tokens(request)
+        jobs = tuple(
+            job
+            for job in _run_reader(service.repository.list_export_jobs)
+            if _can_access_documents(service, job.document_ids, tokens)
+        )
         return ReaderExportJobListResponse(
             jobs=[ReaderExportJobResponse.from_domain(job) for job in jobs]
         )
@@ -1093,6 +1292,8 @@ def build_reader_router() -> APIRouter:
                 status_code=400,
                 message="At least one document or queue item is required.",
             )
+        tokens = _privacy_tokens(request)
+        _require_documents_access(service, document_ids, tokens)
         if payload.voice_id is not None and not request.app.state.container.voice_registry.has(
             payload.voice_id
         ):
@@ -1139,10 +1340,17 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.get_export_job(job_id),
             missing_entity="export job",
         )
+        _require_documents_access(service, job.document_ids, _privacy_tokens(request))
         return ReaderExportJobResponse.from_domain(job)
 
     @router.delete("/exports/{job_id}", response_model=ReaderExportJobResponse)
     async def cancel_export(request: Request, job_id: str) -> ReaderExportJobResponse:
+        service = _service(request)
+        current = _run_reader(
+            lambda: service.repository.get_export_job(job_id),
+            missing_entity="export job",
+        )
+        _require_documents_access(service, current.document_ids, _privacy_tokens(request))
         job = _run_reader(
             lambda: _export_manager(request).cancel(job_id),
             missing_entity="export job",
@@ -1154,6 +1362,12 @@ def build_reader_router() -> APIRouter:
         status_code=status.HTTP_204_NO_CONTENT,
     )
     async def delete_export_history(request: Request, job_id: str) -> Response:
+        service = _service(request)
+        current = _run_reader(
+            lambda: service.repository.get_export_job(job_id),
+            missing_entity="export job",
+        )
+        _require_documents_access(service, current.document_ids, _privacy_tokens(request))
         _run_reader(
             lambda: _export_manager(request).delete(job_id),
             missing_entity="export job",
@@ -1171,6 +1385,7 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.get_export_job(job_id),
             missing_entity="export job",
         )
+        _require_documents_access(service, job.document_ids, _privacy_tokens(request))
         path = _run_reader(lambda: _export_manager(request).result_path(job, index))
         media_type = "audio/mpeg" if job.audio_format.value == "mp3" else "audio/wav"
         return FileResponse(path, filename=path.name, media_type=media_type)
@@ -1178,9 +1393,19 @@ def build_reader_router() -> APIRouter:
     @router.get("/diagnostics", response_model=ReaderDiagnosticsResponse)
     async def reader_diagnostics(request: Request) -> ReaderDiagnosticsResponse:
         service = _service(request)
+        tokens = _privacy_tokens(request)
+        unlocked_folder_ids = service.privacy.unlocked_folder_ids(tokens)
         report = _run_reader(service.repository.report)
-        queue = _run_reader(service.repository.list_queue)
-        jobs = _run_reader(service.repository.list_export_jobs)
+        queue = tuple(
+            item
+            for item in _run_reader(service.repository.list_queue)
+            if _can_access_document(service, item.document_id, tokens)
+        )
+        jobs = tuple(
+            job
+            for job in _run_reader(service.repository.list_export_jobs)
+            if _can_access_documents(service, job.document_ids, tokens)
+        )
         counts: dict[str, int] = {}
         for job in jobs:
             counts[job.status.value] = counts.get(job.status.value, 0) + 1
@@ -1192,7 +1417,9 @@ def build_reader_router() -> APIRouter:
             document_counts_by_state={
                 state.value: count
                 for state, count in _run_reader(
-                    service.repository.document_counts_by_state
+                    lambda: service.repository.document_counts_by_state(
+                        unlocked_folder_ids=unlocked_folder_ids
+                    )
                 ).items()
             },
             queue_item_count=len(queue),
@@ -1495,6 +1722,135 @@ def _run_reader(
             missing_entity=missing_entity,
             cursor_input=cursor_input,
         ) from exc
+
+
+def _privacy_tokens(request: Request) -> tuple[str, ...]:
+    return _run_reader(
+        lambda: parse_privacy_session_header(request.headers.get(PRIVACY_SESSION_HEADER))
+    )
+
+
+def _folder_response(
+    service: ReaderApplicationService,
+    folder,
+    tokens: tuple[str, ...],
+) -> ReaderFolderResponse:
+    unlocked = service.privacy.can_access_folder(folder, tokens)
+    return ReaderFolderResponse.from_domain(
+        folder,
+        privacy_unlocked=unlocked,
+        concealed=folder.privacy_locked and not unlocked,
+    )
+
+
+def _require_folder_access(request: Request, folder_id: str | None) -> None:
+    service = _service(request)
+    _run_reader(
+        lambda: service.privacy.require_folder_access(folder_id, _privacy_tokens(request)),
+        missing_entity="folder",
+    )
+
+
+def _require_document_access(request: Request, document_id: str):
+    service = _service(request)
+    return _run_reader(
+        lambda: service.privacy.require_document_access(
+            document_id,
+            _privacy_tokens(request),
+        )
+    )
+
+
+def _can_access_document(
+    service: ReaderApplicationService,
+    document_id: str,
+    tokens: tuple[str, ...],
+) -> bool:
+    document = _run_reader(lambda: service.repository.get_document(document_id))
+    return service.privacy.can_access_document(document, tokens)
+
+
+def _require_documents_access(
+    service: ReaderApplicationService,
+    document_ids: tuple[str, ...],
+    tokens: tuple[str, ...],
+) -> None:
+    for document_id in document_ids:
+        _run_reader(
+            lambda document_id=document_id: service.privacy.require_document_access(
+                document_id,
+                tokens,
+            )
+        )
+
+
+def _can_access_documents(
+    service: ReaderApplicationService,
+    document_ids: tuple[str, ...],
+    tokens: tuple[str, ...],
+) -> bool:
+    return all(_can_access_document(service, document_id, tokens) for document_id in document_ids)
+
+
+def _require_queue_item_access(
+    service: ReaderApplicationService,
+    item_id: str,
+    tokens: tuple[str, ...],
+) -> None:
+    item = next(
+        (item for item in _run_reader(service.repository.list_queue) if item.id == item_id),
+        None,
+    )
+    if item is None:
+        raise reader_api_error(
+            "reader_conflict",
+            status_code=404,
+            message="Reader queue item was not found.",
+        )
+    _run_reader(lambda: service.privacy.require_document_access(item.document_id, tokens))
+
+
+def _require_complete_queue_access(
+    service: ReaderApplicationService,
+    tokens: tuple[str, ...],
+) -> None:
+    _require_documents_access(
+        service,
+        tuple(item.document_id for item in _run_reader(service.repository.list_queue)),
+        tokens,
+    )
+
+
+def _privacy_session_response(
+    service: ReaderApplicationService,
+    session: ReaderPrivacySession,
+) -> ReaderPrivacySessionResponse:
+    return ReaderPrivacySessionResponse(
+        folder_id=session.folder_id,
+        session_token=session.token,
+        expires_at=session.expires_at,
+        expires_in_seconds=service.privacy.session_seconds,
+    )
+
+
+def _privacy_lock_response(
+    service: ReaderApplicationService,
+    result: ReaderPrivacyLockResult,
+) -> ReaderPrivacyLockResponse:
+    return ReaderPrivacyLockResponse(
+        folder=ReaderFolderResponse.from_domain(
+            result.folder,
+            privacy_unlocked=True,
+        ),
+        recovery_key=result.recovery_key,
+        session=_privacy_session_response(service, result.session),
+    )
+
+
+async def _run_privacy_async(operation: Callable[[], T]) -> T:
+    return await run_in_threadpool(
+        lambda: _run_reader(operation, missing_entity="folder")
+    )
 
 
 def _run_rule(

@@ -623,16 +623,18 @@ Execute these upgrades in order unless `Documentation.md` records a deliberate
 user-approved reorder:
 
 - [x] U1: Current-article Find panel.
-- [ ] U2: Clipboard prompt threshold and five-minute snooze.
-- [ ] U3: Persistent Word Highlighter.
-- [ ] U4: Folder-backed library organization.
-- [ ] U5: Batch import and text-only HTML workflow.
-- [ ] U6: Folder privacy lock, after its security decision gate.
+- [x] U2: Clipboard prompt threshold and five-minute snooze.
+- [x] U3: Persistent Word Highlighter.
+- [x] U4: Folder-backed library organization.
+- [x] U5: Batch import and text-only HTML workflow.
+- [x] U6: Folder privacy lock, after its security decision gate.
 - [ ] U7: Remote Reader security and architecture decision.
 - [ ] U8: Secure LAN server beta, only after U7 approval.
 
 This track is prioritized ahead of Reader Milestones 10 and 11. Those original
 milestones remain incomplete and are not removed from the 1.0 plan.
 
-U1 is complete. U2 is the next Codex resume point, but do not begin it until
-the user asks to continue the upgrade track.
+U1 through U6 are complete. U7 is the next Codex resume point, but it is a
+security/architecture design and feasibility spike. Do not enable remote
+binding or begin U8 until the user explicitly asks to continue and approves the
+U7 security design.

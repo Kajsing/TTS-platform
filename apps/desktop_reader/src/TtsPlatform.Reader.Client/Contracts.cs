@@ -27,6 +27,29 @@ public interface IReaderServiceClient
         string folderId,
         UpdateFolderRequest request,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderPrivacyLockResult> SetupPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacySetupRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderPrivacyLockResult> ChangePrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyChangeRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderPrivacySession> UnlockPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyUnlockRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderPrivacyLockResult> RecoverPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyRecoveryRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task RelockPrivacyLockAsync(
+        string folderId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderFolder> RemovePrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyRemoveRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<MoveDocumentsResponse> MoveDocumentsAsync(
         MoveDocumentsRequest request,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -249,7 +272,8 @@ public sealed record ReaderFolder(
     DateTimeOffset UpdatedAt,
     int RowVersion,
     int ArticleCount,
-    bool PrivacyLocked);
+    bool PrivacyLocked,
+    bool PrivacyUnlocked);
 
 public sealed record ReaderFolderPage(IReadOnlyList<ReaderFolder> Folders);
 
@@ -258,6 +282,37 @@ public sealed record CreateFolderRequest(string Name);
 public sealed record UpdateFolderRequest(
     string Name,
     [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record ReaderPrivacySetupRequest(
+    string Code,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record ReaderPrivacyChangeRequest(
+    [property: JsonPropertyName("current_code")] string CurrentCode,
+    [property: JsonPropertyName("new_code")] string NewCode,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record ReaderPrivacyUnlockRequest(string Code);
+
+public sealed record ReaderPrivacyRecoveryRequest(
+    [property: JsonPropertyName("recovery_key")] string RecoveryKey,
+    [property: JsonPropertyName("new_code")] string NewCode,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record ReaderPrivacyRemoveRequest(
+    [property: JsonPropertyName("current_code")] string CurrentCode,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record ReaderPrivacySession(
+    string FolderId,
+    string SessionToken,
+    DateTimeOffset ExpiresAt,
+    int ExpiresInSeconds);
+
+public sealed record ReaderPrivacyLockResult(
+    ReaderFolder Folder,
+    string RecoveryKey,
+    ReaderPrivacySession Session);
 
 public sealed record FolderDocumentVersion(
     [property: JsonPropertyName("document_id")] string DocumentId,

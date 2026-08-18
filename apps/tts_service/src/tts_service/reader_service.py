@@ -68,6 +68,7 @@ from speech_rules import (
 
 from .config import ReaderConfig
 from .observability import ObservabilityState
+from .reader_privacy import ReaderPrivacyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +206,7 @@ class ReaderApplicationService:
         self.library = ReaderLibrary(repository)
         self.observability = observability
         self.content_leases = ReaderContentLeaseRegistry()
+        self.privacy = ReaderPrivacyService(repository)
         self.reader_home_path = reader_home_path or Path(config.home_path).expanduser()
         configured_managed_path = Path(config.managed_files_path).expanduser()
         self.managed_files_path = managed_files_path or (
@@ -224,11 +226,15 @@ class ReaderApplicationService:
         language_hint: str | None,
         allow_duplicate: bool,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> ReaderDocument:
         if folder_id is not None:
             self.repository.get_folder(folder_id)
         source_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        duplicate = self.repository.find_document_by_source_hash(source_hash)
+        duplicate = self.repository.find_document_by_source_hash(
+            source_hash,
+            unlocked_folder_ids=unlocked_folder_ids,
+        )
         if duplicate is not None and not allow_duplicate:
             raise ReaderDuplicateDocumentError(duplicate.id)
         document = self.library.create_plain_text_document(
@@ -260,6 +266,7 @@ class ReaderApplicationService:
         reuse_existing: bool,
         add_to_queue: bool,
         open_in_desktop: bool,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> tuple[
         ReaderDocument,
         QueueItem | None,
@@ -268,7 +275,10 @@ class ReaderApplicationService:
     ]:
         source_text = "\n\n".join(block.text for block in blocks)
         source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
-        duplicate = self.repository.find_document_by_source_hash(source_hash)
+        duplicate = self.repository.find_document_by_source_hash(
+            source_hash,
+            unlocked_folder_ids=unlocked_folder_ids,
+        )
         reusable_browser_capture = (
             duplicate is not None
             and duplicate.source_type is SourceType.BROWSER
@@ -344,6 +354,7 @@ class ReaderApplicationService:
         limit: int,
         cursor: str | None,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> DocumentPage:
         return self.repository.list_documents(
             state=state,
@@ -351,6 +362,7 @@ class ReaderApplicationService:
             limit=limit,
             cursor=cursor,
             folder_id=folder_id,
+            unlocked_folder_ids=unlocked_folder_ids,
         )
 
     def create_folder(self, name: str) -> ReaderFolder:
@@ -429,6 +441,7 @@ class ReaderApplicationService:
         options: ImportOptions,
         copy_source_file: bool | None,
         cancellation: threading.Event | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> ReaderImportPreview:
         imported = import_document(
             source,
@@ -436,7 +449,10 @@ class ReaderApplicationService:
             limits=self._import_limits(),
             cancellation=cancellation,
         )
-        duplicate = self.repository.find_document_by_source_hash(imported.source_sha256)
+        duplicate = self.repository.find_document_by_source_hash(
+            imported.source_sha256,
+            unlocked_folder_ids=unlocked_folder_ids,
+        )
         resolved_copy = (
             self.config.copy_imported_files
             if copy_source_file is None
@@ -474,6 +490,7 @@ class ReaderApplicationService:
         *,
         allow_duplicate: bool,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> ReaderDocument:
         with self._import_preview_lock:
             self._purge_import_previews_locked()
@@ -486,6 +503,7 @@ class ReaderApplicationService:
             copy_source_file=preview.copy_source_file,
             allow_duplicate=allow_duplicate,
             folder_id=folder_id,
+            unlocked_folder_ids=unlocked_folder_ids,
         )
         with self._import_preview_lock:
             self._import_previews.pop(preview_id, None)
@@ -507,6 +525,7 @@ class ReaderApplicationService:
         allow_duplicate: bool,
         cancellation: threading.Event | None = None,
         folder_id: str | None = None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> ReaderDocument:
         imported = import_document(
             source,
@@ -525,6 +544,7 @@ class ReaderApplicationService:
             copy_source_file=resolved_copy,
             allow_duplicate=allow_duplicate,
             folder_id=folder_id,
+            unlocked_folder_ids=unlocked_folder_ids,
         )
 
     def duplicate_as_editable_text(self, document_id: str) -> ReaderDocument:
@@ -862,8 +882,12 @@ class ReaderApplicationService:
         copy_source_file: bool,
         allow_duplicate: bool,
         folder_id: str | None,
+        unlocked_folder_ids: tuple[str, ...] = (),
     ) -> ReaderDocument:
-        duplicate = self.repository.find_document_by_source_hash(imported.source_sha256)
+        duplicate = self.repository.find_document_by_source_hash(
+            imported.source_sha256,
+            unlocked_folder_ids=unlocked_folder_ids,
+        )
         if duplicate is not None and not allow_duplicate:
             raise ReaderDuplicateDocumentError(duplicate.id)
         if folder_id is not None:

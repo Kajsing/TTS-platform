@@ -50,6 +50,11 @@ The Milestone 9 Reader beta provides:
 - flat Reader-owned article folders with counts, revision-safe rename and
   multi-article moves, folder-filtered paging/search, and explicit transactional
   folder deletion that either moves articles to the root or deletes them;
+- application-level folder Privacy locks with slow salted code and recovery-key
+  hashes, one-time recovery display, 15-minute memory-only unlock sessions,
+  automatic relocking, and protected list/search/read/move/export/delete and
+  playback paths; this feature deliberately does not encrypt database files or
+  backups;
 - bounded multi-file import from the picker or drag/drop, with one destination
   folder, per-file warnings and status, continue-on-error behavior, and
   cancellation of files that have not committed;

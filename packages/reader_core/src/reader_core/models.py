@@ -283,6 +283,22 @@ class ReaderFolder:
 
 
 @dataclass(frozen=True, slots=True)
+class ReaderFolderPrivacy:
+    folder_id: str
+    code_hash: str
+    recovery_hash: str
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_id(self.folder_id, "folder id")
+        _require_utc(self.updated_at, "folder privacy updated_at")
+        if not 64 <= len(self.code_hash) <= 512:
+            raise ReaderValidationError("folder privacy code hash is invalid")
+        if not 64 <= len(self.recovery_hash) <= 512:
+            raise ReaderValidationError("folder privacy recovery hash is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class FolderDocumentVersion:
     document_id: str
     expected_row_version: int

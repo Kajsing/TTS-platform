@@ -14,12 +14,18 @@ public sealed class ReaderServiceClient : IReaderServiceClient
 
     private readonly HttpClient _httpClient;
     private readonly ITokenProvider _tokenProvider;
+    private readonly ReaderPrivacySessionStore? _privacySessions;
 
-    public ReaderServiceClient(HttpClient httpClient, string serviceBaseUrl, ITokenProvider tokenProvider)
+    public ReaderServiceClient(
+        HttpClient httpClient,
+        string serviceBaseUrl,
+        ITokenProvider tokenProvider,
+        ReaderPrivacySessionStore? privacySessions = null)
     {
         _httpClient = httpClient;
         _httpClient.BaseAddress = ServiceBaseUrl.Parse(serviceBaseUrl);
         _tokenProvider = tokenProvider;
+        _privacySessions = privacySessions;
     }
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
@@ -81,6 +87,88 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             true,
             request,
             cancellationToken);
+    }
+
+    public async Task<ReaderPrivacyLockResult> SetupPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacySetupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SavePrivacyLockAsync(folderId, request, cancellationToken)
+            .ConfigureAwait(false);
+        _privacySessions?.Store(result.Session);
+        return result;
+    }
+
+    public async Task<ReaderPrivacyLockResult> ChangePrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyChangeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await SavePrivacyLockAsync(folderId, request, cancellationToken)
+            .ConfigureAwait(false);
+        _privacySessions?.Store(result.Session);
+        return result;
+    }
+
+    public async Task<ReaderPrivacySession> UnlockPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyUnlockRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        var session = await SendAsync<ReaderPrivacySession>(
+            HttpMethod.Post,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}/privacy-lock/unlock",
+            true,
+            request,
+            cancellationToken).ConfigureAwait(false);
+        _privacySessions?.Store(session);
+        return session;
+    }
+
+    public async Task<ReaderPrivacyLockResult> RecoverPrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyRecoveryRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        var result = await SendAsync<ReaderPrivacyLockResult>(
+            HttpMethod.Post,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}/privacy-lock/recover",
+            true,
+            request,
+            cancellationToken).ConfigureAwait(false);
+        _privacySessions?.Store(result.Session);
+        return result;
+    }
+
+    public async Task RelockPrivacyLockAsync(
+        string folderId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        await SendNoContentAsync(
+            HttpMethod.Post,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}/privacy-lock/relock",
+            cancellationToken).ConfigureAwait(false);
+        _privacySessions?.Remove(folderId);
+    }
+
+    public async Task<ReaderFolder> RemovePrivacyLockAsync(
+        string folderId,
+        ReaderPrivacyRemoveRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        var folder = await SendAsync<ReaderFolder>(
+            HttpMethod.Delete,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}/privacy-lock",
+            true,
+            request,
+            cancellationToken).ConfigureAwait(false);
+        _privacySessions?.Remove(folderId);
+        return folder;
     }
 
     public Task<MoveDocumentsResponse> MoveDocumentsAsync(
@@ -1028,6 +1116,20 @@ public sealed class ReaderServiceClient : IReaderServiceClient
         }
     }
 
+    private Task<ReaderPrivacyLockResult> SavePrivacyLockAsync(
+        string folderId,
+        object request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        return SendAsync<ReaderPrivacyLockResult>(
+            HttpMethod.Put,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}/privacy-lock",
+            true,
+            request,
+            cancellationToken);
+    }
+
     private async Task AttachBearerAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
@@ -1040,6 +1142,13 @@ public sealed class ReaderServiceClient : IReaderServiceClient
         }
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var privacyHeader = _privacySessions?.GetHeaderValue();
+        if (!string.IsNullOrWhiteSpace(privacyHeader))
+        {
+            request.Headers.TryAddWithoutValidation(
+                ReaderPrivacySessionStore.HeaderName,
+                privacyHeader);
+        }
     }
 
     private static async Task ThrowApiExceptionAsync(

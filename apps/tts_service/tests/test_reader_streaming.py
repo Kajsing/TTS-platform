@@ -590,6 +590,59 @@ def test_reader_websocket_requires_authentication(tmp_path: Path) -> None:
     assert payload["error"]["type"] == "unauthorized"
 
 
+def test_reader_websocket_requires_an_active_folder_privacy_session(
+    tmp_path: Path,
+) -> None:
+    client, headers = _api_bundle(tmp_path)
+    folder = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "Private audio"},
+    ).json()
+    document = client.post(
+        "/v1/reader/documents",
+        headers=headers,
+        json={
+            "title": "Private stream",
+            "source_type": "plain_text",
+            "text": "Only an unlocked folder may speak.",
+            "folder_id": folder["id"],
+        },
+    ).json()
+    locked = client.put(
+        f"/v1/reader/folders/{folder['id']}/privacy-lock",
+        headers=headers,
+        json={"code": "private stream code", "expected_row_version": folder["row_version"]},
+    ).json()
+    start = {
+        "type": "start",
+        "payload": {
+            "document_id": document["id"],
+            "cursor": {"block_ordinal": 0, "character_offset": 0},
+        },
+    }
+
+    with client.websocket_connect("/v1/reader/stream", headers=headers) as websocket:
+        websocket.send_json(start)
+        blocked = websocket.receive_json()
+
+    assert blocked["type"] == "error"
+    assert blocked["error"]["type"] == "reader_privacy_locked"
+
+    unlocked_headers = {
+        **headers,
+        "X-Reader-Privacy-Sessions": locked["session"]["session_token"],
+    }
+    with client.websocket_connect(
+        "/v1/reader/stream", headers=unlocked_headers
+    ) as websocket:
+        websocket.send_json(start)
+        started = websocket.receive_json()
+        websocket.send_json({"type": "cancel", "stream_id": started["stream_id"]})
+
+    assert started["type"] == "started"
+
+
 def test_reader_websocket_returns_a_typed_error_for_invalid_utf16_cursor(
     tmp_path: Path,
 ) -> None:

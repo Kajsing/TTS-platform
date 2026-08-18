@@ -148,6 +148,191 @@ public partial class FolderManagerDialog : Window
         }
     }
 
+    private async void SetPrivacyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || selected.PrivacyLocked)
+        {
+            return;
+        }
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Setup, selected.Name)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            async () =>
+            {
+                var result = await _client.SetupPrivacyLockAsync(
+                    selected.Id,
+                    new ReaderPrivacySetupRequest(dialog.PrimarySecret, selected.RowVersion));
+                ShowRecoveryKey(result.RecoveryKey);
+            },
+            "Set Privacy lock");
+    }
+
+    private async void UnlockButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || !selected.PrivacyLocked || selected.PrivacyUnlocked)
+        {
+            return;
+        }
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Unlock, selected.Name)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            () => _client.UnlockPrivacyLockAsync(
+                selected.Id,
+                new ReaderPrivacyUnlockRequest(dialog.PrimarySecret)),
+            "Unlock folder");
+    }
+
+    private async void RelockButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || !selected.PrivacyUnlocked)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            () => _client.RelockPrivacyLockAsync(selected.Id),
+            "Relock folder");
+    }
+
+    private async void ChangeCodeButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || !selected.PrivacyUnlocked)
+        {
+            return;
+        }
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Change, selected.Name)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            async () =>
+            {
+                var result = await _client.ChangePrivacyLockAsync(
+                    selected.Id,
+                    new ReaderPrivacyChangeRequest(
+                        dialog.PrimarySecret,
+                        dialog.NewCode,
+                        selected.RowVersion));
+                ShowRecoveryKey(result.RecoveryKey);
+            },
+            "Change Privacy lock code");
+    }
+
+    private async void RecoverButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || !selected.PrivacyLocked || selected.PrivacyUnlocked)
+        {
+            return;
+        }
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Recover, selected.Name)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            async () =>
+            {
+                var result = await _client.RecoverPrivacyLockAsync(
+                    selected.Id,
+                    new ReaderPrivacyRecoveryRequest(
+                        dialog.PrimarySecret,
+                        dialog.NewCode,
+                        selected.RowVersion));
+                ShowRecoveryKey(result.RecoveryKey);
+            },
+            "Recover Privacy lock");
+    }
+
+    private async void RemovePrivacyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedFolder;
+        if (_busy || selected is null || !selected.PrivacyUnlocked)
+        {
+            return;
+        }
+        if (MessageBox.Show(
+            this,
+            "Remove the Privacy lock? The articles remain in the folder and become visible whenever Reader is open.",
+            "Remove Privacy lock",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) is not MessageBoxResult.Yes)
+        {
+            return;
+        }
+        var dialog = new FolderPrivacyDialog(FolderPrivacyDialogMode.Remove, selected.Name)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() is not true)
+        {
+            return;
+        }
+        await RunPrivacyActionAsync(
+            selected.Id,
+            () => _client.RemovePrivacyLockAsync(
+                selected.Id,
+                new ReaderPrivacyRemoveRequest(dialog.PrimarySecret, selected.RowVersion)),
+            "Remove Privacy lock");
+    }
+
+    private async Task RunPrivacyActionAsync(
+        string folderId,
+        Func<Task> operation,
+        string operationName)
+    {
+        SetBusy(true);
+        try
+        {
+            await operation();
+            Changed = true;
+            await RefreshAsync(folderId);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            StatusText.Text = $"{operationName}: {exception.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void ShowRecoveryKey(string recoveryKey)
+    {
+        var dialog = new RecoveryKeyDialog(recoveryKey) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void FolderGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         var selected = SelectedFolder;
@@ -155,8 +340,7 @@ public partial class FolderManagerDialog : Window
         {
             FolderNameTextBox.Text = selected.Name;
         }
-        RenameButton.IsEnabled = !_busy && selected is not null;
-        DeleteButton.IsEnabled = !_busy && selected is not null;
+        UpdateActionButtons();
     }
 
     private void SetBusy(bool busy)
@@ -164,8 +348,22 @@ public partial class FolderManagerDialog : Window
         _busy = busy;
         FolderGrid.IsEnabled = !busy;
         FolderNameTextBox.IsEnabled = !busy;
-        RenameButton.IsEnabled = !busy && SelectedFolder is not null;
-        DeleteButton.IsEnabled = !busy && SelectedFolder is not null;
+        UpdateActionButtons();
+    }
+
+    private void UpdateActionButtons()
+    {
+        var selected = SelectedFolder;
+        var available = !_busy && selected is not null;
+        var accessible = available && (!selected!.PrivacyLocked || selected.PrivacyUnlocked);
+        RenameButton.IsEnabled = accessible;
+        DeleteButton.IsEnabled = accessible;
+        SetPrivacyButton.IsEnabled = available && !selected!.PrivacyLocked;
+        UnlockButton.IsEnabled = available && selected!.PrivacyLocked && !selected.PrivacyUnlocked;
+        RelockButton.IsEnabled = available && selected!.PrivacyUnlocked;
+        ChangeCodeButton.IsEnabled = available && selected!.PrivacyUnlocked;
+        RecoverButton.IsEnabled = available && selected!.PrivacyLocked && !selected.PrivacyUnlocked;
+        RemovePrivacyButton.IsEnabled = available && selected!.PrivacyUnlocked;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
