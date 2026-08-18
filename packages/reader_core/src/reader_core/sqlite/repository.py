@@ -33,6 +33,8 @@ from ..models import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    HighlighterConfiguration,
+    HighlighterTerm,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -1914,6 +1916,81 @@ class SqliteReaderRepository:
             ).fetchone()
             return int(row["rules_version"])
 
+    def get_highlighter_configuration(self) -> HighlighterConfiguration:
+        with self._connection() as connection:
+            config = connection.execute(
+                "SELECT * FROM reader_highlighter_config WHERE id = 'global'"
+            ).fetchone()
+            if config is None:
+                raise ReaderDatabaseError("Reader highlighter configuration is missing")
+            rows = connection.execute(
+                """
+                SELECT * FROM reader_highlighter_terms
+                WHERE config_id = 'global'
+                ORDER BY ordinal, id
+                """
+            )
+            return HighlighterConfiguration(
+                id=str(config["id"]),
+                terms=tuple(_highlighter_term_from_row(row) for row in rows),
+                row_version=int(config["row_version"]),
+                updated_at=_time_load(config["updated_at"]),
+            )
+
+    def replace_highlighter_terms(
+        self,
+        terms: tuple[HighlighterTerm, ...],
+        *,
+        expected_row_version: int,
+    ) -> HighlighterConfiguration:
+        if len(terms) > 200:
+            raise ReaderValidationError("highlighter configuration exceeds 200 terms")
+        if len({term.normalized_term for term in terms}) != len(terms):
+            raise ReaderValidationError("highlighter terms must be unique")
+        if any(term.ordinal != index for index, term in enumerate(terms)):
+            raise ReaderValidationError("highlighter term order must be contiguous")
+
+        updated_at = utc_now()
+        with self._write() as connection:
+            config = connection.execute(
+                "SELECT row_version FROM reader_highlighter_config WHERE id = 'global'"
+            ).fetchone()
+            if config is None:
+                raise ReaderDatabaseError("Reader highlighter configuration is missing")
+            actual_version = int(config["row_version"])
+            if actual_version != expected_row_version:
+                raise ReaderConflictError(
+                    "highlighter-global",
+                    expected=expected_row_version,
+                    actual=actual_version,
+                )
+            connection.execute(
+                "DELETE FROM reader_highlighter_terms WHERE config_id = 'global'"
+            )
+            connection.executemany(
+                """
+                INSERT INTO reader_highlighter_terms(
+                    id, config_id, term, normalized_term, active, color,
+                    ordinal, created_at, updated_at
+                ) VALUES (?, 'global', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (_highlighter_term_values(term) for term in terms),
+            )
+            next_version = actual_version + 1
+            connection.execute(
+                """
+                UPDATE reader_highlighter_config
+                SET row_version = ?, updated_at = ?
+                WHERE id = 'global'
+                """,
+                (next_version, _time_dump(updated_at)),
+            )
+        return HighlighterConfiguration(
+            terms=terms,
+            row_version=next_version,
+            updated_at=updated_at,
+        )
+
     def get_rule_import_report(
         self, target_rule_set_id: str, source_sha256: str
     ) -> Mapping[str, Any] | None:
@@ -3129,6 +3206,32 @@ def _rule_values(rule: SpeechRule) -> tuple[Any, ...]:
         _time_dump(rule.created_at),
         _time_dump(rule.updated_at),
         _json_dump(rule.raw_import_metadata),
+    )
+
+
+def _highlighter_term_from_row(row: sqlite3.Row) -> HighlighterTerm:
+    return HighlighterTerm(
+        id=str(row["id"]),
+        term=str(row["term"]),
+        normalized_term=str(row["normalized_term"]),
+        active=bool(row["active"]),
+        color=str(row["color"]),
+        ordinal=int(row["ordinal"]),
+        created_at=_time_load(row["created_at"]),
+        updated_at=_time_load(row["updated_at"]),
+    )
+
+
+def _highlighter_term_values(term: HighlighterTerm) -> tuple[Any, ...]:
+    return (
+        term.id,
+        term.term,
+        term.normalized_term,
+        int(term.active),
+        term.color,
+        term.ordinal,
+        _time_dump(term.created_at),
+        _time_dump(term.updated_at),
     )
 
 

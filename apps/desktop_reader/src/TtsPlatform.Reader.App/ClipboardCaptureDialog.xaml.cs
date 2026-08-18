@@ -37,6 +37,9 @@ public partial class ClipboardCaptureDialog : Window
     private void Ignore_Click(object sender, RoutedEventArgs e) =>
         Complete(ClipboardCaptureAction.Ignore);
 
+    private void Snooze_Click(object sender, RoutedEventArgs e) =>
+        Complete(ClipboardCaptureAction.SnoozeFiveMinutes);
+
     private void AlwaysIgnore_Click(object sender, RoutedEventArgs e) =>
         Complete(ClipboardCaptureAction.AlwaysIgnoreApplication);
 

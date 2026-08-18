@@ -1,0 +1,13 @@
+{
+  "expected_row_version": 1,
+  "terms": [
+    {
+      "term": "Mara",
+      "active": true
+    },
+    {
+      "term": "identity resolution",
+      "active": false
+    }
+  ]
+}

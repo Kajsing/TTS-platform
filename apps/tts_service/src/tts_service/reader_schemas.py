@@ -14,6 +14,8 @@ from reader_core import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    HighlighterConfiguration,
+    HighlighterTerm,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -561,6 +563,61 @@ class ReaderDiagnosticsResponse(BaseModel):
     active_content_leases: int
     export_status_counts: dict[str, int]
     metrics: dict[str, Any]
+
+
+class ReaderHighlighterTermInput(BaseModel):
+    term: str = Field(min_length=1, max_length=200)
+    active: bool = True
+
+
+class ReplaceReaderHighlighterRequest(BaseModel):
+    expected_row_version: int = Field(gt=0)
+    terms: list[ReaderHighlighterTermInput] = Field(max_length=200)
+
+
+class ReaderHighlighterTermResponse(BaseModel):
+    id: str
+    term: str
+    normalized_term: str
+    active: bool
+    color: str
+    ordinal: int
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, term: HighlighterTerm) -> "ReaderHighlighterTermResponse":
+        return cls(
+            id=term.id,
+            term=term.term,
+            normalized_term=term.normalized_term,
+            active=term.active,
+            color=term.color,
+            ordinal=term.ordinal,
+            created_at=term.created_at,
+            updated_at=term.updated_at,
+        )
+
+
+class ReaderHighlighterResponse(BaseModel):
+    id: str
+    row_version: int
+    updated_at: datetime
+    terms: list[ReaderHighlighterTermResponse]
+
+    @classmethod
+    def from_domain(
+        cls, configuration: HighlighterConfiguration
+    ) -> "ReaderHighlighterResponse":
+        return cls(
+            id=configuration.id,
+            row_version=configuration.row_version,
+            updated_at=configuration.updated_at,
+            terms=[
+                ReaderHighlighterTermResponse.from_domain(term)
+                for term in configuration.terms
+            ],
+        )
 
 
 class CreateReaderRuleSetRequest(BaseModel):

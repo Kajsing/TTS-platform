@@ -5,6 +5,7 @@ import json
 import os
 import threading
 import time
+import unicodedata
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -23,6 +24,8 @@ from reader_core import (
     BlockKind,
     DocumentPage,
     DocumentState,
+    HighlighterConfiguration,
+    HighlighterTerm,
     QueueItem,
     QueueStatus,
     ReaderBlock,
@@ -34,6 +37,7 @@ from reader_core import (
     ReaderLibrary,
     ReaderNotFoundError,
     ReaderSection,
+    ReaderValidationError,
     RuleScope,
     RuleStage,
     RuleType,
@@ -173,6 +177,16 @@ class ReaderRuntimeState:
 
 
 class ReaderApplicationService:
+    _HIGHLIGHTER_COLORS = (
+        "#F9DCC4",
+        "#F7E3A1",
+        "#DDECB5",
+        "#BFE8D5",
+        "#BDE3EE",
+        "#C9D5F2",
+        "#DDD0F0",
+        "#F0CDE3",
+    )
     def __init__(
         self,
         repository: SqliteReaderRepository,
@@ -445,6 +459,50 @@ class ReaderApplicationService:
             source_type=SourceType.PLAIN_TEXT,
             language_hint=bundle.document.language_hint,
             allow_duplicate=True,
+        )
+
+    def replace_highlighter_terms(
+        self,
+        entries: tuple[tuple[str, bool], ...],
+        *,
+        expected_row_version: int,
+    ) -> HighlighterConfiguration:
+        if len(entries) > 200:
+            raise ReaderValidationError("highlighter configuration exceeds 200 terms")
+        current = self.repository.get_highlighter_configuration()
+        existing = {term.normalized_term: term for term in current.terms}
+        now = datetime.now(timezone.utc)
+        normalized_seen: set[str] = set()
+        terms: list[HighlighterTerm] = []
+        for ordinal, (raw_term, active) in enumerate(entries):
+            term = raw_term.strip()
+            normalized = unicodedata.normalize("NFKC", term).casefold()
+            if not term or len(term) > 200:
+                raise ReaderValidationError(
+                    "highlighter term must contain 1 through 200 characters"
+                )
+            if normalized in normalized_seen:
+                raise ReaderValidationError("highlighter terms must be unique")
+            normalized_seen.add(normalized)
+            previous = existing.get(normalized)
+            color_index = int.from_bytes(
+                hashlib.sha256(normalized.encode("utf-8")).digest()[:4], "big"
+            ) % len(self._HIGHLIGHTER_COLORS)
+            terms.append(
+                HighlighterTerm(
+                    id=previous.id if previous is not None else str(uuid.uuid4()),
+                    term=term,
+                    normalized_term=normalized,
+                    active=active,
+                    color=self._HIGHLIGHTER_COLORS[color_index],
+                    ordinal=ordinal,
+                    created_at=previous.created_at if previous is not None else now,
+                    updated_at=now,
+                )
+            )
+        return self.repository.replace_highlighter_terms(
+            tuple(terms),
+            expected_row_version=expected_row_version,
         )
 
     def create_rule_set(

@@ -17,7 +17,7 @@ def test_initial_migration_is_repeatable_and_reported(tmp_path: Path) -> None:
     report = repository.report()
 
     assert report.ready is True
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.integrity_ok is True
     assert report.integrity_message == "ok"
     assert report.journal_mode == "wal"
@@ -74,7 +74,7 @@ def test_known_legacy_rule_migration_checksum_upgrades_safely(tmp_path: Path) ->
 
     repository = SqliteReaderRepository(database)
 
-    assert repository.report().schema_version == 6
+    assert repository.report().schema_version == 7
     with connect_sqlite(database) as connection:
         applied_checksum = connection.execute(
             "SELECT checksum FROM schema_migrations WHERE version = 2"

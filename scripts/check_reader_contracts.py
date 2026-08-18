@@ -23,9 +23,11 @@ from tts_service.reader_schemas import (  # noqa: E402
     ReaderDocumentResponse,
     ReaderErrorResponse,
     ReaderExportJobResponse,
+    ReaderHighlighterResponse,
     ReaderImportPreviewResponse,
     ReaderMutationResponse,
     ReaderRulePreviewResponse,
+    ReplaceReaderHighlighterRequest,
     SaveReaderPositionRequest,
 )
 
@@ -42,6 +44,8 @@ FIXTURES = {
     "error.response.json": ReaderErrorResponse,
     "export_job.response.json": ReaderExportJobResponse,
     "import_preview.response.json": ReaderImportPreviewResponse,
+    "highlighter.request.json": ReplaceReaderHighlighterRequest,
+    "highlighter.response.json": ReaderHighlighterResponse,
     "rule_preview.response.json": ReaderRulePreviewResponse,
 }
 

@@ -9,6 +9,7 @@ public enum ClipboardCaptureAction
     CreateNewDocument,
     SaveToInbox,
     Ignore,
+    SnoozeFiveMinutes,
     AlwaysIgnoreApplication,
 }
 

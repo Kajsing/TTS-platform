@@ -144,6 +144,30 @@ public sealed class ReaderServiceClientTests
     }
 
     [Fact]
+    public async Task Global_highlighter_round_trip_uses_revisioned_protected_contract()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK, HighlighterJson));
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var loaded = await client.GetHighlighterAsync();
+        var saved = await client.ReplaceHighlighterAsync(
+            new ReplaceHighlighterRequest(
+                loaded.RowVersion,
+                [new SaveHighlighterTerm("Mara", Active: false)]));
+
+        Assert.Equal("Mara", Assert.Single(saved.Terms).Term);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"expected_row_version\":2", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.Contains("\"term\":\"Mara\"", handler.Requests[1].Body, StringComparison.Ordinal);
+        Assert.Contains("\"active\":false", handler.Requests[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Import_preview_commit_cancel_and_duplicate_use_protected_routes()
     {
         var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
@@ -466,6 +490,17 @@ public sealed class ReaderServiceClientTests
           "cursor":{"document_id":"doc","block_id":"block","block_ordinal":0,"character_offset":3,"content_revision":1,"segment_index":null},
           "voice_profile_id":null,"pipeline_version":1,"rules_version":1,
           "updated_at":"2026-07-27T12:00:00Z","completed":false,"row_version":2
+        }
+        """;
+
+    private const string HighlighterJson = """
+        {
+          "id":"global","row_version":2,"updated_at":"2026-08-18T12:00:00Z",
+          "terms":[{
+            "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","term":"Mara",
+            "normalized_term":"mara","active":false,"color":"#BFE8D5","ordinal":0,
+            "created_at":"2026-08-18T12:00:00Z","updated_at":"2026-08-18T12:00:00Z"
+          }]
         }
         """;
 

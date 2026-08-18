@@ -57,6 +57,11 @@ public partial class MainWindow : Window
     {
         Interval = DesktopOpenPollInterval,
     };
+    private readonly DispatcherTimer _clipboardSnoozeTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(1),
+    };
+    private readonly ClipboardPromptPolicy _clipboardPromptPolicy;
     private OnboardingResult _onboarding = new(
         ConnectionState.NotChecked,
         "Connection has not been checked.",
@@ -79,18 +84,32 @@ public partial class MainWindow : Window
     private int _findMatchIndex = -1;
     private int _findGeneration;
     private bool _findSearchPending;
+    private ReaderHighlighterConfiguration? _highlighterConfiguration;
+    private ArticleFindDocument? _wordHighlightDocument;
+    private WordHighlightResult _wordHighlightResult = WordHighlightResult.Empty;
+    private IReadOnlyDictionary<int, IReadOnlyList<ReaderTextHighlight>>
+        _wordHighlightsByBlockOrdinal = new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>();
+    private int _wordHighlightMatchIndex = -1;
+    private int _wordHighlightGeneration;
+    private bool _wordHighlightJumpInProgress;
 
-    public MainWindow(IDesktopSettingsStore settingsStore, DesktopSettings settings, bool smokeTest)
+    public MainWindow(
+        IDesktopSettingsStore settingsStore,
+        DesktopSettings settings,
+        bool smokeTest,
+        TimeProvider? timeProvider = null)
     {
         _settingsStore = settingsStore;
         _settings = settings;
         _smokeTest = smokeTest;
+        _clipboardPromptPolicy = new ClipboardPromptPolicy(timeProvider);
         InitializeComponent();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
         ApplySettingsToControls(settings);
         ReadingBlocksList.ItemsSource = _readingBlocks;
         _desktopOpenTimer.Tick += DesktopOpenTimer_Tick;
+        _clipboardSnoozeTimer.Tick += ClipboardSnoozeTimer_Tick;
         ContentRendered += MainWindow_ContentRendered;
         Loaded += MainWindow_Loaded;
         SourceInitialized += MainWindow_SourceInitialized;
@@ -390,6 +409,7 @@ public partial class MainWindow : Window
         _findCancellation?.Cancel();
         _findCancellation?.Dispose();
         _desktopOpenTimer.Stop();
+        _clipboardSnoozeTimer.Stop();
         _autoAdvanceLock.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
@@ -518,6 +538,7 @@ public partial class MainWindow : Window
             ShowOnboarding(_onboarding);
             if (_onboarding.State is ConnectionState.Ready or ConnectionState.BackendDegraded)
             {
+                await RefreshHighlighterConfigurationAsync();
                 await RefreshLibraryAsync();
                 _desktopOpenTimer.Start();
                 await CheckDesktopOpenRequestAsync();
@@ -619,6 +640,8 @@ public partial class MainWindow : Window
         _readingWindow = new ReadingWindowPager(_client);
         _findLoader = new ArticleFindDocumentLoader(_client);
         _findDocument = null;
+        _highlighterConfiguration = null;
+        ClearWordHighlights();
         _editor = new DocumentEditor(_client);
         _clipboardCapture = new ClipboardDocumentCapture(_client);
         _ephemeralAudio = new WasapiAudioOutput();
@@ -738,6 +761,8 @@ public partial class MainWindow : Window
                 TokenSource = new TokenSourceSettings("file", tokenPath),
                 PreferredVoiceId = SelectedVoiceId() ?? _settings.PreferredVoiceId,
                 ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
+                ClipboardPromptMinimumCharacters = ParseClipboardPromptMinimum(
+                    ClipboardPromptMinimumTextBox.Text),
                 CopySelectionAndReadEnabled = CopySelectionCheckBox.IsChecked == true,
                 PrivacyMode = PrivacyModeCheckBox.IsChecked == true,
                 MinimizeToTrayOnClose = MinimizeToTrayCheckBox.IsChecked == true,
@@ -786,6 +811,7 @@ public partial class MainWindow : Window
     private void ApplySettingsToControls(DesktopSettings settings)
     {
         ClipboardMonitoringCheckBox.IsChecked = settings.ClipboardMonitoringEnabled;
+        ClipboardPromptMinimumTextBox.Text = settings.ClipboardPromptMinimumCharacters.ToString();
         CopySelectionCheckBox.IsChecked = settings.CopySelectionAndReadEnabled;
         PrivacyModeCheckBox.IsChecked = settings.PrivacyMode;
         MinimizeToTrayCheckBox.IsChecked = settings.MinimizeToTrayOnClose;
@@ -835,6 +861,16 @@ public partial class MainWindow : Window
     private static IReadOnlyList<string> ParseBlockedApplications(string value) =>
         value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    private static int ParseClipboardPromptMinimum(string value)
+    {
+        if (!int.TryParse(value.Trim(), out var minimum) || minimum is < 0 or > 10_000_000)
+        {
+            throw new ReaderClientConfigurationException(
+                "The clipboard prompt minimum must be a number from 0 to 10,000,000.");
+        }
+        return minimum;
+    }
+
     private async void ClipboardMonitoringCheckBox_Click(object sender, RoutedEventArgs e) =>
         await SetClipboardMonitoringAsync(ClipboardMonitoringCheckBox.IsChecked == true);
 
@@ -867,13 +903,65 @@ public partial class MainWindow : Window
 
     private void UpdateClipboardStatus()
     {
+        var snoozed = _clipboardPromptPolicy.IsSnoozed(
+            _settings.ClipboardPromptSnoozedUntilUtc);
         var state = !_settings.ClipboardMonitoringEnabled
             ? "Off"
             : _clipboardListener?.IsRegistered == false
                 ? "Unavailable"
                 : "On";
         var privacy = _settings.PrivacyMode ? " · Privacy" : string.Empty;
-        ClipboardStatusText.Text = $"Clipboard prompt: {state}{privacy}";
+        var snooze = snoozed
+            ? $" · Paused until {_settings.ClipboardPromptSnoozedUntilUtc!.Value.ToLocalTime():t}"
+            : string.Empty;
+        ClipboardStatusText.Text = $"Clipboard prompt: {state}{privacy}{snooze}";
+        ResumeClipboardPromptsButton.Visibility = snoozed
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (snoozed && !_clipboardSnoozeTimer.IsEnabled)
+        {
+            _clipboardSnoozeTimer.Start();
+        }
+        else if (!snoozed)
+        {
+            _clipboardSnoozeTimer.Stop();
+        }
+    }
+
+    private async void ClipboardSnoozeTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_clipboardPromptPolicy.IsSnoozed(_settings.ClipboardPromptSnoozedUntilUtc))
+        {
+            return;
+        }
+        _clipboardSnoozeTimer.Stop();
+        if (_settings.ClipboardPromptSnoozedUntilUtc is null)
+        {
+            return;
+        }
+        _settings = _settings with { ClipboardPromptSnoozedUntilUtc = null };
+        UpdateClipboardStatus();
+        await SaveClipboardPromptMetadataAsync("Clipboard prompts resumed.");
+    }
+
+    private async void ResumeClipboardPromptsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings = _settings with { ClipboardPromptSnoozedUntilUtc = null };
+        UpdateClipboardStatus();
+        await SaveClipboardPromptMetadataAsync("Clipboard prompts resumed.");
+    }
+
+    private async Task SaveClipboardPromptMetadataAsync(string successMessage)
+    {
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+            FooterText.Text = successMessage;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            FooterText.Text = $"Clipboard prompt preference was not saved: {exception.Message}";
+        }
     }
 
     private async void ReadClipboardButton_Click(object sender, RoutedEventArgs e) =>
@@ -889,6 +977,7 @@ public partial class MainWindow : Window
         if (!_settings.ClipboardMonitoringEnabled ||
             _copySelectionInProgress ||
             _clipboardPromptOpen ||
+            _clipboardPromptPolicy.IsSnoozed(_settings.ClipboardPromptSnoozedUntilUtc) ||
             IsBlockedApplication(change.SourceExecutable))
         {
             return;
@@ -898,6 +987,20 @@ public partial class MainWindow : Window
         if (!clipboard.Succeeded || clipboard.Text is not string text)
         {
             FooterText.Text = clipboard.Message;
+            return;
+        }
+
+        var promptDecision = _clipboardPromptPolicy.Evaluate(
+            text,
+            _settings.ClipboardPromptMinimumCharacters,
+            _settings.ClipboardPromptSnoozedUntilUtc);
+        if (!promptDecision.ShouldPrompt)
+        {
+            if (promptDecision.SuppressionReason == ClipboardPromptSuppressionReason.BelowMinimumLength)
+            {
+                FooterText.Text =
+                    $"Clipboard prompt ignored ({promptDecision.TrimmedCharacterCount:N0} characters; minimum is {_settings.ClipboardPromptMinimumCharacters + 1:N0}).";
+            }
             return;
         }
 
@@ -988,6 +1091,15 @@ public partial class MainWindow : Window
                         FooterText.Text = $"The application block was not saved: {exception.Message}";
                     }
                 }
+                return;
+            case ClipboardCaptureAction.SnoozeFiveMinutes:
+                _settings = _settings with
+                {
+                    ClipboardPromptSnoozedUntilUtc = _clipboardPromptPolicy.SnoozeUntilUtc(),
+                };
+                UpdateClipboardStatus();
+                await SaveClipboardPromptMetadataAsync(
+                    $"Clipboard prompts paused until {_settings.ClipboardPromptSnoozedUntilUtc.Value.ToLocalTime():t}.");
                 return;
             case ClipboardCaptureAction.Ignore:
             default:
@@ -1532,6 +1644,7 @@ public partial class MainWindow : Window
             UpdateEditorButtons();
             UpdatePlaybackControls();
             ScheduleFindRefresh();
+            await RefreshWordHighlightsAsync();
         }
         finally
         {
@@ -1741,6 +1854,7 @@ public partial class MainWindow : Window
         ++_documentLoadGeneration;
         CancelFindWork(clearHighlights: true);
         _findDocument = null;
+        ClearWordHighlights();
         _editor?.Clear();
         _continuousDocument = null;
         _textCursor = null;
@@ -1979,12 +2093,13 @@ public partial class MainWindow : Window
                         ?.ApplySavedBlock(savedBlock);
                 }
             }
+            await RefreshWordHighlightsAsync();
             UpdateTextCursorFromContinuousEditor();
             UpdatePlaybackControls();
         }
     }
 
-    private void RevertEditButton_Click(object sender, RoutedEventArgs e)
+    private async void RevertEditButton_Click(object sender, RoutedEventArgs e)
     {
         if (_editor is null)
         {
@@ -1997,6 +2112,7 @@ public partial class MainWindow : Window
         EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
         EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
         _updatingEditor = false;
+        await RefreshWordHighlightsAsync();
         FooterText.Text = "Local changes reverted";
         UpdateTextCursorFromContinuousEditor();
         UpdateEditorButtons();
@@ -2038,6 +2154,7 @@ public partial class MainWindow : Window
             EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
             EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
             _updatingEditor = false;
+            await RefreshWordHighlightsAsync();
             UpdateTextCursorFromContinuousEditor();
             UpdatePlaybackControls();
         }
@@ -2287,6 +2404,7 @@ public partial class MainWindow : Window
         {
             _readingBlocks.Add(new ReaderBlockDisplay(block));
         }
+        ApplyWordHighlightsToReadingBlocks();
         ApplyCurrentFindToReadingBlocks();
         ReadingBlocksList.SelectedItem = _readingBlocks.FirstOrDefault();
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
@@ -2350,6 +2468,317 @@ public partial class MainWindow : Window
     {
         var dialog = new RuleEditorDialog(GetClient()) { Owner = this };
         dialog.ShowDialog();
+    }
+
+    private async void WordHighlighterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_highlighterConfiguration is null)
+        {
+            await RefreshHighlighterConfigurationAsync();
+        }
+        if (_highlighterConfiguration is not ReaderHighlighterConfiguration configuration)
+        {
+            FooterText.Text = "Connect to the Reader service before editing Word Highlighter terms.";
+            return;
+        }
+        await RefreshWordHighlightsAsync();
+        var dialog = new WordHighlighterDialog(configuration, _wordHighlightResult.Counts)
+        {
+            Owner = this,
+        };
+        dialog.JumpRequested += async (_, termId) => await HandleWordHighlightJumpAsync(termId);
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+        try
+        {
+            _highlighterConfiguration = await GetClient().ReplaceHighlighterAsync(
+                new ReplaceHighlighterRequest(configuration.RowVersion, dialog.SavedTerms));
+            await RefreshWordHighlightsAsync();
+            FooterText.Text =
+                $"Word Highlighter saved {_highlighterConfiguration.Terms.Count:N0} global term(s).";
+        }
+        catch (ReaderApiException exception) when (exception.StatusCode == 409)
+        {
+            await RefreshHighlighterConfigurationAsync();
+            FooterText.Text =
+                "The Word Highlighter list changed in another Reader. Reopen it to review the current list.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Word Highlighter: {exception.Message}";
+        }
+    }
+
+    private async Task RefreshHighlighterConfigurationAsync()
+    {
+        try
+        {
+            _highlighterConfiguration = await GetClient().GetHighlighterAsync();
+            WordHighlighterButton.IsEnabled = true;
+            if (_editor?.Document is not null)
+            {
+                await RefreshWordHighlightsAsync();
+            }
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            _highlighterConfiguration = null;
+            WordHighlighterButton.IsEnabled = false;
+            ClearWordHighlights();
+            FooterText.Text = $"Word Highlighter unavailable: {exception.Message}";
+        }
+    }
+
+    private async Task RefreshWordHighlightsAsync()
+    {
+        var generation = ++_wordHighlightGeneration;
+        if (_editor?.Document is not ReaderDocument document ||
+            _highlighterConfiguration is not ReaderHighlighterConfiguration configuration)
+        {
+            ClearWordHighlights();
+            return;
+        }
+
+        try
+        {
+            ArticleFindDocument? highlightDocument = null;
+            string text;
+            if (_continuousDocument is not null)
+            {
+                text = EditorTextBox.Text;
+            }
+            else
+            {
+                if (_findLoader is null)
+                {
+                    return;
+                }
+                highlightDocument = await _findLoader.LoadAsync(document);
+                text = highlightDocument.Text;
+            }
+
+            var result = await Task.Run(() =>
+                WordHighlighterEngine.Search(text, configuration.Terms));
+            var structuredHighlights = highlightDocument is null
+                ? new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>()
+                : await Task.Run(() => BuildStructuredWordHighlights(
+                    highlightDocument,
+                    result.Matches));
+            if (generation != _wordHighlightGeneration ||
+                _editor?.Document is not ReaderDocument current ||
+                !string.Equals(current.Id, document.Id, StringComparison.Ordinal) ||
+                current.ContentRevision != document.ContentRevision ||
+                _highlighterConfiguration?.RowVersion != configuration.RowVersion)
+            {
+                return;
+            }
+
+            _wordHighlightDocument = highlightDocument;
+            _wordHighlightResult = result;
+            _wordHighlightsByBlockOrdinal = structuredHighlights;
+            _wordHighlightMatchIndex = -1;
+            ApplyWordHighlights();
+            if (result.TimedOut)
+            {
+                FooterText.Text = "Word Highlighter took too long on this article and was stopped.";
+            }
+            else if (result.Truncated)
+            {
+                FooterText.Text =
+                    $"Word Highlighter display is limited to {WordHighlighterEngine.MaxMatches:N0} matches for this article.";
+            }
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            if (generation == _wordHighlightGeneration)
+            {
+                ClearWordHighlights();
+                FooterText.Text = $"Word Highlighter: {exception.Message}";
+            }
+        }
+    }
+
+    private void ApplyWordHighlights()
+    {
+        if (_continuousDocument is not null)
+        {
+            _continuousHighlightAdorner?.ShowWords(
+                _wordHighlightResult.Matches
+                    .Select(match => new ReaderTextHighlight(
+                        match.Start,
+                        match.Length,
+                        match.Color,
+                        match.TermId))
+                    .ToArray());
+            foreach (var block in _readingBlocks)
+            {
+                block.WordHighlights = [];
+            }
+            return;
+        }
+        _continuousHighlightAdorner?.ShowWords([]);
+        ApplyWordHighlightsToReadingBlocks();
+    }
+
+    private void ApplyWordHighlightsToReadingBlocks()
+    {
+        foreach (var block in _readingBlocks)
+        {
+            block.WordHighlights = [];
+        }
+        if (_wordHighlightsByBlockOrdinal.Count == 0)
+        {
+            return;
+        }
+        foreach (var block in _readingBlocks)
+        {
+            block.WordHighlights = _wordHighlightsByBlockOrdinal.GetValueOrDefault(block.Ordinal) ?? [];
+        }
+    }
+
+    private static IReadOnlyDictionary<int, IReadOnlyList<ReaderTextHighlight>>
+        BuildStructuredWordHighlights(
+            ArticleFindDocument document,
+            IReadOnlyList<WordHighlightMatch> matches)
+    {
+        var blocks = document.Blocks.ToDictionary(block => block.Ordinal);
+        var byOrdinal = new Dictionary<int, List<ReaderTextHighlight>>();
+        foreach (var match in matches)
+        {
+            var location = document.Locate(new ArticleFindMatch(match.Start, match.Length));
+            for (var ordinal = location.StartCursor.BlockOrdinal;
+                 ordinal <= location.EndCursor.BlockOrdinal;
+                 ordinal++)
+            {
+                if (!blocks.TryGetValue(ordinal, out var block))
+                {
+                    continue;
+                }
+                var start = ordinal == location.StartCursor.BlockOrdinal
+                    ? location.StartCursor.CharacterOffset
+                    : 0;
+                var end = ordinal == location.EndCursor.BlockOrdinal
+                    ? location.EndCursor.CharacterOffset
+                    : block.Text.Length;
+                start = Math.Clamp(start, 0, block.Text.Length);
+                end = Math.Clamp(end, start, block.Text.Length);
+                if (end <= start)
+                {
+                    continue;
+                }
+                if (!byOrdinal.TryGetValue(ordinal, out var ranges))
+                {
+                    ranges = [];
+                    byOrdinal[ordinal] = ranges;
+                }
+                ranges.Add(new ReaderTextHighlight(
+                    start,
+                    end - start,
+                    match.Color,
+                    match.TermId));
+            }
+        }
+        return byOrdinal.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<ReaderTextHighlight>)item.Value.ToArray());
+    }
+
+    private async Task JumpToNextWordHighlightAsync(string termId)
+    {
+        _wordHighlightMatchIndex = WordHighlighterNavigator.Move(
+            _wordHighlightResult.Matches,
+            termId,
+            _wordHighlightMatchIndex);
+        if (_wordHighlightMatchIndex < 0 ||
+            _editor?.Document is not ReaderDocument document)
+        {
+            return;
+        }
+        var match = _wordHighlightResult.Matches[_wordHighlightMatchIndex];
+        if (_continuousDocument is not null)
+        {
+            BringContinuousHighlightIntoView(match.Start);
+            return;
+        }
+        if (_wordHighlightDocument is null || _readingWindow is null)
+        {
+            return;
+        }
+        var location = _wordHighlightDocument.Locate(
+            new ArticleFindMatch(match.Start, match.Length));
+        if (!_readingWindow.Current.Blocks.Any(block =>
+                block.Ordinal == location.StartCursor.BlockOrdinal))
+        {
+            var page = await _readingWindow.LoadAsync(
+                document.Id,
+                Math.Max(0, location.StartCursor.BlockOrdinal - 8));
+            await ShowReadingPageAsync(page);
+        }
+        var blockDisplay = _readingBlocks.FirstOrDefault(block =>
+            block.Ordinal == location.StartCursor.BlockOrdinal);
+        if (blockDisplay is null)
+        {
+            return;
+        }
+        ReadingBlocksList.SelectedItem = blockDisplay;
+        ReadingBlocksList.ScrollIntoView(blockDisplay);
+        ReadingBlocksList.UpdateLayout();
+        if (ReadingBlocksList.ItemContainerGenerator.ContainerFromItem(blockDisplay) is
+                DependencyObject container &&
+            FindVisualChild<SourceHighlightTextBlock>(container) is { } textBlock)
+        {
+            _ = textBlock.BringWordTextIntoView(location.StartCursor.CharacterOffset);
+        }
+    }
+
+    private async Task HandleWordHighlightJumpAsync(string termId)
+    {
+        if (_wordHighlightJumpInProgress)
+        {
+            return;
+        }
+        _wordHighlightJumpInProgress = true;
+        try
+        {
+            await JumpToNextWordHighlightAsync(termId);
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or
+                ReaderServiceUnavailableException or
+                ReaderTokenUnavailableException)
+        {
+            FooterText.Text = $"Word Highlighter navigation: {exception.Message}";
+        }
+        finally
+        {
+            _wordHighlightJumpInProgress = false;
+        }
+    }
+
+    private void ClearWordHighlights()
+    {
+        ++_wordHighlightGeneration;
+        _wordHighlightDocument = null;
+        _wordHighlightResult = WordHighlightResult.Empty;
+        _wordHighlightsByBlockOrdinal =
+            new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>();
+        _wordHighlightMatchIndex = -1;
+        _continuousHighlightAdorner?.ShowWords([]);
+        foreach (var block in _readingBlocks)
+        {
+            block.WordHighlights = [];
+        }
     }
 
     private void CreateRuleFromSelectionButton_Click(object sender, RoutedEventArgs e)

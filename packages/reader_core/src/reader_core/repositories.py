@@ -10,6 +10,8 @@ from .models import (
     DocumentState,
     ExportPhase,
     ExportStatus,
+    HighlighterConfiguration,
+    HighlighterTerm,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -248,6 +250,15 @@ class ReaderRepository(Protocol):
     def delete_rule(self, rule_id: str, *, expected_row_version: int) -> None: ...
 
     def get_rules_version(self) -> int: ...
+
+    def get_highlighter_configuration(self) -> HighlighterConfiguration: ...
+
+    def replace_highlighter_terms(
+        self,
+        terms: tuple[HighlighterTerm, ...],
+        *,
+        expected_row_version: int,
+    ) -> HighlighterConfiguration: ...
 
     def report(self) -> ReaderDatabaseReport: ...
 

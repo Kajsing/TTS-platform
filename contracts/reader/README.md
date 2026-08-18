@@ -38,3 +38,8 @@ Browser captures accept only HTTP(S) source URLs, preserve bounded block kinds
 and headings, and expose no filesystem destination. Desktop handoffs are
 persistent, idempotent per document, and acknowledged only after the WPF client
 has opened the saved document.
+
+Reader Upgrade U3 adds `highlighter.request.json` and
+`highlighter.response.json`. The one global literal-term list is revisioned,
+stores stable presentation colors, and remains available to future authenticated
+Reader clients without exposing article text.

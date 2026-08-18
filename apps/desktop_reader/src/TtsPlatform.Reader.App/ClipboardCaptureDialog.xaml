@@ -43,6 +43,8 @@
           <Button Content="Save to Inbox" Click="Inbox_Click" />
           <Button Content="Read now" Click="ReadNow_Click" />
           <Button Content="Ignore" Click="Ignore_Click" />
+          <Button Content="Ignore for 5 minutes" Click="Snooze_Click"
+                  ToolTip="Temporarily hide automatic clipboard prompts. Manual Read clipboard still works." />
         </WrapPanel>
         <Button Grid.Row="4" x:Name="AlwaysIgnoreButton" Content="Always ignore clipboard changes from this app"
                 HorizontalAlignment="Left" Margin="3,5,3,0" Click="AlwaysIgnore_Click" />

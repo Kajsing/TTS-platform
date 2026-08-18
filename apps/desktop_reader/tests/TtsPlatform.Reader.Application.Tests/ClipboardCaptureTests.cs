@@ -102,6 +102,46 @@ public sealed class ClipboardCaptureTests
         Assert.Empty(EphemeralTextChunker.Chunk("   "));
     }
 
+    [Fact]
+    public void Automatic_prompt_uses_trimmed_length_and_zero_disables_threshold()
+    {
+        var policy = new ClipboardPromptPolicy();
+
+        var boundary = policy.Evaluate(" 12345 ", 5, null);
+        var above = policy.Evaluate(" 123456 ", 5, null);
+        var disabled = policy.Evaluate(" x ", 0, null);
+
+        Assert.False(boundary.ShouldPrompt);
+        Assert.Equal(5, boundary.TrimmedCharacterCount);
+        Assert.Equal(
+            ClipboardPromptSuppressionReason.BelowMinimumLength,
+            boundary.SuppressionReason);
+        Assert.True(above.ShouldPrompt);
+        Assert.True(disabled.ShouldPrompt);
+    }
+
+    [Fact]
+    public void Snooze_is_deterministic_and_does_not_queue_clipboard_text()
+    {
+        var clock = new ManualTimeProvider(
+            DateTimeOffset.Parse("2026-08-18T17:00:00Z"));
+        var policy = new ClipboardPromptPolicy(clock);
+        var snoozedUntil = policy.SnoozeUntilUtc();
+
+        var during = policy.Evaluate("private clipboard text", 0, snoozedUntil);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var after = policy.Evaluate("new clipboard text", 0, snoozedUntil);
+
+        Assert.Equal(
+            DateTimeOffset.Parse("2026-08-18T17:05:00Z"),
+            snoozedUntil);
+        Assert.False(during.ShouldPrompt);
+        Assert.Equal(ClipboardPromptSuppressionReason.Snoozed, during.SuppressionReason);
+        Assert.True(after.ShouldPrompt);
+        Assert.False(policy.IsSnoozed(snoozedUntil));
+        Assert.DoesNotContain("private", during.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ReaderDocument Document(int rowVersion, string id = "doc") => new(
         id,
         "Document",
@@ -187,5 +227,14 @@ public sealed class ClipboardCaptureTests
         public Task<ReaderPosition?> GetPositionAsync(string documentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ReaderPosition> SavePositionAsync(string documentId, SavePositionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<byte[]> SynthesizeAsync(EphemeralSynthesisRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ManualTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan duration) => _utcNow += duration;
     }
 }

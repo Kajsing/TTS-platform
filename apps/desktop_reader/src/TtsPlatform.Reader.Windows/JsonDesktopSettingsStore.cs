@@ -80,6 +80,12 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
             throw new ReaderClientConfigurationException("Reading font size must be between 10 and 72.");
         }
 
+        if (settings.ClipboardPromptMinimumCharacters is < 0 or > 10_000_000)
+        {
+            throw new ReaderClientConfigurationException(
+                "The clipboard prompt minimum must be between 0 and 10,000,000 characters.");
+        }
+
         var preferredVoiceId = string.IsNullOrWhiteSpace(settings.PreferredVoiceId)
             ? null
             : settings.PreferredVoiceId.Trim();

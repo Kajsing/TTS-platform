@@ -102,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 6,
+        "schema_version": 7,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -111,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 6,
+        "schema_version": 7,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -139,12 +139,64 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     }
 
 
+def test_global_highlighter_is_persistent_revisioned_and_color_stable(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+
+    initial = client.get("/v1/reader/highlighter", headers=headers)
+    saved = client.put(
+        "/v1/reader/highlighter",
+        headers=headers,
+        json={
+            "expected_row_version": initial.json()["row_version"],
+            "terms": [
+                {"term": "Mara", "active": True},
+                {"term": "identity resolution", "active": True},
+            ],
+        },
+    )
+    first_color = saved.json()["terms"][0]["color"]
+    toggled = client.put(
+        "/v1/reader/highlighter",
+        headers=headers,
+        json={
+            "expected_row_version": saved.json()["row_version"],
+            "terms": [
+                {"term": "MARA", "active": False},
+                {"term": "identity resolution", "active": True},
+            ],
+        },
+    )
+    stale = client.put(
+        "/v1/reader/highlighter",
+        headers=headers,
+        json={"expected_row_version": 1, "terms": []},
+    )
+    reopened_client, reopened_headers, _ = build_reader_bundle(tmp_path)
+    reopened = reopened_client.get(
+        "/v1/reader/highlighter", headers=reopened_headers
+    )
+
+    assert initial.status_code == 200
+    assert initial.json()["terms"] == []
+    assert saved.status_code == 200
+    assert saved.json()["row_version"] == 2
+    assert first_color.startswith("#")
+    assert toggled.status_code == 200
+    assert toggled.json()["terms"][0]["active"] is False
+    assert toggled.json()["terms"][0]["color"] == first_color
+    assert stale.status_code == 409
+    assert reopened.status_code == 200
+    assert reopened.json() == toggled.json()
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
         ("GET", "/v1/reader/documents"),
         ("POST", "/v1/reader/documents"),
         ("GET", "/v1/reader/queue"),
+        ("GET", "/v1/reader/highlighter"),
+        ("PUT", "/v1/reader/highlighter"),
         ("POST", "/v1/reader/queue/reorder"),
         ("POST", "/v1/reader/imports"),
     ],
@@ -1164,7 +1216,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 6
+    assert diagnostics.json()["schema_version"] == 7
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,

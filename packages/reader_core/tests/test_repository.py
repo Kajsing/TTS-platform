@@ -13,6 +13,7 @@ from reader_core import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    HighlighterTerm,
     PlaybackPosition,
     QueueItem,
     QueueStatus,
@@ -46,6 +47,34 @@ def _cursor(document, block, offset: int) -> ReaderCursor:
         character_offset=offset,
         content_revision=document.content_revision,
     )
+
+
+def test_highlighter_configuration_is_revisioned_and_persistent(repository) -> None:
+    initial = repository.get_highlighter_configuration()
+    now = datetime.now(timezone.utc)
+    terms = (
+        HighlighterTerm(
+            id=str(uuid.uuid4()),
+            term="Mara",
+            normalized_term="mara",
+            active=True,
+            color="#BFE8D5",
+            ordinal=0,
+            created_at=now,
+            updated_at=now,
+        ),
+    )
+
+    saved = repository.replace_highlighter_terms(
+        terms,
+        expected_row_version=initial.row_version,
+    )
+    reopened = SqliteReaderRepository(repository.database_path)
+
+    assert saved.row_version == initial.row_version + 1
+    assert reopened.get_highlighter_configuration().terms == terms
+    with pytest.raises(ReaderConflictError):
+        reopened.replace_highlighter_terms((), expected_row_version=initial.row_version)
 
 
 def test_rule_sets_rules_versions_and_conflicts_are_persistent(repository) -> None:

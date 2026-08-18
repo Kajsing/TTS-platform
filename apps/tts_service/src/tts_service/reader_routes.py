@@ -63,6 +63,7 @@ from .reader_schemas import (
     ReaderExportCapability,
     ReaderExportJobListResponse,
     ReaderExportJobResponse,
+    ReaderHighlighterResponse,
     ReaderImportBlockPreviewResponse,
     ReaderImportCapability,
     ReaderImportCommitRequest,
@@ -89,6 +90,7 @@ from .reader_schemas import (
     ReaderRuleWarningResponse,
     ReorderReaderQueueRequest,
     ReplaceReaderContentRequest,
+    ReplaceReaderHighlighterRequest,
     SaveReaderPositionRequest,
     UpdateReaderBookmarkRequest,
     UpdateReaderDocumentRequest,
@@ -1109,6 +1111,34 @@ def build_reader_router() -> APIRouter:
             export_status_counts=counts,
             metrics=request.app.state.container.observability.snapshot(),
         )
+
+    @router.get("/highlighter", response_model=ReaderHighlighterResponse)
+    async def get_highlighter(request: Request) -> ReaderHighlighterResponse:
+        service = _service(request)
+        configuration = _run_reader(
+            service.repository.get_highlighter_configuration,
+            missing_entity="highlighter configuration",
+        )
+        return ReaderHighlighterResponse.from_domain(configuration)
+
+    @router.put("/highlighter", response_model=ReaderHighlighterResponse)
+    async def replace_highlighter(
+        request: Request,
+        payload: ReplaceReaderHighlighterRequest,
+    ) -> ReaderHighlighterResponse:
+        service = _service(request)
+        configuration = _run_reader(
+            lambda: service.replace_highlighter_terms(
+                tuple((item.term, item.active) for item in payload.terms),
+                expected_row_version=payload.expected_row_version,
+            ),
+            missing_entity="highlighter configuration",
+        )
+        service.observability.log_reader_operation(
+            operation="replace_highlighter_terms",
+            extra={"term_count": len(configuration.terms)},
+        )
+        return ReaderHighlighterResponse.from_domain(configuration)
 
     @router.get("/rule-sets", response_model=ReaderRuleSetListResponse)
     async def list_rule_sets(request: Request) -> ReaderRuleSetListResponse:

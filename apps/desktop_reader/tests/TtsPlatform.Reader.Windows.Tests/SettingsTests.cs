@@ -17,7 +17,9 @@ public sealed class SettingsTests : IDisposable
         var store = new JsonDesktopSettingsStore(settingsPath);
         var settings = new DesktopSettings(
             TokenSource: new TokenSourceSettings("file", @"C:\safe\token.txt"),
-            PreferredVoiceId: " voice-id ");
+            PreferredVoiceId: " voice-id ",
+            ClipboardPromptMinimumCharacters: 50,
+            ClipboardPromptSnoozedUntilUtc: DateTimeOffset.Parse("2026-08-18T17:05:00Z"));
 
         await store.SaveAsync(settings);
         var json = await File.ReadAllTextAsync(settingsPath);
@@ -34,6 +36,20 @@ public sealed class SettingsTests : IDisposable
         Assert.False(loaded.ClipboardMonitoringEnabled);
         Assert.True(loaded.PrivacyMode);
         Assert.False(loaded.CopySelectionAndReadEnabled);
+        Assert.Equal(50, loaded.ClipboardPromptMinimumCharacters);
+        Assert.Equal(
+            DateTimeOffset.Parse("2026-08-18T17:05:00Z"),
+            loaded.ClipboardPromptSnoozedUntilUtc);
+        Assert.DoesNotContain("clipboard text", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Settings_store_rejects_negative_clipboard_prompt_minimum()
+    {
+        var store = new JsonDesktopSettingsStore(Path.Combine(_temporaryDirectory, "settings.json"));
+
+        await Assert.ThrowsAsync<ReaderClientConfigurationException>(() =>
+            store.SaveAsync(new DesktopSettings(ClipboardPromptMinimumCharacters: -1)));
     }
 
     [Fact]

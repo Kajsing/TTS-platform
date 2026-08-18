@@ -16,6 +16,7 @@
           HighlightLength="{Binding HighlightLength}"
           FindStart="{Binding FindStart}"
           FindLength="{Binding FindLength}"
+          WordHighlights="{Binding WordHighlights}"
           TextWrapping="Wrap" FontFamily="{Binding DisplayFontFamily}"
           FontSize="{Binding DisplayFontSize}" FontWeight="{Binding DisplayFontWeight}"
           FontStyle="{Binding DisplayFontStyle}" Margin="{Binding DisplayMargin}" />
@@ -79,6 +80,9 @@
                     AutomationProperties.Name="Open compact playback controller" />
             <Button x:Name="SpeechRulesButton" Content="Speech rules…" Click="SpeechRulesButton_Click"
                     AutomationProperties.Name="Manage speech rules" />
+            <Button x:Name="WordHighlighterButton" Content="Word Highlighter…"
+                    Click="WordHighlighterButton_Click" IsEnabled="False"
+                    AutomationProperties.Name="Manage global highlighted words and phrases" />
             <Button x:Name="RefreshButton" Content="Check connection" Click="RefreshButton_Click"
                     AutomationProperties.Name="Check local service connection" />
             <Button x:Name="ActionButton" Content="Connection help" Click="ActionButton_Click"
@@ -87,8 +91,15 @@
           <StackPanel VerticalAlignment="Center">
             <TextBlock x:Name="StatusText" Text="Connection has not been checked." FontWeight="SemiBold"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-            <TextBlock x:Name="ClipboardStatusText" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,8,0"
-                       Text="Clipboard prompt: Off" AutomationProperties.LiveSetting="Polite" />
+            <StackPanel Orientation="Horizontal" Margin="0,3,8,0">
+              <TextBlock x:Name="ClipboardStatusText" Foreground="{StaticResource TextMutedBrush}"
+                         VerticalAlignment="Center" Text="Clipboard prompt: Off"
+                         AutomationProperties.LiveSetting="Polite" />
+              <Button x:Name="ResumeClipboardPromptsButton" Content="Resume now"
+                      Click="ResumeClipboardPromptsButton_Click" Visibility="Collapsed"
+                      MinHeight="26" Padding="8,2" Margin="8,0,0,0"
+                      AutomationProperties.Name="Resume automatic clipboard prompts now" />
+            </StackPanel>
           </StackPanel>
         </DockPanel>
         <Expander Header="Connection and keyboard settings" Margin="0,7,0,0">
@@ -133,6 +144,12 @@
               <CheckBox x:Name="PrivacyModeCheckBox" Content="Privacy mode" Margin="4" />
               <CheckBox x:Name="MinimizeToTrayCheckBox" Content="Minimize to tray on close" Margin="4" />
               <CheckBox x:Name="CompactEnabledCheckBox" Content="Remember compact controller" Margin="4" />
+              <TextBlock Text="Ignore automatic prompts at or below" Margin="14,4,4,4"
+                         VerticalAlignment="Center" />
+              <TextBox x:Name="ClipboardPromptMinimumTextBox" Width="82" Margin="4"
+                       ToolTip="Character count after surrounding whitespace is removed. Use 0 to disable."
+                       AutomationProperties.Name="Minimum clipboard prompt character count" />
+              <TextBlock Text="characters" Margin="2,4,4,4" VerticalAlignment="Center" />
             </WrapPanel>
             <Grid Margin="0,7,0,0">
               <Grid.ColumnDefinitions>

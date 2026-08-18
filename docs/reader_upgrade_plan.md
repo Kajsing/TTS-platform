@@ -2,8 +2,8 @@
 
 ## Status
 
-The user approved this upgrade track on 2026-08-17. U1 is complete. U2 is the
-next planned target but has not started.
+The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) is
+complete. U4 is the next planned target but has not started.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -81,7 +81,7 @@ py -3 scripts\check_desktop_reader.py --require-windows-integration
 Also build the Release `win-x64` WPF target and manually verify literal,
 phrase, regex, next, previous, close, playback coexistence, and a long article.
 
-### U2: Clipboard prompt threshold and five-minute snooze
+### U2: Clipboard prompt threshold and five-minute snooze — complete
 
 **Purpose:** Suppress low-value clipboard interruptions without weakening the
 explicit clipboard-reading workflow.
@@ -106,7 +106,7 @@ Acceptance criteria:
 - Snooze and resume are deterministic under an injectable clock.
 - No clipboard text is added to settings or logs.
 
-### U3: Persistent Word Highlighter
+### U3: Persistent Word Highlighter — complete
 
 **Purpose:** Make recurring names, terms, and phrases visually scannable while
 reading.
@@ -192,13 +192,13 @@ Acceptance criteria:
 **Purpose:** Hide selected folders inside Reader until the user supplies an
 access code.
 
-This is a security decision gate. The recommended first version is an honest
-application-level privacy lock, not encryption at rest. Article text would
+The user approved an honest application-level privacy lock as the first
+version, not encryption at rest. Article text would
 still exist in the local database and backups. True encryption is a separate
 architecture requiring search, playback, export, backup, recovery, and key
 management design.
 
-Minimum privacy-lock requirements if approved:
+Minimum privacy-lock requirements:
 
 - Never store the access code in plaintext; store a salted slow password hash.
 - Unlock through a bounded session and support automatic relocking.
@@ -267,5 +267,8 @@ track.
 
 ## Current resume point
 
-U1 passed its acceptance criteria and validation on 2026-08-17. Resume at U2
-only when the user asks to continue this upgrade track.
+Track A is complete: U1 passed on 2026-08-17, and U2 plus U3 passed on
+2026-08-18. Resume at U4 only when the user asks to continue this upgrade
+track. U3 deliberately begins with one global literal/phrase list; the
+per-article expansion decision remains deferred until the global behavior has
+been used in practice.

@@ -13,6 +13,11 @@ public interface IReaderServiceClient
     Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default);
     Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default);
     Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default);
+    Task<ReaderHighlighterConfiguration> GetHighlighterAsync(
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderHighlighterConfiguration> ReplaceHighlighterAsync(
+        ReplaceHighlighterRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<ReaderDocument> CreateDocumentAsync(
         CreateDocumentRequest request,
         CancellationToken cancellationToken = default);
@@ -179,6 +184,28 @@ public interface IReaderServiceClient
         EphemeralSynthesisRequest request,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record ReaderHighlighterTerm(
+    string Id,
+    string Term,
+    string NormalizedTerm,
+    bool Active,
+    string Color,
+    int Ordinal,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record ReaderHighlighterConfiguration(
+    string Id,
+    int RowVersion,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<ReaderHighlighterTerm> Terms);
+
+public sealed record SaveHighlighterTerm(string Term, bool Active = true);
+
+public sealed record ReplaceHighlighterRequest(
+    int ExpectedRowVersion,
+    IReadOnlyList<SaveHighlighterTerm> Terms);
 
 public interface IReaderStreamClient
 {

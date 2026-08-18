@@ -14,6 +14,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     private static readonly Pen UnderlinePen = CreateUnderlinePen();
     private static readonly Brush FindFill = CreateFindFill();
     private static readonly Pen FindBorderPen = CreateFindBorderPen();
+    private static readonly Dictionary<string, Brush> WordFills = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly TextBox _textBox;
     private readonly ScrollChangedEventHandler _scrollChangedHandler;
@@ -21,6 +22,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     private int _highlightLength;
     private int _findStart = -1;
     private int _findLength;
+    private IReadOnlyList<ReaderTextHighlight> _wordHighlights = [];
     private bool _disposed;
 
     public PlaybackHighlightAdorner(TextBox textBox)
@@ -32,6 +34,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         _scrollChangedHandler = (_, _) => InvalidateVisual();
         _textBox.SizeChanged += TextBox_LayoutChanged;
         _textBox.TextChanged += TextBox_TextChanged;
+        _textBox.SelectionChanged += TextBox_SelectionChanged;
         _textBox.AddHandler(ScrollViewer.ScrollChangedEvent, _scrollChangedHandler);
     }
 
@@ -39,6 +42,12 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
     public int HighlightLength => _highlightLength;
     public int FindStart => _findStart;
     public int FindLength => _findLength;
+
+    public void ShowWords(IReadOnlyList<ReaderTextHighlight> highlights)
+    {
+        _wordHighlights = highlights ?? [];
+        InvalidateVisual();
+    }
 
     public void Show(int start, int length)
     {
@@ -79,6 +88,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         _disposed = true;
         _textBox.SizeChanged -= TextBox_LayoutChanged;
         _textBox.TextChanged -= TextBox_TextChanged;
+        _textBox.SelectionChanged -= TextBox_SelectionChanged;
         _textBox.RemoveHandler(ScrollViewer.ScrollChangedEvent, _scrollChangedHandler);
     }
 
@@ -88,7 +98,8 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         var text = _textBox.Text ?? string.Empty;
         if (text.Length == 0 ||
             ((_highlightStart < 0 || _highlightLength <= 0) &&
-                (_findStart < 0 || _findLength <= 0)))
+                (_findStart < 0 || _findLength <= 0) &&
+                _wordHighlights.Count == 0))
         {
             return;
         }
@@ -97,6 +108,25 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
             new Rect(0, 0, ActualWidth, ActualHeight)));
         try
         {
+            var selectionStart = _textBox.SelectionStart;
+            var selectionEnd = selectionStart + _textBox.SelectionLength;
+            foreach (var word in _wordHighlights)
+            {
+                if (selectionEnd > selectionStart &&
+                    word.Start < selectionEnd &&
+                    word.End > selectionStart)
+                {
+                    continue;
+                }
+                DrawHighlight(
+                    drawingContext,
+                    text,
+                    word.Start,
+                    word.Length,
+                    WordFill(word.Color),
+                    borderPen: null,
+                    underlinePen: null);
+            }
             DrawHighlight(
                 drawingContext,
                 text,
@@ -126,7 +156,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         int highlightStart,
         int highlightLength,
         Brush fill,
-        Pen borderPen,
+        Pen? borderPen,
         Pen? underlinePen)
     {
         if (highlightStart < 0 || highlightLength <= 0)
@@ -162,7 +192,7 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         int segmentStart,
         int segmentEnd,
         Brush fill,
-        Pen borderPen,
+        Pen? borderPen,
         Pen? underlinePen)
     {
         while (segmentStart < segmentEnd && text[segmentStart] is '\r' or '\n')
@@ -224,8 +254,12 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         _highlightLength = 0;
         _findStart = -1;
         _findLength = 0;
+        _wordHighlights = [];
         InvalidateVisual();
     }
+
+    private void TextBox_SelectionChanged(object sender, RoutedEventArgs e) =>
+        InvalidateVisual();
 
     private bool TryGetTrailingCharacterEdge(string text, int characterIndex, out Rect edge)
     {
@@ -303,5 +337,21 @@ public sealed class PlaybackHighlightAdorner : Adorner, IDisposable
         var pen = new Pen(brush, 1.1);
         pen.Freeze();
         return pen;
+    }
+
+    private static Brush WordFill(string value)
+    {
+        if (WordFills.TryGetValue(value, out var existing))
+        {
+            return existing;
+        }
+        var color = ColorConverter.ConvertFromString(value) is Color parsed
+            ? parsed
+            : Color.FromRgb(221, 236, 181);
+        color.A = 105;
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        WordFills[value] = brush;
+        return brush;
     }
 }

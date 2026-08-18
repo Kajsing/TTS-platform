@@ -15,6 +15,8 @@ public sealed class SourceHighlightTextBlock : TextBlock
     private static readonly Brush FindBrush = CreateFrozenBrush(Color.FromRgb(190, 225, 226));
     private Run? _highlightedRun;
     private Run? _findRun;
+    private readonly Dictionary<int, Run> _wordRunsByStart = [];
+    private static readonly Dictionary<string, Brush> WordBrushes = new(StringComparer.OrdinalIgnoreCase);
 
     public static readonly DependencyProperty SourceTextProperty = DependencyProperty.Register(
         nameof(SourceText),
@@ -46,6 +48,12 @@ public sealed class SourceHighlightTextBlock : TextBlock
         typeof(SourceHighlightTextBlock),
         new FrameworkPropertyMetadata(0, OnDisplayPropertyChanged));
 
+    public static readonly DependencyProperty WordHighlightsProperty = DependencyProperty.Register(
+        nameof(WordHighlights),
+        typeof(IReadOnlyList<ReaderTextHighlight>),
+        typeof(SourceHighlightTextBlock),
+        new FrameworkPropertyMetadata(Array.Empty<ReaderTextHighlight>(), OnDisplayPropertyChanged));
+
     public string SourceText
     {
         get => (string)GetValue(SourceTextProperty);
@@ -76,6 +84,12 @@ public sealed class SourceHighlightTextBlock : TextBlock
         set => SetValue(FindLengthProperty, value);
     }
 
+    public IReadOnlyList<ReaderTextHighlight> WordHighlights
+    {
+        get => (IReadOnlyList<ReaderTextHighlight>)GetValue(WordHighlightsProperty);
+        set => SetValue(WordHighlightsProperty, value);
+    }
+
     public bool BringHighlightedTextIntoView()
     {
         return BringRunIntoView(_highlightedRun);
@@ -85,6 +99,9 @@ public sealed class SourceHighlightTextBlock : TextBlock
     {
         return BringRunIntoView(_findRun);
     }
+
+    public bool BringWordTextIntoView(int start) =>
+        BringRunIntoView(_wordRunsByStart.GetValueOrDefault(start));
 
     private bool BringRunIntoView(Run? run)
     {
@@ -125,6 +142,7 @@ public sealed class SourceHighlightTextBlock : TextBlock
         Inlines.Clear();
         _highlightedRun = null;
         _findRun = null;
+        _wordRunsByStart.Clear();
         var text = SourceText ?? string.Empty;
         var playbackStart = Math.Clamp(HighlightStart, 0, text.Length);
         var playbackLength = Math.Clamp(HighlightLength, 0, text.Length - playbackStart);
@@ -134,7 +152,11 @@ public sealed class SourceHighlightTextBlock : TextBlock
         var findEnd = findStart + findLength;
         var hasPlayback = HighlightStart >= 0 && playbackLength > 0;
         var hasFind = FindStart >= 0 && findLength > 0;
-        if (!hasPlayback && !hasFind)
+        var words = (WordHighlights ?? [])
+            .Select(range => range.Clamp(text.Length))
+            .Where(range => range.Length > 0)
+            .ToArray();
+        if (!hasPlayback && !hasFind && words.Length == 0)
         {
             Inlines.Add(new Run(text));
             AutomationProperties.SetHelpText(this, string.Empty);
@@ -151,6 +173,11 @@ public sealed class SourceHighlightTextBlock : TextBlock
         {
             boundaries.Add(findStart);
             boundaries.Add(findEnd);
+        }
+        foreach (var word in words)
+        {
+            boundaries.Add(word.Start);
+            boundaries.Add(word.End);
         }
 
         var ordered = boundaries.ToArray();
@@ -173,6 +200,14 @@ public sealed class SourceHighlightTextBlock : TextBlock
                 run.Background = FindBrush;
                 _findRun ??= run;
             }
+            else if (words.FirstOrDefault(word => start < word.End && end > word.Start) is { } word)
+            {
+                run.Background = WordBrush(word.Color);
+                if (start == word.Start)
+                {
+                    _wordRunsByStart[start] = run;
+                }
+            }
             Inlines.Add(run);
         }
         var help = hasPlayback && hasFind
@@ -189,6 +224,35 @@ public sealed class SourceHighlightTextBlock : TextBlock
         brush.Freeze();
         return brush;
     }
+
+    private static Brush WordBrush(string value)
+    {
+        if (WordBrushes.TryGetValue(value, out var existing))
+        {
+            return existing;
+        }
+        var color = ColorConverter.ConvertFromString(value) is Color parsed
+            ? parsed
+            : Color.FromRgb(221, 236, 181);
+        var brush = CreateFrozenBrush(color);
+        WordBrushes[value] = brush;
+        return brush;
+    }
+}
+
+public sealed record ReaderTextHighlight(int Start, int Length, string Color, string TermId)
+{
+    public int End => Start + Length;
+
+    public ReaderTextHighlight Clamp(int textLength)
+    {
+        var start = Math.Clamp(Start, 0, textLength);
+        return this with
+        {
+            Start = start,
+            Length = Math.Clamp(Length, 0, textLength - start),
+        };
+    }
 }
 
 public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChanged
@@ -197,6 +261,7 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
     private int _highlightLength;
     private int _findStart = -1;
     private int _findLength;
+    private IReadOnlyList<ReaderTextHighlight> _wordHighlights = [];
     private string _text = block.Text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -287,6 +352,20 @@ public sealed class ReaderBlockDisplay(ReaderBlock block) : INotifyPropertyChang
                 return;
             }
             _findLength = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public IReadOnlyList<ReaderTextHighlight> WordHighlights
+    {
+        get => _wordHighlights;
+        set
+        {
+            if (ReferenceEquals(_wordHighlights, value))
+            {
+                return;
+            }
+            _wordHighlights = value;
             OnPropertyChanged();
         }
     }

@@ -31,6 +31,9 @@ The Milestone 9 Reader beta provides:
 - clipboard prompt mode, off by default, with Read, append, create, Inbox,
   ignore, and executable-block actions; the prompt is activated above other
   windows and appears in the taskbar so a browser cannot hide it behind Reader;
+- a configurable automatic-prompt minimum (50 trimmed characters by default,
+  with 0 disabling the threshold), plus Ignore for 5 minutes, a visible expiry,
+  and Resume now; explicit clipboard-reading actions bypass these filters;
 - opt-in Copy Selection and Read with a one-second timeout, secure-desktop
   refusal, one-shot `Ctrl+C`, loop prevention, and best-effort safe clipboard
   restoration;
@@ -88,6 +91,13 @@ The Milestone 9 Reader beta provides:
   document title, text, token, or imported-file path is recorded.
 - persistent browser-open handoffs polled from the protected local service; a
   saved web document opens only after unsaved edits and active playback are clear.
+- current-article Find with literal, phrase, whole-word, case-sensitive, and
+  bounded regex modes, keyboard next/previous navigation, and layout-stable
+  active-result overlays across complete articles;
+- one service-owned global Word Highlighter list with literal words/phrases,
+  active toggles, stable colors, full-article counts, next-match navigation, and
+  longer-phrase priority. Its background-only ranges do not edit source text or
+  change font metrics, and playback remains visually dominant.
 
 ## Project boundaries
 

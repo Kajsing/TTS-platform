@@ -1,0 +1,17 @@
+{
+  "id": "global",
+  "row_version": 2,
+  "updated_at": "2026-08-18T12:00:00Z",
+  "terms": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "term": "Mara",
+      "normalized_term": "mara",
+      "active": true,
+      "color": "#BFE8D5",
+      "ordinal": 0,
+      "created_at": "2026-08-18T12:00:00Z",
+      "updated_at": "2026-08-18T12:00:00Z"
+    }
+  ]
+}

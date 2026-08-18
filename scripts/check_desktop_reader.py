@@ -121,6 +121,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ReadingWindowPager.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ContinuousDocumentText.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ArticleFind.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "WordHighlighter.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.ico",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.png",
@@ -131,6 +132,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "RenameDocumentDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "ImportPreviewDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "WordHighlighterDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "WordHighlighterDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
@@ -331,6 +334,16 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "ShowFind",
         "FindStart",
         "BringFindTextIntoView",
+        "ClipboardPromptMinimumCharacters",
+        "SnoozeFiveMinutes",
+        "ResumeClipboardPromptsButton",
+        "ClipboardPromptPolicy",
+        "WordHighlighterEngine",
+        "WordHighlighterDialog",
+        "GetHighlighterAsync",
+        "ReplaceHighlighterAsync",
+        "ShowWords",
+        "WordHighlights",
     ]
     missing_workstation_usability_features = [
         value
@@ -372,6 +385,8 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "article_deletion": "implemented",
         "playback_performance_logging": "implemented",
         "article_find": "implemented",
+        "clipboard_prompt_filters": "implemented",
+        "word_highlighter": "implemented",
     }
 
 

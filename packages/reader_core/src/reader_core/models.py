@@ -53,6 +53,56 @@ class QueueStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+@dataclass(frozen=True, slots=True)
+class HighlighterTerm:
+    id: str
+    term: str
+    normalized_term: str
+    active: bool
+    color: str
+    ordinal: int
+    created_at: datetime
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "highlighter term id")
+        _require_utc(self.created_at, "highlighter term created_at")
+        _require_utc(self.updated_at, "highlighter term updated_at")
+        if not self.term.strip() or len(self.term) > 200:
+            raise ReaderValidationError("highlighter term must contain 1 through 200 characters")
+        if not self.normalized_term or len(self.normalized_term) > 400:
+            raise ReaderValidationError("normalized highlighter term is invalid")
+        if len(self.color) != 7 or not self.color.startswith("#"):
+            raise ReaderValidationError("highlighter color must use #RRGGBB")
+        try:
+            int(self.color[1:], 16)
+        except ValueError as exc:
+            raise ReaderValidationError("highlighter color must use #RRGGBB") from exc
+        if self.ordinal < 0:
+            raise ReaderValidationError("highlighter term ordinal must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class HighlighterConfiguration:
+    terms: tuple[HighlighterTerm, ...]
+    row_version: int
+    updated_at: datetime
+    id: str = "global"
+
+    def __post_init__(self) -> None:
+        if self.id != "global":
+            raise ReaderValidationError("highlighter configuration id must be global")
+        _require_utc(self.updated_at, "highlighter configuration updated_at")
+        if self.row_version <= 0:
+            raise ReaderValidationError("highlighter configuration version must be positive")
+        if len(self.terms) > 200:
+            raise ReaderValidationError("highlighter configuration exceeds 200 terms")
+        if len({term.normalized_term for term in self.terms}) != len(self.terms):
+            raise ReaderValidationError("highlighter terms must be unique")
+        if any(term.ordinal != index for index, term in enumerate(self.terms)):
+            raise ReaderValidationError("highlighter term order must be contiguous")
+
+
 class ExportStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"

@@ -4,18 +4,42 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-17
+- Date: 2026-08-18
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
-- The user approved `docs/reader_upgrade_plan.md` on 2026-08-17. U1, the
-  current-article Find panel, is the active implementation target. The upgrade
+- The user approved `docs/reader_upgrade_plan.md` on 2026-08-17. Reader Upgrade
+  Track A (U1 through U3) is complete; U4 folder-backed library organization is
+  the next implementation target but has not started. The upgrade
   track is deliberately prioritized ahead of Reader Milestones 10 and 11,
-  which remain incomplete. U6 retains an explicit privacy-lock-versus-encryption
-  decision gate; U7 must amend the localhost security architecture before any
-  remote server implementation can begin.
+  which remain incomplete. U6 is approved as an application-level privacy lock
+  without encryption at rest in its first version. U7 must amend the localhost
+  security architecture before any remote server implementation can begin;
+  internet reachability should use a user-managed VPN rather than direct public
+  exposure in the first remote version.
+- Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
+  now use a configurable trimmed-character threshold (50 by default, 0 to
+  disable), offer a persistent five-minute pause, show its local expiry time,
+  and provide Resume now without retaining or replaying clipboard text. Manual
+  Read Clipboard and Copy Selection and Read remain independent of the
+  automatic-prompt filters. The Reader now also owns one global, revisioned
+  literal/phrase highlighter list in service schema 7. It provides active
+  toggles, deterministic persisted colors, complete-article counts, next-match
+  navigation, longer-phrase priority, and Unicode-aware case-insensitive word
+  boundaries. Background-only ranges remain separate from source text; normal
+  selection suppresses overlapping word color and playback remains the highest
+  visual priority. Both the continuous editor and structured/oversized pages
+  use the same full-article result set.
+- Track A validation on 2026-08-18 passed all 423 Python tests, all 123 .NET
+  Release tests, the standalone WPF build, Ruff, .NET formatting, 15 Reader
+  contract fixtures, `git diff --check`, and the complete required Windows
+  integration check. The latter passed live Reader API/edit/playback/import
+  flows, schema-7 preview migration, Windows audio, clipboard listener, global
+  hotkeys, tray lifecycle, self-contained packaging, and packaged WPF render.
+  The only pre-existing worktree change remains `models/MANIFEST.json`; it was
+  not modified or included in this work.
 - Completed the stable playback-highlight field fix (2026-08-17). Editable
   documents now keep the same continuous TextBox before, during, and after
   playback. A follow-up added a dedicated non-layout overlay because WPF did not

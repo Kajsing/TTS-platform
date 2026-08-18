@@ -31,6 +31,25 @@ public sealed class ReaderServiceClient : IReaderServiceClient
     public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) =>
         SendAsync<VoicePage>(HttpMethod.Get, "v1/voices", true, null, cancellationToken);
 
+    public Task<ReaderHighlighterConfiguration> GetHighlighterAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderHighlighterConfiguration>(
+            HttpMethod.Get,
+            "v1/reader/highlighter",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderHighlighterConfiguration> ReplaceHighlighterAsync(
+        ReplaceHighlighterRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderHighlighterConfiguration>(
+            HttpMethod.Put,
+            "v1/reader/highlighter",
+            true,
+            request,
+            cancellationToken);
+
     public Task<ReaderDocument> CreateDocumentAsync(
         CreateDocumentRequest request,
         CancellationToken cancellationToken = default) =>
