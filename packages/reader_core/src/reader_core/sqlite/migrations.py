@@ -12,11 +12,11 @@ from ..errors import ReaderMigrationError
 
 _MIGRATION_NAME = re.compile(r"^(?P<version>[0-9]{3})_[a-z0-9_]+\.sql$")
 
-# A development Milestone 7 database could apply the first rule migration
-# before its pattern, replacement, and timeout constraints were tightened in
-# the canonical SQL. The service layer enforced those same bounds already.
-# Accept only that exact known predecessor so existing local libraries can
-# continue to later migrations while arbitrary checksum drift still fails.
+# Accept only exact, known development predecessors so existing local libraries
+# can continue while arbitrary checksum drift still fails. Migration 002 was
+# tightened after its first development use. Migration 009 briefly had one
+# additional trailing newline; its executable SQL is otherwise byte-for-byte
+# identical after trimming that blank line.
 _COMPATIBLE_APPLIED_CHECKSUMS = {
     (
         2,
@@ -24,6 +24,13 @@ _COMPATIBLE_APPLIED_CHECKSUMS = {
         "8d7727ae6ff923f5fcc0831204f53b8ee04cadba82a2422581f1d97e8bb7c18c",
     ): frozenset(
         {"b952d4ff98accea6f6a5df1fa7ed628737d141b076a195edb17c090eba8a3da3"}
+    ),
+    (
+        9,
+        "009_reader_folder_privacy.sql",
+        "2ad4e739789d72341301ef471b59d1159c2872c060b47ecb5945c193ebbf24c1",
+    ): frozenset(
+        {"ffbaac1b4f89f028fcab0e262eda96bbe99faff87e1993ff7451b314a29d7bac"}
     ),
 }
 

@@ -2109,7 +2109,7 @@ python3 scripts/package_windows_bundle.py
   backups. The one-time recovery dialog requires acknowledgement, HTTP and
   WebSocket clients share memory-only sessions, and the desktop hides an open
   protected article when a session ends or the local service stops.
-- Validation passed all 430 Python tests and all 129 .NET Release tests (33
+- Validation passed all 431 Python tests and all 129 .NET Release tests (33
   client, 75 application, 21 Windows), Ruff, .NET formatting, 20 Reader
   contract fixtures, `git diff --check`, and the required Windows integration
   check. That check passed live API/edit/playback/import flows, schema-9 preview
@@ -2117,6 +2117,12 @@ python3 scripts/package_windows_bundle.py
   packaging, and WPF rendering. Its first run hit one existing three-second
   playback-test timeout; the isolated test and the complete required rerun both
   passed.
+- The first live schema-9 start exposed one development-only checksum variant:
+  the same migration SQL had previously been applied with one additional
+  trailing blank line. Migration validation now accepts only that exact known
+  predecessor checksum, with a regression test, while continuing to reject all
+  arbitrary drift. The existing library then reopened at schema 9 with
+  `database_ready: true`; no article data or migration metadata was rewritten.
 - Track B (U4 through U6) is complete. U7 is a separate remote-security design
   and feasibility spike; this work did not enable remote binding, encryption,
   a paid/cloud dependency, or a new deployment profile. The user-owned

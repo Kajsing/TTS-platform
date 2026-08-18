@@ -87,6 +87,35 @@ def test_known_legacy_rule_migration_checksum_upgrades_safely(tmp_path: Path) ->
     assert handoff_table is not None
 
 
+def test_known_privacy_migration_trailing_newline_is_compatible(tmp_path: Path) -> None:
+    database = tmp_path / "privacy-development-reader.db"
+    migrations = load_migrations()
+    current_privacy = migrations[8]
+    development_sql = current_privacy.sql + "\n"
+    development_checksum = hashlib.sha256(development_sql.encode()).hexdigest()
+    assert development_checksum == (
+        "ffbaac1b4f89f028fcab0e262eda96bbe99faff87e1993ff7451b314a29d7bac"
+    )
+    development_privacy = Migration(
+        version=current_privacy.version,
+        name=current_privacy.name,
+        sql=development_sql,
+        checksum=development_checksum,
+    )
+
+    with connect_sqlite(database) as connection:
+        assert apply_migrations(connection, (*migrations[:8], development_privacy)) == 9
+
+    repository = SqliteReaderRepository(database)
+
+    assert repository.report().schema_version == 9
+    with connect_sqlite(database) as connection:
+        applied_checksum = connection.execute(
+            "SELECT checksum FROM schema_migrations WHERE version = 9"
+        ).fetchone()[0]
+    assert applied_checksum == development_checksum
+
+
 def test_invalid_migration_rolls_back_and_is_typed(tmp_path: Path) -> None:
     database = tmp_path / "broken.db"
     bad_sql = "CREATE TABLE should_rollback(id INTEGER);\nTHIS IS INVALID;"
