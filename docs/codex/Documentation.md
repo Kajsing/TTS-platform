@@ -11,8 +11,9 @@ This file is the live status log and shared memory for future Codex loops.
   is now the Reader Workstation defined in
   `design_doc/reader_workstation_design_v1.md`.
 - The user approved `docs/reader_upgrade_plan.md` on 2026-08-17. Reader Upgrade
-  Track A (U1 through U3) is complete; U4 folder-backed library organization is
-  the next implementation target but has not started. The upgrade
+  Track A (U1 through U3) is complete. Track B is in progress: U4 folder-backed
+  organization and U5 batch import are implemented and validated; U6 privacy
+  lock is next and awaits the explicit forgotten-code recovery decision. The upgrade
   track is deliberately prioritized ahead of Reader Milestones 10 and 11,
   which remain incomplete. U6 is approved as an application-level privacy lock
   without encryption at rest in its first version. U7 must amend the localhost
@@ -2058,6 +2059,34 @@ python3 scripts/package_windows_bundle.py
   made. The existing local `models/MANIFEST.json` change remains user-owned and
   excluded from U1.
 
+## Reader Upgrade U4 And U5: Folders And Batch Import (2026-08-18)
+
+- U4 and U5 are complete. Reader schema 8 adds service-owned flat folders while
+  preserving one implicit root. Folders support create, rename, counts,
+  revision-conflict protection, folder-filtered paging/search, atomic
+  multi-article moves, and a transactional delete choice between moving content
+  to the root or deleting the contained articles.
+- The WPF library can filter by folder, select and move several articles, and
+  manage folders without exposing filesystem paths. Single-file imports use the
+  selected destination folder and editable copies retain the source folder.
+- The file picker and drag/drop accept 1 through 100 TXT, Markdown, HTML, DOCX,
+  or EPUB files. The bounded sequential batch view shows per-file preview
+  warnings and status, continues after individual failures, imports each success
+  as its own transaction, and cancels only work that has not committed.
+- Existing offline HTML parsing remains semantic-text-only, rejects active
+  content, and performs no network fetches. Ordinary logs record operation names
+  and counts but not folder names, document text, or import paths.
+- Validation passed all 425 Python tests and all 127 .NET Release tests (31
+  client, 75 application, 21 Windows), the standalone Release WPF build with no
+  warnings, Ruff, .NET formatting, all 18 Reader contract fixtures, and
+  `git diff --check`.
+- U6 has not started because its approved plan explicitly requires a defined
+  forgotten-code and owner-recovery policy before privacy-lock implementation.
+  This is a product/security decision, not a technical failure.
+- No architecture, deployment, licensing, cloud dependency, or encryption claim
+  was introduced. The pre-existing `models/MANIFEST.json` change remains
+  user-owned and excluded.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2121,8 +2150,8 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. U1 in `docs/reader_upgrade_plan.md` is complete. Resume at U2 only after the
-   user explicitly asks to continue the upgrade track. Reader Workstation
+4. Reader Upgrade U1 through U5 are complete. Resume Track B at U6 after the
+   user chooses the forgotten-code recovery policy. Reader Workstation
    Milestones 10 and 11 remain deferred until the upgrade track is completed or
    deliberately paused.
 5. If a future milestone changes deployment exposure, model catalog trust, or

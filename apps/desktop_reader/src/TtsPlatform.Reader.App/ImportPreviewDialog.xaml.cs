@@ -9,21 +9,27 @@ public partial class ImportPreviewDialog : Window
 {
     private readonly IReaderServiceClient _client;
     private readonly string _filePath;
+    private readonly string? _folderId;
     private readonly ObservableCollection<string> _structure = [];
     private readonly ObservableCollection<string> _samples = [];
     private ReaderImportPreview? _preview;
     private CancellationTokenSource? _operationCancellation;
     private bool _committed;
 
-    public ImportPreviewDialog(IReaderServiceClient client, string filePath)
+    public ImportPreviewDialog(
+        IReaderServiceClient client,
+        string filePath,
+        string? folderId = null)
     {
         _client = client;
         _filePath = filePath;
+        _folderId = folderId;
         InitializeComponent();
         FileNameText.Text = Path.GetFileName(filePath);
         TitleTextBox.Text = Path.GetFileNameWithoutExtension(filePath);
         StructureList.ItemsSource = _structure;
         SampleList.ItemsSource = _samples;
+        ImportButton.Content = folderId is null ? "Import to All articles" : "Import to selected folder";
         Loaded += ImportPreviewDialog_Loaded;
         Closed += ImportPreviewDialog_Closed;
     }
@@ -120,9 +126,10 @@ public partial class ImportPreviewDialog : Window
         SetBusy(true, "Saving the imported document...");
         try
         {
-            ImportedDocument = await _client.CommitImportAsync(
+            ImportedDocument = await _client.CommitImportToFolderAsync(
                 _preview.PreviewId,
                 AllowDuplicateCheckBox.IsChecked == true,
+                _folderId,
                 _operationCancellation.Token);
             _committed = true;
             DialogResult = true;

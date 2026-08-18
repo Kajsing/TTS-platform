@@ -1,0 +1,13 @@
+{
+  "target_folder_id": "a6d523d5-0824-4d64-8f04-d124024c8a36",
+  "documents": [
+    {
+      "document_id": "4f4f91f1-8ca9-4610-b951-4d73893936c2",
+      "expected_row_version": 3
+    },
+    {
+      "document_id": "fb0fe600-7df1-4b82-a590-c45cfcc25bf8",
+      "expected_row_version": 7
+    }
+  ]
+}

@@ -166,6 +166,25 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Library_preserves_folder_filter_across_pages()
+    {
+        var client = new StubClient
+        {
+            DocumentPages = new Queue<DocumentPage>(
+            [
+                new DocumentPage([Document("one", 1)], "next"),
+                new DocumentPage([Document("two", 1)], null),
+            ]),
+        };
+        var pager = new LibraryPager(client, 1);
+
+        await pager.RefreshAsync(folderId: "folder-id");
+        await pager.LoadMoreAsync();
+
+        Assert.Equal(["folder-id", "folder-id"], client.ReceivedFolderIds);
+    }
+
+    [Fact]
     public void Library_updates_observable_collection_on_calling_synchronization_context()
     {
         var previousContext = SynchronizationContext.Current;
@@ -538,6 +557,7 @@ public sealed class ApplicationTests
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
         public UpdateDocumentRequest? LastUpdateRequest { get; private set; }
         public List<string?> ReceivedCursors { get; } = [];
+        public List<string?> ReceivedFolderIds { get; } = [];
         public List<int> ReceivedBlockAfterOrdinals { get; } = [];
         public List<int> ReceivedBlockLimits { get; } = [];
 
@@ -567,6 +587,18 @@ public sealed class ApplicationTests
         {
             ReceivedCursors.Add(cursor);
             return PendingDocumentPage ?? Task.FromResult(DocumentPages.Dequeue());
+        }
+
+        public Task<DocumentPage> GetDocumentsByFolderAsync(
+            int limit = 50,
+            string? cursor = null,
+            string? query = null,
+            string? state = null,
+            string? folderId = null,
+            CancellationToken cancellationToken = default)
+        {
+            ReceivedFolderIds.Add(folderId);
+            return GetDocumentsAsync(limit, cursor, query, state, cancellationToken);
         }
 
         public Task<ReaderDocument> UpdateDocumentAsync(

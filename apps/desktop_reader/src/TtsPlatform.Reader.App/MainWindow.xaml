@@ -196,6 +196,7 @@
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
@@ -210,7 +211,22 @@
             </Button>
             <TextBlock Text="Library" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" />
           </DockPanel>
-          <Grid Grid.Row="1" Margin="10,0,10,9">
+          <Grid Grid.Row="1" Margin="10,0,10,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="FolderFilterComboBox" DisplayMemberPath="DisplayName"
+                      SelectionChanged="FolderFilterComboBox_SelectionChanged"
+                      AutomationProperties.Name="Article folder filter" />
+            <Button Grid.Column="1" x:Name="MoveArticlesButton" Content="Move…"
+                    Click="MoveArticlesButton_Click" Margin="6,0,0,0"
+                    IsEnabled="False" AutomationProperties.Name="Move selected articles" />
+            <Button Grid.Column="2" Content="Folders…" Click="ManageFoldersButton_Click"
+                    Margin="6,0,0,0" AutomationProperties.Name="Manage article folders" />
+          </Grid>
+          <Grid Grid.Row="2" Margin="10,0,10,9">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="112" />
@@ -232,8 +248,8 @@
                     Stretch="Uniform" Stroke="{StaticResource TextBrush}" StrokeThickness="1.5" />
             </Button>
           </Grid>
-          <DataGrid Grid.Row="2" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                    BorderThickness="0,1,0,1" SelectionMode="Single"
+          <DataGrid Grid.Row="3" x:Name="DocumentsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    BorderThickness="0,1,0,1" SelectionMode="Extended"
                     SelectionChanged="DocumentsGrid_SelectionChanged"
                     EnableRowVirtualization="True" AutomationProperties.Name="Reader library">
             <DataGrid.Columns>
@@ -241,7 +257,7 @@
               <DataGridTextColumn Header="State" Binding="{Binding State}" Width="82" />
             </DataGrid.Columns>
           </DataGrid>
-          <Button Grid.Row="3" x:Name="LoadMoreButton" Content="Load more" Click="LoadMoreButton_Click"
+          <Button Grid.Row="4" x:Name="LoadMoreButton" Content="Load more" Click="LoadMoreButton_Click"
                   HorizontalAlignment="Left" IsEnabled="False" Margin="12,8" />
         </Grid>
       </Border>

@@ -10,6 +10,9 @@ from .models import (
     DocumentState,
     ExportPhase,
     ExportStatus,
+    FolderDeleteMode,
+    FolderDeleteResult,
+    FolderDocumentVersion,
     HighlighterConfiguration,
     HighlighterTerm,
     PlaybackPosition,
@@ -22,6 +25,7 @@ from .models import (
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderExportJob,
+    ReaderFolder,
     SpeechRule,
     SpeechRuleSet,
 )
@@ -44,7 +48,38 @@ class ReaderRepository(Protocol):
         query: str | None = None,
         limit: int = 50,
         cursor: str | None = None,
+        folder_id: str | None = None,
     ) -> DocumentPage: ...
+
+    def create_folder(self, folder: ReaderFolder) -> ReaderFolder: ...
+
+    def get_folder(self, folder_id: str) -> ReaderFolder: ...
+
+    def list_folders(self) -> tuple[ReaderFolder, ...]: ...
+
+    def update_folder(
+        self,
+        folder_id: str,
+        *,
+        name: str,
+        normalized_name: str,
+        expected_row_version: int,
+    ) -> ReaderFolder: ...
+
+    def move_documents(
+        self,
+        documents: tuple[FolderDocumentVersion, ...],
+        *,
+        folder_id: str | None,
+    ) -> tuple[ReaderDocument, ...]: ...
+
+    def delete_folder(
+        self,
+        folder_id: str,
+        *,
+        expected_row_version: int,
+        mode: FolderDeleteMode,
+    ) -> FolderDeleteResult: ...
 
     def find_document_by_source_hash(self, source_sha256: str) -> ReaderDocument | None: ...
 

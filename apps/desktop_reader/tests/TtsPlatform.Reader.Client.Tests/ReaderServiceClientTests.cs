@@ -168,6 +168,47 @@ public sealed class ReaderServiceClientTests
     }
 
     [Fact]
+    public async Task Folder_management_move_and_filter_use_protected_revisioned_contracts()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/reader/folders" when request.Method == HttpMethod.Get =>
+                Json(HttpStatusCode.OK, $"{{\"folders\":[{FolderJson}]}}"),
+            "/v1/reader/folders" => Json(HttpStatusCode.Created, FolderJson),
+            "/v1/reader/folders/folder-id" when request.Method == HttpMethod.Patch =>
+                Json(HttpStatusCode.OK, FolderJson),
+            "/v1/reader/folders/folder-id" => Json(HttpStatusCode.OK, FolderDeleteJson),
+            "/v1/reader/folders/move-documents" =>
+                Json(HttpStatusCode.OK, $"{{\"documents\":[{DocumentJson}]}}"),
+            "/v1/reader/documents" =>
+                Json(HttpStatusCode.OK, $"{{\"documents\":[{DocumentJson}],\"next_cursor\":null}}"),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ReaderServiceClient(
+            new HttpClient(handler),
+            "http://localhost:8000/",
+            new StaticTokenProvider("token"));
+
+        var page = await client.GetFoldersAsync();
+        await client.CreateFolderAsync(new CreateFolderRequest("Books"));
+        await client.UpdateFolderAsync("folder-id", new UpdateFolderRequest("Long books", 2));
+        await client.MoveDocumentsAsync(
+            new MoveDocumentsRequest(
+                "folder-id",
+                [new FolderDocumentVersion("doc-id", 7)]));
+        await client.GetDocumentsByFolderAsync(folderId: "folder-id");
+        await client.DeleteFolderAsync("folder-id", 3, "move_to_root");
+
+        Assert.Equal("Books", Assert.Single(page.Folders).Name);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer token", request.Authorization));
+        Assert.Contains("\"expected_row_version\":2", handler.Requests[2].Body, StringComparison.Ordinal);
+        Assert.Contains("\"target_folder_id\":\"folder-id\"", handler.Requests[3].Body, StringComparison.Ordinal);
+        Assert.Contains("\"expected_row_version\":7", handler.Requests[3].Body, StringComparison.Ordinal);
+        Assert.Contains("folder_id=folder-id", handler.Requests[4].Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("mode=move_to_root", handler.Requests[5].Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Import_preview_commit_cancel_and_duplicate_use_protected_routes()
     {
         var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
@@ -502,6 +543,17 @@ public sealed class ReaderServiceClientTests
             "created_at":"2026-08-18T12:00:00Z","updated_at":"2026-08-18T12:00:00Z"
           }]
         }
+        """;
+
+    private const string FolderJson = """
+        {"id":"folder-id","name":"Books","created_at":"2026-08-18T12:00:00Z",
+         "updated_at":"2026-08-18T12:00:00Z","row_version":2,"article_count":3,
+         "privacy_locked":false}
+        """;
+
+    private const string FolderDeleteJson = """
+        {"folder_id":"folder-id","affected_articles":3,"moved_articles":3,
+         "deleted_articles":0,"mode":"move_to_root"}
         """;
 
     private const string ImportPreviewJson = """

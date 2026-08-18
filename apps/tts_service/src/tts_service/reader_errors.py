@@ -103,6 +103,7 @@ def translate_reader_error(
         error_type = {
             "block": "reader_block_not_found",
             "document": "reader_document_not_found",
+            "folder": "reader_folder_not_found",
         }.get(missing_entity, "reader_conflict")
         return reader_api_error(
             error_type,

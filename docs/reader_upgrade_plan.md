@@ -3,7 +3,8 @@
 ## Status
 
 The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) is
-complete. U4 is the next planned target but has not started.
+complete. Track B is in progress: U4 and U5 are implemented and validated; U6
+is waiting for the documented forgotten-code recovery decision.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -138,7 +139,7 @@ Acceptance criteria:
 Decision gate before expansion: confirm whether per-article term additions are
 needed after the global-list version.
 
-### U4: Folder-backed library organization
+### U4: Folder-backed library organization — complete
 
 **Purpose:** Organize articles without coupling folders to filesystem paths.
 
@@ -162,7 +163,7 @@ Acceptance criteria:
   after a move.
 - Folder deletion cannot strand article rows or partially delete content.
 
-### U5: Batch import and text-only HTML workflow
+### U5: Batch import and text-only HTML workflow — complete
 
 **Purpose:** Import several articles efficiently and place them directly in the
 right folder.

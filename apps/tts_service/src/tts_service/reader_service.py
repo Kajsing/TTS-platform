@@ -24,6 +24,9 @@ from reader_core import (
     BlockKind,
     DocumentPage,
     DocumentState,
+    FolderDeleteMode,
+    FolderDeleteResult,
+    FolderDocumentVersion,
     HighlighterConfiguration,
     HighlighterTerm,
     QueueItem,
@@ -34,6 +37,7 @@ from reader_core import (
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderError,
+    ReaderFolder,
     ReaderLibrary,
     ReaderNotFoundError,
     ReaderSection,
@@ -219,7 +223,10 @@ class ReaderApplicationService:
         source_type: SourceType,
         language_hint: str | None,
         allow_duplicate: bool,
+        folder_id: str | None = None,
     ) -> ReaderDocument:
+        if folder_id is not None:
+            self.repository.get_folder(folder_id)
         source_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
         duplicate = self.repository.find_document_by_source_hash(source_hash)
         if duplicate is not None and not allow_duplicate:
@@ -229,6 +236,7 @@ class ReaderApplicationService:
             text=text,
             source_type=source_type,
             language_hint=language_hint,
+            folder_id=folder_id,
         )
         self.observability.log_reader_operation(
             operation="create_document",
@@ -335,13 +343,78 @@ class ReaderApplicationService:
         query: str | None,
         limit: int,
         cursor: str | None,
+        folder_id: str | None = None,
     ) -> DocumentPage:
         return self.repository.list_documents(
             state=state,
             query=query,
             limit=limit,
             cursor=cursor,
+            folder_id=folder_id,
         )
+
+    def create_folder(self, name: str) -> ReaderFolder:
+        display_name, normalized_name = _normalize_folder_name(name)
+        now = datetime.now(timezone.utc)
+        folder = self.repository.create_folder(
+            ReaderFolder(
+                id=str(uuid.uuid4()),
+                name=display_name,
+                normalized_name=normalized_name,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        self.observability.log_reader_operation(operation="create_folder")
+        return folder
+
+    def update_folder(
+        self,
+        folder_id: str,
+        *,
+        name: str,
+        expected_row_version: int,
+    ) -> ReaderFolder:
+        display_name, normalized_name = _normalize_folder_name(name)
+        folder = self.repository.update_folder(
+            folder_id,
+            name=display_name,
+            normalized_name=normalized_name,
+            expected_row_version=expected_row_version,
+        )
+        self.observability.log_reader_operation(operation="update_folder")
+        return folder
+
+    def move_documents(
+        self,
+        documents: tuple[FolderDocumentVersion, ...],
+        *,
+        folder_id: str | None,
+    ) -> tuple[ReaderDocument, ...]:
+        moved = self.repository.move_documents(documents, folder_id=folder_id)
+        self.observability.log_reader_operation(
+            operation="move_documents",
+            extra={"document_count": len(moved)},
+        )
+        return moved
+
+    def delete_folder(
+        self,
+        folder_id: str,
+        *,
+        expected_row_version: int,
+        mode: FolderDeleteMode,
+    ) -> FolderDeleteResult:
+        result = self.repository.delete_folder(
+            folder_id,
+            expected_row_version=expected_row_version,
+            mode=mode,
+        )
+        self.observability.log_reader_operation(
+            operation="delete_folder",
+            extra={"document_count": result.affected_articles},
+        )
+        return result
 
     def get_document(self, document_id: str) -> ReaderDocument:
         return self.repository.get_document(document_id)
@@ -400,6 +473,7 @@ class ReaderApplicationService:
         preview_id: str,
         *,
         allow_duplicate: bool,
+        folder_id: str | None = None,
     ) -> ReaderDocument:
         with self._import_preview_lock:
             self._purge_import_previews_locked()
@@ -411,6 +485,7 @@ class ReaderApplicationService:
             source_data=preview.source_data,
             copy_source_file=preview.copy_source_file,
             allow_duplicate=allow_duplicate,
+            folder_id=folder_id,
         )
         with self._import_preview_lock:
             self._import_previews.pop(preview_id, None)
@@ -431,6 +506,7 @@ class ReaderApplicationService:
         copy_source_file: bool | None,
         allow_duplicate: bool,
         cancellation: threading.Event | None = None,
+        folder_id: str | None = None,
     ) -> ReaderDocument:
         imported = import_document(
             source,
@@ -448,6 +524,7 @@ class ReaderApplicationService:
             source_data=source.data if resolved_copy else None,
             copy_source_file=resolved_copy,
             allow_duplicate=allow_duplicate,
+            folder_id=folder_id,
         )
 
     def duplicate_as_editable_text(self, document_id: str) -> ReaderDocument:
@@ -459,6 +536,7 @@ class ReaderApplicationService:
             source_type=SourceType.PLAIN_TEXT,
             language_hint=bundle.document.language_hint,
             allow_duplicate=True,
+            folder_id=bundle.document.folder_id,
         )
 
     def replace_highlighter_terms(
@@ -783,11 +861,14 @@ class ReaderApplicationService:
         source_data: bytes | None,
         copy_source_file: bool,
         allow_duplicate: bool,
+        folder_id: str | None,
     ) -> ReaderDocument:
         duplicate = self.repository.find_document_by_source_hash(imported.source_sha256)
         if duplicate is not None and not allow_duplicate:
             raise ReaderDuplicateDocumentError(duplicate.id)
-        bundle = _reader_bundle_from_import(imported)
+        if folder_id is not None:
+            self.repository.get_folder(folder_id)
+        bundle = _reader_bundle_from_import(imported, folder_id=folder_id)
         managed_path: Path | None = None
         if copy_source_file:
             if source_data is None:
@@ -931,7 +1012,11 @@ def initialize_reader_runtime(
         )
 
 
-def _reader_bundle_from_import(imported: ImportedDocument) -> ReaderDocumentBundle:
+def _reader_bundle_from_import(
+    imported: ImportedDocument,
+    *,
+    folder_id: str | None = None,
+) -> ReaderDocumentBundle:
     document_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     section_ids = {section.ordinal: str(uuid.uuid4()) for section in imported.sections}
@@ -980,6 +1065,7 @@ def _reader_bundle_from_import(imported: ImportedDocument) -> ReaderDocumentBund
         source_name=imported.source_name,
         source_sha256=imported.source_sha256,
         language_hint=imported.language_hint,
+        folder_id=folder_id,
         state=DocumentState.INBOX,
         created_at=now,
         updated_at=now,
@@ -997,6 +1083,16 @@ def _reader_bundle_from_import(imported: ImportedDocument) -> ReaderDocumentBund
         },
     )
     return ReaderDocumentBundle(document=document, sections=sections, blocks=blocks)
+
+
+def _normalize_folder_name(name: str) -> tuple[str, str]:
+    display_name = " ".join(name.strip().split())
+    if not display_name or len(display_name) > 200:
+        raise ReaderValidationError("folder name must contain 1 through 200 characters")
+    normalized_name = unicodedata.normalize("NFKC", display_name).casefold()
+    if len(normalized_name) > 400:
+        raise ReaderValidationError("normalized folder name exceeds its limit")
+    return display_name, normalized_name
 
 
 def _reader_bundle_from_browser_capture(

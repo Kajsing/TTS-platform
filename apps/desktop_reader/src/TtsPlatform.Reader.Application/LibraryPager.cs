@@ -8,6 +8,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
     private string? _nextCursor;
     private string? _query;
     private string? _state;
+    private string? _folderId;
 
     public ObservableCollection<ReaderDocument> Documents { get; } = [];
     public bool HasMore => _nextCursor is not null;
@@ -32,6 +33,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
     public async Task RefreshAsync(
         string? query = null,
         string? state = null,
+        string? folderId = null,
         CancellationToken cancellationToken = default)
     {
         if (IsLoading)
@@ -43,7 +45,13 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
         LastError = null;
         try
         {
-            var page = await client.GetDocumentsAsync(pageSize, null, query, state, cancellationToken);
+            var page = await client.GetDocumentsByFolderAsync(
+                pageSize,
+                null,
+                query,
+                state,
+                folderId,
+                cancellationToken);
             Documents.Clear();
             foreach (var document in page.Documents)
             {
@@ -52,6 +60,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
 
             _query = query;
             _state = state;
+            _folderId = folderId;
             _nextCursor = page.NextCursor;
         }
         catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
@@ -76,7 +85,13 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
         LastError = null;
         try
         {
-            var page = await client.GetDocumentsAsync(pageSize, _nextCursor, _query, _state, cancellationToken);
+            var page = await client.GetDocumentsByFolderAsync(
+                pageSize,
+                _nextCursor,
+                _query,
+                _state,
+                _folderId,
+                cancellationToken);
             foreach (var document in page.Documents)
             {
                 Documents.Add(document);

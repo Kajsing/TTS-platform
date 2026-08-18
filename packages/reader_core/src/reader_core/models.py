@@ -20,6 +20,11 @@ class DocumentState(str, Enum):
     ARCHIVED = "archived"
 
 
+class FolderDeleteMode(str, Enum):
+    MOVE_TO_ROOT = "move_to_root"
+    DELETE_ARTICLES = "delete_articles"
+
+
 class SourceType(str, Enum):
     PLAIN_TEXT = "plain_text"
     CLIPBOARD = "clipboard"
@@ -226,6 +231,7 @@ class ReaderDocument:
     source_uri: str | None = None
     source_sha256: str | None = None
     language_hint: str | None = None
+    folder_id: str | None = None
     deleted_at: datetime | None = None
     content_revision: int = 1
     row_version: int = 1
@@ -241,12 +247,65 @@ class ReaderDocument:
         _require_utc(self.imported_at, "document imported_at")
         if self.deleted_at is not None:
             _require_utc(self.deleted_at, "document deleted_at")
+        if self.folder_id is not None:
+            _require_id(self.folder_id, "folder id")
         if not self.title.strip():
             raise ReaderValidationError("document title must not be empty")
         if self.content_revision <= 0 or self.row_version <= 0:
             raise ReaderValidationError("document revisions must be positive")
         if min(self.total_sections, self.total_blocks, self.total_characters) < 0:
             raise ReaderValidationError("document totals must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class ReaderFolder:
+    id: str
+    name: str
+    normalized_name: str
+    created_at: datetime
+    updated_at: datetime
+    row_version: int = 1
+    article_count: int = 0
+    privacy_locked: bool = False
+
+    def __post_init__(self) -> None:
+        _require_id(self.id, "folder id")
+        _require_utc(self.created_at, "folder created_at")
+        _require_utc(self.updated_at, "folder updated_at")
+        if not self.name.strip() or len(self.name) > 200:
+            raise ReaderValidationError("folder name must contain 1 through 200 characters")
+        if not self.normalized_name or len(self.normalized_name) > 400:
+            raise ReaderValidationError("normalized folder name is invalid")
+        if self.row_version <= 0:
+            raise ReaderValidationError("folder row version must be positive")
+        if self.article_count < 0:
+            raise ReaderValidationError("folder article count must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class FolderDocumentVersion:
+    document_id: str
+    expected_row_version: int
+
+    def __post_init__(self) -> None:
+        _require_id(self.document_id, "document id")
+        if self.expected_row_version <= 0:
+            raise ReaderValidationError("document row version must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class FolderDeleteResult:
+    folder_id: str
+    affected_articles: int
+    moved_articles: int
+    deleted_articles: int
+
+    def __post_init__(self) -> None:
+        _require_id(self.folder_id, "folder id")
+        if min(self.affected_articles, self.moved_articles, self.deleted_articles) < 0:
+            raise ReaderValidationError("folder deletion counts must not be negative")
+        if self.moved_articles + self.deleted_articles != self.affected_articles:
+            raise ReaderValidationError("folder deletion counts must balance")
 
 
 @dataclass(frozen=True, slots=True)

@@ -102,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-        "schema_version": 7,
+        "schema_version": 8,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -111,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 7,
+        "schema_version": 8,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -216,6 +216,11 @@ def test_reader_reads_and_writes_require_authentication(
 
 def test_import_preview_commit_duplicate_cancel_and_editable_copy(tmp_path: Path) -> None:
     client, headers, _ = build_reader_bundle(tmp_path)
+    folder = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "Imported books"},
+    ).json()
     html = b"""
     <html><head><title>Imported article</title><script>PRIVATE SCRIPT</script></head>
     <body><h1>Chapter</h1><p>Readable paragraph.</p><p hidden>PRIVATE HIDDEN</p></body></html>
@@ -240,11 +245,12 @@ def test_import_preview_commit_duplicate_cancel_and_editable_copy(tmp_path: Path
     committed = client.post(
         f"/v1/reader/imports/{preview_body['preview_id']}/commit",
         headers=headers,
-        json={"allow_duplicate": False},
+        json={"allow_duplicate": False, "folder_id": folder["id"]},
     )
     assert committed.status_code == 201, committed.text
     document = committed.json()
     assert document["source_type"] == "html"
+    assert document["folder_id"] == folder["id"]
     assert document["metadata"]["import"]["network_requests"] == 0
     assert len(document["metadata"]["import"]["warnings"]) == 2
 
@@ -292,6 +298,7 @@ def test_import_preview_commit_duplicate_cancel_and_editable_copy(tmp_path: Path
     )
     assert editable.status_code == 201
     assert editable.json()["source_type"] == "plain_text"
+    assert editable.json()["folder_id"] == folder["id"]
     editable_blocks = client.get(
         f"/v1/reader/documents/{editable.json()['id']}/blocks",
         headers=headers,
@@ -726,6 +733,120 @@ def test_document_crud_search_keyset_and_block_paging(tmp_path: Path) -> None:
     }
     assert deleted.json()["deleted_at"] is not None
     assert restored.json()["deleted_at"] is None
+
+
+def test_folder_crud_move_filter_and_delete_modes(tmp_path: Path) -> None:
+    client, headers, _ = build_reader_bundle(tmp_path)
+    first = create_document(client, headers, title="Folder alpha", text="Alpha")
+    second = create_document(client, headers, title="Folder beta", text="Beta")
+
+    assert client.get("/v1/reader/folders").status_code == 401
+    created = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "  Long   reads  "},
+    )
+    assert created.status_code == 201, created.text
+    folder = created.json()
+    assert folder["name"] == "Long reads"
+    assert folder["article_count"] == 0
+    duplicate = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "LONG READS"},
+    )
+    assert duplicate.status_code == 400
+
+    moved = client.post(
+        "/v1/reader/folders/move-documents",
+        headers=headers,
+        json={
+            "target_folder_id": folder["id"],
+            "documents": [
+                {"document_id": first["id"], "expected_row_version": first["row_version"]},
+                {
+                    "document_id": second["id"],
+                    "expected_row_version": second["row_version"],
+                },
+            ],
+        },
+    )
+    assert moved.status_code == 200, moved.text
+    moved_documents = moved.json()["documents"]
+    assert {item["folder_id"] for item in moved_documents} == {folder["id"]}
+    filtered = client.get(
+        "/v1/reader/documents",
+        headers=headers,
+        params={"folder_id": folder["id"], "query": "beta"},
+    )
+    assert [item["id"] for item in filtered.json()["documents"]] == [second["id"]]
+    listed_folder = client.get("/v1/reader/folders", headers=headers).json()["folders"][0]
+    assert listed_folder["article_count"] == 2
+
+    renamed = client.patch(
+        f"/v1/reader/folders/{folder['id']}",
+        headers=headers,
+        json={"name": "Books", "expected_row_version": folder["row_version"]},
+    )
+    assert renamed.status_code == 200
+    stale = client.patch(
+        f"/v1/reader/folders/{folder['id']}",
+        headers=headers,
+        json={"name": "Stale", "expected_row_version": folder["row_version"]},
+    )
+    assert stale.status_code == 409
+
+    removed = client.delete(
+        f"/v1/reader/folders/{folder['id']}",
+        headers=headers,
+        params={
+            "expected_row_version": renamed.json()["row_version"],
+            "mode": "move_to_root",
+        },
+    )
+    assert removed.json()["moved_articles"] == 2
+    root = client.get(
+        "/v1/reader/documents",
+        headers=headers,
+        params={"folder_id": "root"},
+    ).json()["documents"]
+    assert {item["id"] for item in root} == {first["id"], second["id"]}
+
+    disposable = client.post(
+        "/v1/reader/folders",
+        headers=headers,
+        json={"name": "Disposable"},
+    ).json()
+    current_second = client.get(
+        f"/v1/reader/documents/{second['id']}",
+        headers=headers,
+    ).json()
+    client.post(
+        "/v1/reader/folders/move-documents",
+        headers=headers,
+        json={
+            "target_folder_id": disposable["id"],
+            "documents": [
+                {
+                    "document_id": second["id"],
+                    "expected_row_version": current_second["row_version"],
+                }
+            ],
+        },
+    )
+    deleted = client.delete(
+        f"/v1/reader/folders/{disposable['id']}",
+        headers=headers,
+        params={
+            "expected_row_version": disposable["row_version"],
+            "mode": "delete_articles",
+        },
+    )
+    assert deleted.json()["deleted_articles"] == 1
+    assert all(
+        item["id"] != second["id"]
+        for item in client.get("/v1/reader/documents", headers=headers).json()["documents"]
+    )
 
 
 def test_content_edit_append_undo_redo_and_typed_failures(tmp_path: Path) -> None:
@@ -1216,7 +1337,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 7
+    assert diagnostics.json()["schema_version"] == 8
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,

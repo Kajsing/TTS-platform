@@ -122,6 +122,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ContinuousDocumentText.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "ArticleFind.cs",
         reader_root / "src" / "TtsPlatform.Reader.Application" / "WordHighlighter.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Application" / "BatchImport.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "MainWindow.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.ico",
         reader_root / "src" / "TtsPlatform.Reader.App" / "Assets" / "TtsPlatformReader.png",
@@ -134,6 +135,12 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.App" / "RuleEditorDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "WordHighlighterDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "WordHighlighterDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "FolderManagerDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "FolderManagerDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "MoveArticlesDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "MoveArticlesDialog.xaml.cs",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "BatchImportDialog.xaml",
+        reader_root / "src" / "TtsPlatform.Reader.App" / "BatchImportDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml",
         reader_root / "src" / "TtsPlatform.Reader.App" / "LibraryWorkflowDialog.xaml.cs",
         reader_root / "src" / "TtsPlatform.Reader.App" / "CompactControllerWindow.xaml",
@@ -230,6 +237,25 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
     if missing_library_features:
         raise DesktopReaderCheckError(
             f"Milestone 8 library-workflow features are missing: {missing_library_features}"
+        )
+    organization_features = [
+        "FolderManagerDialog",
+        "MoveDocumentsAsync",
+        "FolderFilterComboBox",
+        "BatchImportRunner",
+        "BatchImportDialog",
+        "Multiselect = true",
+        "CommitImportToFolderAsync",
+    ]
+    missing_organization_features = [
+        value
+        for value in organization_features
+        if value.casefold() not in source_text.casefold()
+    ]
+    if missing_organization_features:
+        raise DesktopReaderCheckError(
+            "Reader folder or batch-import features are missing: "
+            f"{missing_organization_features}"
         )
     browser_handoff_features = [
         "GetNextDesktopOpenRequestAsync",

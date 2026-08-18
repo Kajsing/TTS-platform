@@ -47,6 +47,12 @@ The Milestone 9 Reader beta provides:
 - offline TXT, Markdown, HTML/HTM, DOCX, and EPUB import with a bounded preview,
   cancellation, duplicate detection, durable warnings, and optional managed
   source-file copies;
+- flat Reader-owned article folders with counts, revision-safe rename and
+  multi-article moves, folder-filtered paging/search, and explicit transactional
+  folder deletion that either moves articles to the root or deletes them;
+- bounded multi-file import from the picker or drag/drop, with one destination
+  folder, per-file warnings and status, continue-on-error behavior, and
+  cancellation of files that have not committed;
 - Markdown fences labeled `text`, `txt`, `plain`, `plaintext`, or `prose` are
   read literally, while programming-language code fences remain skipped in the
   current article-style playback; legacy bracketed system notifications are

@@ -14,6 +14,8 @@ from reader_core import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    FolderDeleteMode,
+    FolderDeleteResult,
     HighlighterConfiguration,
     HighlighterTerm,
     PlaybackPosition,
@@ -24,6 +26,7 @@ from reader_core import (
     ReaderDesktopOpenRequest,
     ReaderDocument,
     ReaderExportJob,
+    ReaderFolder,
     RuleScope,
     RuleStage,
     RuleType,
@@ -87,6 +90,7 @@ class ReaderDocumentResponse(BaseModel):
     source_uri: str | None
     source_sha256: str | None
     language_hint: str | None
+    folder_id: str | None
     state: DocumentState
     created_at: datetime
     updated_at: datetime
@@ -109,6 +113,7 @@ class ReaderDocumentResponse(BaseModel):
             source_uri=document.source_uri,
             source_sha256=document.source_sha256,
             language_hint=document.language_hint,
+            folder_id=document.folder_id,
             state=document.state,
             created_at=document.created_at,
             updated_at=document.updated_at,
@@ -134,6 +139,78 @@ class CreateReaderDocumentRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10_000_000)
     language_hint: str | None = Field(default=None, max_length=64)
     allow_duplicate: bool = False
+    folder_id: str | None = None
+
+
+class ReaderFolderResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    row_version: int
+    article_count: int
+    privacy_locked: bool
+
+    @classmethod
+    def from_domain(cls, folder: ReaderFolder) -> "ReaderFolderResponse":
+        return cls(
+            id=folder.id,
+            name=folder.name,
+            created_at=folder.created_at,
+            updated_at=folder.updated_at,
+            row_version=folder.row_version,
+            article_count=folder.article_count,
+            privacy_locked=folder.privacy_locked,
+        )
+
+
+class ReaderFolderPageResponse(BaseModel):
+    folders: list[ReaderFolderResponse]
+
+
+class CreateReaderFolderRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class UpdateReaderFolderRequest(CreateReaderFolderRequest):
+    expected_row_version: int = Field(gt=0)
+
+
+class ReaderFolderDocumentVersionRequest(BaseModel):
+    document_id: str
+    expected_row_version: int = Field(gt=0)
+
+
+class MoveReaderDocumentsRequest(BaseModel):
+    target_folder_id: str | None = None
+    documents: list[ReaderFolderDocumentVersionRequest] = Field(min_length=1, max_length=500)
+
+
+class ReaderMoveDocumentsResponse(BaseModel):
+    documents: list[ReaderDocumentResponse]
+
+
+class ReaderFolderDeleteResponse(BaseModel):
+    folder_id: str
+    affected_articles: int
+    moved_articles: int
+    deleted_articles: int
+    mode: FolderDeleteMode
+
+    @classmethod
+    def from_domain(
+        cls,
+        result: FolderDeleteResult,
+        *,
+        mode: FolderDeleteMode,
+    ) -> "ReaderFolderDeleteResponse":
+        return cls(
+            folder_id=result.folder_id,
+            affected_articles=result.affected_articles,
+            moved_articles=result.moved_articles,
+            deleted_articles=result.deleted_articles,
+            mode=mode,
+        )
 
 
 class ReaderBrowserCaptureBlock(BaseModel):
@@ -276,6 +353,7 @@ class ReaderImportPreviewResponse(BaseModel):
 
 class ReaderImportCommitRequest(BaseModel):
     allow_duplicate: bool = False
+    folder_id: str | None = None
 
 
 class ReaderEditResponse(BaseModel):

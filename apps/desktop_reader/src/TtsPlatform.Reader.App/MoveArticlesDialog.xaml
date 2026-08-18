@@ -1,0 +1,23 @@
+<Window x:Class="TtsPlatform.Reader.App.MoveArticlesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Move articles" Height="240" Width="480" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Grid Margin="18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <TextBlock x:Name="SummaryText" FontSize="20" FontWeight="SemiBold" />
+    <TextBlock Grid.Row="1" Margin="0,8,0,6" Text="Destination" />
+    <ComboBox Grid.Row="2" x:Name="DestinationComboBox" DisplayMemberPath="Name"
+              AutomationProperties.Name="Destination folder" />
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="Cancel" IsCancel="True" MinWidth="85" />
+      <Button Content="Move" IsDefault="True" MinWidth="85" Margin="8,0,0,0"
+              Click="MoveButton_Click" />
+    </StackPanel>
+  </Grid>
+</Window>

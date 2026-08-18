@@ -13,6 +13,8 @@ from reader_core import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    FolderDeleteMode,
+    FolderDocumentVersion,
     HighlighterTerm,
     PlaybackPosition,
     QueueItem,
@@ -22,6 +24,7 @@ from reader_core import (
     ReaderDesktopOpenRequest,
     ReaderEditHistoryError,
     ReaderExportJob,
+    ReaderFolder,
     ReaderLibrary,
     ReaderNotFoundError,
     ReaderStaleCursorError,
@@ -169,6 +172,99 @@ def test_document_listing_filters_title_and_finds_source_hash(repository, docume
     assert repository.list_documents(query="missing").items == ()
     assert repository.find_document_by_source_hash(document.source_sha256).id == document.id
     assert repository.find_document_by_source_hash("0" * 64) is None
+
+
+def test_folder_moves_filters_conflicts_and_deletion_are_transactional(
+    repository,
+    document,
+) -> None:
+    now = datetime.now(timezone.utc)
+    first_folder = repository.create_folder(
+        ReaderFolder(
+            id=str(uuid.uuid4()),
+            name="Long reads",
+            normalized_name="long reads",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    second_folder = repository.create_folder(
+        ReaderFolder(
+            id=str(uuid.uuid4()),
+            name="Research",
+            normalized_name="research",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    second = ReaderLibrary(repository).create_plain_text_document(
+        title="Second",
+        text="Two",
+    )
+
+    moved = repository.move_documents(
+        (
+            FolderDocumentVersion(document.id, document.row_version),
+            FolderDocumentVersion(second.id, second.row_version),
+        ),
+        folder_id=first_folder.id,
+    )
+
+    assert {item.folder_id for item in moved} == {first_folder.id}
+    assert {item.id for item in repository.list_documents(folder_id=first_folder.id).items} == {
+        document.id,
+        second.id,
+    }
+    assert repository.list_documents(folder_id="root").items == ()
+    assert repository.get_folder(first_folder.id).article_count == 2
+
+    with pytest.raises(ReaderConflictError):
+        repository.move_documents(
+            (
+                FolderDocumentVersion(document.id, moved[0].row_version),
+                FolderDocumentVersion(second.id, second.row_version),
+            ),
+            folder_id=second_folder.id,
+        )
+    assert repository.get_document(document.id).folder_id == first_folder.id
+    assert repository.get_document(second.id).folder_id == first_folder.id
+
+    renamed = repository.update_folder(
+        first_folder.id,
+        name="Books",
+        normalized_name="books",
+        expected_row_version=first_folder.row_version,
+    )
+    with pytest.raises(ReaderConflictError):
+        repository.update_folder(
+            first_folder.id,
+            name="Stale",
+            normalized_name="stale",
+            expected_row_version=first_folder.row_version,
+        )
+
+    root_result = repository.delete_folder(
+        renamed.id,
+        expected_row_version=renamed.row_version,
+        mode=FolderDeleteMode.MOVE_TO_ROOT,
+    )
+    assert root_result.moved_articles == 2
+    root_documents = repository.list_documents(folder_id="root").items
+    assert {item.id for item in root_documents} == {document.id, second.id}
+
+    current_second = repository.get_document(second.id)
+    repository.move_documents(
+        (FolderDocumentVersion(second.id, current_second.row_version),),
+        folder_id=second_folder.id,
+    )
+    delete_result = repository.delete_folder(
+        second_folder.id,
+        expected_row_version=second_folder.row_version,
+        mode=FolderDeleteMode.DELETE_ARTICLES,
+    )
+    assert delete_result.deleted_articles == 1
+    assert repository.get_document(second.id).deleted_at is not None
+    assert repository.list_documents(folder_id="root").items[0].id == document.id
 
 
 def test_document_updates_detect_optimistic_concurrency_conflicts(repository, document) -> None:

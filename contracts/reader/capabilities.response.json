@@ -3,7 +3,7 @@
   "enabled": true,
   "database": {
     "ready": true,
-    "schema_version": 7,
+    "schema_version": 8,
     "search_available": true
   },
   "imports": {

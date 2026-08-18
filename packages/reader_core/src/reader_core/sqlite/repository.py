@@ -33,6 +33,9 @@ from ..models import (
     ExportAudioFormat,
     ExportPhase,
     ExportStatus,
+    FolderDeleteMode,
+    FolderDeleteResult,
+    FolderDocumentVersion,
     HighlighterConfiguration,
     HighlighterTerm,
     PlaybackPosition,
@@ -45,6 +48,7 @@ from ..models import (
     ReaderDocument,
     ReaderDocumentBundle,
     ReaderExportJob,
+    ReaderFolder,
     ReaderSection,
     RuleScope,
     RuleStage,
@@ -439,6 +443,7 @@ class SqliteReaderRepository:
         query: str | None = None,
         limit: int = 50,
         cursor: str | None = None,
+        folder_id: str | None = None,
     ) -> DocumentPage:
         if limit <= 0:
             raise ReaderValidationError("document page limit must be positive")
@@ -448,6 +453,12 @@ class SqliteReaderRepository:
         if state is not None:
             clauses.append("state = ?")
             parameters.append(state.value)
+        if folder_id is not None:
+            if folder_id == "root":
+                clauses.append("folder_id IS NULL")
+            else:
+                clauses.append("folder_id = ?")
+                parameters.append(folder_id)
         if query is not None and query.strip():
             cleaned_query = query.strip()
             fts_query = _fts_query(cleaned_query) if self._search_available else None
@@ -511,6 +522,182 @@ class SqliteReaderRepository:
             ):
                 counts[DocumentState(row["state"])] = int(row["total"])
         return counts
+
+    def create_folder(self, folder: ReaderFolder) -> ReaderFolder:
+        with self._write() as connection:
+            self._ensure_folder_name_available(connection, folder.normalized_name)
+            connection.execute(
+                """
+                INSERT INTO reader_folders(
+                    id, name, normalized_name, created_at, updated_at, row_version
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    folder.id,
+                    folder.name,
+                    folder.normalized_name,
+                    _time_dump(folder.created_at),
+                    _time_dump(folder.updated_at),
+                    folder.row_version,
+                ),
+            )
+            return self._require_folder(connection, folder.id)
+
+    def get_folder(self, folder_id: str) -> ReaderFolder:
+        with self._connection() as connection:
+            return self._require_folder(connection, folder_id)
+
+    def list_folders(self) -> tuple[ReaderFolder, ...]:
+        with self._connection() as connection:
+            return tuple(
+                _folder_from_row(row)
+                for row in connection.execute(
+                    """
+                    SELECT folder.*,
+                           COUNT(document.id) AS article_count
+                    FROM reader_folders AS folder
+                    LEFT JOIN reader_documents AS document
+                      ON document.folder_id = folder.id
+                     AND document.deleted_at IS NULL
+                    GROUP BY folder.id
+                    ORDER BY folder.normalized_name, folder.id
+                    """
+                )
+            )
+
+    def update_folder(
+        self,
+        folder_id: str,
+        *,
+        name: str,
+        normalized_name: str,
+        expected_row_version: int,
+    ) -> ReaderFolder:
+        with self._write() as connection:
+            folder = self._require_folder(connection, folder_id)
+            _check_folder_version(folder, expected_row_version)
+            self._ensure_folder_name_available(
+                connection,
+                normalized_name,
+                excluding_folder_id=folder_id,
+            )
+            connection.execute(
+                """
+                UPDATE reader_folders
+                SET name = ?, normalized_name = ?, updated_at = ?,
+                    row_version = row_version + 1
+                WHERE id = ?
+                """,
+                (name, normalized_name, _time_dump(utc_now()), folder_id),
+            )
+            return self._require_folder(connection, folder_id)
+
+    def move_documents(
+        self,
+        documents: tuple[FolderDocumentVersion, ...],
+        *,
+        folder_id: str | None,
+    ) -> tuple[ReaderDocument, ...]:
+        if not documents:
+            raise ReaderValidationError("at least one document is required")
+        if len({item.document_id for item in documents}) != len(documents):
+            raise ReaderValidationError("document move contains duplicate IDs")
+        with self._write() as connection:
+            if folder_id is not None:
+                self._require_folder(connection, folder_id)
+            current_documents: list[ReaderDocument] = []
+            for item in documents:
+                document = self._require_document(connection, item.document_id)
+                if document.deleted_at is not None:
+                    raise ReaderValidationError("soft-deleted documents cannot be moved")
+                _check_version(document, item.expected_row_version)
+                current_documents.append(document)
+            now = _time_dump(utc_now())
+            for document in current_documents:
+                connection.execute(
+                    """
+                    UPDATE reader_documents
+                    SET folder_id = ?, updated_at = ?, row_version = row_version + 1
+                    WHERE id = ?
+                    """,
+                    (folder_id, now, document.id),
+                )
+            return tuple(
+                self._require_document(connection, document.id)
+                for document in current_documents
+            )
+
+    def delete_folder(
+        self,
+        folder_id: str,
+        *,
+        expected_row_version: int,
+        mode: FolderDeleteMode,
+    ) -> FolderDeleteResult:
+        with self._write() as connection:
+            folder = self._require_folder(connection, folder_id)
+            _check_folder_version(folder, expected_row_version)
+            affected = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM reader_documents
+                    WHERE folder_id = ? AND deleted_at IS NULL
+                    """,
+                    (folder_id,),
+                ).fetchone()[0]
+            )
+            now = _time_dump(utc_now())
+            moved = 0
+            deleted = 0
+            if mode is FolderDeleteMode.MOVE_TO_ROOT:
+                connection.execute(
+                    """
+                    UPDATE reader_documents
+                    SET folder_id = NULL, updated_at = ?, row_version = row_version + 1
+                    WHERE folder_id = ?
+                    """,
+                    (now, folder_id),
+                )
+                moved = affected
+            else:
+                document_ids = tuple(
+                    str(row["id"])
+                    for row in connection.execute(
+                        """
+                        SELECT id FROM reader_documents
+                        WHERE folder_id = ? AND deleted_at IS NULL
+                        """,
+                        (folder_id,),
+                    )
+                )
+                connection.execute(
+                    """
+                    UPDATE reader_documents
+                    SET deleted_at = ?, folder_id = NULL, updated_at = ?,
+                        row_version = row_version + 1
+                    WHERE folder_id = ? AND deleted_at IS NULL
+                    """,
+                    (now, now, folder_id),
+                )
+                if document_ids:
+                    placeholders = ",".join("?" for _ in document_ids)
+                    connection.execute(
+                        f"DELETE FROM reader_queue_items WHERE document_id IN ({placeholders})",
+                        document_ids,
+                    )
+                    self._compact_queue(connection)
+                connection.execute(
+                    "UPDATE reader_documents SET folder_id = NULL WHERE folder_id = ?",
+                    (folder_id,),
+                )
+                deleted = affected
+            connection.execute("DELETE FROM reader_folders WHERE id = ?", (folder_id,))
+            return FolderDeleteResult(
+                folder_id=folder_id,
+                affected_articles=affected,
+                moved_articles=moved,
+                deleted_articles=deleted,
+            )
 
     def list_blocks(
         self,
@@ -2107,6 +2294,40 @@ class SqliteReaderRepository:
             raise ReaderNotFoundError(f"Reader document not found: {document_id}")
         return _document_from_row(row)
 
+    def _require_folder(
+        self,
+        connection: sqlite3.Connection,
+        folder_id: str,
+    ) -> ReaderFolder:
+        row = connection.execute(
+            """
+            SELECT folder.*,
+                   (SELECT COUNT(*) FROM reader_documents AS document
+                    WHERE document.folder_id = folder.id
+                      AND document.deleted_at IS NULL) AS article_count
+            FROM reader_folders AS folder
+            WHERE folder.id = ?
+            """,
+            (folder_id,),
+        ).fetchone()
+        if row is None:
+            raise ReaderNotFoundError(f"Reader folder not found: {folder_id}")
+        return _folder_from_row(row)
+
+    @staticmethod
+    def _ensure_folder_name_available(
+        connection: sqlite3.Connection,
+        normalized_name: str,
+        *,
+        excluding_folder_id: str | None = None,
+    ) -> None:
+        row = connection.execute(
+            "SELECT id FROM reader_folders WHERE normalized_name = ?",
+            (normalized_name,),
+        ).fetchone()
+        if row is not None and str(row["id"]) != excluding_folder_id:
+            raise ReaderValidationError("a folder with this name already exists")
+
     def _require_editable_document(
         self,
         connection: sqlite3.Connection,
@@ -2129,10 +2350,10 @@ class SqliteReaderRepository:
             """
             INSERT INTO reader_documents(
                 id, title, source_type, source_name, source_uri, source_sha256,
-                language_hint, state, created_at, updated_at, imported_at,
+                language_hint, folder_id, state, created_at, updated_at, imported_at,
                 deleted_at, content_revision, row_version, total_sections,
                 total_blocks, total_characters, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 document.id,
@@ -2142,6 +2363,7 @@ class SqliteReaderRepository:
                 document.source_uri,
                 document.source_sha256,
                 document.language_hint,
+                document.folder_id,
                 document.state.value,
                 _time_dump(document.created_at),
                 _time_dump(document.updated_at),
@@ -2896,6 +3118,11 @@ def _check_version(document: ReaderDocument, expected: int) -> None:
         raise ReaderConflictError(document.id, expected=expected, actual=document.row_version)
 
 
+def _check_folder_version(folder: ReaderFolder, expected: int) -> None:
+    if expected != folder.row_version:
+        raise ReaderConflictError(folder.id, expected=expected, actual=folder.row_version)
+
+
 def _document_from_row(row: sqlite3.Row) -> ReaderDocument:
     return ReaderDocument(
         id=str(row["id"]),
@@ -2905,6 +3132,7 @@ def _document_from_row(row: sqlite3.Row) -> ReaderDocument:
         source_uri=row["source_uri"],
         source_sha256=row["source_sha256"],
         language_hint=row["language_hint"],
+        folder_id=row["folder_id"],
         state=DocumentState(row["state"]),
         created_at=_time_load(row["created_at"]),
         updated_at=_time_load(row["updated_at"]),
@@ -2916,6 +3144,18 @@ def _document_from_row(row: sqlite3.Row) -> ReaderDocument:
         total_blocks=int(row["total_blocks"]),
         total_characters=int(row["total_characters"]),
         metadata=_json_load(row["metadata_json"]),
+    )
+
+
+def _folder_from_row(row: sqlite3.Row) -> ReaderFolder:
+    return ReaderFolder(
+        id=str(row["id"]),
+        name=str(row["name"]),
+        normalized_name=str(row["normalized_name"]),
+        created_at=_time_load(row["created_at"]),
+        updated_at=_time_load(row["updated_at"]),
+        row_version=int(row["row_version"]),
+        article_count=int(row["article_count"]),
     )
 
 

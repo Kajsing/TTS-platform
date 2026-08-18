@@ -26,6 +26,7 @@ class ReaderLibrary:
         text: str,
         source_type: SourceType = SourceType.PLAIN_TEXT,
         language_hint: str | None = None,
+        folder_id: str | None = None,
     ) -> ReaderDocument:
         if source_type not in {
             SourceType.PLAIN_TEXT,
@@ -53,6 +54,7 @@ class ReaderLibrary:
             imported_at=now,
             source_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
             language_hint=language_hint,
+            folder_id=folder_id,
             total_sections=len(sections),
             total_blocks=len(blocks),
             total_characters=sum(block.character_count for block in blocks),

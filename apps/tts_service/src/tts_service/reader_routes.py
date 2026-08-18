@@ -14,6 +14,8 @@ from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile,
 from reader_core import (
     Bookmark,
     DocumentState,
+    FolderDeleteMode,
+    FolderDocumentVersion,
     PlaybackPosition,
     QueueItem,
     ReaderCursor,
@@ -43,9 +45,11 @@ from .reader_schemas import (
     CreateReaderBrowserCaptureRequest,
     CreateReaderDocumentRequest,
     CreateReaderExportRequest,
+    CreateReaderFolderRequest,
     CreateReaderRuleRequest,
     CreateReaderRuleSetRequest,
     ExpectedReaderVersionRequest,
+    MoveReaderDocumentsRequest,
     ReaderBlockPageResponse,
     ReaderBlockResponse,
     ReaderBookmarkListResponse,
@@ -63,6 +67,9 @@ from .reader_schemas import (
     ReaderExportCapability,
     ReaderExportJobListResponse,
     ReaderExportJobResponse,
+    ReaderFolderDeleteResponse,
+    ReaderFolderPageResponse,
+    ReaderFolderResponse,
     ReaderHighlighterResponse,
     ReaderImportBlockPreviewResponse,
     ReaderImportCapability,
@@ -70,6 +77,7 @@ from .reader_schemas import (
     ReaderImportPreviewResponse,
     ReaderImportSectionPreviewResponse,
     ReaderImportWarningResponse,
+    ReaderMoveDocumentsResponse,
     ReaderMutationResponse,
     ReaderPlaybackCapability,
     ReaderPositionEnvelope,
@@ -94,6 +102,7 @@ from .reader_schemas import (
     SaveReaderPositionRequest,
     UpdateReaderBookmarkRequest,
     UpdateReaderDocumentRequest,
+    UpdateReaderFolderRequest,
     UpdateReaderQueueItemRequest,
     UpdateReaderRuleRequest,
     UpdateReaderRuleSetRequest,
@@ -164,6 +173,80 @@ def build_reader_router() -> APIRouter:
             ),
         )
 
+    @router.get("/folders", response_model=ReaderFolderPageResponse)
+    async def list_folders(request: Request) -> ReaderFolderPageResponse:
+        service = _service(request)
+        folders = _run_reader(service.repository.list_folders)
+        return ReaderFolderPageResponse(
+            folders=[ReaderFolderResponse.from_domain(folder) for folder in folders]
+        )
+
+    @router.post(
+        "/folders",
+        response_model=ReaderFolderResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_folder(
+        request: Request,
+        payload: CreateReaderFolderRequest,
+    ) -> ReaderFolderResponse:
+        folder = _run_reader(lambda: _service(request).create_folder(payload.name))
+        return ReaderFolderResponse.from_domain(folder)
+
+    @router.patch("/folders/{folder_id}", response_model=ReaderFolderResponse)
+    async def update_folder(
+        request: Request,
+        folder_id: str,
+        payload: UpdateReaderFolderRequest,
+    ) -> ReaderFolderResponse:
+        folder = _run_reader(
+            lambda: _service(request).update_folder(
+                folder_id,
+                name=payload.name,
+                expected_row_version=payload.expected_row_version,
+            ),
+            missing_entity="folder",
+        )
+        return ReaderFolderResponse.from_domain(folder)
+
+    @router.post("/folders/move-documents", response_model=ReaderMoveDocumentsResponse)
+    async def move_documents(
+        request: Request,
+        payload: MoveReaderDocumentsRequest,
+    ) -> ReaderMoveDocumentsResponse:
+        documents = _run_reader(
+            lambda: _service(request).move_documents(
+                tuple(
+                    FolderDocumentVersion(
+                        document_id=item.document_id,
+                        expected_row_version=item.expected_row_version,
+                    )
+                    for item in payload.documents
+                ),
+                folder_id=payload.target_folder_id,
+            )
+        )
+        return ReaderMoveDocumentsResponse(
+            documents=[ReaderDocumentResponse.from_domain(document) for document in documents]
+        )
+
+    @router.delete("/folders/{folder_id}", response_model=ReaderFolderDeleteResponse)
+    async def delete_folder(
+        request: Request,
+        folder_id: str,
+        expected_row_version: Annotated[int, Query(gt=0)],
+        mode: Annotated[FolderDeleteMode, Query()] = FolderDeleteMode.MOVE_TO_ROOT,
+    ) -> ReaderFolderDeleteResponse:
+        result = _run_reader(
+            lambda: _service(request).delete_folder(
+                folder_id,
+                expected_row_version=expected_row_version,
+                mode=mode,
+            ),
+            missing_entity="folder",
+        )
+        return ReaderFolderDeleteResponse.from_domain(result, mode=mode)
+
     @router.post("/imports/preview", response_model=ReaderImportPreviewResponse)
     async def preview_import(
         request: Request,
@@ -199,6 +282,7 @@ def build_reader_router() -> APIRouter:
             lambda _: service.commit_import_preview(
                 preview_id,
                 allow_duplicate=payload.allow_duplicate,
+                folder_id=payload.folder_id,
             )
         )
         return ReaderDocumentResponse.from_domain(document)
@@ -224,6 +308,7 @@ def build_reader_router() -> APIRouter:
         language_hint: Annotated[str | None, Form(max_length=64)] = None,
         copy_source_file: Annotated[bool | None, Form()] = None,
         allow_duplicate: Annotated[bool, Form()] = False,
+        folder_id: Annotated[str | None, Form(max_length=64)] = None,
     ) -> ReaderDocumentResponse:
         service = _service(request)
         source = await _read_import_source(file, service.config.imports.max_file_bytes)
@@ -234,6 +319,7 @@ def build_reader_router() -> APIRouter:
                 copy_source_file=copy_source_file,
                 allow_duplicate=allow_duplicate,
                 cancellation=cancellation,
+                folder_id=folder_id,
             )
         )
         return ReaderDocumentResponse.from_domain(document)
@@ -245,6 +331,7 @@ def build_reader_router() -> APIRouter:
         query: Annotated[str | None, Query(max_length=500)] = None,
         limit: Annotated[int, Query(gt=0)] = 50,
         cursor: Annotated[str | None, Query(max_length=2048)] = None,
+        folder_id: Annotated[str | None, Query(max_length=64)] = None,
     ) -> ReaderDocumentPageResponse:
         service = _service(request)
         if limit > service.config.max_page_size:
@@ -261,6 +348,7 @@ def build_reader_router() -> APIRouter:
                 query=query,
                 limit=limit,
                 cursor=cursor,
+                folder_id=folder_id,
             ),
             cursor_input=cursor is not None,
         )
@@ -286,6 +374,7 @@ def build_reader_router() -> APIRouter:
                 source_type=payload.source_type,
                 language_hint=payload.language_hint,
                 allow_duplicate=payload.allow_duplicate,
+                folder_id=payload.folder_id,
             )
         )
         return ReaderDocumentResponse.from_domain(document)

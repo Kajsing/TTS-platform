@@ -50,6 +50,70 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             request,
             cancellationToken);
 
+    public Task<ReaderFolderPage> GetFoldersAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderFolderPage>(
+            HttpMethod.Get,
+            "v1/reader/folders",
+            true,
+            null,
+            cancellationToken);
+
+    public Task<ReaderFolder> CreateFolderAsync(
+        CreateFolderRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderFolder>(
+            HttpMethod.Post,
+            "v1/reader/folders",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<ReaderFolder> UpdateFolderAsync(
+        string folderId,
+        UpdateFolderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        return SendAsync<ReaderFolder>(
+            HttpMethod.Patch,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}",
+            true,
+            request,
+            cancellationToken);
+    }
+
+    public Task<MoveDocumentsResponse> MoveDocumentsAsync(
+        MoveDocumentsRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<MoveDocumentsResponse>(
+            HttpMethod.Post,
+            "v1/reader/folders/move-documents",
+            true,
+            request,
+            cancellationToken);
+
+    public Task<FolderDeleteResponse> DeleteFolderAsync(
+        string folderId,
+        int expectedRowVersion,
+        string mode,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(mode);
+        if (expectedRowVersion <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedRowVersion));
+        }
+        return SendAsync<FolderDeleteResponse>(
+            HttpMethod.Delete,
+            $"v1/reader/folders/{Uri.EscapeDataString(folderId)}" +
+                $"?expected_row_version={expectedRowVersion}&mode={Uri.EscapeDataString(mode)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
     public Task<ReaderDocument> CreateDocumentAsync(
         CreateDocumentRequest request,
         CancellationToken cancellationToken = default) =>
@@ -94,6 +158,21 @@ public sealed class ReaderServiceClient : IReaderServiceClient
             $"v1/reader/imports/{Uri.EscapeDataString(previewId)}/commit",
             true,
             new { allow_duplicate = allowDuplicate },
+            cancellationToken);
+    }
+
+    public Task<ReaderDocument> CommitImportToFolderAsync(
+        string previewId,
+        bool allowDuplicate = false,
+        string? folderId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(previewId);
+        return SendAsync<ReaderDocument>(
+            HttpMethod.Post,
+            $"v1/reader/imports/{Uri.EscapeDataString(previewId)}/commit",
+            true,
+            new { allow_duplicate = allowDuplicate, folder_id = folderId },
             cancellationToken);
     }
 
@@ -300,6 +379,32 @@ public sealed class ReaderServiceClient : IReaderServiceClient
         AddQueryValue(values, "cursor", cursor);
         AddQueryValue(values, "query", query);
         AddQueryValue(values, "state", state);
+        return SendAsync<DocumentPage>(
+            HttpMethod.Get,
+            $"v1/reader/documents?{string.Join('&', values)}",
+            true,
+            null,
+            cancellationToken);
+    }
+
+    public Task<DocumentPage> GetDocumentsByFolderAsync(
+        int limit = 50,
+        string? cursor = null,
+        string? query = null,
+        string? state = null,
+        string? folderId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        }
+
+        var values = new List<string> { $"limit={limit}" };
+        AddQueryValue(values, "cursor", cursor);
+        AddQueryValue(values, "query", query);
+        AddQueryValue(values, "state", state);
+        AddQueryValue(values, "folder_id", folderId);
         return SendAsync<DocumentPage>(
             HttpMethod.Get,
             $"v1/reader/documents?{string.Join('&', values)}",

@@ -43,3 +43,8 @@ Reader Upgrade U3 adds `highlighter.request.json` and
 `highlighter.response.json`. The one global literal-term list is revisioned,
 stores stable presentation colors, and remains available to future authenticated
 Reader clients without exposing article text.
+
+Reader Upgrade U4 adds `folders.response.json`, `move_documents.request.json`,
+and `folder_delete.response.json`. Folder membership is a service-owned nullable
+document relationship; multi-article moves and the two explicit deletion modes
+are revisioned and transactional.

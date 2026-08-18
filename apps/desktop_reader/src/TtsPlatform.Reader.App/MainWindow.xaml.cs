@@ -51,6 +51,10 @@ public partial class MainWindow : Window
     private Task? _ephemeralTask;
     private string? _ephemeralReplayText;
     private readonly ObservableCollection<ReaderBlockDisplay> _readingBlocks = [];
+    private readonly ObservableCollection<FolderFilterItem> _folderFilters =
+    [
+        new(null, "All articles"),
+    ];
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
     private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
     private readonly DispatcherTimer _desktopOpenTimer = new()
@@ -92,6 +96,7 @@ public partial class MainWindow : Window
     private int _wordHighlightMatchIndex = -1;
     private int _wordHighlightGeneration;
     private bool _wordHighlightJumpInProgress;
+    private bool _refreshingFolders;
 
     public MainWindow(
         IDesktopSettingsStore settingsStore,
@@ -108,6 +113,8 @@ public partial class MainWindow : Window
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
         ApplySettingsToControls(settings);
         ReadingBlocksList.ItemsSource = _readingBlocks;
+        FolderFilterComboBox.ItemsSource = _folderFilters;
+        FolderFilterComboBox.SelectedIndex = 0;
         _desktopOpenTimer.Tick += DesktopOpenTimer_Tick;
         _clipboardSnoozeTimer.Tick += ClipboardSnoozeTimer_Tick;
         ContentRendered += MainWindow_ContentRendered;
@@ -1141,7 +1148,10 @@ public partial class MainWindow : Window
 
         try
         {
-            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+            await _library.RefreshAsync(
+                SearchTextBox.Text.Trim(),
+                SelectedLibraryState(),
+                SelectedLibraryFolderId());
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -1404,10 +1414,47 @@ public partial class MainWindow : Window
         object sender,
         SelectionChangedEventArgs e) => await RefreshLibraryAsync();
 
+    private async void FolderFilterComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (!_refreshingFolders)
+        {
+            await RefreshLibraryAsync();
+        }
+    }
+
     private string? SelectedLibraryState()
     {
         var value = (LibraryStateComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private string? SelectedLibraryFolderId() =>
+        (FolderFilterComboBox.SelectedItem as FolderFilterItem)?.Id;
+
+    private async Task RefreshFoldersAsync()
+    {
+        var selectedId = SelectedLibraryFolderId();
+        _refreshingFolders = true;
+        try
+        {
+            var page = await GetClient().GetFoldersAsync();
+            _folderFilters.Clear();
+            _folderFilters.Add(new FolderFilterItem(null, "All articles"));
+            foreach (var folder in page.Folders)
+            {
+                _folderFilters.Add(
+                    new FolderFilterItem(folder.Id, $"{folder.Name} ({folder.ArticleCount:N0})"));
+            }
+            FolderFilterComboBox.SelectedItem = _folderFilters.FirstOrDefault(
+                item => string.Equals(item.Id, selectedId, StringComparison.Ordinal));
+            FolderFilterComboBox.SelectedItem ??= _folderFilters[0];
+        }
+        finally
+        {
+            _refreshingFolders = false;
+        }
     }
 
     private async void ImportButton_Click(object sender, RoutedEventArgs e)
@@ -1416,18 +1463,25 @@ public partial class MainWindow : Window
         {
             Title = "Import a document",
             Filter = "Reader documents (*.txt;*.md;*.markdown;*.html;*.htm;*.docx;*.epub)|*.txt;*.md;*.markdown;*.html;*.htm;*.docx;*.epub|All files (*.*)|*.*",
-            Multiselect = false,
+            Multiselect = true,
             CheckFileExists = true,
         };
         if (dialog.ShowDialog(this) == true)
         {
-            await ShowImportDialogAsync(dialog.FileName);
+            if (dialog.FileNames.Length == 1)
+            {
+                await ShowImportDialogAsync(dialog.FileName);
+            }
+            else
+            {
+                await ShowBatchImportDialogAsync(dialog.FileNames);
+            }
         }
     }
 
     private void MainWindow_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = TryGetSingleImportPath(e.Data, out _)
+        e.Effects = TryGetImportPaths(e.Data, out _)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -1435,13 +1489,21 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Drop(object sender, DragEventArgs e)
     {
-        if (TryGetSingleImportPath(e.Data, out var path))
+        if (TryGetImportPaths(e.Data, out var paths))
         {
-            await ShowImportDialogAsync(path);
+            if (paths.Length == 1)
+            {
+                await ShowImportDialogAsync(paths[0]);
+            }
+            else
+            {
+                await ShowBatchImportDialogAsync(paths);
+            }
         }
         else
         {
-            FooterText.Text = "Drop one TXT, Markdown, HTML, DOCX, or EPUB file.";
+            FooterText.Text =
+                "Drop between 1 and 100 TXT, Markdown, HTML, DOCX, or EPUB files.";
         }
         e.Handled = true;
     }
@@ -1453,7 +1515,11 @@ public partial class MainWindow : Window
             FooterText.Text = "Connect to the local Reader service before importing.";
             return;
         }
-        var dialog = new ImportPreviewDialog(GetClient(), filePath) { Owner = this };
+        var dialog = new ImportPreviewDialog(
+            GetClient(),
+            filePath,
+            SelectedLibraryFolderId())
+        { Owner = this };
         if (dialog.ShowDialog() == true && dialog.ImportedDocument is ReaderDocument imported)
         {
             await RefreshLibraryAsync();
@@ -1462,21 +1528,57 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool TryGetSingleImportPath(IDataObject data, out string path)
+    private async Task ShowBatchImportDialogAsync(IReadOnlyList<string> filePaths)
     {
-        path = string.Empty;
+        if (_onboarding.State is not (ConnectionState.Ready or ConnectionState.BackendDegraded))
+        {
+            FooterText.Text = "Connect to the local Reader service before importing.";
+            return;
+        }
+        try
+        {
+            var folders = await GetClient().GetFoldersAsync();
+            var dialog = new BatchImportDialog(
+                GetClient(),
+                filePaths,
+                folders.Folders,
+                SelectedLibraryFolderId())
+            { Owner = this };
+            _ = dialog.ShowDialog();
+            if (dialog.ImportedDocuments.Count > 0)
+            {
+                await RefreshFoldersAsync();
+                await RefreshLibraryAsync();
+                var last = dialog.ImportedDocuments[^1];
+                DocumentsGrid.SelectedItem = _library?.Documents.FirstOrDefault(
+                    item => item.Id == last.Id);
+                FooterText.Text = $"Imported {dialog.ImportedDocuments.Count:N0} article(s).";
+            }
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Batch import: {exception.Message}";
+        }
+    }
+
+    private static bool TryGetImportPaths(IDataObject data, out string[] paths)
+    {
+        paths = [];
         if (!data.GetDataPresent(DataFormats.FileDrop) ||
-            data.GetData(DataFormats.FileDrop) is not string[] { Length: 1 } files)
+            data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 and <= 100 } files)
         {
             return false;
         }
-        var extension = Path.GetExtension(files[0]).ToLowerInvariant();
-        if (extension is not (".txt" or ".md" or ".markdown" or ".html" or ".htm" or ".docx" or ".epub"))
+        if (files.Any(file =>
+            !File.Exists(file) ||
+            Path.GetExtension(file).ToLowerInvariant() is not
+                (".txt" or ".md" or ".markdown" or ".html" or ".htm" or ".docx" or ".epub")))
         {
             return false;
         }
-        path = files[0];
-        return File.Exists(path);
+        paths = files;
+        return true;
     }
 
     private async Task RefreshLibraryAsync()
@@ -1488,7 +1590,14 @@ public partial class MainWindow : Window
 
         try
         {
-            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+            if (_folderFilters.Count == 1)
+            {
+                await RefreshFoldersAsync();
+            }
+            await _library.RefreshAsync(
+                SearchTextBox.Text.Trim(),
+                SelectedLibraryState(),
+                SelectedLibraryFolderId());
             LoadMoreButton.IsEnabled = _library.HasMore;
             FooterText.Text = $"{_library.Documents.Count} document(s) loaded";
         }
@@ -1519,6 +1628,8 @@ public partial class MainWindow : Window
 
     private async void DocumentsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        MoveArticlesButton.IsEnabled = DocumentsGrid.SelectedItems.Count > 0 &&
+            _playback?.State is not (ReaderPlaybackState.Playing or ReaderPlaybackState.Paused);
         if (_editor is null || DocumentsGrid.SelectedItem is not ReaderDocument document)
         {
             return;
@@ -1550,6 +1661,48 @@ public partial class MainWindow : Window
             exception is ReaderApiException or ReaderServiceUnavailableException)
         {
             FooterText.Text = $"Document: {exception.Message}";
+        }
+    }
+
+    private async void ManageFoldersButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new FolderManagerDialog(GetClient()) { Owner = this };
+        _ = dialog.ShowDialog();
+        if (dialog.Changed)
+        {
+            await RefreshFoldersAsync();
+            await RefreshLibraryAsync();
+        }
+    }
+
+    private async void MoveArticlesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var documents = DocumentsGrid.SelectedItems.Cast<ReaderDocument>().ToArray();
+        if (documents.Length == 0)
+        {
+            return;
+        }
+        try
+        {
+            var folders = await GetClient().GetFoldersAsync();
+            var dialog = new MoveArticlesDialog(folders.Folders, documents.Length) { Owner = this };
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+            var response = await GetClient().MoveDocumentsAsync(
+                new MoveDocumentsRequest(
+                    dialog.TargetFolderId,
+                    documents.Select(
+                        document => new FolderDocumentVersion(document.Id, document.RowVersion)).ToArray()));
+            await RefreshFoldersAsync();
+            await RefreshLibraryAsync();
+            FooterText.Text = $"Moved {response.Documents.Count:N0} article(s).";
+        }
+        catch (Exception exception) when (
+            exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            FooterText.Text = $"Move articles: {exception.Message}";
         }
     }
 
@@ -2172,7 +2325,10 @@ public partial class MainWindow : Window
         var selectedId = _editor.Document.Id;
         try
         {
-            await _library.RefreshAsync(SearchTextBox.Text.Trim(), SelectedLibraryState());
+            await _library.RefreshAsync(
+                SearchTextBox.Text.Trim(),
+                SelectedLibraryState(),
+                SelectedLibraryFolderId());
             DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item => item.Id == selectedId);
             LoadMoreButton.IsEnabled = _library.HasMore;
         }
@@ -3484,6 +3640,8 @@ public partial class MainWindow : Window
             StatusText.Text = text;
         }
     }
+
+    private sealed record FolderFilterItem(string? Id, string DisplayName);
 
     private sealed record VoiceChoice(VoiceDescriptor Voice, bool IsServiceDefault)
     {

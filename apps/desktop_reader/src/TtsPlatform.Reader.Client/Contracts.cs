@@ -18,6 +18,23 @@ public interface IReaderServiceClient
     Task<ReaderHighlighterConfiguration> ReplaceHighlighterAsync(
         ReplaceHighlighterRequest request,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderFolderPage> GetFoldersAsync(
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderFolder> CreateFolderAsync(
+        CreateFolderRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderFolder> UpdateFolderAsync(
+        string folderId,
+        UpdateFolderRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<MoveDocumentsResponse> MoveDocumentsAsync(
+        MoveDocumentsRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<FolderDeleteResponse> DeleteFolderAsync(
+        string folderId,
+        int expectedRowVersion,
+        string mode,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<ReaderDocument> CreateDocumentAsync(
         CreateDocumentRequest request,
         CancellationToken cancellationToken = default);
@@ -34,6 +51,14 @@ public interface IReaderServiceClient
         string previewId,
         bool allowDuplicate = false,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> CommitImportToFolderAsync(
+        string previewId,
+        bool allowDuplicate = false,
+        string? folderId = null,
+        CancellationToken cancellationToken = default) =>
+        folderId is null
+            ? CommitImportAsync(previewId, allowDuplicate, cancellationToken)
+            : throw new NotSupportedException();
     Task CancelImportAsync(
         string previewId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -88,6 +113,16 @@ public interface IReaderServiceClient
         string? query = null,
         string? state = null,
         CancellationToken cancellationToken = default);
+    Task<DocumentPage> GetDocumentsByFolderAsync(
+        int limit = 50,
+        string? cursor = null,
+        string? query = null,
+        string? state = null,
+        string? folderId = null,
+        CancellationToken cancellationToken = default) =>
+        folderId is null
+            ? GetDocumentsAsync(limit, cursor, query, state, cancellationToken)
+            : throw new NotSupportedException();
     Task<ReaderDocument> GetDocumentAsync(
         string documentId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -207,6 +242,40 @@ public sealed record ReplaceHighlighterRequest(
     int ExpectedRowVersion,
     IReadOnlyList<SaveHighlighterTerm> Terms);
 
+public sealed record ReaderFolder(
+    string Id,
+    string Name,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    int RowVersion,
+    int ArticleCount,
+    bool PrivacyLocked);
+
+public sealed record ReaderFolderPage(IReadOnlyList<ReaderFolder> Folders);
+
+public sealed record CreateFolderRequest(string Name);
+
+public sealed record UpdateFolderRequest(
+    string Name,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record FolderDocumentVersion(
+    [property: JsonPropertyName("document_id")] string DocumentId,
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);
+
+public sealed record MoveDocumentsRequest(
+    [property: JsonPropertyName("target_folder_id")] string? TargetFolderId,
+    IReadOnlyList<FolderDocumentVersion> Documents);
+
+public sealed record MoveDocumentsResponse(IReadOnlyList<ReaderDocument> Documents);
+
+public sealed record FolderDeleteResponse(
+    string FolderId,
+    int AffectedArticles,
+    int MovedArticles,
+    int DeletedArticles,
+    string Mode);
+
 public interface IReaderStreamClient
 {
     Task<IReaderStreamSession> OpenAsync(
@@ -285,7 +354,8 @@ public sealed record CreateDocumentRequest(
     [property: JsonPropertyName("source_type")] string SourceType,
     string Text,
     [property: JsonPropertyName("language_hint")] string? LanguageHint = null,
-    [property: JsonPropertyName("allow_duplicate")] bool AllowDuplicate = false);
+    [property: JsonPropertyName("allow_duplicate")] bool AllowDuplicate = false,
+    [property: JsonPropertyName("folder_id")] string? FolderId = null);
 
 public sealed record ReaderDocument(
     string Id,
@@ -305,7 +375,8 @@ public sealed record ReaderDocument(
     int TotalSections,
     int TotalBlocks,
     int TotalCharacters,
-    JsonElement Metadata)
+    JsonElement Metadata,
+    string? FolderId = null)
 {
     public bool IsEditable => SourceType is "plain_text" or "clipboard" or "selection" or "text_file";
 }
