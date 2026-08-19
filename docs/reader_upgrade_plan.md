@@ -3,9 +3,10 @@
 ## Status
 
 The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) and
-Track B (U4 through U6) are complete. U7 is the next upgrade, but it is a
-security/architecture decision and feasibility spike rather than authorization
-to expose the current service remotely.
+Track B (U4 through U6) are complete. U7's threat model, architecture decision,
+and Windows feasibility spike are complete and awaiting the user's explicit
+security-design approval. That approval is not authorization to expose the
+current service remotely or begin U8 unless the user also asks to continue.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -258,6 +259,23 @@ Acceptance criteria:
 - No code path silently enables remote binding or plain-HTTP remote tokens.
 - The user approves the security design before U8 begins.
 
+Completed design and spike evidence:
+
+- `docs/reader_remote_security.md` defines the threat model, a separate secure
+  gateway that preserves localhost, ECDSA P-256 server identity with SHA-256
+  SPKI pinning, out-of-band one-time pairing, per-device credentials,
+  revocation/rotation, route classification, per-device limits, revision
+  conflicts, VPN boundary, and reversible Windows Firewall design.
+- `scripts/check_reader_secure_transport.py --require-windows` proved the
+  actual Reader application over pinned HTTPS and WSS on Windows. It negotiated
+  TLS 1.3, rejected a wrong pin and plain HTTP, completed protected Reader HTTP
+  plus marked PCM WebSocket playback, bound only to `127.0.0.1`, changed no
+  firewall state, and removed all temporary files.
+- U7 added no production listener, remote credential, config profile, firewall
+  rule, cloud/paid dependency, or change to the desktop localhost validator.
+- The remaining acceptance item is the user's explicit approval of
+  `docs/reader_remote_security.md`; U8 stays blocked until then.
+
 ### U8: Secure LAN server beta
 
 **Purpose:** Let a paired Reader desktop on another computer use the service,
@@ -286,8 +304,9 @@ track.
 
 ## Current resume point
 
-Track A is complete: U1 passed on 2026-08-17, and U2 plus U3 passed on
-2026-08-18. Resume at U4 only when the user asks to continue this upgrade
-track. U3 deliberately begins with one global literal/phrase list; the
-per-article expansion decision remains deferred until the global behavior has
-been used in practice.
+U1 through U6 are complete. U7 design and Windows spike passed on 2026-08-19;
+resume by recording the user's approve/revise decision. Do not begin U8 merely
+because U7's technical work passed. U8 requires explicit approval and a new
+request to continue. U3 deliberately begins with one global literal/phrase
+list; the per-article expansion decision remains deferred until the global
+behavior has been used in practice.

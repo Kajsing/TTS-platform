@@ -96,6 +96,7 @@ The Milestone 9 Reader beta provides:
   the desktop closes; MP3 uses a separately installed, validated FFmpeg command;
 - Reader diagnostics for database integrity, search capability, document states,
   stream leases, queue size, export states, and low-sensitivity metrics.
+
 - bounded JSONL playback diagnostics containing chunk arrival gaps, submission
   time, PCM duration, WASAPI buffer duration, and suspected underrun counts at
   `%LOCALAPPDATA%\TTSPlatform\Reader\logs\playback-performance.jsonl`; no
@@ -109,6 +110,11 @@ The Milestone 9 Reader beta provides:
   active toggles, stable colors, full-article counts, next-match navigation, and
   longer-phrase priority. Its background-only ranges do not edit source text or
   change font metrics, and playback remains visually dominant.
+
+Remote Reader access is not implemented in the current desktop. U7's candidate
+design is documented in `../../docs/reader_remote_security.md`; the existing
+strict loopback validator remains intentional until the user approves that
+design and separately starts U8.
 
 ## Project boundaries
 

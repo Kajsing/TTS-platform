@@ -628,13 +628,14 @@ user-approved reorder:
 - [x] U4: Folder-backed library organization.
 - [x] U5: Batch import and text-only HTML workflow.
 - [x] U6: Folder privacy lock, after its security decision gate.
-- [ ] U7: Remote Reader security and architecture decision.
+- [ ] U7: Remote Reader security and architecture decision; design/spike passed,
+  awaiting explicit user approval.
 - [ ] U8: Secure LAN server beta, only after U7 approval.
 
 This track is prioritized ahead of Reader Milestones 10 and 11. Those original
 milestones remain incomplete and are not removed from the 1.0 plan.
 
-U1 through U6 are complete. U7 is the next Codex resume point, but it is a
-security/architecture design and feasibility spike. Do not enable remote
-binding or begin U8 until the user explicitly asks to continue and approves the
-U7 security design.
+U1 through U6 are complete. U7's design and Windows spike passed on 2026-08-19;
+the next resume point is the user's explicit approve/revise decision. Do not
+enable remote binding or begin U8 until the user approves the U7 security design
+and explicitly asks to continue.

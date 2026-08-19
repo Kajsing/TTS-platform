@@ -189,3 +189,34 @@ Reasoning:
   explain than hidden one-shot intent.
 - Early viewport prefetch prevents a long article from appearing to end and then
   abruptly revealing more text while speech continues.
+
+## 2026-08-19: Add remote Reader through a pinned secure gateway
+
+The first remote Reader version will preserve the existing HTTP localhost
+listener and add a separate, disabled-by-default secure gateway bound to one
+explicit private or VPN interface address. The gateway accepts HTTPS/WSS only,
+pins an ECDSA P-256 server identity by SHA-256 SPKI, pairs out of band with a
+short-lived high-entropy invitation, and gives every computer its own
+revocable credential.
+
+The gateway positively allow-lists Reader/TTS data-plane routes, rejects browser
+origins, enforces per-IP and per-device limits, strips the remote credential,
+and proxies to the single existing localhost service. The localhost token is
+never accepted remotely. Chrome remote access, public port forwarding, model or
+service administration, and Privacy-lock recovery/configuration remain outside
+the first beta. Internet reachability uses an owner-managed VPN, not a public
+Reader listener.
+
+Reasoning:
+
+- Changing the existing listener would risk the completed WPF, Chrome, SAPI,
+  CLI, and localhost security contracts.
+- A second full service process would duplicate models, export workers, and
+  canonical Reader state.
+- A gateway gives remote authentication and route policy one fail-closed
+  boundary while the Reader continues to use APIs and revision conflicts rather
+  than SQLite synchronization.
+- Server-key pinning plus per-device random credentials is practical for a
+  single owner and avoids the certificate lifecycle burden of mutual TLS.
+- The exact threat model, pairing flow, firewall design, and U8 gates are in
+  `docs/reader_remote_security.md`.

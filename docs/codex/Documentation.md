@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-18
+- Date: 2026-08-19
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,6 +18,12 @@ This file is the live status log and shared memory for future Codex loops.
   security architecture before any remote server implementation can begin;
   internet reachability should use a user-managed VPN rather than direct public
   exposure in the first remote version.
+- Reader Upgrade U7's threat model, architecture decision, and isolated Windows
+  transport spike are complete. The recommended first beta preserves the
+  existing localhost listener behind a separate disabled secure gateway, uses
+  pinned HTTPS/WSS plus per-device credentials, and makes no firewall or remote
+  binding change in U7. The design awaits explicit user approval; U8 remains
+  unauthorized until that approval and a new request to continue.
 - Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
   now use a configurable trimmed-character threshold (50 by default, 0 to
   disable), offer a persistent five-minute pause, show its local expiry time,
@@ -2128,6 +2134,53 @@ python3 scripts/package_windows_bundle.py
   a paid/cloud dependency, or a new deployment profile. The user-owned
   `models/MANIFEST.json` remains excluded.
 
+## Reader Upgrade U7: Remote Security Design And Windows Spike (2026-08-19)
+
+- `docs/reader_remote_security.md` now defines the first remote Reader as a
+  single-owner trusted-LAN/VPN feature. It preserves the current loopback
+  service and adds a separate disabled-by-default secure gateway in U8, bound
+  to one selected private address rather than a wildcard.
+- The selected transport uses TLS 1.3 where available with TLS 1.2 as the
+  minimum, an ECDSA P-256 server identity, SHA-256 SPKI pinning in both HTTP and
+  WebSocket clients, and no certificate-warning bypass. Direct public exposure
+  is unsupported; a user-owned VPN is the remote-internet boundary.
+- Pairing is out of band with a ten-minute, one-use, 256-bit invitation secret
+  that installs the server pin before the client sends anything. Every device
+  receives its own 256-bit credential, stored protected on Windows and only as
+  a hash on the server, with immediate revocation and two-phase rotation.
+- The gateway will require device auth even for health, reject browser Origin
+  headers, positively classify every forwarded route, allow normal Reader/TTS
+  data-plane work, and deny local-token rotation, service/model administration,
+  browser handoff, diagnostics, and Privacy-lock setup/change/remove/recovery.
+  Chrome extension remote access remains outside the first slice.
+- Existing row versions, content revisions, stable block IDs, and content
+  leases remain the simultaneous-edit authority. There is no live SQLite copy,
+  last-write-wins fallback, or automatic merge.
+- The Windows Firewall design uses an exact named inbound TCP rule restricted
+  to the selected local address/port, LocalSubnet (or explicit VPN range),
+  Private profile, and exact gateway program. Setup/removal must be elevated,
+  idempotent, inspectable, and reversible; U7 itself changed no firewall rule.
+- The bounded spike added a dependency-free .NET 8 certificate/pinning probe
+  plus `scripts/check_reader_secure_transport.py`. On Windows it generated a
+  temporary ECDSA certificate, started the real Reader application on
+  `127.0.0.1` with Uvicorn TLS, and proved pinned protected Reader HTTPS plus
+  the complete marked-PCM Reader WSS flow.
+- Live spike evidence: TLS 1.3 negotiated; incorrect pin rejected; plain HTTP
+  rejected; Reader capabilities and temporary document creation passed; WSS
+  completed with 45 marks and 84,768 PCM bytes; remote binding false; firewall
+  unchanged; temporary Reader home/certificate removed.
+- Validation passed all 434 Python tests and all 129 .NET Release tests (33
+  client, 75 application, 21 Windows), Ruff, .NET formatting for both the
+  desktop solution and probe, all 20 Reader contract fixtures, localhost
+  security defaults, the completed-v1 audit, `git diff --check`, the isolated
+  secure-transport Windows check, and the desktop live/package/render check.
+  The latter's first run hit the same existing three-second playback timing
+  test seen during U6; that test passed immediately in isolation and the full
+  desktop check then passed on its required rerun.
+- U7 has one remaining acceptance item: explicit user approval of the proposed
+  design. Do not mark U7 complete or begin U8 until the user approves it. The
+  user-owned `models/MANIFEST.json` remains excluded.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2191,10 +2244,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Upgrade U1 through U6 are complete. U7 is the next upgrade, but it is
-   a security/architecture decision and feasibility spike. Do not expose the
-   service remotely or begin U8 without a new explicit user request and approval
-   of the U7 design. Reader Workstation Milestones 10 and 11 remain deferred.
+4. Reader Upgrade U1 through U6 are complete. U7's design and Windows spike are
+   complete and await the user's explicit approve/revise decision. Do not expose
+   the service remotely or begin U8 without that approval and a new explicit
+   request to continue. Reader Workstation Milestones 10 and 11 remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.
