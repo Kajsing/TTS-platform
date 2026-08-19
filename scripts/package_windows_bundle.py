@@ -64,6 +64,7 @@ INCLUDED_FILES = (
     "scripts/windows/run_service.ps1",
     "scripts/windows/run_scheduled_service.ps1",
     "scripts/windows/reader_remote_firewall.ps1",
+    "scripts/windows/check_reader_remote_firewall.ps1",
     "scripts/windows/reader_secure_transport_probe/Program.cs",
     "scripts/windows/reader_secure_transport_probe/ReaderSecureTransportProbe.csproj",
 )

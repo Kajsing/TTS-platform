@@ -26,6 +26,11 @@ REMOTE_CONTRACT_VERSION = 1
 PAIRING_LIFETIME = timedelta(minutes=10)
 ROTATION_LIFETIME = timedelta(minutes=10)
 MAX_TICKET_FAILURES = 5
+REMOTE_TLS12_CIPHERS = (
+    "ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-ECDSA-CHACHA20-POLY1305"
+)
 _ALLOWED_PRIVATE_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -669,6 +674,7 @@ class RemoteAccessManager:
                 access_log=False,
                 ssl_certfile=str(certificate),
                 ssl_keyfile=str(private_key),
+                ssl_ciphers=REMOTE_TLS12_CIPHERS,
             )
             server = uvicorn.Server(config)
             thread = threading.Thread(

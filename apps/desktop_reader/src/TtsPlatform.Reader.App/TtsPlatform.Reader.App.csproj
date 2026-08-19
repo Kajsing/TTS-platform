@@ -18,6 +18,10 @@
              Link="reader_remote_firewall.ps1"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\..\scripts\windows\check_reader_remote_firewall.ps1"
+             Link="check_reader_remote_firewall.ps1"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

@@ -34,6 +34,11 @@ DOTNET_PROBE_DLL = (
     / "net10.0"
     / "ReaderSecureTransportProbe.dll"
 )
+TLS12_CIPHERS = (
+    "ECDHE-ECDSA-AES256-GCM-SHA384:"
+    "ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-ECDSA-CHACHA20-POLY1305"
+)
 
 
 def main() -> None:
@@ -118,15 +123,18 @@ def check_reader_secure_transport(
                     process=process,
                     timeout_s=startup_timeout_s,
                 )
-                wrong_pin = "sha256/" + ("A" * 44)
-                wrong_pin_rejected = _probe_rejects_pin(
+                wrong_pin = "sha256/" + ("A" * 43) + "="
+                wrong_pin_result = _probe_wrong_pin_transports(
                     dotnet_executable,
                     base_url=base_url,
                     pin=wrong_pin,
                     token_file=Path(str(layout["token_path"])),
                 )
-                if not wrong_pin_rejected:
-                    raise RuntimeError("The .NET probe accepted an incorrect certificate pin.")
+                tls_protocols = _required_tls_protocols(
+                    host="localhost",
+                    port=port,
+                    certificate_path=certificate_path,
+                )
                 probe = _run_probe_command(
                     dotnet_executable,
                     ["probe", base_url, pin, str(layout["token_path"])],
@@ -154,11 +162,16 @@ def check_reader_secure_transport(
                 "wss": True,
                 "plain_http_rejected": plain_http_rejected,
                 "tls_protocol": probe["tls_protocol"],
+                "required_tls_protocols": tls_protocols,
             },
             "certificate": {
                 "algorithm": generated["algorithm"],
                 "pin_type": "sha256-subject-public-key-info",
-                "pin_enforced": wrong_pin_rejected,
+                "pin_enforced": True,
+                "https_wrong_pin_rejected": wrong_pin_result[
+                    "https_wrong_pin_rejected"
+                ],
+                "wss_wrong_pin_rejected": wrong_pin_result["wss_wrong_pin_rejected"],
                 "subject_alternative_names": generated["subject_alternative_names"],
             },
             "reader_http": {
@@ -331,6 +344,8 @@ def _server_command(
         str(certificate_path),
         "--ssl-keyfile",
         str(private_key_path),
+        "--ssl-ciphers",
+        TLS12_CIPHERS,
         "--log-level",
         "warning",
         "--no-server-header",
@@ -378,30 +393,42 @@ def _run_probe_command(dotnet_executable: str, arguments: list[str]) -> dict[str
     return payload
 
 
-def _probe_rejects_pin(
+def _probe_wrong_pin_transports(
     dotnet_executable: str,
     *,
     base_url: str,
     pin: str,
     token_file: Path,
-) -> bool:
-    completed = subprocess.run(
-        [
-            dotnet_executable,
-            str(DOTNET_PROBE_DLL),
-            "probe",
-            base_url,
-            pin,
-            str(token_file),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+) -> dict[str, Any]:
+    payload = _run_probe_command(
+        dotnet_executable,
+        ["reject-pin", base_url, pin, str(token_file)],
     )
-    return completed.returncode != 0
+    if not payload.get("https_wrong_pin_rejected") or not payload.get(
+        "wss_wrong_pin_rejected"
+    ):
+        raise RuntimeError("The .NET probe accepted an incorrect certificate pin.")
+    return payload
+
+
+def _required_tls_protocols(
+    *, host: str, port: int, certificate_path: Path
+) -> list[str]:
+    protocols: list[str] = []
+    for version, expected in (
+        (ssl.TLSVersion.TLSv1_2, "TLSv1.2"),
+        (ssl.TLSVersion.TLSv1_3, "TLSv1.3"),
+    ):
+        context = ssl.create_default_context(cafile=str(certificate_path))
+        context.minimum_version = version
+        context.maximum_version = version
+        with socket.create_connection((host, port), timeout=3.0) as connection:
+            with context.wrap_socket(connection, server_hostname=host) as secured:
+                negotiated = secured.version()
+        if negotiated != expected:
+            raise RuntimeError(f"The server did not negotiate required {expected}.")
+        protocols.append(negotiated)
+    return protocols
 
 
 def _wait_for_tls(

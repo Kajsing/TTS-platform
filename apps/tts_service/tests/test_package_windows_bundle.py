@@ -6,6 +6,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PACKAGE_SCRIPT_PATH = REPO_ROOT / "scripts" / "package_windows_bundle.py"
+FIREWALL_ACCEPTANCE_PATH = (
+    REPO_ROOT / "scripts" / "windows" / "check_reader_remote_firewall.ps1"
+)
+
+
+def test_remote_firewall_acceptance_is_idempotent_and_cleanup_safe() -> None:
+    script = FIREWALL_ACCEPTANCE_PATH.read_text(encoding="utf-8")
+
+    assert script.count('Invoke-FirewallHelper "Create"') == 2
+    assert 'Invoke-FirewallHelper "Status"' in script
+    assert 'Invoke-FirewallHelper "Remove"' in script
+    assert "finally {" in script
+    assert "Get-NetFirewallRule -Name $ruleName" in script
+    assert 'firewall_changed = $false' in script
 
 
 def test_package_windows_bundle_builds_source_and_extension_bundle(
@@ -133,6 +147,7 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/check_windows_launchers.py" in names
     assert "tts-platform/scripts/check_windows_service_task.py" in names
     assert "tts-platform/scripts/windows/reader_remote_firewall.ps1" in names
+    assert "tts-platform/scripts/windows/check_reader_remote_firewall.ps1" in names
     assert (
         "tts-platform/scripts/windows/reader_secure_transport_probe/"
         "ReaderSecureTransportProbe.csproj"

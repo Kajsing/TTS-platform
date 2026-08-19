@@ -241,6 +241,12 @@ remotely, while setup, code changes, recovery, and removal remain local-only.
 See [`docs/reader_remote_security.md`](docs/reader_remote_security.md) for the
 security boundary and validation details.
 
+The release acceptance helper
+`scripts/windows/check_reader_remote_firewall.ps1` is only for an elevated test
+on the intended, already-active WireGuard interface. It creates a randomly
+named exact rule twice, verifies it independently, and removes it in a cleanup
+block. Reader still does not install or configure WireGuard.
+
 To build a Windows-friendly local reader bundle with the service source,
 launchers, config example, docs, and a validated Chrome extension zip:
 

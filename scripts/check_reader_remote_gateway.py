@@ -155,6 +155,11 @@ def check_remote_gateway(
                     process=gateway_process,
                     timeout_s=startup_timeout_s,
                 )
+                required_tls_protocols = secure_transport._required_tls_protocols(
+                    host="localhost",
+                    port=gateway_port,
+                    certificate_path=certificate_path,
+                )
                 result = _exercise_gateway(
                     gateway_url=gateway_url,
                     pin=pin,
@@ -170,6 +175,7 @@ def check_remote_gateway(
                 result["legacy_tls_rejected"] = _legacy_tls_rejected(
                     "localhost", gateway_port, certificate_path
                 )
+                result["required_tls_protocols"] = required_tls_protocols
                 if not result["plain_http_rejected"] or not result["legacy_tls_rejected"]:
                     raise RuntimeError("The remote gateway accepted an unsafe transport.")
                 secure_transport._stop_process(gateway_process)
@@ -292,14 +298,12 @@ def _exercise_gateway(
             raise RuntimeError("The gateway did not enforce its origin/admin boundary.")
 
     credential_file.write_text(first_credential + "\n", encoding="utf-8")
-    wrong_pin_rejected = secure_transport._probe_rejects_pin(
+    wrong_pin = secure_transport._probe_wrong_pin_transports(
         dotnet_executable,
         base_url=gateway_url,
-        pin="sha256/" + ("A" * 44),
+        pin="sha256/" + ("A" * 43) + "=",
         token_file=credential_file,
     )
-    if not wrong_pin_rejected:
-        raise RuntimeError("The remote .NET client accepted an incorrect server pin.")
     probe = secure_transport._run_probe_command(
         dotnet_executable,
         ["probe", gateway_url, pin, str(credential_file)],
@@ -324,7 +328,8 @@ def _exercise_gateway(
         "content_lease_enforced": lease,
         "browser_origin_denied": True,
         "remote_admin_denied": True,
-        "wrong_pin_rejected": wrong_pin_rejected,
+        "https_wrong_pin_rejected": wrong_pin["https_wrong_pin_rejected"],
+        "wss_wrong_pin_rejected": wrong_pin["wss_wrong_pin_rejected"],
         "https_reader_document_created": probe["https_reader_document_created"],
         "wss_reader_completed": probe["wss_reader_completed"],
         "tls_protocol": probe["tls_protocol"],
@@ -539,6 +544,8 @@ def _uvicorn_command(
                 str(certificate_path),
                 "--ssl-keyfile",
                 str(private_key_path),
+                "--ssl-ciphers",
+                secure_transport.TLS12_CIPHERS,
             ]
         )
     return command

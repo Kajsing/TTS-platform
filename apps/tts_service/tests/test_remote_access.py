@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 from tts_service.config import AppConfig
 from tts_service.main import create_app
 from tts_service.remote_access import (
+    REMOTE_TLS12_CIPHERS,
     RemoteAccessError,
     RemoteAccessManager,
     RemoteAccessProfile,
@@ -311,6 +313,54 @@ def test_gateway_start_rejects_a_missing_device_store_before_firewall_use(
 
     with pytest.raises(RemoteAccessError, match="device store is missing"):
         manager.start_if_enabled()
+
+
+def test_gateway_start_uses_modern_tls12_ciphers(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    manager = _manager(tmp_path)
+    profile = replace(
+        manager.configure(
+            bind_host="10.42.0.1",
+            port=7790,
+            firewall_remote_address="10.42.0.2/32",
+            firewall_interface_alias="WireGuard",
+            start=False,
+        ),
+        enabled=True,
+        gateway_program=str(Path(sys.executable).resolve()),
+    )
+    _ = manager.store
+    captured: dict[str, object] = {}
+
+    class FakeConfig:
+        def __init__(self, _app, **kwargs) -> None:
+            captured.update(kwargs)
+
+    class FakeServer:
+        started = True
+        should_exit = False
+
+        def __init__(self, _config) -> None:
+            pass
+
+        def run(self) -> None:
+            pass
+
+    monkeypatch.setattr(manager, "load_profile", lambda: profile)
+    monkeypatch.setattr(manager, "assert_firewall_safe", lambda _profile: None)
+    monkeypatch.setattr(
+        "tts_service.remote_access._assert_bind_address_available",
+        lambda _host: None,
+    )
+    monkeypatch.setattr("uvicorn.Config", FakeConfig)
+    monkeypatch.setattr("uvicorn.Server", FakeServer)
+
+    manager.start()
+    manager.stop()
+
+    assert captured["ssl_ciphers"] == REMOTE_TLS12_CIPHERS
 
 
 @pytest.mark.parametrize(

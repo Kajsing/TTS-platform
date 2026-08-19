@@ -2235,11 +2235,23 @@ python3 scripts/package_windows_bundle.py
 - `scripts/check_reader_remote_gateway.py` passed its live two-device test over
   temporary TLS. The first device was paired through the production .NET
   `RemotePairingClient`, including its certificate-pin validation. The smoke
-  proved TLS 1.3, correct HTTPS/WSS pinning, wrong-pin rejection, single-use
-  pairing, distinct credentials, two-phase rotation, revocation, stale-edit
-  conflict, content lease, Origin/admin denial, old-TLS/plain-HTTP rejection,
-  and localhost health after gateway shutdown. It made no firewall change.
-- Final automated validation passed all 468 Python tests, Ruff, all 142 .NET
+  now proves both required TLS 1.2 and TLS 1.3, correct HTTPS/WSS pinning, and a
+  valid-but-wrong pin rejected independently by the production HTTPS and WSS
+  clients. It also proves single-use pairing, distinct credentials, two-phase
+  rotation, revocation, stale-edit conflict, content lease, Origin/admin
+  denial, old-TLS/plain-HTTP rejection, and localhost health after gateway
+  shutdown. It made no firewall change.
+- The transport audit found that Uvicorn's default cipher expression did not
+  negotiate the required TLS 1.2 with the ECDSA identity on this Windows host.
+  The production gateway now selects modern ECDSA AES-GCM/ChaCha20 TLS 1.2
+  ciphers explicitly; TLS 1.3 suites remain controlled by the TLS stack.
+- `scripts/windows/check_reader_remote_firewall.ps1` now provides the remaining
+  elevated acceptance as one cleanup-safe operation on an already-active,
+  intended WireGuard interface. It uses a random profile UUID, performs create
+  twice, checks exact status, removes in `finally`, and refuses success if its
+  rule remains. It has not been run because this computer still has no intended
+  WireGuard interface.
+- Final automated validation passed all 470 Python tests, Ruff, all 142 .NET
   Release tests, .NET format verification, the full Windows desktop integration
   and portable-package smoke, the HTTPS/WSS secure-transport smoke, and the
   local security-default check. A scoped review found no unhandled high or

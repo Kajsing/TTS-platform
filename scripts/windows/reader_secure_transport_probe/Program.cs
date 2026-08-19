@@ -34,6 +34,12 @@ internal static class Program
                 return 0;
             }
 
+            if (args.Length == 4 && string.Equals(args[0], "reject-pin", StringComparison.Ordinal))
+            {
+                await RejectPinAsync(args[1], args[2], args[3]).ConfigureAwait(false);
+                return 0;
+            }
+
             if (args.Length == 3 && string.Equals(args[0], "pair", StringComparison.Ordinal))
             {
                 await PairAsync(args[1], args[2]).ConfigureAwait(false);
@@ -43,6 +49,7 @@ internal static class Program
             Console.Error.WriteLine(
                 "Usage: ReaderSecureTransportProbe generate <output-directory> | " +
                 "probe <https-base-url> <sha256-spki-pin> <token-file> | " +
+                "reject-pin <https-base-url> <wrong-sha256-spki-pin> <token-file> | " +
                 "pair <invitation-file> <device-name>");
             return 2;
         }
@@ -126,23 +133,8 @@ internal static class Program
 
     private static async Task ProbeAsync(string baseUrl, string pin, string tokenFile)
     {
-        var baseUri = new Uri(baseUrl, UriKind.Absolute);
-        if (!string.Equals(baseUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(baseUri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
-            baseUri.AbsolutePath != "/" ||
-            !string.IsNullOrEmpty(baseUri.Query) ||
-            !string.IsNullOrEmpty(baseUri.Fragment) ||
-            !string.IsNullOrEmpty(baseUri.UserInfo))
-        {
-            throw new InvalidOperationException(
-                "The U7 probe accepts only an HTTPS localhost origin without credentials or a path.");
-        }
-
-        var token = File.ReadAllText(Path.GetFullPath(tokenFile), Encoding.UTF8).Trim();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            throw new InvalidOperationException("The probe token file is empty.");
-        }
+        var baseUri = ParseProbeBaseUri(baseUrl);
+        var token = ReadToken(tokenFile);
 
         var validator = new PinnedCertificateValidator(pin);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -219,6 +211,123 @@ internal static class Program
                 wss_reader_completed = stream.Completed,
             },
             JsonOptions));
+    }
+
+    private static async Task RejectPinAsync(string baseUrl, string wrongPin, string tokenFile)
+    {
+        var baseUri = ParseProbeBaseUri(baseUrl);
+        var token = ReadToken(tokenFile);
+        var validator = new PinnedServerCertificateValidator(wrongPin);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var httpsRejected = await HttpsRejectsPinAsync(
+            baseUri,
+            validator,
+            token,
+            timeout.Token).ConfigureAwait(false);
+        var wssRejected = await WssRejectsPinAsync(
+            baseUri,
+            validator,
+            token,
+            timeout.Token).ConfigureAwait(false);
+        if (!httpsRejected || !wssRejected)
+        {
+            throw new AuthenticationException(
+                "An HTTPS or WSS connection accepted the incorrect certificate pin.");
+        }
+
+        Console.WriteLine(JsonSerializer.Serialize(
+            new
+            {
+                status = "ok",
+                https_wrong_pin_rejected = httpsRejected,
+                wss_wrong_pin_rejected = wssRejected,
+            },
+            JsonOptions));
+    }
+
+    private static async Task<bool> HttpsRejectsPinAsync(
+        Uri baseUri,
+        PinnedServerCertificateValidator validator,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        using var handler = validator.CreateHttpClientHandler();
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = baseUri,
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var response = await http.GetAsync("v1/health", cancellationToken)
+                .ConfigureAwait(false);
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            return true;
+        }
+    }
+
+    private static async Task<bool> WssRejectsPinAsync(
+        Uri baseUri,
+        PinnedServerCertificateValidator validator,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        using var socket = new ClientWebSocket();
+        socket.Options.RemoteCertificateValidationCallback = validator.Validate;
+        socket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+        var streamUri = new UriBuilder(baseUri)
+        {
+            Scheme = "wss",
+            Path = "/v1/reader/stream",
+        }.Uri;
+        try
+        {
+            await socket.ConnectAsync(streamUri, cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        catch (WebSocketException)
+        {
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            return true;
+        }
+        catch (AuthenticationException)
+        {
+            return true;
+        }
+    }
+
+    private static Uri ParseProbeBaseUri(string baseUrl)
+    {
+        var baseUri = new Uri(baseUrl, UriKind.Absolute);
+        if (!string.Equals(baseUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(baseUri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+            baseUri.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(baseUri.Query) ||
+            !string.IsNullOrEmpty(baseUri.Fragment) ||
+            !string.IsNullOrEmpty(baseUri.UserInfo))
+        {
+            throw new InvalidOperationException(
+                "The U7 probe accepts only an HTTPS localhost origin without credentials or a path.");
+        }
+        return baseUri;
+    }
+
+    private static string ReadToken(string tokenFile)
+    {
+        var token = File.ReadAllText(Path.GetFullPath(tokenFile), Encoding.UTF8).Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("The probe token file is empty.");
+        }
+        return token;
     }
 
     private static async Task<string> ProbeTlsAsync(

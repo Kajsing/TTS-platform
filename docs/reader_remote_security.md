@@ -472,14 +472,18 @@ The beta implementation adds:
 
 `scripts/check_reader_remote_gateway.py` is the isolated live security smoke. It
 uses two logical devices and a temporary TLS gateway, does not modify Windows
-Firewall, and proves pinned HTTPS/WSS, wrong-pin rejection, single-use pairing,
-two-phase rotation, revocation, row-version conflict behavior, content leases,
-Origin/admin denial, legacy-TLS/plain-HTTP rejection, and continued localhost
-health after the gateway stops.
+Firewall, and proves required TLS 1.2 and TLS 1.3, pinned HTTPS/WSS, a
+valid-but-wrong pin rejected independently on HTTPS and WSS, single-use
+pairing, two-phase rotation, revocation, row-version conflict behavior, content
+leases, Origin/admin denial, legacy-TLS/plain-HTTP rejection, and continued
+localhost health after the gateway stops. The gateway selects modern ECDSA
+AES-GCM/ChaCha20 TLS 1.2 ciphers explicitly rather than relying on Uvicorn's
+incompatible default expression; TLS 1.3 cipher selection remains with the TLS
+stack.
 
 On 2026-08-19 that smoke negotiated TLS 1.3 and passed every assertion. Its
 first device paired through the production .NET `RemotePairingClient`, including
-the same certificate-pin validator used by the desktop. All 468 Python tests,
+the same certificate-pin validator used by the desktop. All 470 Python tests,
 all 142 .NET Release tests, Ruff, .NET format, the complete Windows desktop
 integration/package smoke, the transport smoke, and the security-default check
 also passed. A scoped review found no unhandled high or critical issue within
@@ -489,7 +493,11 @@ The firewall helper separately passed read-only status inspection and rejected
 an over-broad subnet before firewall inspection. This computer currently has no
 WireGuard interface and its physical Ethernet profile is Public, so the final
 elevated create/status/remove proof is deliberately not faked against the wrong
-interface. No firewall rule was left behind.
+interface. `scripts/windows/check_reader_remote_firewall.ps1` packages that
+proof as one elevated, cleanup-safe run: a random rule is created twice to prove
+idempotence, checked independently, and removed in `finally`, with a final
+absence check. It remains unrun until the intended WireGuard interface exists.
+No firewall rule was left behind.
 
 ## References
 
