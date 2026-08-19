@@ -631,14 +631,16 @@ user-approved reorder:
 - [x] U7: Remote Reader security and architecture decision; design/spike passed,
   and the optional WireGuard/private-network direction was approved on
   2026-08-19.
-- [ ] U8: Secure private-network server beta, awaiting an explicit start
-  request.
+- [ ] U8: Secure private-network server beta. Implementation and isolated live
+  gateway checks are complete; final acceptance awaits a reversible elevated
+  firewall create/status/remove pass on the intended WireGuard interface.
 
 This track is prioritized ahead of Reader Milestones 10 and 11. Those original
 milestones remain incomplete and are not removed from the 1.0 plan.
 
-U1 through U7 are complete. The approved remote architecture preserves the
-current localhost Reader as the default, adds remote workspaces only as an
-explicit opt-in, and recommends owner-managed WireGuard without coupling Reader
-to a VPN vendor. Do not enable remote binding or begin U8 until the user
-explicitly asks to continue.
+U1 through U7 are complete and U8 is active. The implemented remote architecture
+preserves the current localhost Reader as the default, adds remote workspaces
+only as an explicit opt-in, and recommends owner-managed WireGuard without
+coupling Reader to a VPN vendor. Remote access remains disabled on this machine
+until the owner supplies the intended interface and approves its exact firewall
+rule.

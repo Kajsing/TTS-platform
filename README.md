@@ -205,6 +205,42 @@ use `-NoDependencies` only when dependencies are already provisioned.
 uses a per-user scheduled task rather than a machine-wide Windows Service or
 external service manager.
 
+### Optional remote Reader beta
+
+The Windows Reader can now keep its normal **Local** workspace and add named
+**Remote** workspaces that use the library and TTS engine on another owner-run
+computer. Local remains the default and does not require a network connection.
+Remote access is off until it is explicitly configured.
+
+For internet use, first connect the computers with an owner-managed WireGuard
+network. Reader does not install or configure WireGuard, and its HTTPS port must
+never be forwarded directly to the public internet.
+
+On the server computer:
+
+1. Start the existing local service and Reader.
+2. Open **Remote access…**, then **Share this computer**.
+3. Enter the exact private/WireGuard address, port, peer IP or narrow subnet,
+   tunnel interface name, and its current Windows network profile.
+4. Choose **Set up secure access…** and approve the one exact Windows Firewall
+   rule when Windows asks.
+5. Create a ten-minute, one-use invitation and transfer it through a trusted
+   channel.
+
+On the other Windows computer, open **Remote access…**, paste the invitation,
+name the workspace and computer, and choose **Pair and save**. Select **Local**
+or the named remote workspace from the main window. Remote credentials are
+protected with Windows DPAPI for the current user and are not written into
+`settings.json`.
+
+The server tab lists paired computers and supports immediate revocation.
+**Disable and remove rule…** stops the secure gateway, revokes every paired
+credential, clears pending invitations, and removes only the Reader rule. It
+does not delete the local library. Privacy-lock unlock/relock is available
+remotely, while setup, code changes, recovery, and removal remain local-only.
+See [`docs/reader_remote_security.md`](docs/reader_remote_security.md) for the
+security boundary and validation details.
+
 To build a Windows-friendly local reader bundle with the service source,
 launchers, config example, docs, and a validated Chrome extension zip:
 

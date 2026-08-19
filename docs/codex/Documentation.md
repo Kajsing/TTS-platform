@@ -18,11 +18,13 @@ This file is the live status log and shared memory for future Codex loops.
   security architecture while preserving Local as the default; first-version
   internet reachability uses owner-managed WireGuard rather than direct public
   Reader exposure.
-- Reader Upgrade U7 is complete. Its threat model, architecture decision, and
-  isolated Windows transport spike preserve the existing loopback Reader as the
-  default local workspace and specify a separate disabled secure gateway for
-  U8. On 2026-08-19 the user approved owner-managed WireGuard as the recommended
-  first remote transport. U8 remains unstarted pending an explicit request.
+- Reader Upgrade U7 is complete and U8 is active. The secure private-network
+  beta is implemented behind an explicit disabled profile: the existing
+  loopback Reader remains the default, while named Remote profiles use a
+  separate pinned HTTPS/WSS gateway. Isolated live gateway validation passes.
+  Final U8 acceptance awaits the exact elevated firewall create/status/remove
+  pass on the owner's intended WireGuard interface; no rule is currently left
+  behind.
 - Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
   now use a configurable trimmed-character threshold (50 by default, 0 to
   disable), offer a persistent five-minute pause, show its local expiry time,
@@ -2160,7 +2162,7 @@ python3 scripts/package_windows_bundle.py
   to the selected local address/port, LocalSubnet (or explicit VPN range),
   Private profile, and exact gateway program. Setup/removal must be elevated,
   idempotent, inspectable, and reversible; U7 itself changed no firewall rule.
-- The bounded spike added a dependency-free .NET 8 certificate/pinning probe
+- The bounded spike added a dependency-free .NET 10 certificate/pinning probe
   plus `scripts/check_reader_secure_transport.py`. On Windows it generated a
   temporary ECDSA certificate, started the real Reader application on
   `127.0.0.1` with Uvicorn TLS, and proved pinned protected Reader HTTPS plus
@@ -2181,13 +2183,73 @@ python3 scripts/package_windows_bundle.py
   Reader as the default offline-capable workspace, add Remote only as an
   explicit opt-in, use owner-managed WireGuard as the recommended first
   internet transport, and keep that network layer replaceable. U7 is complete.
-  U8 has not started and still requires a separate explicit request. The
+  U8 was subsequently started by the user. The
   user-owned `models/MANIFEST.json` remains excluded.
 - U7 approval closeout validation passed all 434 Python tests, Ruff, all 129
   .NET Release tests through the existing user-local .NET 10 SDK, .NET format,
   localhost security-default checks, and `git diff --check`. This closeout
   changed documentation only and did not enable a listener, firewall rule,
   WireGuard configuration, or remote credential.
+
+## Reader Upgrade U8: Secure Private-Network Server Beta (2026-08-19)
+
+- The existing localhost service is unchanged and still starts independently.
+  A separate disabled-by-default Uvicorn gateway is the only non-loopback
+  listener. It accepts one explicit RFC1918/ULA address and HTTPS/WSS only; it
+  rejects wildcard, loopback, link-local, hostname, and public binds.
+- The gateway owns an ECDSA P-256 self-signed identity. Startup revalidates the
+  exact certificate/key paths, matching key pair, self-signature, validity,
+  server-auth EKU, non-CA constraint, SAN for the bind address and optional
+  server name, persisted SPKI pin, current Python executable, and exact Windows
+  Firewall status before binding.
+- Pairing invitations expire after ten minutes, work once, and are persisted
+  only as hashes. Each paired computer receives a distinct high-entropy
+  credential; only its hash is stored server-side. Device listing, last-used
+  metadata, immediate revocation, revoke-all disable, and two-phase rotation are
+  implemented.
+- The remote gateway strips device auth before its internal loopback proxy and
+  supplies the existing local token only on that private hop. Every registered
+  `/v1` route has an explicit allow/deny classification test. Unknown and admin
+  routes fail closed; browser origins, query-string credentials, and recursive
+  WebSocket-message credentials are rejected.
+- Resource controls include combined failed pairing/login limits per IP,
+  ordinary request limits per device, separate export creation limits, bounded
+  request and WebSocket frames, and one concurrent import plus one Reader audio
+  stream per device. Active streams watch revocation and close promptly.
+- The WPF Reader now presents Local plus named Remote workspaces. Pairing pins
+  the server before sending the invitation, and device credentials are kept in
+  DPAPI CurrentUser files rather than `settings.json`. HTTP and WSS share the
+  same strict pin validator. Users can pair, switch, rotate, remove local
+  profiles, list/revoke server devices, and disable sharing. Local service
+  start/stop and browser desktop-open polling remain local-only.
+- Folder Privacy-lock unlock/relock remains usable remotely. Setup, code change,
+  recovery, and removal are rejected by the gateway and disabled in the remote
+  folder UI. Direct public exposure, Chrome-extension remote access, model or
+  service administration, offline replicas, and database synchronization stay
+  out of scope.
+- The Windows Firewall helper creates only one deterministic inbound TCP rule
+  for the exact private address, port, program, network profile, peer range, and
+  WireGuard interface. IPv4 ranges must be `/24` or narrower and IPv6 `/64` or
+  narrower. Status is exact, conflicts fail closed, and removal targets only the
+  profile UUID rule. Reader never installs or configures WireGuard.
+- `scripts/check_reader_remote_gateway.py` passed its live two-device test over
+  temporary TLS. The first device was paired through the production .NET
+  `RemotePairingClient`, including its certificate-pin validation. The smoke
+  proved TLS 1.3, correct HTTPS/WSS pinning, wrong-pin rejection, single-use
+  pairing, distinct credentials, two-phase rotation, revocation, stale-edit
+  conflict, content lease, Origin/admin denial, old-TLS/plain-HTTP rejection,
+  and localhost health after gateway shutdown. It made no firewall change.
+- Final automated validation passed all 468 Python tests, Ruff, all 142 .NET
+  Release tests, .NET format verification, the full Windows desktop integration
+  and portable-package smoke, the HTTPS/WSS secure-transport smoke, and the
+  local security-default check. A scoped review found no unhandled high or
+  critical issue inside the documented private-network threat model.
+- Firewall input validation and a real read-only Windows status call passed;
+  an over-broad subnet was rejected before inspection. This computer has no
+  WireGuard interface and its Ethernet profile is Public, so the final elevated
+  create/status/remove acceptance pass remains intentionally pending rather
+  than creating a misleading rule on the wrong interface.
+- The user-owned `models/MANIFEST.json` remains excluded from this work.
 
 ## Known Issues And Follow-Ups
 
@@ -2252,10 +2314,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Upgrade U1 through U7 are complete. U7 preserves Local as the default
-   and approves optional Remote profiles over owner-managed WireGuard. Do not
-   expose the service remotely or begin U8 without a new explicit request to
-   continue. Reader Workstation Milestones 10 and 11 remain deferred.
+4. Reader Upgrade U1 through U7 are complete. U8 implementation is present but
+   disabled; finish its live firewall acceptance on the intended WireGuard
+   interface before marking it complete. Do not expose the Reader port directly
+   to the internet. Reader Workstation Milestones 10 and 11 remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

@@ -22,6 +22,7 @@ from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
 from .reader_routes import build_reader_router
 from .reader_stream_routes import build_reader_stream_router
+from .remote_routes import build_remote_admin_router
 from .schemas import SynthesizeRequestPayload
 from .security import (
     enforce_headers_access,
@@ -57,15 +58,26 @@ def create_app(
     _register_routes(app)
     app.include_router(build_reader_router())
     app.include_router(build_reader_stream_router())
+    app.include_router(build_remote_admin_router())
 
     return app
 
 
 @asynccontextmanager
 async def _application_lifespan(app: FastAPI):
+    remote_access = app.state.container.remote_access
     try:
+        if remote_access is not None:
+            try:
+                remote_access.start_if_enabled()
+            except Exception:
+                # The secure gateway is optional. Its status exposes the bounded
+                # startup failure while localhost Reader remains available.
+                pass
         yield
     finally:
+        if remote_access is not None:
+            remote_access.stop()
         manager = app.state.container.reader_exports
         if manager is not None:
             manager.shutdown(wait=True)

@@ -31,7 +31,7 @@ DOTNET_PROBE_DLL = (
     DOTNET_PROBE_PROJECT.parent
     / "bin"
     / "Release"
-    / "net8.0"
+    / "net10.0"
     / "ReaderSecureTransportProbe.dll"
 )
 

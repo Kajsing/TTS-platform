@@ -14,6 +14,10 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\TtsPlatformReader.ico" />
+    <Content Include="..\..\..\..\scripts\windows\reader_remote_firewall.ps1"
+             Link="reader_remote_firewall.ps1"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

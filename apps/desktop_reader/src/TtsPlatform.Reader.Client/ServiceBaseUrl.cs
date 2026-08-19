@@ -33,9 +33,43 @@ public static class ServiceBaseUrl
 
         return new UriBuilder(Uri.UriSchemeHttp, uri.Host, uri.IsDefaultPort ? 7777 : uri.Port, "/").Uri;
     }
+
+    public static Uri ParseRemote(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            throw new ReaderClientConfigurationException(
+                "The remote service address must be an absolute URL.");
+        }
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ReaderClientConfigurationException("The remote service address must use HTTPS.");
+        }
+        if (string.IsNullOrWhiteSpace(uri.Host) ||
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            uri.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new ReaderClientConfigurationException(
+                "The remote service address must be an HTTPS origin without credentials, a path, a query, or a fragment.");
+        }
+        return new UriBuilder(Uri.UriSchemeHttps, uri.Host, uri.IsDefaultPort ? 443 : uri.Port, "/").Uri;
+    }
 }
 
-public sealed class ReaderClientConfigurationException(string message) : Exception(message);
+public sealed class ReaderClientConfigurationException : Exception
+{
+    public ReaderClientConfigurationException(string message)
+        : base(message)
+    {
+    }
+
+    public ReaderClientConfigurationException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
 
 public sealed class ReaderTokenUnavailableException(string message) : Exception(message);
 

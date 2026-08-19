@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using TtsPlatform.Reader.Client;
 
 internal static class Program
 {
@@ -33,9 +34,16 @@ internal static class Program
                 return 0;
             }
 
+            if (args.Length == 3 && string.Equals(args[0], "pair", StringComparison.Ordinal))
+            {
+                await PairAsync(args[1], args[2]).ConfigureAwait(false);
+                return 0;
+            }
+
             Console.Error.WriteLine(
                 "Usage: ReaderSecureTransportProbe generate <output-directory> | " +
-                "probe <https-base-url> <sha256-spki-pin> <token-file>");
+                "probe <https-base-url> <sha256-spki-pin> <token-file> | " +
+                "pair <invitation-file> <device-name>");
             return 2;
         }
         catch (Exception exception)
@@ -44,6 +52,29 @@ internal static class Program
                 $"Secure transport probe failed: {exception.GetType().Name}: {exception.Message}");
             return 1;
         }
+    }
+
+    private static async Task PairAsync(string invitationFile, string deviceName)
+    {
+        var invitation = RemotePairingClient.ParseInvitation(
+            File.ReadAllText(Path.GetFullPath(invitationFile), Encoding.UTF8));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var result = await new RemotePairingClient().PairAsync(
+            invitation,
+            deviceName,
+            timeout.Token).ConfigureAwait(false);
+        Console.WriteLine(JsonSerializer.Serialize(
+            new
+            {
+                status = "ok",
+                credential = result.Credential,
+                device = new
+                {
+                    id = result.Device.Id,
+                    display_name = result.Device.DisplayName,
+                },
+            },
+            JsonOptions));
     }
 
     private static void GenerateCertificate(string outputDirectory)

@@ -16,6 +16,21 @@ public sealed record CompactControllerSettings(
     double? Left = null,
     double? Top = null);
 
+public sealed record RemoteConnectionProfileSettings(
+    string Id,
+    string Name,
+    string ServiceBaseUrl,
+    string ServerSpkiPin,
+    string CredentialId);
+
+public sealed record DesktopConnectionTarget(
+    string Id,
+    string Name,
+    bool IsLocal,
+    string ServiceBaseUrl,
+    string? ServerSpkiPin,
+    string CredentialId);
+
 public sealed record DesktopSettings(
     string ServiceBaseUrl = "http://127.0.0.1:7777/",
     TokenSourceSettings? TokenSource = null,
@@ -31,7 +46,9 @@ public sealed record DesktopSettings(
     bool MinimizeToTrayOnClose = false,
     IReadOnlyList<string>? ClipboardBlockedApplications = null,
     DesktopHotkeys? Hotkeys = null,
-    CompactControllerSettings? CompactController = null)
+    CompactControllerSettings? CompactController = null,
+    string ActiveConnectionProfileId = "local",
+    IReadOnlyList<RemoteConnectionProfileSettings>? RemoteConnectionProfiles = null)
 {
     [JsonIgnore]
     public TokenSourceSettings EffectiveTokenSource => TokenSource ?? new TokenSourceSettings();
@@ -46,6 +63,32 @@ public sealed record DesktopSettings(
     [JsonIgnore]
     public CompactControllerSettings EffectiveCompactController =>
         CompactController ?? new CompactControllerSettings();
+
+    [JsonIgnore]
+    public IReadOnlyList<RemoteConnectionProfileSettings> EffectiveRemoteConnectionProfiles =>
+        RemoteConnectionProfiles ?? [];
+
+    [JsonIgnore]
+    public DesktopConnectionTarget ActiveConnection =>
+        EffectiveRemoteConnectionProfiles
+            .Where(profile => string.Equals(
+                profile.Id,
+                ActiveConnectionProfileId,
+                StringComparison.Ordinal))
+            .Select(profile => new DesktopConnectionTarget(
+                profile.Id,
+                profile.Name,
+                false,
+                profile.ServiceBaseUrl,
+                profile.ServerSpkiPin,
+                profile.CredentialId))
+            .FirstOrDefault() ?? new DesktopConnectionTarget(
+                "local",
+                "Local",
+                true,
+                ServiceBaseUrl,
+                null,
+                string.Empty);
 }
 
 public enum ClipboardPromptSuppressionReason
@@ -123,7 +166,8 @@ public static class DesktopConnectionPolicy
     public static bool RequiresReconnect(
         DesktopSettings current,
         string serviceBaseUrl,
-        string tokenPath)
+        string tokenPath,
+        string? activeConnectionProfileId = null)
     {
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(serviceBaseUrl);
@@ -136,7 +180,11 @@ public static class DesktopConnectionPolicy
                !string.Equals(
                    current.EffectiveTokenSource.Path,
                    tokenPath,
-                   StringComparison.OrdinalIgnoreCase);
+                   StringComparison.OrdinalIgnoreCase) ||
+               !string.Equals(
+                   current.ActiveConnectionProfileId,
+                   activeConnectionProfileId ?? current.ActiveConnectionProfileId,
+                   StringComparison.Ordinal);
     }
 }
 

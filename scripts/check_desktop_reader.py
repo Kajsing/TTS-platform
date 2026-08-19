@@ -814,6 +814,7 @@ def _build_development_package(
         "TtsPlatform.Reader.App.exe",
         "TtsPlatform.Reader.App.dll",
         "TtsPlatform.Reader.App.runtimeconfig.json",
+        "reader_remote_firewall.ps1",
         "THIRD_PARTY_NOTICES.md",
         "DEVELOPMENT-ONLY.txt",
     }

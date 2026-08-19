@@ -18,15 +18,20 @@ public sealed class ReaderStreamClient : IReaderStreamClient
     private readonly Uri _serviceBaseUri;
     private readonly ITokenProvider _tokenProvider;
     private readonly ReaderPrivacySessionStore? _privacySessions;
+    private readonly PinnedServerCertificateValidator? _certificateValidator;
 
     public ReaderStreamClient(
         string serviceBaseUrl,
         ITokenProvider tokenProvider,
-        ReaderPrivacySessionStore? privacySessions = null)
+        ReaderPrivacySessionStore? privacySessions = null,
+        PinnedServerCertificateValidator? certificateValidator = null)
     {
-        _serviceBaseUri = ServiceBaseUrl.Parse(serviceBaseUrl);
+        _serviceBaseUri = certificateValidator is null
+            ? ServiceBaseUrl.Parse(serviceBaseUrl)
+            : ServiceBaseUrl.ParseRemote(serviceBaseUrl);
         _tokenProvider = tokenProvider;
         _privacySessions = privacySessions;
+        _certificateValidator = certificateValidator;
     }
 
     public async Task<IReaderStreamSession> OpenAsync(
@@ -48,6 +53,10 @@ public sealed class ReaderStreamClient : IReaderStreamClient
         }
 
         var socket = new ClientWebSocket();
+        if (_certificateValidator is not null)
+        {
+            socket.Options.RemoteCertificateValidationCallback = _certificateValidator.Validate;
+        }
         socket.Options.SetRequestHeader("Authorization", new AuthenticationHeaderValue("Bearer", token).ToString());
         var privacyHeader = _privacySessions?.GetHeaderValue();
         if (!string.IsNullOrWhiteSpace(privacyHeader))
@@ -56,7 +65,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
         }
         var streamUri = new UriBuilder(_serviceBaseUri)
         {
-            Scheme = "ws",
+            Scheme = _serviceBaseUri.Scheme == Uri.UriSchemeHttps ? "wss" : "ws",
             Path = "/v1/reader/stream",
         }.Uri;
         try

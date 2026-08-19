@@ -15,21 +15,26 @@ public sealed class ReaderServiceClient : IReaderServiceClient
     private readonly HttpClient _httpClient;
     private readonly ITokenProvider _tokenProvider;
     private readonly ReaderPrivacySessionStore? _privacySessions;
+    private readonly bool _authenticateHealth;
 
     public ReaderServiceClient(
         HttpClient httpClient,
         string serviceBaseUrl,
         ITokenProvider tokenProvider,
-        ReaderPrivacySessionStore? privacySessions = null)
+        ReaderPrivacySessionStore? privacySessions = null,
+        bool allowRemote = false)
     {
         _httpClient = httpClient;
-        _httpClient.BaseAddress = ServiceBaseUrl.Parse(serviceBaseUrl);
+        _httpClient.BaseAddress = allowRemote
+            ? ServiceBaseUrl.ParseRemote(serviceBaseUrl)
+            : ServiceBaseUrl.Parse(serviceBaseUrl);
         _tokenProvider = tokenProvider;
         _privacySessions = privacySessions;
+        _authenticateHealth = allowRemote;
     }
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
-        SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", false, null, cancellationToken);
+        SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken);
 
     public Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
         SendAsync<ReaderCapabilities>(HttpMethod.Get, "v1/reader/capabilities", true, null, cancellationToken);

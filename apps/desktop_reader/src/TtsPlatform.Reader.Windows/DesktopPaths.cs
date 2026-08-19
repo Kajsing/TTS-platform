@@ -9,6 +9,10 @@ public static class DesktopPaths
 
     public static string SettingsPath => Path.Combine(ReaderHome, "settings.json");
 
+    public static string RemoteCredentialsDirectory => Path.Combine(
+        ReaderHome,
+        "remote-credentials");
+
     public static string ServiceProcessLeasePath => Path.Combine(
         ReaderHome,
         "service-process.json");

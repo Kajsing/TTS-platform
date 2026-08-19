@@ -21,6 +21,7 @@ from .jobs import InMemoryJobManager
 from .observability import ObservabilityState, configure_structured_logging
 from .reader_exports import ReaderExportManager, resolve_export_directory
 from .reader_service import ReaderRuntimeState, initialize_reader_runtime
+from .remote_access import RemoteAccessManager
 from .security import OriginPolicy, RateLimiter
 from .streaming import StreamingMetrics
 
@@ -40,6 +41,7 @@ class ApplicationState:
     observability: ObservabilityState
     reader: ReaderRuntimeState
     reader_exports: ReaderExportManager | None
+    remote_access: RemoteAccessManager | None
     started_at: datetime
     backend_ready: bool
     default_voice_loaded: bool
@@ -115,6 +117,15 @@ def build_application_state(
             configured_formats=config.reader.exports.formats,
             mp3_encoder=mp3_encoder,
         )
+    remote_access = None
+    if reader.service is not None:
+        remote_access = RemoteAccessManager(
+            reader_home=reader.service.reader_home_path,
+            local_base_url=f"http://127.0.0.1:{config.server.port}",
+            local_token_file=auth_state.token_file,
+            firewall_script_path=base_path / "scripts" / "windows" / "reader_remote_firewall.ps1",
+            log_level=config.server.log_level,
+        )
     job_manager = InMemoryJobManager(
         max_workers=config.limits.max_concurrent_jobs,
         backend=backend,
@@ -146,6 +157,7 @@ def build_application_state(
         observability=observability,
         reader=reader,
         reader_exports=reader_exports,
+        remote_access=remote_access,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,
         default_voice_loaded=registry.default_voice is not None,

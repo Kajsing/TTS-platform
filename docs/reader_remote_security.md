@@ -2,15 +2,16 @@
 
 ## Status
 
-This document is the Reader Upgrade U7 threat model and architecture decision.
-The design and Windows transport spike are complete as of 2026-08-19. The user
-approved the optional, owner-managed WireGuard direction on 2026-08-19. Product
-implementation remains disabled; U8 requires a separate explicit start request.
+This document began as the Reader Upgrade U7 threat model and architecture
+decision. The user approved the optional, owner-managed WireGuard direction and
+started U8 on 2026-08-19. The U8 beta is now implemented but remains disabled by
+default. The final acceptance step is a live create/status/remove pass for the
+exact firewall rule on the owner's intended WireGuard interface.
 
-Nothing in U7 binds the service to a LAN address, changes Windows Firewall, or
-allows a remote credential. The normal service remains plain HTTP on
-`127.0.0.1`, and the current desktop continues to reject non-loopback service
-addresses.
+The normal service remains plain HTTP on `127.0.0.1`. U8 does not widen that
+listener. It adds a separate HTTPS/WSS gateway which can start only from an
+explicit remote profile after its certificate identity, private bind address,
+and exact Windows Firewall rule have all been revalidated.
 
 ## Decision summary
 
@@ -441,6 +442,54 @@ U8 is complete only when all of these pass:
 - disabling remote access closes the listener, revokes devices, clears pending
   pairing tickets, and leaves localhost Reader operation and data healthy;
 - a scoped security review reports no unhandled high/critical findings.
+
+## U8 implementation evidence
+
+The beta implementation adds:
+
+- a separate Uvicorn HTTPS/WSS gateway and a positive Reader route allow-list;
+- a SQLite pairing/device store containing hashes rather than plaintext
+  invitation or device secrets;
+- ten-minute one-use invitations, per-device credentials, immediate revocation,
+  and two-phase credential rotation;
+- ECDSA P-256 identity generation plus start-time validation of the key pair,
+  validity period, self-signature, server-auth usage, SAN, and persisted SPKI
+  pin;
+- exact private-address binding with no wildcard, loopback, link-local, public,
+  or hostname bind;
+- local-only native administration endpoints, per-IP and per-device throttles,
+  one upload and one stream per device, request/frame limits, browser-Origin
+  denial, and credential rejection in query strings or WebSocket messages;
+- Local/Remote desktop profiles, pinned HTTP and WSS clients, DPAPI-protected
+  device credentials, pairing, rotation, profile switching, device management,
+  and local-only Privacy-lock administration controls;
+- an elevated firewall helper limited to one profile UUID, exact address, port,
+  program, Windows profile, interface (for WireGuard), and peer IP or subnet.
+  IPv4 peer subnets must be `/24` or narrower and IPv6 peer subnets `/64` or
+  narrower. Conflicting rules are never broadened or replaced;
+- a disable flow that stops the gateway and revokes devices before attempting
+  removal of only that exact firewall rule.
+
+`scripts/check_reader_remote_gateway.py` is the isolated live security smoke. It
+uses two logical devices and a temporary TLS gateway, does not modify Windows
+Firewall, and proves pinned HTTPS/WSS, wrong-pin rejection, single-use pairing,
+two-phase rotation, revocation, row-version conflict behavior, content leases,
+Origin/admin denial, legacy-TLS/plain-HTTP rejection, and continued localhost
+health after the gateway stops.
+
+On 2026-08-19 that smoke negotiated TLS 1.3 and passed every assertion. Its
+first device paired through the production .NET `RemotePairingClient`, including
+the same certificate-pin validator used by the desktop. All 468 Python tests,
+all 142 .NET Release tests, Ruff, .NET format, the complete Windows desktop
+integration/package smoke, the transport smoke, and the security-default check
+also passed. A scoped review found no unhandled high or critical issue within
+this threat model.
+
+The firewall helper separately passed read-only status inspection and rejected
+an over-broad subnet before firewall inspection. This computer currently has no
+WireGuard interface and its physical Ethernet profile is Public, so the final
+elevated create/status/remove proof is deliberately not faked against the wrong
+interface. No firewall rule was left behind.
 
 ## References
 

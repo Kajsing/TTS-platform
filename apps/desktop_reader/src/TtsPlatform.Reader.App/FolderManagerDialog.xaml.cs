@@ -8,12 +8,16 @@ namespace TtsPlatform.Reader.App;
 public partial class FolderManagerDialog : Window
 {
     private readonly IReaderServiceClient _client;
+    private readonly bool _allowPrivacyAdministration;
     private readonly ObservableCollection<ReaderFolder> _folders = [];
     private bool _busy;
 
-    public FolderManagerDialog(IReaderServiceClient client)
+    public FolderManagerDialog(
+        IReaderServiceClient client,
+        bool allowPrivacyAdministration = true)
     {
         _client = client;
+        _allowPrivacyAdministration = allowPrivacyAdministration;
         InitializeComponent();
         FolderGrid.ItemsSource = _folders;
         Loaded += async (_, _) => await RefreshAsync();
@@ -35,7 +39,9 @@ public partial class FolderManagerDialog : Window
                 _folders.Add(folder);
             }
             FolderGrid.SelectedItem = _folders.FirstOrDefault(item => item.Id == selectedId);
-            StatusText.Text = $"{_folders.Count} folder(s).";
+            StatusText.Text = _allowPrivacyAdministration
+                ? $"{_folders.Count} folder(s)."
+                : $"{_folders.Count} folder(s). Privacy lock setup, recovery, changes, and removal are local-only.";
         }
         catch (Exception exception) when (
             exception is ReaderApiException or ReaderServiceUnavailableException)
@@ -151,7 +157,7 @@ public partial class FolderManagerDialog : Window
     private async void SetPrivacyButton_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedFolder;
-        if (_busy || selected is null || selected.PrivacyLocked)
+        if (_busy || !_allowPrivacyAdministration || selected is null || selected.PrivacyLocked)
         {
             return;
         }
@@ -214,7 +220,7 @@ public partial class FolderManagerDialog : Window
     private async void ChangeCodeButton_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedFolder;
-        if (_busy || selected is null || !selected.PrivacyUnlocked)
+        if (_busy || !_allowPrivacyAdministration || selected is null || !selected.PrivacyUnlocked)
         {
             return;
         }
@@ -244,7 +250,12 @@ public partial class FolderManagerDialog : Window
     private async void RecoverButton_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedFolder;
-        if (_busy || selected is null || !selected.PrivacyLocked || selected.PrivacyUnlocked)
+        if (
+            _busy ||
+            !_allowPrivacyAdministration ||
+            selected is null ||
+            !selected.PrivacyLocked ||
+            selected.PrivacyUnlocked)
         {
             return;
         }
@@ -274,7 +285,7 @@ public partial class FolderManagerDialog : Window
     private async void RemovePrivacyButton_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedFolder;
-        if (_busy || selected is null || !selected.PrivacyUnlocked)
+        if (_busy || !_allowPrivacyAdministration || selected is null || !selected.PrivacyUnlocked)
         {
             return;
         }
@@ -358,12 +369,19 @@ public partial class FolderManagerDialog : Window
         var accessible = available && (!selected!.PrivacyLocked || selected.PrivacyUnlocked);
         RenameButton.IsEnabled = accessible;
         DeleteButton.IsEnabled = accessible;
-        SetPrivacyButton.IsEnabled = available && !selected!.PrivacyLocked;
+        SetPrivacyButton.IsEnabled =
+            _allowPrivacyAdministration && available && !selected!.PrivacyLocked;
         UnlockButton.IsEnabled = available && selected!.PrivacyLocked && !selected.PrivacyUnlocked;
         RelockButton.IsEnabled = available && selected!.PrivacyUnlocked;
-        ChangeCodeButton.IsEnabled = available && selected!.PrivacyUnlocked;
-        RecoverButton.IsEnabled = available && selected!.PrivacyLocked && !selected.PrivacyUnlocked;
-        RemovePrivacyButton.IsEnabled = available && selected!.PrivacyUnlocked;
+        ChangeCodeButton.IsEnabled =
+            _allowPrivacyAdministration && available && selected!.PrivacyUnlocked;
+        RecoverButton.IsEnabled =
+            _allowPrivacyAdministration &&
+            available &&
+            selected!.PrivacyLocked &&
+            !selected.PrivacyUnlocked;
+        RemovePrivacyButton.IsEnabled =
+            _allowPrivacyAdministration && available && selected!.PrivacyUnlocked;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

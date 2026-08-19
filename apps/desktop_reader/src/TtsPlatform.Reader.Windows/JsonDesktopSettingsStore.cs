@@ -95,6 +95,55 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
                 "The preferred voice identifier is too long.");
         }
 
+        if (settings.EffectiveRemoteConnectionProfiles.Count > 32)
+        {
+            throw new ReaderClientConfigurationException("At most 32 remote workspaces are supported.");
+        }
+        var profileIds = new HashSet<string>(StringComparer.Ordinal);
+        var remoteProfiles = settings.EffectiveRemoteConnectionProfiles.Select(profile =>
+        {
+            var id = profile.Id.Trim();
+            var name = string.Join(" ", profile.Name.Trim().Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries));
+            var credentialId = profile.CredentialId.Trim();
+            if (!Guid.TryParse(id, out _) || !profileIds.Add(id))
+            {
+                throw new ReaderClientConfigurationException(
+                    "Remote workspace identifiers must be unique UUIDs.");
+            }
+            if (name.Length is < 1 or > 80)
+            {
+                throw new ReaderClientConfigurationException(
+                    "Remote workspace names must contain 1 to 80 characters.");
+            }
+            if (!Guid.TryParse(credentialId, out _))
+            {
+                throw new ReaderClientConfigurationException(
+                    "Remote credential identifiers must be UUIDs.");
+            }
+            var serviceBaseUrl = ServiceBaseUrl.ParseRemote(profile.ServiceBaseUrl).AbsoluteUri;
+            _ = new PinnedServerCertificateValidator(profile.ServerSpkiPin);
+            return profile with
+            {
+                Id = id,
+                Name = name,
+                ServiceBaseUrl = serviceBaseUrl,
+                CredentialId = credentialId,
+            };
+        }).ToArray();
+        var activeProfileId = string.IsNullOrWhiteSpace(settings.ActiveConnectionProfileId)
+            ? "local"
+            : settings.ActiveConnectionProfileId.Trim();
+        if (!string.Equals(activeProfileId, "local", StringComparison.Ordinal) &&
+            remoteProfiles.All(profile => !string.Equals(
+                profile.Id,
+                activeProfileId,
+                StringComparison.Ordinal)))
+        {
+            activeProfileId = "local";
+        }
+
         var blockedApplications = settings.EffectiveClipboardBlockedApplications
             .Select(item => item.Trim())
             .Where(item => item.Length > 0)
@@ -108,6 +157,8 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
             Hotkeys = settings.EffectiveHotkeys,
             ClipboardBlockedApplications = blockedApplications,
             CompactController = settings.EffectiveCompactController,
+            ActiveConnectionProfileId = activeProfileId,
+            RemoteConnectionProfiles = remoteProfiles,
         };
     }
 }

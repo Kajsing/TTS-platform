@@ -27,6 +27,8 @@ INCLUDED_FILES = (
     "docs/codex/Implement.md",
     "docs/codex/Plan.md",
     "docs/codex/Prompt.md",
+    "docs/reader_remote_security.md",
+    "docs/reader_upgrade_plan.md",
     "docs/v1_completion_audit.md",
     "docs/v1_final_security.md",
     "docs/v1_readiness.md",
@@ -41,6 +43,8 @@ INCLUDED_FILES = (
     "scripts/check_local_reader_bundle.py",
     "scripts/check_local_service_bootstrap.py",
     "scripts/check_model_management_flow.py",
+    "scripts/check_reader_remote_gateway.py",
+    "scripts/check_reader_secure_transport.py",
     "scripts/check_security_defaults.py",
     "scripts/check_v1_completion.py",
     "scripts/check_v1_readiness.py",
@@ -59,10 +63,14 @@ INCLUDED_FILES = (
     "scripts/windows/run_service.cmd",
     "scripts/windows/run_service.ps1",
     "scripts/windows/run_scheduled_service.ps1",
+    "scripts/windows/reader_remote_firewall.ps1",
+    "scripts/windows/reader_secure_transport_probe/Program.cs",
+    "scripts/windows/reader_secure_transport_probe/ReaderSecureTransportProbe.csproj",
 )
 
 INCLUDED_DIRS = (
     "apps/chrome_extension",
+    "apps/desktop_reader/src/TtsPlatform.Reader.Client",
     "apps/tts_service/src",
     "packages/tts_core/src",
     "packages/reader_core/src",

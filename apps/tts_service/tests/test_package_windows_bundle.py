@@ -120,12 +120,23 @@ def test_package_windows_bundle_builds_source_and_extension_bundle(
     assert "tts-platform/scripts/check_security_defaults.py" in names
     assert "tts-platform/scripts/check_local_service_bootstrap.py" in names
     assert "tts-platform/scripts/check_model_management_flow.py" in names
+    assert "tts-platform/scripts/check_reader_remote_gateway.py" in names
+    assert "tts-platform/scripts/check_reader_secure_transport.py" in names
+    assert (
+        "tts-platform/apps/desktop_reader/src/TtsPlatform.Reader.Client/"
+        "RemotePairingClient.cs"
+    ) in names
     assert "tts-platform/scripts/check_v1_completion.py" in names
     assert "tts-platform/scripts/check_v1_readiness.py" in names
     assert "tts-platform/scripts/check_windows_bundle_bootstrap.py" in names
     assert "tts-platform/scripts/check_windows_bundle_install.py" in names
     assert "tts-platform/scripts/check_windows_launchers.py" in names
     assert "tts-platform/scripts/check_windows_service_task.py" in names
+    assert "tts-platform/scripts/windows/reader_remote_firewall.ps1" in names
+    assert (
+        "tts-platform/scripts/windows/reader_secure_transport_probe/"
+        "ReaderSecureTransportProbe.csproj"
+    ) in names
     assert "tts-platform/scripts/demo_real_voice.py" in names
     assert "tts-platform/scripts/package_windows_bundle.py" in names
     assert "tts-platform/scripts/release_check.py" in names

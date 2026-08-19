@@ -3,6 +3,17 @@
 This file records direct runtime dependencies added by TTS Platform Reader.
 Transitive package notices remain available in their respective distributions.
 
+## cryptography 46.x
+
+- Purpose: ECDSA P-256 server identity generation and validation for the optional
+  private-network Reader gateway.
+- Source: <https://github.com/pyca/cryptography>
+- Package: <https://pypi.org/project/cryptography/>
+- License expression: Apache-2.0 OR BSD-3-Clause.
+
+The applicable license texts are distributed with the upstream package. The
+dependency is independently maintained and is not modified by this project.
+
 ## regex 2026.7.19
 
 - Purpose: hard-timeout Unicode regular expressions for untrusted Reader speech rules.

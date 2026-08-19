@@ -52,7 +52,8 @@
           <StackPanel>
             <TextBlock Foreground="White" FontSize="20" FontWeight="SemiBold"
                        Text="TTS Platform Reader" />
-            <TextBlock Foreground="#AFC3D3" FontSize="11" Text="Your local reading workspace" />
+            <TextBlock x:Name="WorkspaceSubtitleText" Foreground="#AFC3D3" FontSize="11"
+                       Text="Local workspace" />
           </StackPanel>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -104,6 +105,17 @@
         </DockPanel>
         <Expander Header="Connection and keyboard settings" Margin="0,7,0,0">
           <StackPanel Margin="0,5,0,0">
+            <DockPanel Margin="0,0,0,7">
+              <Button DockPanel.Dock="Right" Content="Remote access…"
+                      Click="RemoteAccessButton_Click"
+                      AutomationProperties.Name="Manage local and remote Reader workspaces" />
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox x:Name="WorkspaceComboBox" Width="280" DisplayMemberPath="Name"
+                          SelectionChanged="WorkspaceComboBox_SelectionChanged"
+                          AutomationProperties.Name="Active Reader workspace" />
+              </StackPanel>
+            </DockPanel>
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -117,7 +129,7 @@
               <TextBlock Grid.Column="2" Text="Token file" VerticalAlignment="Center" Margin="12,0,5,0" />
               <TextBox Grid.Column="3" x:Name="TokenPathTextBox" AutomationProperties.Name="Token file path" />
               <StackPanel Grid.Column="4" Orientation="Horizontal">
-                <Button Content="Browse…" Click="BrowseTokenButton_Click" />
+                <Button x:Name="BrowseTokenButton" Content="Browse…" Click="BrowseTokenButton_Click" />
                 <Button Content="Save" Click="SaveSettingsButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
               </StackPanel>
             </Grid>

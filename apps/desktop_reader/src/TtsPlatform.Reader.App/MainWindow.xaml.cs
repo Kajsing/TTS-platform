@@ -98,6 +98,7 @@ public partial class MainWindow : Window
     private int _wordHighlightGeneration;
     private bool _wordHighlightJumpInProgress;
     private bool _refreshingFolders;
+    private bool _updatingWorkspaceChoices;
 
     public MainWindow(
         IDesktopSettingsStore settingsStore,
@@ -113,6 +114,7 @@ public partial class MainWindow : Window
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
         ApplySettingsToControls(settings);
+        RefreshWorkspaceChoices();
         ReadingBlocksList.ItemsSource = _readingBlocks;
         FolderFilterComboBox.ItemsSource = _folderFilters;
         FolderFilterComboBox.SelectedIndex = 0;
@@ -440,7 +442,12 @@ public partial class MainWindow : Window
 
     private async Task StartLocalServiceAsync()
     {
-        SetBusy(true, "Starting the local serviceâ€¦");
+        if (!_settings.ActiveConnection.IsLocal)
+        {
+            StatusText.Text = "Switch to Local to start the service on this computer.";
+            return;
+        }
+        SetBusy(true, "Starting the local service...");
         try
         {
             if (!ScheduledServiceController.TryStart(out var message))
@@ -464,6 +471,11 @@ public partial class MainWindow : Window
 
     private async Task StopLocalServiceAsync()
     {
+        if (!_settings.ActiveConnection.IsLocal)
+        {
+            StatusText.Text = "Switch to Local to stop the service on this computer.";
+            return;
+        }
         var confirmation = MessageBox.Show(
             "Stop the local TTS service? Current Reader and browser playback will be interrupted.",
             "Stop local service",
@@ -474,7 +486,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SetBusy(true, "Stopping the local serviceâ€¦");
+        SetBusy(true, "Stopping the local service...");
         try
         {
             await StopUnifiedPlaybackAsync();
@@ -527,7 +539,10 @@ public partial class MainWindow : Window
 
     private async Task RefreshConnectionAsync(bool rebuildClient = false)
     {
-        SetBusy(true, "Checking the local service…");
+        var connection = _settings.ActiveConnection;
+        SetBusy(true, connection.IsLocal
+            ? "Checking the local service…"
+            : $"Connecting to {connection.Name}…");
         try
         {
             var clientWasRebuilt = rebuildClient || _client is null;
@@ -547,7 +562,7 @@ public partial class MainWindow : Window
             {
                 _onboarding = _onboarding with
                 {
-                    Message = "The local service is busy. Current library and voice selection are kept; retry in about a minute.",
+                    Message = "The Reader service is busy. Current library and voice selection are kept; retry in about a minute.",
                 };
             }
             else
@@ -559,8 +574,15 @@ public partial class MainWindow : Window
             {
                 await RefreshHighlighterConfigurationAsync();
                 await RefreshLibraryAsync();
-                _desktopOpenTimer.Start();
-                await CheckDesktopOpenRequestAsync();
+                if (_settings.ActiveConnection.IsLocal)
+                {
+                    _desktopOpenTimer.Start();
+                    await CheckDesktopOpenRequestAsync();
+                }
+                else
+                {
+                    _desktopOpenTimer.Stop();
+                }
             }
             else
             {
@@ -641,6 +663,7 @@ public partial class MainWindow : Window
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
         _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _playback?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _playback = null;
         _playbackPerformance?.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
@@ -649,21 +672,47 @@ public partial class MainWindow : Window
             _privacySessions.SessionsChanged -= PrivacySessions_SessionsChanged;
             _privacySessions.Dispose();
         }
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-        _synthesisHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        ClearDocumentDisplay();
+        var connection = _settings.ActiveConnection;
+        PinnedServerCertificateValidator? certificateValidator = null;
+        ITokenProvider tokenProvider;
+        if (connection.IsLocal)
+        {
+            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            _synthesisHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            tokenProvider = new FileTokenProvider(_settings.EffectiveTokenSource.Path);
+        }
+        else
+        {
+            certificateValidator = new PinnedServerCertificateValidator(
+                connection.ServerSpkiPin ?? throw new ReaderClientConfigurationException(
+                    "The remote workspace has no server identity pin."));
+            _httpClient = new HttpClient(certificateValidator.CreateHttpClientHandler())
+            {
+                Timeout = TimeSpan.FromSeconds(10),
+            };
+            _synthesisHttpClient = new HttpClient(certificateValidator.CreateHttpClientHandler())
+            {
+                Timeout = TimeSpan.FromMinutes(2),
+            };
+            tokenProvider = new ProtectedCredentialTokenProvider(
+                new DpapiCredentialStore(),
+                connection.CredentialId);
+        }
         _privacySessions = new ReaderPrivacySessionStore();
         _privacySessions.SessionsChanged += PrivacySessions_SessionsChanged;
-        var tokenProvider = new FileTokenProvider(_settings.EffectiveTokenSource.Path);
         _client = new ReaderServiceClient(
             _httpClient,
-            _settings.ServiceBaseUrl,
+            connection.ServiceBaseUrl,
             tokenProvider,
-            _privacySessions);
+            _privacySessions,
+            allowRemote: !connection.IsLocal);
         _synthesisClient = new ReaderServiceClient(
             _synthesisHttpClient,
-            _settings.ServiceBaseUrl,
+            connection.ServiceBaseUrl,
             tokenProvider,
-            _privacySessions);
+            _privacySessions,
+            allowRemote: !connection.IsLocal);
         _library = new LibraryPager(_client);
         _readingWindow = new ReadingWindowPager(_client);
         _findLoader = new ArticleFindDocumentLoader(_client);
@@ -676,7 +725,11 @@ public partial class MainWindow : Window
         _playbackPerformance = new JsonlPlaybackPerformanceSink();
         _playback = new ReaderPlaybackCoordinator(
             _client,
-            new ReaderStreamClient(_settings.ServiceBaseUrl, tokenProvider, _privacySessions),
+            new ReaderStreamClient(
+                connection.ServiceBaseUrl,
+                tokenProvider,
+                _privacySessions,
+                certificateValidator),
             new WasapiAudioOutput(),
             _playbackPerformance);
         _playback.StateChanged += Playback_StateChanged;
@@ -703,27 +756,35 @@ public partial class MainWindow : Window
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(222, 245, 228))
             : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 244, 214));
         ActionButton.Visibility = result.Action == SuggestedAction.None ? Visibility.Collapsed : Visibility.Visible;
-        ActionButton.Content = result.Action switch
-        {
-            SuggestedAction.StartService => "Start service",
-            SuggestedAction.ChooseTokenFile => "Choose token file",
-            SuggestedAction.CheckVoiceModels => "Voice setup help",
-            SuggestedAction.EnableReader => "Reader setup help",
-            _ => "Retry",
-        };
+        ActionButton.Content = !_settings.ActiveConnection.IsLocal &&
+            result.Action is SuggestedAction.StartService or SuggestedAction.ChooseTokenFile
+            ? "Retry"
+            : result.Action switch
+            {
+                SuggestedAction.StartService => "Start service",
+                SuggestedAction.ChooseTokenFile => "Choose token file",
+                SuggestedAction.CheckVoiceModels => "Voice setup help",
+                SuggestedAction.EnableReader => "Reader setup help",
+                _ => "Retry",
+            };
         var serviceUnavailable = result.State == ConnectionState.ServiceUnavailable;
+        var localConnection = _settings.ActiveConnection.IsLocal;
         ServiceStatusText.Text = serviceUnavailable
-            ? "Service: stopped"
+            ? localConnection ? "Service: stopped" : "Remote: offline"
             : result.State is ConnectionState.NotChecked or ConnectionState.Checking
-                ? "Service: checking"
-                : "Service: running";
+                ? localConnection ? "Service: checking" : "Remote: connecting"
+                : localConnection ? "Service: running" : "Remote: connected";
         ServiceStatusDot.Fill = serviceUnavailable
             ? new SolidColorBrush(Color.FromRgb(213, 83, 83))
             : result.State is ConnectionState.NotChecked or ConnectionState.Checking
                 ? new SolidColorBrush(Color.FromRgb(224, 165, 43))
                 : new SolidColorBrush(Color.FromRgb(52, 199, 138));
-        StartServiceButton.IsEnabled = serviceUnavailable;
-        StopServiceButton.IsEnabled = !serviceUnavailable || ScheduledServiceController.OwnsRunningService;
+        StartServiceButton.IsEnabled = localConnection && serviceUnavailable;
+        StopServiceButton.IsEnabled = localConnection &&
+            (!serviceUnavailable || ScheduledServiceController.OwnsRunningService);
+        WorkspaceSubtitleText.Text = _settings.ActiveConnection.IsLocal
+            ? "Local workspace · offline capable"
+            : $"Remote workspace · {_settings.ActiveConnection.Name}";
         FooterText.Text = result.State.ToString();
     }
 
@@ -732,10 +793,20 @@ public partial class MainWindow : Window
         switch (_onboarding.Action)
         {
             case SuggestedAction.StartService:
-                await StartLocalServiceAsync();
+                if (_settings.ActiveConnection.IsLocal)
+                {
+                    await StartLocalServiceAsync();
+                }
+                else
+                {
+                    await RefreshConnectionAsync();
+                }
                 break;
             case SuggestedAction.ChooseTokenFile:
-                BrowseForToken();
+                if (_settings.ActiveConnection.IsLocal)
+                {
+                    BrowseForToken();
+                }
                 break;
             case SuggestedAction.CheckVoiceModels:
                 MessageBox.Show(
@@ -779,14 +850,17 @@ public partial class MainWindow : Window
         {
             var normalizedUrl = ServiceBaseUrl.Parse(ServiceUrlTextBox.Text).AbsoluteUri;
             var tokenPath = TokenPathTextBox.Text.Trim();
+            var activeProfileId = (WorkspaceComboBox.SelectedItem as ConnectionChoice)?.Id ?? "local";
             var reconnectRequired = DesktopConnectionPolicy.RequiresReconnect(
                 _settings,
                 normalizedUrl,
-                tokenPath);
+                tokenPath,
+                activeProfileId);
             _settings = _settings with
             {
                 ServiceBaseUrl = normalizedUrl,
                 TokenSource = new TokenSourceSettings("file", tokenPath),
+                ActiveConnectionProfileId = activeProfileId,
                 PreferredVoiceId = SelectedVoiceId() ?? _settings.PreferredVoiceId,
                 ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
                 ClipboardPromptMinimumCharacters = ParseClipboardPromptMinimum(
@@ -807,6 +881,7 @@ public partial class MainWindow : Window
                 },
             };
             await _settingsStore.SaveAsync(_settings);
+            RefreshWorkspaceChoices();
             FooterText.Text = $"Settings saved to {_settingsStore.SettingsPath}";
             if (reconnectRequired || _client is null)
             {
@@ -850,6 +925,63 @@ public partial class MainWindow : Window
         PlayPauseHotkeyTextBox.Text = settings.EffectiveHotkeys.PlayPause;
         StopHotkeyTextBox.Text = settings.EffectiveHotkeys.Stop;
         UpdateClipboardStatus();
+    }
+
+    private void RefreshWorkspaceChoices()
+    {
+        _updatingWorkspaceChoices = true;
+        try
+        {
+            WorkspaceComboBox.Items.Clear();
+            WorkspaceComboBox.Items.Add(new ConnectionChoice("local", "Local", true));
+            foreach (var profile in _settings.EffectiveRemoteConnectionProfiles)
+            {
+                WorkspaceComboBox.Items.Add(new ConnectionChoice(profile.Id, profile.Name, false));
+            }
+            WorkspaceComboBox.SelectedItem = WorkspaceComboBox.Items
+                .OfType<ConnectionChoice>()
+                .FirstOrDefault(choice => string.Equals(
+                    choice.Id,
+                    _settings.ActiveConnectionProfileId,
+                    StringComparison.Ordinal)) ?? WorkspaceComboBox.Items[0];
+            UpdateWorkspaceControls();
+        }
+        finally
+        {
+            _updatingWorkspaceChoices = false;
+        }
+    }
+
+    private void WorkspaceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_updatingWorkspaceChoices)
+        {
+            UpdateWorkspaceControls();
+            FooterText.Text = "Choose Save to switch workspaces.";
+        }
+    }
+
+    private void UpdateWorkspaceControls()
+    {
+        var local = (WorkspaceComboBox.SelectedItem as ConnectionChoice)?.IsLocal != false;
+        ServiceUrlTextBox.IsEnabled = local;
+        TokenPathTextBox.IsEnabled = local;
+        BrowseTokenButton.IsEnabled = local;
+    }
+
+    private async void RemoteAccessButton_Click(object sender, RoutedEventArgs e)
+    {
+        var beforeProfile = _settings.ActiveConnectionProfileId;
+        var dialog = new RemoteAccessDialog(_settingsStore, _settings) { Owner = this };
+        dialog.ShowDialog();
+        _settings = dialog.Settings;
+        ServiceUrlTextBox.Text = _settings.ServiceBaseUrl;
+        TokenPathTextBox.Text = _settings.EffectiveTokenSource.Path;
+        RefreshWorkspaceChoices();
+        if (!string.Equals(beforeProfile, _settings.ActiveConnectionProfileId, StringComparison.Ordinal))
+        {
+            await RefreshConnectionAsync(rebuildClient: true);
+        }
     }
 
     private void UpdateVoiceOptions(VoicePage? page)
@@ -1772,7 +1904,12 @@ public partial class MainWindow : Window
 
     private async void ManageFoldersButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new FolderManagerDialog(GetClient()) { Owner = this };
+        var dialog = new FolderManagerDialog(
+            GetClient(),
+            allowPrivacyAdministration: _settings.ActiveConnection.IsLocal)
+        {
+            Owner = this,
+        };
         _ = dialog.ShowDialog();
         if (dialog.Changed)
         {
@@ -3736,10 +3873,11 @@ public partial class MainWindow : Window
         }
         else
         {
+            var local = _settings.ActiveConnection.IsLocal;
             var serviceUnavailable = _onboarding.State == ConnectionState.ServiceUnavailable;
-            StartServiceButton.IsEnabled = serviceUnavailable;
-            StopServiceButton.IsEnabled = !serviceUnavailable ||
-                ScheduledServiceController.OwnsRunningService;
+            StartServiceButton.IsEnabled = local && serviceUnavailable;
+            StopServiceButton.IsEnabled = local && (!serviceUnavailable ||
+                ScheduledServiceController.OwnsRunningService);
         }
         if (text is not null)
         {
@@ -3752,6 +3890,8 @@ public partial class MainWindow : Window
         string DisplayName,
         bool PrivacyLocked,
         bool PrivacyUnlocked);
+
+    private sealed record ConnectionChoice(string Id, string Name, bool IsLocal);
 
     private sealed record VoiceChoice(VoiceDescriptor Voice, bool IsServiceDefault)
     {
