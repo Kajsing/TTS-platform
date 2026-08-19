@@ -14,16 +14,15 @@ This file is the live status log and shared memory for future Codex loops.
   Track A (U1 through U3) and Track B (U4 through U6) are complete. The upgrade
   track is deliberately prioritized ahead of Reader Milestones 10 and 11,
   which remain incomplete. U6 is approved as an application-level privacy lock
-  without encryption at rest in its first version. U7 must amend the localhost
-  security architecture before any remote server implementation can begin;
-  internet reachability should use a user-managed VPN rather than direct public
-  exposure in the first remote version.
-- Reader Upgrade U7's threat model, architecture decision, and isolated Windows
-  transport spike are complete. The recommended first beta preserves the
-  existing localhost listener behind a separate disabled secure gateway, uses
-  pinned HTTPS/WSS plus per-device credentials, and makes no firewall or remote
-  binding change in U7. The design awaits explicit user approval; U8 remains
-  unauthorized until that approval and a new request to continue.
+  without encryption at rest in its first version. U7 has amended the localhost
+  security architecture while preserving Local as the default; first-version
+  internet reachability uses owner-managed WireGuard rather than direct public
+  Reader exposure.
+- Reader Upgrade U7 is complete. Its threat model, architecture decision, and
+  isolated Windows transport spike preserve the existing loopback Reader as the
+  default local workspace and specify a separate disabled secure gateway for
+  U8. On 2026-08-19 the user approved owner-managed WireGuard as the recommended
+  first remote transport. U8 remains unstarted pending an explicit request.
 - Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
   now use a configurable trimmed-character threshold (50 by default, 0 to
   disable), offer a persistent five-minute pause, show its local expiry time,
@@ -2137,13 +2136,14 @@ python3 scripts/package_windows_bundle.py
 ## Reader Upgrade U7: Remote Security Design And Windows Spike (2026-08-19)
 
 - `docs/reader_remote_security.md` now defines the first remote Reader as a
-  single-owner trusted-LAN/VPN feature. It preserves the current loopback
+  single-owner private-network feature. It preserves the current loopback
   service and adds a separate disabled-by-default secure gateway in U8, bound
-  to one selected private address rather than a wildcard.
+  to one selected private or WireGuard address rather than a wildcard.
 - The selected transport uses TLS 1.3 where available with TLS 1.2 as the
   minimum, an ECDSA P-256 server identity, SHA-256 SPKI pinning in both HTTP and
-  WebSocket clients, and no certificate-warning bypass. Direct public exposure
-  is unsupported; a user-owned VPN is the remote-internet boundary.
+  WebSocket clients, and no certificate-warning bypass. Direct public Reader
+  exposure is unsupported; owner-managed WireGuard is the first approved
+  remote-internet boundary.
 - Pairing is out of band with a ten-minute, one-use, 256-bit invitation secret
   that installs the server pin before the client sends anything. Every device
   receives its own 256-bit credential, stored protected on Windows and only as
@@ -2177,9 +2177,17 @@ python3 scripts/package_windows_bundle.py
   The latter's first run hit the same existing three-second playback timing
   test seen during U6; that test passed immediately in isolation and the full
   desktop check then passed on its required rerun.
-- U7 has one remaining acceptance item: explicit user approval of the proposed
-  design. Do not mark U7 complete or begin U8 until the user approves it. The
+- On 2026-08-19 the user approved the revised U7 direction: preserve the local
+  Reader as the default offline-capable workspace, add Remote only as an
+  explicit opt-in, use owner-managed WireGuard as the recommended first
+  internet transport, and keep that network layer replaceable. U7 is complete.
+  U8 has not started and still requires a separate explicit request. The
   user-owned `models/MANIFEST.json` remains excluded.
+- U7 approval closeout validation passed all 434 Python tests, Ruff, all 129
+  .NET Release tests through the existing user-local .NET 10 SDK, .NET format,
+  localhost security-default checks, and `git diff --check`. This closeout
+  changed documentation only and did not enable a listener, firewall rule,
+  WireGuard configuration, or remote credential.
 
 ## Known Issues And Follow-Ups
 
@@ -2244,10 +2252,10 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Upgrade U1 through U6 are complete. U7's design and Windows spike are
-   complete and await the user's explicit approve/revise decision. Do not expose
-   the service remotely or begin U8 without that approval and a new explicit
-   request to continue. Reader Workstation Milestones 10 and 11 remain deferred.
+4. Reader Upgrade U1 through U7 are complete. U7 preserves Local as the default
+   and approves optional Remote profiles over owner-managed WireGuard. Do not
+   expose the service remotely or begin U8 without a new explicit request to
+   continue. Reader Workstation Milestones 10 and 11 remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

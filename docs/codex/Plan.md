@@ -628,14 +628,17 @@ user-approved reorder:
 - [x] U4: Folder-backed library organization.
 - [x] U5: Batch import and text-only HTML workflow.
 - [x] U6: Folder privacy lock, after its security decision gate.
-- [ ] U7: Remote Reader security and architecture decision; design/spike passed,
-  awaiting explicit user approval.
-- [ ] U8: Secure LAN server beta, only after U7 approval.
+- [x] U7: Remote Reader security and architecture decision; design/spike passed,
+  and the optional WireGuard/private-network direction was approved on
+  2026-08-19.
+- [ ] U8: Secure private-network server beta, awaiting an explicit start
+  request.
 
 This track is prioritized ahead of Reader Milestones 10 and 11. Those original
 milestones remain incomplete and are not removed from the 1.0 plan.
 
-U1 through U6 are complete. U7's design and Windows spike passed on 2026-08-19;
-the next resume point is the user's explicit approve/revise decision. Do not
-enable remote binding or begin U8 until the user approves the U7 security design
-and explicitly asks to continue.
+U1 through U7 are complete. The approved remote architecture preserves the
+current localhost Reader as the default, adds remote workspaces only as an
+explicit opt-in, and recommends owner-managed WireGuard without coupling Reader
+to a VPN vendor. Do not enable remote binding or begin U8 until the user
+explicitly asks to continue.

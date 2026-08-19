@@ -2,11 +2,12 @@
 
 ## Status
 
-The user approved this upgrade track on 2026-08-17. Track A (U1 through U3) and
-Track B (U4 through U6) are complete. U7's threat model, architecture decision,
-and Windows feasibility spike are complete and awaiting the user's explicit
-security-design approval. That approval is not authorization to expose the
-current service remotely or begin U8 unless the user also asks to continue.
+The user approved this upgrade track on 2026-08-17. Track A (U1 through U3),
+Track B (U4 through U6), and the U7 remote-security decision are complete. On
+2026-08-19 the user approved an optional remote workspace over owner-managed
+WireGuard while preserving the existing local Reader as the default. That
+approval is not authorization to expose the current service remotely or begin
+U8 unless the user also asks to continue.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
@@ -24,6 +25,11 @@ protected baselines.
   synchronize the live SQLite file.
 - Localhost remains the default. Planning a remote mode does not authorize
   exposing the current plain-HTTP service.
+- Local and remote workspaces remain separate in the first remote version. A
+  remote connection must not overwrite, migrate, or disable the local library.
+- WireGuard is the recommended first private-network transport, but it remains
+  outside the Reader protocol and can be replaced without changing Reader data
+  or API contracts.
 - The local `C:\project\Word-Highlighter` project is a product-behavior
   reference for U3: stable term colors, active toggles, occurrence counts, and
   jump-to-next behavior. Reader receives its own tested implementation rather
@@ -228,7 +234,7 @@ Implemented session and safety boundary:
   folders conceal names and article counts, and protected documents are absent
   from list/search/queue/export/diagnostic/open-request results until unlocked.
 
-### U7: Remote Reader security and architecture decision
+### U7: Remote Reader security and architecture decision — complete
 
 **Purpose:** Design single-owner access from another computer without weakening
 the protected localhost baseline.
@@ -241,8 +247,8 @@ rejects non-localhost addresses.
 
 Required decisions and spike evidence:
 
-- Limit the first product to the owner's trusted LAN; internet access should use
-  a user-managed VPN rather than direct public port exposure.
+- Limit the first product to an owner-controlled private network. Internet
+  access uses self-hosted WireGuard rather than direct public Reader exposure.
 - Choose HTTPS/WSS certificate creation and client certificate-pinning behavior.
 - Design one-time pairing, per-device credentials, revocation, and rotation.
 - Decide which Reader APIs a remote device may use and how rate limits apply per
@@ -273,27 +279,35 @@ Completed design and spike evidence:
   firewall state, and removed all temporary files.
 - U7 added no production listener, remote credential, config profile, firewall
   rule, cloud/paid dependency, or change to the desktop localhost validator.
-- The remaining acceptance item is the user's explicit approval of
-  `docs/reader_remote_security.md`; U8 stays blocked until then.
+- On 2026-08-19 the user approved the revised design: the current local Reader
+  remains available and default, remote access is an optional mode, and
+  self-hosted WireGuard is the recommended first transport. U8 still requires
+  a separate explicit start request.
 
-### U8: Secure LAN server beta
+### U8: Secure private-network server beta
 
 **Purpose:** Let a paired Reader desktop on another computer use the service,
 library, folders, and TTS engine on the owner-controlled server computer.
 
 Implementation scope depends on U7, but must include:
 
-- Explicit disabled-by-default LAN server profile and selected bind interface.
+- Explicit disabled-by-default remote server profile and selected private or
+  WireGuard bind interface.
 - HTTPS/WSS only for non-loopback clients.
 - One-time pairing and per-device protected credentials.
 - Connected-device list, last-used metadata, revocation, and rotation.
-- Remote connection profiles in the desktop Reader.
+- Named Local and Remote connection profiles in the desktop Reader. Local is
+  the default, continues to use the existing localhost service and library,
+  and remains healthy when remote access is unavailable or disabled.
 - Reversible firewall configuration and clear diagnostics.
 - Windows integration smoke using two logical clients and conflict tests.
+- WireGuard setup remains an external, replaceable prerequisite; Reader does
+  not install, configure, or require a hosted VPN control service.
 
-The server beta is not multi-user collaboration, cloud sync, or public-internet
-hosting. Remote clients use the server-owned library; they do not synchronize
-SQLite files or maintain an offline replica in this milestone.
+The server beta is not multi-user collaboration, cloud sync, or direct public
+Reader hosting. It may be reached across the internet only inside the approved
+private network. Remote clients use the server-owned library; they do not
+synchronize SQLite files or maintain an offline replica in this milestone.
 
 ## Deferred Reader milestones
 
@@ -304,9 +318,8 @@ track.
 
 ## Current resume point
 
-U1 through U6 are complete. U7 design and Windows spike passed on 2026-08-19;
-resume by recording the user's approve/revise decision. Do not begin U8 merely
-because U7's technical work passed. U8 requires explicit approval and a new
-request to continue. U3 deliberately begins with one global literal/phrase
-list; the per-article expansion decision remains deferred until the global
-behavior has been used in practice.
+U1 through U7 are complete. Resume at U8 only after the user explicitly asks to
+start it. U8 must preserve the working local Reader and implement remote access
+as a disabled-by-default, replaceable private-network mode. U3 deliberately
+begins with one global literal/phrase list; the per-article expansion decision
+remains deferred until the global behavior has been used in practice.

@@ -3,9 +3,9 @@
 ## Status
 
 This document is the Reader Upgrade U7 threat model and architecture decision.
-The design and Windows transport spike are complete as of 2026-08-19. Product
-implementation remains disabled and requires explicit user approval before U8
-may begin.
+The design and Windows transport spike are complete as of 2026-08-19. The user
+approved the optional, owner-managed WireGuard direction on 2026-08-19. Product
+implementation remains disabled; U8 requires a separate explicit start request.
 
 Nothing in U7 binds the service to a LAN address, changes Windows Firewall, or
 allows a remote credential. The normal service remains plain HTTP on
@@ -14,25 +14,30 @@ addresses.
 
 ## Decision summary
 
-The first remote Reader will be a single-owner, trusted-network feature with
+The first remote Reader will be a single-owner, private-network feature with
 these boundaries:
 
 1. Keep the existing localhost listener and its clients unchanged.
-2. Add a separate, disabled-by-default secure Reader gateway in U8.
-3. Bind that gateway to one explicitly selected private or VPN interface
+2. Keep Local as the default workspace. Its existing localhost service,
+   library, models, and offline behavior do not depend on remote access.
+3. Add a separate, disabled-by-default secure Reader gateway in U8.
+4. Bind that gateway to one explicitly selected private or VPN interface
    address, never a wildcard address.
-4. Accept only HTTPS and WSS on the gateway. Do not open or redirect a plain
+5. Accept only HTTPS and WSS on the gateway. Do not open or redirect a plain
    HTTP LAN port.
-5. Give the gateway an ECDSA P-256 server identity and pin its SHA-256 Subject
+6. Give the gateway an ECDSA P-256 server identity and pin its SHA-256 Subject
    Public Key Info (SPKI) in each paired desktop profile.
-6. Pair out of band with a short-lived invitation containing the endpoint,
+7. Pair out of band with a short-lived invitation containing the endpoint,
    SPKI pin, and a high-entropy one-time secret.
-7. Give every paired computer its own high-entropy, revocable credential.
-8. Use the existing Reader API, stable IDs, content revisions, and row-version
+8. Give every paired computer its own high-entropy, revocable credential.
+9. Use the existing Reader API, stable IDs, content revisions, and row-version
    conflicts. Never copy or synchronize the live SQLite database.
-9. Keep direct public-internet exposure unsupported. Remote internet use goes
-   through a VPN configured and owned by the user.
-10. Keep the Chrome extension outside the first remote slice.
+10. Keep Local and Remote as separate workspaces in the first version. Switching
+    profiles never migrates, replaces, or merges the local library.
+11. Keep direct public Reader exposure unsupported. Remote internet use goes
+    through owner-managed WireGuard. Reader does not depend on a hosted VPN
+    account or control plane, and the transport remains replaceable.
+12. Keep the Chrome extension outside the first remote slice.
 
 The secure gateway is preferred over changing the existing listener because it
 preserves the known localhost contract for the WPF Reader, Chrome extension,
@@ -45,15 +50,20 @@ request reaches the local service.
 ### In scope for the first beta
 
 - one owner and their explicitly paired Windows computers;
-- a trusted home/work LAN marked Private in Windows, or an owner-managed VPN;
+- the existing local Windows Reader as a complete, offline-capable default;
+- an owner-controlled private network, with self-hosted WireGuard as the
+  recommended internet transport and trusted LAN as an optional local path;
 - online access to the server-owned library, folders, rules, bookmarks, queue,
   imports, exports, editing, and TTS playback;
+- named local and remote desktop connection profiles;
 - no offline remote replica;
 - revocation of a lost or retired client computer.
 
 ### Out of scope
 
-- public port forwarding, public DNS hosting, or a cloud relay;
+- forwarding the Reader HTTPS/WSS port, public Reader DNS/TLS hosting, or a
+  third-party cloud relay required by Reader;
+- installing or administering WireGuard from inside Reader;
 - anonymous, guest, or multi-user accounts;
 - collaborative editing or automatic conflict merging;
 - synchronization of SQLite files;
@@ -95,7 +105,7 @@ audio. U8 does not claim to protect against that stronger local compromise.
 
 | Threat | Required control | Residual risk |
 | --- | --- | --- |
-| LAN traffic is read or modified | TLS 1.3 preferred, TLS 1.2 minimum; HTTPS/WSS only | Endpoint traffic remains visible to the two Windows machines themselves |
+| Private-network traffic is read or modified | WireGuard plus TLS 1.3 preferred, TLS 1.2 minimum; HTTPS/WSS only | Endpoint traffic remains visible to the two Windows machines themselves |
 | Active man-in-the-middle during pairing | Invitation carries the SPKI pin before network contact; no certificate-warning bypass or trust-on-first-click | The invitation must be transferred through a channel the owner trusts |
 | False server after pairing | Exact SPKI pin, hostname/SAN, expiry, and server-auth usage validation for both HTTP and WebSocket | Server-key compromise requires revocation and re-pairing |
 | Stolen shared localhost token | Local token is never accepted by the gateway and never sent to a remote client | Same-user server malware remains out of scope |
@@ -104,7 +114,7 @@ audio. U8 does not claim to protect against that stronger local compromise.
 | Credential replay | TLS, protected client storage, device-specific credential, last-used visibility, revoke and rotate | A copied live bearer remains usable until revoked; request signing is deferred |
 | Malicious web origin | Remote gateway rejects every request carrying an `Origin` header in the first beta; no CORS; no WebSocket token in a start message | A compromised native paired client retains its authorized access |
 | DNS rebinding or forged proxy headers | Pin the server key; use the socket peer/local address; ignore and strip forwarded-IP headers | None beyond server/key compromise |
-| Public exposure by mistake | Disabled profile, exact private bind address, Private-profile/LocalSubnet firewall rule, prominent unsupported warning | NAT port forwarding cannot be detected reliably; the user must not configure it |
+| Public Reader exposure by mistake | Disabled profile, exact private/VPN bind address, narrow firewall rule, prominent unsupported warning | NAT port forwarding cannot be detected reliably; the Reader gateway must never be forwarded |
 | Request flooding | Pre-auth IP limit, post-auth device limit, one active speech stream per device, existing global TTS/export limits | A paired device can still consume some local compute until revoked |
 | API privilege expansion | Positive remote endpoint allow-list; deny unknown and administrative paths before proxying | The allow-list must be reviewed whenever new routes are added |
 | Private text in caches or logs | `Cache-Control: no-store`; existing low-sensitivity logging; gateway logs only IDs, counts, device ID, outcome, and timing | OS memory, screen capture, and explicit client exports remain outside this control |
@@ -148,7 +158,7 @@ gateway fails or is stopped.
 ### Creation
 
 - Generate one ECDSA P-256 identity key when the owner explicitly enables the
-  LAN profile.
+  remote profile.
 - Store the private key under the current user's Reader remote-access directory
   with an ACL limited to that user and administrators. This is filesystem
   protection, not hardware-backed key storage or encryption at rest.
@@ -222,7 +232,7 @@ codes, and recovery keys never enter ordinary logs.
   old. An unconfirmed rotation expires without locking out the client.
 - The server UI lists device name, paired time, last-used time, current status,
   and Revoke/Rotate actions. It never displays a credential.
-- Removing the LAN profile revokes every device, deletes pending invitations,
+- Removing the remote profile revokes every device, deletes pending invitations,
   removes the exact firewall rule, and stops the gateway. Library data remains.
 
 ## Remote API policy
@@ -302,9 +312,12 @@ The created rule must use:
 - one stable internal name containing the Reader remote-profile ID;
 - inbound TCP only;
 - the exact selected local IP and configured port;
-- `RemoteAddress LocalSubnet` for the LAN preset, or an explicitly selected VPN
-  subnet/address for a VPN preset;
+- `RemoteAddress LocalSubnet` for the optional LAN preset, or an explicitly
+  selected WireGuard peer/subnet for the recommended VPN preset;
 - Windows `Private` profile only for the LAN preset;
+- for the WireGuard preset, the exact tunnel interface alias plus its exact
+  current Windows network profile; never an unrestricted interface or `Any`
+  profile;
 - the exact packaged gateway executable/interpreter path;
 - no edge traversal and no wildcard local address.
 
@@ -313,7 +326,7 @@ Conceptual PowerShell shape:
 ```powershell
 New-NetFirewallRule `
   -Name "TTSPlatform.Reader.Remote.<profile-id>" `
-  -DisplayName "TTS Platform Reader secure LAN access" `
+  -DisplayName "TTS Platform Reader secure remote access" `
   -Group "TTS Platform Reader" `
   -Direction Inbound `
   -Action Allow `
@@ -325,10 +338,14 @@ New-NetFirewallRule `
   -Program <exact-gateway-program>
 ```
 
-Setup first previews the rule, verifies the active network category, and asks
-for elevation. It refuses Public networks, `0.0.0.0`, `::`, `Any` profile, and
-`Any` remote address. Re-running setup is idempotent only when every property
-matches; a conflicting existing rule is reported rather than broadened.
+Setup first previews the rule, verifies the active interface and network
+category, and asks for elevation. The LAN preset refuses Public networks. The
+WireGuard preset may match a Public-classified tunnel only when the rule also
+matches the exact tunnel interface alias, private local address, and explicit
+peer/subnet. Both presets refuse `0.0.0.0`, `::`, `Any` profile, unrestricted
+interfaces, and `Any` remote address. Re-running setup is idempotent only when
+every property matches; a conflicting existing rule is reported rather than
+broadened.
 
 Disable/uninstall removes only the exact stored rule name:
 
@@ -340,18 +357,26 @@ Status reads the rule and its address/application filters back and compares
 them with the saved profile. A firewall rule is defense in depth; missing
 authentication or TLS is never excused by a narrow rule.
 
-## Internet access through a VPN
+## Internet access through owner-managed WireGuard
 
-Reader will not install, configure, or require a particular VPN product. A VPN
-may make the server's private/VPN address reachable while keeping Reader's
-gateway non-public. The same TLS pin and device credential remain mandatory,
-because the VPN is an additional network boundary rather than a replacement for
-Reader authentication.
+The first supported remote-internet path is an owner-managed WireGuard network.
+WireGuard is not part of the Reader protocol: Reader will not install, update,
+configure, or administer it. The operator supplies a working WireGuard address,
+and the Reader gateway binds only to that exact private address. This keeps the
+transport replaceable if another self-hosted VPN is selected later.
 
-Direct router port forwarding, UPnP/NAT-PMP opening, a public reverse proxy, and
-public HTTP(S) hosting are unsupported. If public hosting is ever proposed, it
-requires a new threat model covering public certificates, account recovery,
-abuse response, patching, Internet-scale rate limiting, and service isolation.
+The WireGuard endpoint itself may require an owner-configured public UDP
+endpoint, router forwarding, dynamic DNS, or equivalent reachability. That is
+separate from the Reader gateway: the Reader HTTPS/WSS port is never forwarded
+or bound to a public interface. The same TLS pin and device credential remain
+mandatory because WireGuard is an additional network boundary rather than a
+replacement for Reader authentication.
+
+Reader never performs UPnP/NAT-PMP changes. Direct Reader port forwarding, a
+public Reader reverse proxy, and public Reader HTTP(S) hosting are unsupported.
+If public Reader hosting is ever proposed, it requires a new threat model
+covering public certificates, account recovery, abuse response, patching,
+Internet-scale rate limiting, and service isolation.
 
 ## U7 Windows feasibility spike
 
@@ -393,6 +418,10 @@ gateway, pairing store, device UI, or firewall implementation.
 U8 is complete only when all of these pass:
 
 - localhost behavior and existing clients remain unchanged;
+- Local is the default workspace, works without WireGuard or internet access,
+  and retains its own existing local library and models;
+- Remote profiles are explicit, separate from Local, and cannot overwrite or
+  silently migrate the local library;
 - secure profile is absent/disabled by default and cannot bind a wildcard;
 - non-loopback startup refuses missing TLS, missing device store, public IP,
   wrong SAN, or unsafe firewall state;
@@ -410,7 +439,7 @@ U8 is complete only when all of these pass:
 - firewall create/status/remove is idempotent, exact, reversible, and tested on
   Windows without leaving a rule behind;
 - disabling remote access closes the listener, revokes devices, clears pending
-  pairing tickets, and leaves localhost Reader operation healthy;
+  pairing tickets, and leaves localhost Reader operation and data healthy;
 - a scoped security review reports no unhandled high/critical findings.
 
 ## References
@@ -422,3 +451,5 @@ U8 is complete only when all of these pass:
 - [.NET `SubjectAlternativeNameBuilder`](https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.subjectalternativenamebuilder)
 - [Microsoft `New-NetFirewallRule`](https://learn.microsoft.com/powershell/module/netsecurity/new-netfirewallrule)
 - [Microsoft Windows Firewall command-line management](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/configure-with-command-line)
+- [WireGuard project and protocol overview](https://www.wireguard.com/)
+- [WireGuard platform installers](https://www.wireguard.com/install/)
