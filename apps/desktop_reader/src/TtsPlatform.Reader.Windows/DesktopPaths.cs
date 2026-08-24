@@ -18,7 +18,8 @@ public static class DesktopPaths
         "service-process.json");
 
     public static string PlaybackPerformanceLogPath => Path.Combine(
-        ReaderHome,
-        "logs",
+        PlaybackLogDirectory,
         "playback-performance.jsonl");
+
+    public static string PlaybackLogDirectory => Path.Combine(ReaderHome, "logs");
 }

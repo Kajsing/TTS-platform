@@ -165,16 +165,52 @@ public sealed class PlaybackTests
         await playback.PlayAsync(Document());
         await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
 
-        var packets = diagnostics.Events.Where(item => item.Name == "audio_packet").ToArray();
-        Assert.Equal(2, packets.Length);
-        Assert.Equal([0, 1], packets.Select(item => item.ChunkIndex));
+        var packets = diagnostics.Events.Where(item => item.Name == "audio_packet_sample").ToArray();
+        Assert.Single(packets);
+        Assert.Equal(0, packets[0].ChunkIndex);
         Assert.All(packets, item => Assert.Equal("doc", item.DocumentId));
         Assert.All(packets, item => Assert.Equal(4, item.PcmBytes));
         Assert.All(packets, item => Assert.NotNull(item.BufferAfterMs));
-        Assert.Contains(diagnostics.Events, item => item.Name == "stream_done");
+        var summary = Assert.Single(diagnostics.Events, item => item.Name == "stream_done");
+        Assert.Equal(2, summary.PacketCount);
+        Assert.Equal(8, summary.TotalPcmBytes);
+        Assert.Equal(125, summary.MinBufferMs);
+        Assert.Equal(125, summary.MaxBufferMs);
+        Assert.True(summary.DocumentComplete);
+        var request = Assert.Single(diagnostics.Events, item => item.Name == "playback_requested");
+        Assert.Equal("document_start", request.StartMode);
+        Assert.False(string.IsNullOrWhiteSpace(request.RunId));
+        Assert.All(
+            diagnostics.Events.Where(item => item.Name != "playback_interrupt_requested"),
+            item => Assert.Equal(request.RunId, item.RunId));
         Assert.DoesNotContain(
             diagnostics.Events,
             item => item.ErrorCategory is not null);
+    }
+
+    [Fact]
+    public async Task Playback_samples_routine_packets_but_keeps_the_complete_window_summary()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(request => SessionWithPacketCount(request, 60));
+        var diagnostics = new FakePerformanceSink();
+        await using var playback = new ReaderPlaybackCoordinator(
+            service,
+            streams,
+            new FakeAudioOutput(),
+            diagnostics);
+
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Completed);
+
+        var samples = diagnostics.Events
+            .Where(item => item.Name == "audio_packet_sample")
+            .ToArray();
+        Assert.Equal([0, 49], samples.Select(item => item.ChunkIndex));
+        Assert.Equal([1, 50], samples.Select(item => item.PacketCount));
+        var summary = Assert.Single(diagnostics.Events, item => item.Name == "stream_done");
+        Assert.Equal(60, summary.PacketCount);
+        Assert.Equal(240, summary.TotalPcmBytes);
     }
 
     [Fact]
@@ -287,6 +323,17 @@ public sealed class PlaybackTests
             Started(request),
             new ReaderStreamDone("stream", next, false, true),
         ]);
+    }
+
+    private static FakeStreamSession SessionWithPacketCount(
+        ReaderStreamStartRequest request,
+        int packetCount)
+    {
+        var events = new List<ReaderStreamEvent> { Started(request) };
+        events.AddRange(Enumerable.Range(0, packetCount).Select(
+            index => Packet(request, index, 0, 1)));
+        events.Add(new ReaderStreamDone("stream", Cursor(request, 1), true, false));
+        return new FakeStreamSession(events);
     }
 
     private static FakeStreamSession CompletedSession(ReaderStreamStartRequest request) => new(

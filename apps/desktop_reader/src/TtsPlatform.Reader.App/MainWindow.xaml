@@ -191,6 +191,14 @@
             <TextBlock x:Name="HotkeyStatusText" Margin="3,5,0,0" Foreground="{StaticResource TextMutedBrush}"
                        Text="Global hotkeys are not registered yet." TextWrapping="Wrap"
                        AutomationProperties.LiveSetting="Polite" />
+            <DockPanel Margin="3,7,0,0">
+              <Button DockPanel.Dock="Left" Content="Open playback logs"
+                      Click="OpenPlaybackLogsButton_Click"
+                      AutomationProperties.Name="Open privacy-safe playback diagnostic logs" />
+              <TextBlock Margin="9,0,0,0" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                         Text="Keeps a bounded current and previous diagnostic file. Article text and titles are not logged." />
+            </DockPanel>
           </StackPanel>
         </Expander>
       </StackPanel>

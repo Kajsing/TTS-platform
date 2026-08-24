@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -737,6 +738,27 @@ public partial class MainWindow : Window
         _playback.RuleWarning += Playback_RuleWarning;
         DocumentsGrid.ItemsSource = _library.Documents;
         UpdatePlaybackControls();
+    }
+
+    private void OpenPlaybackLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        try
+        {
+            Directory.CreateDirectory(DesktopPaths.PlaybackLogDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = DesktopPaths.PlaybackLogDirectory,
+                UseShellExecute = true,
+            });
+            FooterText.Text = "Opened the privacy-safe playback diagnostics folder.";
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            FooterText.Text = $"Playback logs could not be opened: {exception.Message}";
+        }
     }
 
     private IReaderServiceClient GetClient()

@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-19
+- Date: 2026-08-24
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -18,13 +18,18 @@ This file is the live status log and shared memory for future Codex loops.
   security architecture while preserving Local as the default; first-version
   internet reachability uses owner-managed WireGuard rather than direct public
   Reader exposure.
-- Reader Upgrade U7 is complete and U8 is active. The secure private-network
+- Reader Upgrade U7 is complete and U8 is deliberately parked at the user's
+  request. The secure private-network
   beta is implemented behind an explicit disabled profile: the existing
   loopback Reader remains the default, while named Remote profiles use a
   separate pinned HTTPS/WSS gateway. Isolated live gateway validation passes.
   Final U8 acceptance awaits the exact elevated firewall create/status/remove
   pass on the owner's intended WireGuard interface; no rule is currently left
   behind.
+- The active user-requested follow-up is a playback diagnostic capture after
+  several days of intermittent field failures. This is a deliberate reorder,
+  not a change to the Reader Upgrade direction. Playback behavior and buffering
+  policy remain unchanged until the new trace is reviewed.
 - Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
   now use a configurable trimmed-character threshold (50 by default, 0 to
   disable), offer a persistent five-minute pause, show its local expiry time,
@@ -2263,6 +2268,45 @@ python3 scripts/package_windows_bundle.py
   than creating a misleading rule on the wrong interface.
 - The user-owned `models/MANIFEST.json` remains excluded from this work.
 
+## Playback Diagnostic Capture (2026-08-24)
+
+- The user deliberately parked U8 after several days of regular Reader use and
+  requested a diagnostic capture for intermittent playback failures. This slice
+  changes diagnostics only; playback control semantics, audio buffering,
+  synthesis, service exposure, and the remote-access security model are
+  unchanged.
+- The pre-existing desktop performance log was privacy-safe but not actually
+  bounded during a long-running process. The live files had reached about 33 MB
+  and 121 MB because rotation was checked only at sink construction. The Reader
+  now rotates before writes as well as at startup and retains only a current and
+  previous file of approximately 4 MiB each. Existing live files were inspected
+  read-only and were not deleted or rewritten during this implementation. The
+  updated Reader reduces an inherited oversized current log to its bounded tail
+  on first start rather than carrying an oversized generation forward.
+- Diagnostic schema 2 adds random desktop-session and playback-run IDs, Reader
+  build version, requested start mode, explicit Pause/Stop intent, window
+  completion decisions, stable failure metadata, and one complete summary per
+  stream window. Routine audio packets are sampled at the first packet and every
+  fiftieth packet; slow gaps, slow audio submission, and underrun increases are
+  always recorded. This removes the former line-per-roughly-40-ms volume while
+  retaining anomaly evidence and complete aggregate counts.
+- The expanded Connection and keyboard settings panel now provides **Open
+  playback logs**. `docs/playback_diagnostics.md` documents the local path,
+  retention, privacy boundary, and what time/context to note after a field
+  failure. Article titles/text, clipboard contents, tokens, speech-rule text,
+  and import paths remain excluded.
+- Validation passed all 470 Python tests on the required full rerun, Ruff, all
+  144 .NET Release tests (42 client, 76 application, 26 Windows), .NET format,
+  the standalone Release WPF build with zero warnings, and `git diff --check`.
+  The first Python run had one unrelated timing race: a short Reader WebSocket
+  completed before its test sent Cancel. That test passed immediately in
+  isolation and the complete 470-test rerun passed. The full Windows integration
+  smoke was not run because the user's existing Reader process was active and
+  owns the same global hotkeys; it was not stopped or disturbed.
+- The user-owned `models/MANIFEST.json` remains excluded. It is safe to continue
+  using the local Reader after restarting it to load this build, collect the two
+  bounded JSONL files, and review the trace before making playback fixes.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2327,9 +2371,11 @@ python3 scripts/package_windows_bundle.py
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
 4. Reader Upgrade U1 through U7 are complete. U8 implementation is present but
-   disabled; finish its live firewall acceptance on the intended WireGuard
-   interface before marking it complete. Do not expose the Reader port directly
-   to the internet. Reader Workstation Milestones 10 and 11 remain deferred.
+   disabled and deliberately parked; do not resume its live firewall acceptance
+   unless the user asks. Do not expose the Reader port directly to the internet.
+   The active field follow-up is to collect and review the bounded playback logs
+   before changing playback behavior. Reader Workstation Milestones 10 and 11
+   remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

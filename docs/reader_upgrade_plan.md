@@ -282,7 +282,8 @@ Completed design and spike evidence:
 - On 2026-08-19 the user approved the revised design: the current local Reader
   remains available and default, remote access is an optional mode, and
   self-hosted WireGuard is the recommended first transport. The user started U8
-  on 2026-08-19.
+  on 2026-08-19 and deliberately parked it on 2026-08-24 while playback
+  diagnostics are collected.
 
 ### U8: Secure private-network server beta
 
@@ -321,7 +322,8 @@ track.
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall
 create/status/remove pass on the owner's intended WireGuard interface. The
-working local Reader remains the default and remote access remains disabled
+milestone is deliberately parked until the user asks to resume it. The working
+local Reader remains the default and remote access remains disabled
 until that explicit setup. U3 deliberately begins with one global
 literal/phrase list; the per-article expansion decision remains deferred until
 the global behavior has been used in practice.

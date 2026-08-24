@@ -29,6 +29,7 @@ public interface IAudioOutputDiagnostics
 
 public sealed record PlaybackPerformanceEvent(
     string Name,
+    string? RunId = null,
     string? DocumentId = null,
     int? WindowIndex = null,
     int? ChunkIndex = null,
@@ -45,7 +46,23 @@ public sealed record PlaybackPerformanceEvent(
     int? SampleRateHz = null,
     int? Channels = null,
     string? State = null,
-    string? ErrorCategory = null);
+    string? ErrorCategory = null,
+    string? ErrorCode = null,
+    int? StatusCode = null,
+    string? RequestId = null,
+    string? StartMode = null,
+    string? RequestedState = null,
+    bool? RestartFromBeginning = null,
+    int? PacketCount = null,
+    long? TotalPcmBytes = null,
+    long? FirstAudioMs = null,
+    long? MaxGapMs = null,
+    long? MaxOperationMs = null,
+    double? MinBufferMs = null,
+    double? MaxBufferMs = null,
+    long? UnderrunDelta = null,
+    bool? NextWindowAvailable = null,
+    bool? DocumentComplete = null);
 
 public interface IPlaybackPerformanceSink
 {
@@ -80,6 +97,9 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 {
     private static readonly TimeSpan PositionSaveInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan HighlightPollInterval = TimeSpan.FromMilliseconds(20);
+    private const int AudioPacketSampleInterval = 50;
+    private const long SlowPacketGapThresholdMs = 250;
+    private const long SlowAudioSubmitThresholdMs = 200;
     private readonly IReaderServiceClient _serviceClient;
     private readonly IReaderStreamClient _streamClient;
     private readonly IAudioOutput _audioOutput;
@@ -99,6 +119,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     private int? _positionRowVersion;
     private bool _positionCompleted;
     private string? _voice;
+    private string? _runId;
     private ReaderPlaybackState _desiredState = ReaderPlaybackState.Stopped;
 
     public ReaderPlaybackCoordinator(
@@ -139,8 +160,10 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             _document = document;
             _voice = voice;
             ClearPendingAudioProgress();
+            var startMode = "in_memory_position";
             if (startCursor is not null)
             {
+                startMode = "explicit_cursor";
                 ValidateCursorDocument(startCursor, document.Id);
                 _lastFullyPlayedCursor = startCursor;
                 _positionRowVersion = (await _serviceClient.GetPositionAsync(
@@ -154,6 +177,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             {
                 var position = await _serviceClient.GetPositionAsync(document.Id, cancellationToken)
                     .ConfigureAwait(false);
+                startMode = position?.Cursor is null ? "document_start" : "saved_position";
                 _lastFullyPlayedCursor = position?.Cursor ?? await FirstCursorAsync(document, cancellationToken)
                     .ConfigureAwait(false);
                 _positionRowVersion = position?.RowVersion ?? 0;
@@ -161,12 +185,20 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             }
             if (startCursor is null && _positionCompleted)
             {
+                startMode = "restart_after_completion";
                 _lastFullyPlayedCursor = await FirstCursorAsync(document, cancellationToken)
                     .ConfigureAwait(false);
                 _positionCompleted = false;
             }
 
             _desiredState = ReaderPlaybackState.Playing;
+            _runId = Guid.NewGuid().ToString("N");
+            RecordPerformance(new PlaybackPerformanceEvent(
+                "playback_requested",
+                DocumentId: document.Id,
+                BlockOrdinal: _lastFullyPlayedCursor?.BlockOrdinal,
+                CharacterOffset: _lastFullyPlayedCursor?.CharacterOffset,
+                StartMode: startMode));
             _runCancellation = new CancellationTokenSource();
             SetState(ReaderPlaybackState.Playing);
             _runTask = RunAsync(_runCancellation.Token);
@@ -219,7 +251,6 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         var saveTimer = Stopwatch.StartNew();
         var runTimer = Stopwatch.StartNew();
         var windowIndex = 0;
-        long? previousPacketTimestamp = null;
         using var highlightCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken);
         var highlightTask = MonitorPlayedHighlightsAsync(highlightCancellation.Token);
@@ -232,6 +263,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             {
                 var document = _document ?? throw new InvalidOperationException("Playback has no document.");
                 var cursor = _lastFullyPlayedCursor ?? throw new InvalidOperationException("Playback has no cursor.");
+                var windowTimer = Stopwatch.StartNew();
                 var streamOpenTimer = Stopwatch.StartNew();
                 await using var session = await _streamClient.OpenAsync(
                     new ReaderStreamStartRequest(
@@ -253,6 +285,16 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                 var shouldContinue = false;
                 var completed = false;
                 PcmAudioFormat? audioFormat = null;
+                long? previousPacketTimestamp = null;
+                var packetCount = 0;
+                long totalPcmBytes = 0;
+                long? firstAudioMs = null;
+                long? maxGapMs = null;
+                long maxOperationMs = 0;
+                double? minBufferMs = null;
+                double? maxBufferMs = null;
+                var initialUnderruns = AudioSnapshot()?.SuspectedUnderrunCount ?? 0;
+                var latestUnderruns = initialUnderruns;
 
                 await foreach (var streamEvent in session.ReadEventsAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -274,6 +316,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                                 Channels: started.Channels));
                             break;
                         case ReaderAudioPacket packet:
+                            packetCount++;
                             var packetTimestamp = Stopwatch.GetTimestamp();
                             var packetGapMs = previousPacketTimestamp is long previous
                                 ? ElapsedMilliseconds(previous, packetTimestamp)
@@ -282,6 +325,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             var packetFormat = audioFormat
                                 ?? throw new ReaderStreamProtocolException(
                                     "Reader PCM arrived before its audio format.");
+                            firstAudioMs ??= windowTimer.ElapsedMilliseconds;
                             var before = AudioSnapshot();
                             var submitTimer = Stopwatch.StartNew();
                             await _audioOutput.PlayAsync(
@@ -289,23 +333,39 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                                 packetFormat,
                                 cancellationToken).ConfigureAwait(false);
                             var after = AudioSnapshot();
-                            RecordPerformance(new PlaybackPerformanceEvent(
-                                "audio_packet",
-                                DocumentId: document.Id,
-                                WindowIndex: windowIndex,
-                                ChunkIndex: packet.ChunkIndex,
-                                BlockOrdinal: packet.CursorEnd.BlockOrdinal,
-                                CharacterOffset: packet.CursorEnd.CharacterOffset,
-                                ElapsedMs: runTimer.ElapsedMilliseconds,
-                                GapMs: packetGapMs,
-                                OperationMs: submitTimer.ElapsedMilliseconds,
-                                PcmBytes: packet.PcmBytes.Length,
-                                AudioDurationMs: packet.DurationMs,
-                                BufferBeforeMs: before?.BufferedDurationMs,
-                                BufferAfterMs: after?.BufferedDurationMs,
-                                SuspectedUnderruns: after?.SuspectedUnderrunCount,
-                                SampleRateHz: packetFormat.SampleRateHz,
-                                Channels: packetFormat.Channels));
+                            totalPcmBytes += packet.PcmBytes.Length;
+                            maxGapMs = MaxNullable(maxGapMs, packetGapMs);
+                            maxOperationMs = Math.Max(maxOperationMs, submitTimer.ElapsedMilliseconds);
+                            minBufferMs = MinNullable(minBufferMs, after?.BufferedDurationMs);
+                            maxBufferMs = MaxNullable(maxBufferMs, after?.BufferedDurationMs);
+                            var currentUnderruns = after?.SuspectedUnderrunCount ?? latestUnderruns;
+                            var underrunIncreased = currentUnderruns > latestUnderruns;
+                            latestUnderruns = currentUnderruns;
+                            if (ShouldRecordAudioPacket(
+                                packetCount,
+                                packetGapMs,
+                                submitTimer.ElapsedMilliseconds,
+                                underrunIncreased))
+                            {
+                                RecordPerformance(new PlaybackPerformanceEvent(
+                                    "audio_packet_sample",
+                                    DocumentId: document.Id,
+                                    WindowIndex: windowIndex,
+                                    ChunkIndex: packet.ChunkIndex,
+                                    BlockOrdinal: packet.CursorEnd.BlockOrdinal,
+                                    CharacterOffset: packet.CursorEnd.CharacterOffset,
+                                    ElapsedMs: runTimer.ElapsedMilliseconds,
+                                    GapMs: packetGapMs,
+                                    OperationMs: submitTimer.ElapsedMilliseconds,
+                                    PcmBytes: packet.PcmBytes.Length,
+                                    AudioDurationMs: packet.DurationMs,
+                                    BufferBeforeMs: before?.BufferedDurationMs,
+                                    BufferAfterMs: after?.BufferedDurationMs,
+                                    SuspectedUnderruns: after?.SuspectedUnderrunCount,
+                                    SampleRateHz: packetFormat.SampleRateHz,
+                                    Channels: packetFormat.Channels,
+                                    PacketCount: packetCount));
+                            }
                             cancellationToken.ThrowIfCancellationRequested();
                             var submittedCheckpoint = _audioOutput.SubmittedCheckpoint;
                             ScheduleAudioHighlight(
@@ -340,6 +400,9 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                             AcknowledgePlayedHighlights();
                             AcknowledgePlayedAudio();
                             var afterDrain = AudioSnapshot();
+                            minBufferMs = MinNullable(minBufferMs, afterDrain?.BufferedDurationMs);
+                            maxBufferMs = MaxNullable(maxBufferMs, afterDrain?.BufferedDurationMs);
+                            latestUnderruns = afterDrain?.SuspectedUnderrunCount ?? latestUnderruns;
                             RecordPerformance(new PlaybackPerformanceEvent(
                                 "stream_done",
                                 DocumentId: document.Id,
@@ -350,18 +413,45 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                                 OperationMs: drainTimer.ElapsedMilliseconds,
                                 BufferBeforeMs: beforeDrain?.BufferedDurationMs,
                                 BufferAfterMs: afterDrain?.BufferedDurationMs,
-                                SuspectedUnderruns: afterDrain?.SuspectedUnderrunCount));
+                                SuspectedUnderruns: afterDrain?.SuspectedUnderrunCount,
+                                PacketCount: packetCount,
+                                TotalPcmBytes: totalPcmBytes,
+                                FirstAudioMs: firstAudioMs,
+                                MaxGapMs: maxGapMs,
+                                MaxOperationMs: maxOperationMs,
+                                MinBufferMs: minBufferMs,
+                                MaxBufferMs: maxBufferMs,
+                                UnderrunDelta: Math.Max(0, latestUnderruns - initialUnderruns),
+                                NextWindowAvailable: done.NextWindowAvailable,
+                                DocumentComplete: done.DocumentComplete));
                             continueAt = done.Cursor;
                             shouldContinue = done.NextWindowAvailable;
                             completed = done.DocumentComplete;
                             break;
                         case ReaderStreamCancelled:
+                            RecordPerformance(new PlaybackPerformanceEvent(
+                                "stream_cancelled",
+                                DocumentId: document.Id,
+                                WindowIndex: windowIndex,
+                                ElapsedMs: runTimer.ElapsedMilliseconds));
                             shouldContinue = false;
                             break;
                         case ReaderStreamWarning warning:
+                            RecordPerformance(new PlaybackPerformanceEvent(
+                                "stream_warning",
+                                DocumentId: document.Id,
+                                WindowIndex: windowIndex,
+                                ElapsedMs: runTimer.ElapsedMilliseconds,
+                                ErrorCode: NormalizeDiagnosticCode(warning.WarningType)));
                             RuleWarning?.Invoke(this, warning);
                             break;
                         case ReaderStreamError error:
+                            RecordPerformance(new PlaybackPerformanceEvent(
+                                "stream_error",
+                                DocumentId: document.Id,
+                                WindowIndex: windowIndex,
+                                ElapsedMs: runTimer.ElapsedMilliseconds,
+                                ErrorCode: NormalizeDiagnosticCode(error.ErrorType)));
                             throw new ReaderStreamProtocolException(
                                 $"{error.ErrorType}: {error.Message}");
                     }
@@ -406,11 +496,17 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                 ReaderStreamProtocolException or
                 WebSocketException)
         {
+            var apiException = exception as ReaderApiException;
             RecordPerformance(new PlaybackPerformanceEvent(
                 "playback_run_faulted",
                 DocumentId: _document?.Id,
                 ElapsedMs: runTimer.ElapsedMilliseconds,
-                ErrorCategory: exception.GetType().Name));
+                ErrorCategory: exception.GetType().Name,
+                ErrorCode: apiException is null
+                    ? NormalizeDiagnosticCode(exception.GetType().Name)
+                    : NormalizeDiagnosticCode(apiException.ErrorType),
+                StatusCode: apiException?.StatusCode,
+                RequestId: apiException?.RequestId));
             try
             {
                 await _audioOutput.StopAsync(CancellationToken.None).ConfigureAwait(false);
@@ -458,6 +554,13 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         await _transitionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            RecordPerformance(new PlaybackPerformanceEvent(
+                "playback_interrupt_requested",
+                DocumentId: _document?.Id,
+                BlockOrdinal: _lastFullyPlayedCursor?.BlockOrdinal,
+                CharacterOffset: _lastFullyPlayedCursor?.CharacterOffset,
+                RequestedState: requestedState.ToString(),
+                RestartFromBeginning: restartFromBeginning));
             if (_runTask is null || _runTask.IsCompleted)
             {
                 _desiredState = requestedState;
@@ -741,7 +844,10 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     {
         try
         {
-            _performanceSink?.Record(performanceEvent);
+            _performanceSink?.Record(performanceEvent with
+            {
+                RunId = performanceEvent.RunId ?? _runId,
+            });
         }
         catch (Exception)
         {
@@ -752,5 +858,42 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     private static long ElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
         Math.Max(0, (long)Math.Round(
             Stopwatch.GetElapsedTime(startTimestamp, endTimestamp).TotalMilliseconds));
+
+    private static bool ShouldRecordAudioPacket(
+        int packetCount,
+        long? gapMs,
+        long operationMs,
+        bool underrunIncreased) =>
+        packetCount == 1 ||
+        packetCount % AudioPacketSampleInterval == 0 ||
+        gapMs >= SlowPacketGapThresholdMs ||
+        operationMs >= SlowAudioSubmitThresholdMs ||
+        underrunIncreased;
+
+    private static long? MaxNullable(long? current, long? candidate) =>
+        candidate is null ? current : Math.Max(current ?? candidate.Value, candidate.Value);
+
+    private static double? MinNullable(double? current, double? candidate) =>
+        candidate is null ? current : Math.Min(current ?? candidate.Value, candidate.Value);
+
+    private static double? MaxNullable(double? current, double? candidate) =>
+        candidate is null ? current : Math.Max(current ?? candidate.Value, candidate.Value);
+
+    private static string? NormalizeDiagnosticCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = new string(value
+            .Take(64)
+            .Select(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.'
+                ? char.ToLowerInvariant(character)
+                : '_')
+            .ToArray())
+            .Trim('_');
+        return normalized.Length == 0 ? null : normalized;
+    }
 
 }

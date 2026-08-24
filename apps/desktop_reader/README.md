@@ -97,10 +97,11 @@ The Milestone 9 Reader beta provides:
 - Reader diagnostics for database integrity, search capability, document states,
   stream leases, queue size, export states, and low-sensitivity metrics.
 
-- bounded JSONL playback diagnostics containing chunk arrival gaps, submission
-  time, PCM duration, WASAPI buffer duration, and suspected underrun counts at
-  `%LOCALAPPDATA%\TTSPlatform\Reader\logs\playback-performance.jsonl`; no
-  document title, text, token, or imported-file path is recorded.
+- bounded rotating JSONL playback diagnostics containing correlated playback
+  runs, sampled chunk timing, per-window buffer/underrun summaries, control
+  transitions, and stable failure metadata. The settings panel opens the log
+  folder; see `../../docs/playback_diagnostics.md`. No document title, text,
+  token, clipboard content, or imported-file path is recorded.
 - persistent browser-open handoffs polled from the protected local service; a
   saved web document opens only after unsaved edits and active playback are clear.
 - current-article Find with literal, phrase, whole-word, case-sensitive, and
