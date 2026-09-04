@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     ];
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
     private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
+    private readonly SemaphoreSlim _documentLoadLock = new(1, 1);
     private readonly DispatcherTimer _desktopOpenTimer = new()
     {
         Interval = DesktopOpenPollInterval,
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
     private bool _shutdownInProgress;
     private bool _closed;
     private int _documentLoadGeneration;
+    private bool _suppressDocumentSelectionLoad;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
     private PlaybackHighlightAdorner? _continuousHighlightAdorner;
@@ -1321,6 +1323,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        string? refreshFailure = null;
+        var previousSelectionSuppression = _suppressDocumentSelectionLoad;
+        _suppressDocumentSelectionLoad = result.OpenDocument || previousSelectionSuppression;
         try
         {
             await _library.RefreshAsync(
@@ -1333,31 +1338,26 @@ public partial class MainWindow : Window
                 ReaderServiceUnavailableException or
                 ReaderTokenUnavailableException)
         {
-            FooterText.Text = $"{result.Message} Library refresh is delayed: {exception.Message}";
+            refreshFailure = exception.Message;
+        }
+        finally
+        {
+            _library.ReplaceDocument(result.Document);
+            LoadMoreButton.IsEnabled = _library.HasMore;
             if (result.OpenDocument)
             {
-                await LoadDocumentAsync(result.Document);
+                DocumentsGrid.SelectedItem = _library.Documents.FirstOrDefault(item =>
+                    string.Equals(item.Id, result.Document.Id, StringComparison.Ordinal));
             }
-            return;
+            _suppressDocumentSelectionLoad = previousSelectionSuppression;
         }
-        LoadMoreButton.IsEnabled = _library.HasMore;
         if (result.OpenDocument)
         {
-            var current = _library.Documents.FirstOrDefault(item => item.Id == result.Document.Id);
-            if (current is null)
-            {
-                await LoadDocumentAsync(result.Document);
-                FooterText.Text = result.Message;
-                return;
-            }
-            DocumentsGrid.SelectedItem = current;
-            if (_editor is not null &&
-                (DocumentsGrid.SelectedItem as ReaderDocument)?.Id == _editor.Document?.Id)
-            {
-                await LoadDocumentAsync(current);
-            }
+            await LoadDocumentAsync(result.Document);
         }
-        FooterText.Text = result.Message;
+        FooterText.Text = refreshFailure is null
+            ? result.Message
+            : $"{result.Message} Library refresh is delayed: {refreshFailure}";
     }
 
     private bool IsBlockedApplication(string? executable)
@@ -1890,6 +1890,10 @@ public partial class MainWindow : Window
     {
         MoveArticlesButton.IsEnabled = DocumentsGrid.SelectedItems.Count > 0 &&
             _playback?.State is not (ReaderPlaybackState.Playing or ReaderPlaybackState.Paused);
+        if (_suppressDocumentSelectionLoad)
+        {
+            return;
+        }
         if (_editor is null || DocumentsGrid.SelectedItem is not ReaderDocument document)
         {
             return;
@@ -1913,7 +1917,7 @@ public partial class MainWindow : Window
         {
             var selectedDocument = _editor.Document is ReaderDocument current &&
                 string.Equals(current.Id, document.Id, StringComparison.Ordinal)
-                ? current
+                ? ReaderDocumentVersions.PreferNewest(current, document)
                 : document;
             await LoadDocumentAsync(selectedDocument);
         }
@@ -1980,13 +1984,33 @@ public partial class MainWindow : Window
         var loadGeneration = ++_documentLoadGeneration;
         for (var attempt = 0; attempt < 2; attempt++)
         {
+            var retryRateLimit = false;
+            await _documentLoadLock.WaitAsync();
             try
             {
+                if (_closed || loadGeneration != _documentLoadGeneration)
+                {
+                    return;
+                }
                 await LoadDocumentCoreAsync(document);
                 return;
             }
             catch (ReaderApiException exception) when (
                 exception.ErrorType == "rate_limited" && attempt == 0)
+            {
+                retryRateLimit = true;
+            }
+            catch (Exception exception) when (
+                exception is ReaderApiException or ReaderServiceUnavailableException)
+            {
+                FooterText.Text = $"Document: {exception.Message}";
+                return;
+            }
+            finally
+            {
+                _documentLoadLock.Release();
+            }
+            if (retryRateLimit)
             {
                 FooterText.Text =
                     "The local service is temporarily busy. The document is not locked; Reader will retry automatically in one minute.";
@@ -1995,12 +2019,6 @@ public partial class MainWindow : Window
                 {
                     return;
                 }
-            }
-            catch (Exception exception) when (
-                exception is ReaderApiException or ReaderServiceUnavailableException)
-            {
-                FooterText.Text = $"Document: {exception.Message}";
-                return;
             }
         }
     }
@@ -2695,8 +2713,13 @@ public partial class MainWindow : Window
 
         try
         {
+            var (document, _) = await RefreshDocumentForPlaybackAsync(_editor.Document);
+            if (document is null)
+            {
+                return;
+            }
             await StopEphemeralAsync(clearReplay: true);
-            await _playback.PlayAsync(_editor.Document, voice: SelectedVoiceId());
+            await _playback.PlayAsync(document, voice: SelectedVoiceId());
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2723,18 +2746,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        UpdateTextCursorFromContinuousEditor();
-        if (_textCursor is not ReaderCursor cursor)
-        {
-            FooterText.Text = "Place the text cursor in an editable article first.";
-            return;
-        }
-
         try
         {
+            var (refreshedDocument, reloaded) = await RefreshDocumentForPlaybackAsync(document);
+            if (refreshedDocument is null)
+            {
+                return;
+            }
+            if (reloaded)
+            {
+                FooterText.Text =
+                    "The article changed and was refreshed. Place the cursor again, then choose Start at cursor.";
+                return;
+            }
+
+            UpdateTextCursorFromContinuousEditor();
+            if (_textCursor is not ReaderCursor cursor)
+            {
+                FooterText.Text = "Place the text cursor in an editable article first.";
+                return;
+            }
+
             await StopEphemeralAsync(clearReplay: true);
             await _playback.PlayAsync(
-                document,
+                refreshedDocument,
                 voice: SelectedVoiceId(),
                 startCursor: cursor);
         }
@@ -2746,6 +2781,24 @@ public partial class MainWindow : Window
         {
             FooterText.Text = $"Playback: {exception.Message}";
         }
+    }
+
+    private async Task<(ReaderDocument? Document, bool Reloaded)>
+        RefreshDocumentForPlaybackAsync(ReaderDocument displayedDocument)
+    {
+        var latestDocument = await GetClient().GetDocumentAsync(displayedDocument.Id);
+        if (ReaderDocumentVersions.AreSame(displayedDocument, latestDocument))
+        {
+            return (displayedDocument, false);
+        }
+
+        await LoadDocumentAsync(latestDocument);
+        if (_editor?.Document is ReaderDocument loadedDocument &&
+            ReaderDocumentVersions.AreSame(loadedDocument, latestDocument))
+        {
+            return (loadedDocument, true);
+        }
+        return (null, true);
     }
 
     private async void PreviousSectionButton_Click(object sender, RoutedEventArgs e) =>

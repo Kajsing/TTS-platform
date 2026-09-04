@@ -4,7 +4,7 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-08-24
+- Date: 2026-09-04
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
@@ -26,10 +26,13 @@ This file is the live status log and shared memory for future Codex loops.
   Final U8 acceptance awaits the exact elevated firewall create/status/remove
   pass on the owner's intended WireGuard interface; no rule is currently left
   behind.
-- The active user-requested follow-up is a playback diagnostic capture after
-  several days of intermittent field failures. This is a deliberate reorder,
-  not a change to the Reader Upgrade direction. Playback behavior and buffering
-  policy remain unchanged until the new trace is reviewed.
+- The first playback diagnostic field failure has been resolved. Repeated
+  clipboard appends could race a stale library-selection reload against the
+  authoritative append response, leaving the visible article one revision
+  behind the service. The append flow, document loader, and playback preflight
+  now prevent an obsolete Reader cursor from reaching the stream endpoint.
+  Further intermittent playback evidence should still be collected before
+  changing buffering or synthesis behavior.
 - Completed Reader Upgrade U2 and U3 on 2026-08-18. Automatic clipboard prompts
   now use a configurable trimmed-character threshold (50 by default, 0 to
   disable), offer a persistent five-minute pause, show its local expiry time,
@@ -2306,6 +2309,44 @@ python3 scripts/package_windows_bundle.py
 - The user-owned `models/MANIFEST.json` remains excluded. It is safe to continue
   using the local Reader after restarting it to load this build, collect the two
   bounded JSONL files, and review the trace before making playback fixes.
+
+## Stale Cursor After Clipboard Append Fix (2026-09-04)
+
+- A live field failure was reproduced after creating a clipboard article,
+  appending several chapters, and pressing Play. The desktop displayed 74,118
+  characters and 393 blocks while the service held the complete revision-4
+  article with 109,356 characters and 594 blocks. SQLite retained all three
+  applied append operations, so no article content was lost.
+- The privacy-safe playback trace showed five stream attempts failing in 9-10
+  ms before any audio packet. The service correctly rejected the desktop's
+  revision-old cursor as `reader_stale_cursor`; viewport movement was therefore
+  not causal in this occurrence.
+- `ApplyClipboardCaptureResultAsync` now treats the document returned by the
+  append mutation as authoritative, suppresses collection-selection reloads
+  while the library is refreshed, and loads that version exactly once. A
+  version-aware selection policy refuses to replace an already-newer open
+  document with a stale library row.
+- Document loads are serialized and generation checked. A superseded queued
+  load exits before touching the editor, while the newest requested load always
+  has the final commit opportunity. The one-minute rate-limit wait occurs
+  outside the serialization lock.
+- Play now checks the article's current row/content revision with the service
+  before opening a stream. Normal Play transparently reloads a stale article.
+  Start at cursor reloads but asks the user to place the caret again, because a
+  caret from obsolete text must not be guessed or silently remapped.
+- The root shortcut targets the runtime-specific `win-x64` output. That output
+  was still an August 19 binary and therefore also lacked the August 24 bounded
+  diagnostic sink. A fresh self-contained Release publish updated the exact
+  shortcut target, and its hidden WPF render smoke passed. On first normal
+  launch the diagnostic sink can reduce the inherited oversized log to its
+  bounded tail.
+- Validation passed all 470 Python tests, Ruff, all 148 .NET Release tests (42
+  client, 80 application, 26 Windows), .NET format verification, a zero-warning
+  WPF Release build, the self-contained `win-x64` publish, the published-target
+  WPF render smoke, and `git diff --check`.
+- The service and Reader were no longer running at deployment time. No process
+  was terminated. The user-owned `models/MANIFEST.json` remains excluded from
+  the implementation and commit.
 
 ## Known Issues And Follow-Ups
 
