@@ -2344,9 +2344,12 @@ python3 scripts/package_windows_bundle.py
   client, 80 application, 26 Windows), .NET format verification, a zero-warning
   WPF Release build, the self-contained `win-x64` publish, the published-target
   WPF render smoke, and `git diff --check`.
-- The service and Reader were no longer running at deployment time. No process
-  was terminated. The user-owned `models/MANIFEST.json` remains excluded from
-  the implementation and commit.
+- The service and Reader were no longer running at deployment time, so no
+  process was terminated. Both were started normally after deployment; local
+  health returned HTTP 200 and the Reader ran from the updated shortcut target.
+  The bounded sink retained an approximately 4 MiB tail as the previous log and
+  opened a new current log. The user-owned `models/MANIFEST.json` remains
+  excluded from the implementation and commits.
 
 ## Known Issues And Follow-Ups
 
