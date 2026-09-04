@@ -157,6 +157,7 @@ public sealed class JsonDesktopSettingsStore(string? settingsPath = null) : IDes
             Hotkeys = settings.EffectiveHotkeys,
             ClipboardBlockedApplications = blockedApplications,
             CompactController = settings.EffectiveCompactController,
+            PauseForCallsAndAlarms = settings.EffectivePauseForCallsAndAlarms,
             ActiveConnectionProfileId = activeProfileId,
             RemoteConnectionProfiles = remoteProfiles,
         };

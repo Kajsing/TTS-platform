@@ -36,11 +36,30 @@ public sealed class SettingsTests : IDisposable
         Assert.False(loaded.ClipboardMonitoringEnabled);
         Assert.True(loaded.PrivacyMode);
         Assert.False(loaded.CopySelectionAndReadEnabled);
+        Assert.True(loaded.EffectivePauseForCallsAndAlarms);
         Assert.Equal(50, loaded.ClipboardPromptMinimumCharacters);
         Assert.Equal(
             DateTimeOffset.Parse("2026-08-18T17:05:00Z"),
             loaded.ClipboardPromptSnoozedUntilUtc);
         Assert.DoesNotContain("clipboard text", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Settings_store_defaults_interruption_pause_on_and_persists_opt_out()
+    {
+        var settingsPath = Path.Combine(_temporaryDirectory, "settings.json");
+        var store = new JsonDesktopSettingsStore(settingsPath);
+
+        Directory.CreateDirectory(_temporaryDirectory);
+        await File.WriteAllTextAsync(settingsPath, "{\"serviceBaseUrl\":\"http://127.0.0.1:7777/\"}");
+        var legacySettings = await store.LoadAsync();
+        Assert.True(legacySettings.EffectivePauseForCallsAndAlarms);
+
+        await store.SaveAsync(legacySettings with { PauseForCallsAndAlarms = false });
+        var loaded = await store.LoadAsync();
+
+        Assert.False(loaded.EffectivePauseForCallsAndAlarms);
+        Assert.Contains("\"pauseForCallsAndAlarms\": false", await File.ReadAllTextAsync(settingsPath));
     }
 
     [Fact]

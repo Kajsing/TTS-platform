@@ -2351,6 +2351,39 @@ python3 scripts/package_windows_bundle.py
   opened a new current log. The user-owned `models/MANIFEST.json` remains
   excluded from the implementation and commits.
 
+## Desktop Options And Call/Alarm Pause (2026-09-04)
+
+- Reader now has a dedicated **Options...** window with Playback, Clipboard,
+  and Window & shortcuts tabs. Connection URL, workspace, token, voice, and
+  diagnostics remain in the connection panel so behavioral preferences no
+  longer crowd the main window.
+- Playback includes **Pause and resume reading for Teams calls and Windows
+  alarms**. The preference is enabled by default, including for settings files
+  written before the option existed, and can be disabled without restarting
+  Reader.
+- Detection is entirely local and uses Windows audio sessions through the
+  existing NAudio dependency. It recognizes Microsoft Teams render/capture
+  sessions, Windows Clock alarms, and sustained Windows system-alert audio. It
+  does not require a Teams sign-in, Microsoft Graph, a cloud service, or a new
+  paid dependency.
+- Candidate audio must remain present for 450 ms before playback is paused, so
+  short notification sounds are normally ignored. Reader waits two seconds
+  after the detected session clears before resuming. Different short sources
+  cannot be combined to satisfy the activation delay.
+- Reader resumes only playback that this monitor paused. A manual pause or Stop
+  is never auto-resumed; disabling the option also cancels any pending automatic
+  resume. An article with unsaved edits remains paused instead of silently
+  overriding the edit state.
+- Validation passed all 470 Python tests, Ruff, all 162 .NET Release tests (42
+  client, 85 application, 35 Windows), .NET format verification, a zero-warning
+  WPF Release build, an Options-dialog render smoke, and `git diff --check`.
+- Actual Teams-call and Windows-alarm behavior still needs a short field check
+  after the current Reader is restarted onto this build. Windows application
+  audio-session identities can vary between app releases, so the checkbox and
+  failure-safe monitor deliberately make this enhancement optional. The active
+  Reader process was not terminated or replaced because it may contain open
+  user state. The user-owned `models/MANIFEST.json` remains excluded.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.

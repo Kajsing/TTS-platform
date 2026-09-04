@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private ClipboardListener? _clipboardListener;
     private CopySelectionHelper? _copySelection;
     private GlobalHotkeyManager? _hotkeys;
+    private WindowsAudioInterruptionMonitor? _audioInterruptionMonitor;
     private ReaderTrayIcon? _trayIcon;
     private CompactControllerWindow? _compactController;
     private HwndSource? _windowSource;
@@ -60,6 +61,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
     private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
     private readonly SemaphoreSlim _documentLoadLock = new(1, 1);
+    private readonly SemaphoreSlim _audioInterruptionLock = new(1, 1);
     private readonly DispatcherTimer _desktopOpenTimer = new()
     {
         Interval = DesktopOpenPollInterval,
@@ -102,6 +104,9 @@ public partial class MainWindow : Window
     private bool _wordHighlightJumpInProgress;
     private bool _refreshingFolders;
     private bool _updatingWorkspaceChoices;
+    private bool _audioInterruptionActive;
+    private AutomaticPauseKind _automaticPauseKind;
+    private string? _automaticPauseSource;
 
     public MainWindow(
         IDesktopSettingsStore settingsStore,
@@ -116,7 +121,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
-        ApplySettingsToControls(settings);
         RefreshWorkspaceChoices();
         ReadingBlocksList.ItemsSource = _readingBlocks;
         FolderFilterComboBox.ItemsSource = _folderFilters;
@@ -152,12 +156,17 @@ public partial class MainWindow : Window
         var marker = Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_SMOKE_MARKER");
         if (!string.IsNullOrWhiteSpace(marker))
         {
+            var optionsWindow = new OptionsDialog(_settings) { Owner = this };
+            optionsWindow.Show();
+            optionsWindow.UpdateLayout();
+            optionsWindow.Close();
             Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
             File.WriteAllText(
                 marker,
                 JsonSerializer.Serialize(new
                 {
                     rendered = true,
+                    options_rendered = true,
                     title = Title,
                     process_id = Environment.ProcessId,
                 }));
@@ -190,6 +199,10 @@ public partial class MainWindow : Window
         _hotkeys = new GlobalHotkeyManager();
         _hotkeys.Pressed += Hotkeys_Pressed;
         RegisterHotkeys(handle);
+
+        _audioInterruptionMonitor = new WindowsAudioInterruptionMonitor();
+        _audioInterruptionMonitor.Changed += AudioInterruptionMonitor_Changed;
+        _audioInterruptionMonitor.Enabled = _settings.EffectivePauseForCallsAndAlarms;
 
         _trayIcon = new ReaderTrayIcon();
         _trayIcon.Command += TrayIcon_Command;
@@ -407,6 +420,11 @@ public partial class MainWindow : Window
         _closed = true;
         _windowSource?.RemoveHook(WindowMessageHook);
         _hotkeys?.Dispose();
+        if (_audioInterruptionMonitor is not null)
+        {
+            _audioInterruptionMonitor.Changed -= AudioInterruptionMonitor_Changed;
+            _audioInterruptionMonitor.Dispose();
+        }
         _clipboardListener?.Dispose();
         _trayIcon?.Dispose();
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
@@ -424,6 +442,7 @@ public partial class MainWindow : Window
         _desktopOpenTimer.Stop();
         _clipboardSnoozeTimer.Stop();
         _autoAdvanceLock.Dispose();
+        _audioInterruptionLock.Dispose();
         _httpClient?.Dispose();
         _synthesisHttpClient?.Dispose();
         if (_privacySessions is not null)
@@ -886,23 +905,6 @@ public partial class MainWindow : Window
                 TokenSource = new TokenSourceSettings("file", tokenPath),
                 ActiveConnectionProfileId = activeProfileId,
                 PreferredVoiceId = SelectedVoiceId() ?? _settings.PreferredVoiceId,
-                ClipboardMonitoringEnabled = ClipboardMonitoringCheckBox.IsChecked == true,
-                ClipboardPromptMinimumCharacters = ParseClipboardPromptMinimum(
-                    ClipboardPromptMinimumTextBox.Text),
-                CopySelectionAndReadEnabled = CopySelectionCheckBox.IsChecked == true,
-                PrivacyMode = PrivacyModeCheckBox.IsChecked == true,
-                MinimizeToTrayOnClose = MinimizeToTrayCheckBox.IsChecked == true,
-                ClipboardBlockedApplications = ParseBlockedApplications(
-                    BlockedApplicationsTextBox.Text),
-                Hotkeys = new DesktopHotkeys(
-                    ReadClipboardHotkeyTextBox.Text.Trim(),
-                    CopySelectionHotkeyTextBox.Text.Trim(),
-                    PlayPauseHotkeyTextBox.Text.Trim(),
-                    StopHotkeyTextBox.Text.Trim()),
-                CompactController = _settings.EffectiveCompactController with
-                {
-                    Enabled = CompactEnabledCheckBox.IsChecked == true,
-                },
             };
             await _settingsStore.SaveAsync(_settings);
             RefreshWorkspaceChoices();
@@ -935,19 +937,48 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplySettingsToControls(DesktopSettings settings)
+    private async void OptionsButton_Click(object sender, RoutedEventArgs e)
     {
-        ClipboardMonitoringCheckBox.IsChecked = settings.ClipboardMonitoringEnabled;
-        ClipboardPromptMinimumTextBox.Text = settings.ClipboardPromptMinimumCharacters.ToString();
-        CopySelectionCheckBox.IsChecked = settings.CopySelectionAndReadEnabled;
-        PrivacyModeCheckBox.IsChecked = settings.PrivacyMode;
-        MinimizeToTrayCheckBox.IsChecked = settings.MinimizeToTrayOnClose;
-        CompactEnabledCheckBox.IsChecked = settings.EffectiveCompactController.Enabled;
-        BlockedApplicationsTextBox.Text = string.Join(", ", settings.EffectiveClipboardBlockedApplications);
-        ReadClipboardHotkeyTextBox.Text = settings.EffectiveHotkeys.ReadClipboard;
-        CopySelectionHotkeyTextBox.Text = settings.EffectiveHotkeys.CopySelectionAndRead;
-        PlayPauseHotkeyTextBox.Text = settings.EffectiveHotkeys.PlayPause;
-        StopHotkeyTextBox.Text = settings.EffectiveHotkeys.Stop;
+        var dialog = new OptionsDialog(_settings) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+        try
+        {
+            var previous = _settings;
+            await _settingsStore.SaveAsync(dialog.Settings);
+            _settings = dialog.Settings;
+            ApplyRuntimeOptions(previous);
+            FooterText.Text = "Options saved.";
+        }
+        catch (Exception exception) when (
+            exception is ReaderClientConfigurationException or IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = $"Options were not saved: {exception.Message}";
+        }
+    }
+
+    private void ApplyRuntimeOptions(DesktopSettings previous)
+    {
+        if (_audioInterruptionMonitor is not null)
+        {
+            _audioInterruptionMonitor.Enabled = _settings.EffectivePauseForCallsAndAlarms;
+        }
+        if (!_settings.EffectivePauseForCallsAndAlarms)
+        {
+            _audioInterruptionActive = false;
+            CancelAutomaticInterruptionResume();
+        }
+        if (previous.ClipboardMonitoringEnabled != _settings.ClipboardMonitoringEnabled)
+        {
+            ApplyClipboardMonitoringRuntime(_settings.ClipboardMonitoringEnabled);
+        }
+        if (_windowSource is not null)
+        {
+            RegisterHotkeys(new WindowInteropHelper(this).Handle);
+        }
+        _trayIcon?.SetClipboardMonitoring(_settings.ClipboardMonitoringEnabled);
         UpdateClipboardStatus();
     }
 
@@ -1042,26 +1073,22 @@ public partial class MainWindow : Window
     private string? SelectedVoiceId() =>
         (VoiceComboBox.SelectedItem as VoiceChoice)?.Id;
 
-    private static IReadOnlyList<string> ParseBlockedApplications(string value) =>
-        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    private static int ParseClipboardPromptMinimum(string value)
-    {
-        if (!int.TryParse(value.Trim(), out var minimum) || minimum is < 0 or > 10_000_000)
-        {
-            throw new ReaderClientConfigurationException(
-                "The clipboard prompt minimum must be a number from 0 to 10,000,000.");
-        }
-        return minimum;
-    }
-
-    private async void ClipboardMonitoringCheckBox_Click(object sender, RoutedEventArgs e) =>
-        await SetClipboardMonitoringAsync(ClipboardMonitoringCheckBox.IsChecked == true);
-
     private async Task SetClipboardMonitoringAsync(bool enabled)
     {
         _settings = _settings with { ClipboardMonitoringEnabled = enabled };
-        ClipboardMonitoringCheckBox.IsChecked = enabled;
+        ApplyClipboardMonitoringRuntime(enabled);
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            FooterText.Text = $"Clipboard monitoring preference was not saved: {exception.Message}";
+        }
+    }
+
+    private void ApplyClipboardMonitoringRuntime(bool enabled)
+    {
         if (_clipboardListener is not null)
         {
             if (enabled)
@@ -1075,14 +1102,6 @@ public partial class MainWindow : Window
         }
         _trayIcon?.SetClipboardMonitoring(enabled);
         UpdateClipboardStatus();
-        try
-        {
-            await _settingsStore.SaveAsync(_settings);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            FooterText.Text = $"Clipboard monitoring preference was not saved: {exception.Message}";
-        }
     }
 
     private void UpdateClipboardStatus()
@@ -1263,7 +1282,6 @@ public partial class MainWindow : Window
                         .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
                         .ToArray();
                     _settings = _settings with { ClipboardBlockedApplications = blocked };
-                    BlockedApplicationsTextBox.Text = string.Join(", ", blocked);
                     try
                     {
                         await _settingsStore.SaveAsync(_settings);
@@ -1418,8 +1436,142 @@ public partial class MainWindow : Window
         }
     }
 
+    private void AudioInterruptionMonitor_Changed(
+        object? sender,
+        AudioInterruptionChangedEventArgs change)
+    {
+        if (_closed)
+        {
+            return;
+        }
+        Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            await HandleAudioInterruptionAsync(change);
+        }));
+    }
+
+    private async Task HandleAudioInterruptionAsync(AudioInterruptionChangedEventArgs change)
+    {
+        var lockAcquired = false;
+        try
+        {
+            await _audioInterruptionLock.WaitAsync();
+            lockAcquired = true;
+            if (_closed || !_settings.EffectivePauseForCallsAndAlarms)
+            {
+                _audioInterruptionActive = false;
+                CancelAutomaticInterruptionResume();
+                return;
+            }
+
+            _audioInterruptionActive = change.IsActive;
+            if (change.IsActive)
+            {
+                await PauseForAudioInterruptionAsync(change.Source ?? "an audio interruption");
+            }
+            else
+            {
+                await ResumeAfterAudioInterruptionAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            CancelAutomaticInterruptionResume();
+            if (!_closed)
+            {
+                FooterText.Text = $"Automatic interruption handling: {exception.Message}";
+            }
+        }
+        finally
+        {
+            if (lockAcquired)
+            {
+                _audioInterruptionLock.Release();
+            }
+        }
+    }
+
+    private async Task PauseForAudioInterruptionAsync(string source)
+    {
+        if (_automaticPauseKind != AutomaticPauseKind.None)
+        {
+            _automaticPauseSource = source;
+            return;
+        }
+        if (_ephemeralPlaying)
+        {
+            _automaticPauseKind = AutomaticPauseKind.Clipboard;
+            _automaticPauseSource = source;
+            await StopEphemeralAsync(clearReplay: false);
+            if (_automaticPauseKind == AutomaticPauseKind.Clipboard)
+            {
+                SetEphemeralState($"Paused for {source}", playing: false);
+            }
+            return;
+        }
+        if (_playback?.IsActive == true)
+        {
+            _automaticPauseKind = AutomaticPauseKind.Document;
+            _automaticPauseSource = source;
+            await _playback.PauseAsync();
+            if (_automaticPauseKind == AutomaticPauseKind.Document)
+            {
+                PlaybackStatusText.Text = $"Paused for {source}";
+                FooterText.Text = $"Reading paused for {source}.";
+                _trayIcon?.SetStatus("Paused for interruption");
+                UpdateCompactController();
+            }
+        }
+    }
+
+    private async Task ResumeAfterAudioInterruptionAsync()
+    {
+        var pausedKind = _automaticPauseKind;
+        var source = _automaticPauseSource ?? "the interruption";
+        CancelAutomaticInterruptionResume();
+        switch (pausedKind)
+        {
+            case AutomaticPauseKind.Clipboard when
+                !_ephemeralPlaying && _ephemeralReplayText is string replay:
+                await StartEphemeralPlaybackAsync(replay);
+                if (_ephemeralPlaying)
+                {
+                    FooterText.Text = $"Resumed after {source}.";
+                }
+                break;
+            case AutomaticPauseKind.Document when
+                _playback?.State == ReaderPlaybackState.Paused && _editor?.Document is not null:
+                await TogglePlaybackAsync();
+                if (_playback.IsActive)
+                {
+                    FooterText.Text = $"Resumed after {source}.";
+                }
+                break;
+        }
+    }
+
+    private bool PlaybackBlockedByAudioInterruption()
+    {
+        if (!_settings.EffectivePauseForCallsAndAlarms || !_audioInterruptionActive)
+        {
+            return false;
+        }
+        FooterText.Text = "Reading is waiting for the current Teams call or Windows alarm to finish.";
+        return true;
+    }
+
+    private void CancelAutomaticInterruptionResume()
+    {
+        _automaticPauseKind = AutomaticPauseKind.None;
+        _automaticPauseSource = null;
+    }
+
     private async Task StartEphemeralPlaybackAsync(string text)
     {
+        if (PlaybackBlockedByAudioInterruption())
+        {
+            return;
+        }
         if (_synthesisClient is null || _ephemeralAudio is null)
         {
             FooterText.Text = "Connect to the local service before reading clipboard text.";
@@ -1554,6 +1706,11 @@ public partial class MainWindow : Window
 
     private async Task ToggleUnifiedPlaybackAsync()
     {
+        if (PlaybackBlockedByAudioInterruption())
+        {
+            return;
+        }
+        CancelAutomaticInterruptionResume();
         if (_ephemeralPlaying)
         {
             await StopEphemeralAsync(clearReplay: false);
@@ -1575,6 +1732,7 @@ public partial class MainWindow : Window
 
     private async Task StopUnifiedPlaybackAsync()
     {
+        CancelAutomaticInterruptionResume();
         await StopEphemeralAsync(clearReplay: true);
         if (_playback is not null)
         {
@@ -2158,6 +2316,11 @@ public partial class MainWindow : Window
         string documentId,
         ReaderCursor? cursor)
     {
+        if (PlaybackBlockedByAudioInterruption())
+        {
+            return;
+        }
+        CancelAutomaticInterruptionResume();
         try
         {
             var document = await GetClient().GetDocumentAsync(documentId);
@@ -2696,6 +2859,10 @@ public partial class MainWindow : Window
 
     private async Task TogglePlaybackAsync()
     {
+        if (PlaybackBlockedByAudioInterruption())
+        {
+            return;
+        }
         if (_playback is null || _editor?.Document is null)
         {
             return;
@@ -2736,6 +2903,11 @@ public partial class MainWindow : Window
 
     private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e)
     {
+        if (PlaybackBlockedByAudioInterruption())
+        {
+            return;
+        }
+        CancelAutomaticInterruptionResume();
         if (_playback is null || _editor?.Document is not ReaderDocument document)
         {
             return;
@@ -3967,6 +4139,13 @@ public partial class MainWindow : Window
         bool PrivacyUnlocked);
 
     private sealed record ConnectionChoice(string Id, string Name, bool IsLocal);
+
+    private enum AutomaticPauseKind
+    {
+        None,
+        Document,
+        Clipboard,
+    }
 
     private sealed record VoiceChoice(VoiceDescriptor Voice, bool IsServiceDefault)
     {

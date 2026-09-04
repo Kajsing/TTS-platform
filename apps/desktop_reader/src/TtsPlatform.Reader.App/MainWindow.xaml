@@ -57,6 +57,8 @@
           </StackPanel>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Content="Options…" Style="{StaticResource HeaderButtonStyle}"
+                  Click="OptionsButton_Click" AutomationProperties.Name="Open Reader options" />
           <Ellipse x:Name="ServiceStatusDot" Width="9" Height="9" Fill="#E0A52B" Margin="0,0,7,0" />
           <TextBlock x:Name="ServiceStatusText" Foreground="White" Margin="0,4,12,0"
                      Text="Service: checking" AutomationProperties.LiveSetting="Polite" />
@@ -103,7 +105,7 @@
             </StackPanel>
           </StackPanel>
         </DockPanel>
-        <Expander Header="Connection and keyboard settings" Margin="0,7,0,0">
+        <Expander Header="Connection, voice, and diagnostics" Margin="0,7,0,0">
           <StackPanel Margin="0,5,0,0">
             <DockPanel Margin="0,0,0,7">
               <Button DockPanel.Dock="Right" Content="Remote access…"
@@ -148,45 +150,6 @@
               <TextBlock Grid.Column="2" x:Name="VoiceDetailsText" Margin="12,0,0,0"
                          VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}"
                          Text="Connect to load installed voices." TextWrapping="Wrap" />
-            </Grid>
-            <WrapPanel Margin="0,7,0,0">
-              <CheckBox x:Name="ClipboardMonitoringCheckBox" Content="Clipboard prompt mode"
-                        Click="ClipboardMonitoringCheckBox_Click" Margin="4" />
-              <CheckBox x:Name="CopySelectionCheckBox" Content="Enable Copy Selection and Read" Margin="4" />
-              <CheckBox x:Name="PrivacyModeCheckBox" Content="Privacy mode" Margin="4" />
-              <CheckBox x:Name="MinimizeToTrayCheckBox" Content="Minimize to tray on close" Margin="4" />
-              <CheckBox x:Name="CompactEnabledCheckBox" Content="Remember compact controller" Margin="4" />
-              <TextBlock Text="Ignore automatic prompts at or below" Margin="14,4,4,4"
-                         VerticalAlignment="Center" />
-              <TextBox x:Name="ClipboardPromptMinimumTextBox" Width="82" Margin="4"
-                       ToolTip="Character count after surrounding whitespace is removed. Use 0 to disable."
-                       AutomationProperties.Name="Minimum clipboard prompt character count" />
-              <TextBlock Text="characters" Margin="2,4,4,4" VerticalAlignment="Center" />
-            </WrapPanel>
-            <Grid Margin="0,7,0,0">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="Blocked apps" VerticalAlignment="Center" Margin="0,0,5,0" />
-              <TextBox Grid.Column="1" x:Name="BlockedApplicationsTextBox"
-                       ToolTip="Comma-separated executable names" />
-              <TextBlock Grid.Column="2" Text="Read" VerticalAlignment="Center" Margin="8,0,4,0" />
-              <TextBox Grid.Column="3" x:Name="ReadClipboardHotkeyTextBox" Width="95" />
-              <TextBlock Grid.Column="4" Text="Selection" VerticalAlignment="Center" Margin="8,0,4,0" />
-              <TextBox Grid.Column="5" x:Name="CopySelectionHotkeyTextBox" Width="95" />
-              <TextBlock Grid.Column="6" Text="Play/Pause" VerticalAlignment="Center" Margin="8,0,4,0" />
-              <TextBox Grid.Column="7" x:Name="PlayPauseHotkeyTextBox" Width="85" />
-              <TextBlock Grid.Column="8" Text="Stop" VerticalAlignment="Center" Margin="8,0,4,0" />
-              <TextBox Grid.Column="9" x:Name="StopHotkeyTextBox" Width="85" />
             </Grid>
             <TextBlock x:Name="HotkeyStatusText" Margin="3,5,0,0" Foreground="{StaticResource TextMutedBrush}"
                        Text="Global hotkeys are not registered yet." TextWrapping="Wrap"

@@ -1,0 +1,116 @@
+<Window x:Class="TtsPlatform.Reader.App.OptionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Options" Width="720" Height="620" MinWidth="620" MinHeight="520"
+        Icon="Assets/TtsPlatformReader.ico" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False" ResizeMode="CanResizeWithGrip">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Margin="2,0,2,12">
+      <TextBlock Text="Reader options" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Margin="0,3,0,0" Foreground="{StaticResource TextMutedBrush}"
+                 Text="Preferences on this computer. Article content and service settings are not changed here." />
+    </StackPanel>
+
+    <TabControl Grid.Row="1">
+      <TabItem Header="Playback">
+        <StackPanel Margin="16">
+          <TextBlock Text="Interruptions" FontSize="17" FontWeight="SemiBold" />
+          <CheckBox x:Name="PauseForCallsAndAlarmsCheckBox" Margin="0,12,0,0"
+                    Content="Pause and resume reading for Teams calls and Windows alarms"
+                    AutomationProperties.Name="Pause reading for Teams calls and Windows alarms" />
+          <TextBlock Margin="24,7,0,0" Foreground="{StaticResource TextMutedBrush}"
+                     TextWrapping="Wrap"
+                     Text="Reader watches local Windows audio only; no Teams login or cloud access is used. Short notification sounds are filtered out. Reader resumes only when it initiated the pause—Stop and manual Pause are always respected." />
+          <Border Margin="0,18,0,0" Padding="12" CornerRadius="7"
+                  Background="#FFF8E8" BorderBrush="#E4C36D" BorderThickness="1">
+            <TextBlock TextWrapping="Wrap"
+                       Text="Initial detection covers Microsoft Teams, Windows Clock alarms, and sustained Windows alert audio. Application-specific audio behavior can vary, so this option can be turned off here at any time." />
+          </Border>
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="Clipboard">
+        <StackPanel Margin="16">
+          <TextBlock Text="Automatic clipboard capture" FontSize="17" FontWeight="SemiBold" />
+          <CheckBox x:Name="ClipboardMonitoringCheckBox" Margin="0,12,0,0"
+                    Content="Show New clipboard text when eligible text is copied" />
+          <CheckBox x:Name="CopySelectionCheckBox" Margin="0,9,0,0"
+                    Content="Enable Copy Selection and Read" />
+          <CheckBox x:Name="PrivacyModeCheckBox" Margin="0,9,0,0"
+                    Content="Privacy mode" />
+          <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="90" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Ignore copied text at or below" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="ClipboardPromptMinimumTextBox"
+                     AutomationProperties.Name="Minimum clipboard prompt character count" />
+            <TextBlock Grid.Column="2" Text="characters (0 disables the limit)"
+                       VerticalAlignment="Center" Margin="5,0,0,0" />
+          </Grid>
+          <TextBlock Margin="0,16,0,4" Text="Applications that never show clipboard prompts"
+                     FontWeight="SemiBold" />
+          <TextBox x:Name="BlockedApplicationsTextBox"
+                   ToolTip="Comma-separated executable names"
+                   AutomationProperties.Name="Blocked clipboard applications" />
+          <TextBlock Margin="3,4,0,0" Foreground="{StaticResource TextMutedBrush}"
+                     TextWrapping="Wrap"
+                     Text="Use comma-separated executable names. The New clipboard text window can add applications to this list automatically." />
+        </StackPanel>
+      </TabItem>
+
+      <TabItem Header="Window &amp; shortcuts">
+        <StackPanel Margin="16">
+          <TextBlock Text="Window behavior" FontSize="17" FontWeight="SemiBold" />
+          <CheckBox x:Name="MinimizeToTrayCheckBox" Margin="0,12,0,0"
+                    Content="Minimize to tray when the main window is closed" />
+          <CheckBox x:Name="CompactEnabledCheckBox" Margin="0,9,0,0"
+                    Content="Remember and reopen the compact controller" />
+
+          <TextBlock Margin="0,22,0,8" Text="Global keyboard shortcuts"
+                     FontSize="17" FontWeight="SemiBold" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="150" />
+              <ColumnDefinition Width="150" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Read clipboard" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" x:Name="ReadClipboardHotkeyTextBox" />
+            <TextBlock Grid.Row="1" Text="Copy selection and read" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="CopySelectionHotkeyTextBox" />
+            <TextBlock Grid.Row="2" Text="Play / Pause" VerticalAlignment="Center" />
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="PlayPauseHotkeyTextBox" />
+            <TextBlock Grid.Row="3" Text="Stop" VerticalAlignment="Center" />
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="StopHotkeyTextBox" />
+          </Grid>
+          <TextBlock Margin="3,8,0,0" Foreground="{StaticResource TextMutedBrush}"
+                     Text="Shortcut availability is shown in the connection panel after saving." />
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+
+    <DockPanel Grid.Row="2" Margin="0,12,0,0">
+      <TextBlock VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}"
+                 Text="Saved locally in Reader settings." />
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Content="Cancel" IsCancel="True" />
+        <Button Content="Save options" IsDefault="True"
+                Style="{StaticResource PrimaryButtonStyle}" Click="Save_Click" />
+      </StackPanel>
+    </DockPanel>
+  </Grid>
+</Window>

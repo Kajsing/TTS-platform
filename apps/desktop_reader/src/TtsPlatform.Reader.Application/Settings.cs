@@ -47,6 +47,7 @@ public sealed record DesktopSettings(
     IReadOnlyList<string>? ClipboardBlockedApplications = null,
     DesktopHotkeys? Hotkeys = null,
     CompactControllerSettings? CompactController = null,
+    bool? PauseForCallsAndAlarms = null,
     string ActiveConnectionProfileId = "local",
     IReadOnlyList<RemoteConnectionProfileSettings>? RemoteConnectionProfiles = null)
 {
@@ -63,6 +64,9 @@ public sealed record DesktopSettings(
     [JsonIgnore]
     public CompactControllerSettings EffectiveCompactController =>
         CompactController ?? new CompactControllerSettings();
+
+    [JsonIgnore]
+    public bool EffectivePauseForCallsAndAlarms => PauseForCallsAndAlarms ?? true;
 
     [JsonIgnore]
     public IReadOnlyList<RemoteConnectionProfileSettings> EffectiveRemoteConnectionProfiles =>
