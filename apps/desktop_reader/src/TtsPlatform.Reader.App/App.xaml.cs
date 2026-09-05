@@ -13,11 +13,19 @@ public partial class App : System.Windows.Application
         CultureInfo.DefaultThreadCurrentUICulture ??= CultureInfo.CurrentUICulture;
         var smokeTest = e.Args.Contains("--smoke-test", StringComparer.Ordinal);
         var agentSmoke = smokeTest ? AgentSmokeScenario.LoadFromEnvironment() : null;
-        var settingsStore = new JsonDesktopSettingsStore(agentSmoke?.SettingsPath);
+        var folderSmoke = smokeTest && Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_FOLDER_SMOKE") == "1";
+        var folderSettingsPath = folderSmoke
+            ? System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(
+                Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_SMOKE_MARKER")
+                    ?? throw new InvalidOperationException("Folder smoke requires an isolated marker path.")))!,
+                "folder-smoke-settings.json")
+            : null;
+        var settingsStore = new JsonDesktopSettingsStore(folderSettingsPath ?? agentSmoke?.SettingsPath);
         DesktopSettings settings;
         try
         {
-            settings = agentSmoke?.Settings ?? settingsStore.LoadAsync().GetAwaiter().GetResult();
+            settings = folderSmoke ? new DesktopSettings()
+                : agentSmoke?.Settings ?? settingsStore.LoadAsync().GetAwaiter().GetResult();
         }
         catch
         {

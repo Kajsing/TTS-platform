@@ -87,9 +87,11 @@ def _resolve_dotnet(explicit: Path | None, *, required: bool) -> Path | None:
             check=False,
         )
         version = completed.stdout.strip()
-        if completed.returncode == 0 and version.split(".", 1)[0].isdigit() and int(
-            version.split(".", 1)[0]
-        ) >= 10:
+        if (
+            completed.returncode == 0
+            and version.split(".", 1)[0].isdigit()
+            and int(version.split(".", 1)[0]) >= 10
+        ):
             return candidate
     if required:
         raise DesktopReaderCheckError(
@@ -106,10 +108,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         reader_root / "src" / "TtsPlatform.Reader.Application" / "Onboarding.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "JsonDesktopSettingsStore.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "WasapiAudioOutput.cs",
-        reader_root
-        / "src"
-        / "TtsPlatform.Reader.Windows"
-        / "JsonlPlaybackPerformanceSink.cs",
+        reader_root / "src" / "TtsPlatform.Reader.Windows" / "JsonlPlaybackPerformanceSink.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ClipboardIntegration.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "GlobalHotkeys.cs",
         reader_root / "src" / "TtsPlatform.Reader.Windows" / "ReaderTrayIcon.cs",
@@ -253,14 +252,11 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "CommitImportToFolderAsync",
     ]
     missing_organization_features = [
-        value
-        for value in organization_features
-        if value.casefold() not in source_text.casefold()
+        value for value in organization_features if value.casefold() not in source_text.casefold()
     ]
     if missing_organization_features:
         raise DesktopReaderCheckError(
-            "Reader folder or batch-import features are missing: "
-            f"{missing_organization_features}"
+            f"Reader folder or batch-import features are missing: {missing_organization_features}"
         )
     privacy_lock_features = [
         "ReaderPrivacySessionStore",
@@ -273,14 +269,11 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "I saved the recovery key",
     ]
     missing_privacy_lock_features = [
-        value
-        for value in privacy_lock_features
-        if value.casefold() not in source_text.casefold()
+        value for value in privacy_lock_features if value.casefold() not in source_text.casefold()
     ]
     if missing_privacy_lock_features:
         raise DesktopReaderCheckError(
-            "Reader Privacy lock features are missing: "
-            f"{missing_privacy_lock_features}"
+            f"Reader Privacy lock features are missing: {missing_privacy_lock_features}"
         )
     browser_handoff_features = [
         "GetNextDesktopOpenRequestAsync",
@@ -299,8 +292,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
     ]
     if missing_browser_handoff_features:
         raise DesktopReaderCheckError(
-            "Milestone 9 browser handoff features are missing: "
-            f"{missing_browser_handoff_features}"
+            f"Milestone 9 browser handoff features are missing: {missing_browser_handoff_features}"
         )
     clipboard_duplicate_features = [
         "reader_duplicate_document",
@@ -414,9 +406,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         )
     )
     if "_useTextCursorOnNextPlay" in main_window_source:
-        raise DesktopReaderCheckError(
-            "Implicit caret playback intent is still present."
-        )
+        raise DesktopReaderCheckError("Implicit caret playback intent is still present.")
     return {
         "required_files": len(required),
         "clipboard_features": "implemented",
@@ -687,13 +677,9 @@ def _check_live_speech_rules(base_url: str, token_path: Path) -> bool:
         {"text": "a" * 4_095 + "!", "rule_set_ids": [rule_set["id"]]},
     )
     elapsed = time.monotonic() - started
-    if (
-        elapsed >= 5
-        or not any(
-            warning.get("code") == "rule_timeout"
-            and warning.get("rule_id") == timeout_rule["id"]
-            for warning in guarded["warnings"]
-        )
+    if elapsed >= 5 or not any(
+        warning.get("code") == "rule_timeout" and warning.get("rule_id") == timeout_rule["id"]
+        for warning in guarded["warnings"]
     ):
         raise DesktopReaderCheckError("The live regex timeout guard did not respond safely.")
     return True
@@ -824,9 +810,7 @@ def _build_development_package(
             f"The desktop package is missing runtime files: {sorted(required - names)}"
         )
     forbidden_names = {"settings.json", "token.txt"}
-    forbidden = [
-        name for name in names if Path(name).name.casefold() in forbidden_names
-    ]
+    forbidden = [name for name in names if Path(name).name.casefold() in forbidden_names]
     if forbidden:
         raise DesktopReaderCheckError(
             f"Desktop package contains local secret/settings files: {forbidden}"
@@ -843,6 +827,7 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
     marker = temporary / "wpf-rendered.json"
     environment = os.environ.copy()
     environment["TTS_PLATFORM_READER_SMOKE_MARKER"] = str(marker)
+    environment["TTS_PLATFORM_READER_FOLDER_SMOKE"] = "1"
     _run(
         [str(extracted / "TtsPlatform.Reader.App.exe"), "--smoke-test"],
         cwd=extracted,
@@ -853,7 +838,20 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
     payload = json.loads(marker.read_text(encoding="utf-8"))
     if payload.get("rendered") is not True:
         raise DesktopReaderCheckError("The WPF render marker is invalid.")
-    return {"status": "passed", "title": payload.get("title")}
+    folder_checks = (
+        "options_rendered",
+        "folder_toggle",
+        "hidden_after_refresh",
+        "editor_cleared",
+        "settings_reload",
+        "reopened",
+        "unsaved_edit_preserved",
+        "save_failure_reverted",
+        "service_reads_only",
+    )
+    if not all(payload.get(check) is True for check in folder_checks):
+        raise DesktopReaderCheckError("The isolated folder visibility smoke failed.")
+    return {"status": "passed", "title": payload.get("title"), "folder_visibility": "passed"}
 
 
 def main() -> int:

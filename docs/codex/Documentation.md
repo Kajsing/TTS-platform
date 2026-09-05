@@ -6,6 +6,17 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Date: 2026-09-05
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
+- Completed user-requested follow-up: Article folders -> Open is a persistent
+  visibility toggle, separate from Privacy lock and agent permissions. Closed
+  folders remain manageable, but their articles are excluded from this desktop's
+  library/search/paging and cannot be opened for reading until reopened. The
+  preference is local and scoped by workspace/profile and service URL; it does
+  not change service data or other clients. U8 remains parked. The user closed
+  Reader and authorized stopping the service; a verified idle service was stopped
+  before this desktop-only update. The exact root-shortcut win-x64 executable is
+  published and passed the synthetic checkbox smoke; Reader and the service are
+  left stopped. Validation/deployment evidence is in
+  `.logs/2026-09-05-reader-folder-visibility.md`.
 - Latest completed user-selected target: Reader Agent Access M1, specified in
   `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
   local folder-scoped MCP article tools and reliable chapter delivery next.

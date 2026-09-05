@@ -177,6 +177,22 @@ Acceptance criteria:
   after a move.
 - Folder deletion cannot strand article rows or partially delete content.
 
+Follow-up (2026-09-05): **Article folders -> Open** is a clickable visibility
+preference, not a Privacy-lock status. Checked shows the folder's articles;
+unchecked excludes them from the local library, search and paging until reopened.
+The folder remains in Article folders. The setting is remembered per desktop
+workspace/profile and service URL, defaults open for existing folders, and does
+not modify articles, grants, Privacy-lock sessions, or other clients. Existing
+queue/export records are not deleted; opening/playing a closed folder's article
+requires reopening the folder. This is not a confidentiality boundary.
+
+Closing the current folder clears its displayed article only after saving the
+preference. Active/paused playback, loading or unsaved edits block the operation
+with guidance; settings-save failure restores the checkbox. Hidden-only paging
+scans at most five service pages per action, then retains Load more if needed.
+The isolated WPF smoke covers the actual checkbox, hide/reopen, settings reload,
+editor clearing, unsaved edits and save failure without accessing live data.
+
 ### U5: Batch import and text-only HTML workflow — complete
 
 **Purpose:** Import several articles efficiently and place them directly in the

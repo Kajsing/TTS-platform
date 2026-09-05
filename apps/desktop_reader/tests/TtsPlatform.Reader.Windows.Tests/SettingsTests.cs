@@ -72,6 +72,38 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public async Task Folder_visibility_defaults_open_and_persists_per_workspace_without_changing_access()
+    {
+        var store = new JsonDesktopSettingsStore(Path.Combine(_temporaryDirectory, "folders.json"));
+        var original = await store.LoadAsync();
+        Assert.True(FolderVisibility.IsOpen(original, "folder"));
+        Assert.True(FolderVisibility.IsOpen(original, null));
+
+        var closed = FolderVisibility.SetOpen(original, "folder", false);
+        closed = FolderVisibility.SetOpen(closed, "folder", false);
+        await store.SaveAsync(closed);
+        var reloaded = await store.LoadAsync();
+        Assert.False(FolderVisibility.IsOpen(reloaded, "folder"));
+        Assert.True(FolderVisibility.IsOpen(reloaded, "other-folder"));
+        Assert.Single(FolderVisibility.ClosedFolderIds(reloaded));
+        Assert.True(FolderVisibility.IsOpen(original, "folder"));
+        Assert.Equal(original.EffectiveTokenSource, reloaded.EffectiveTokenSource);
+
+        var otherServer = reloaded with { ServiceBaseUrl = "http://127.0.0.1:8888/" };
+        Assert.True(FolderVisibility.IsOpen(otherServer, "folder"));
+        var remote = reloaded with
+        {
+            ActiveConnectionProfileId = "remote",
+            RemoteConnectionProfiles =
+            [new("remote", "Remote", "https://10.8.0.1:7790/", "pin", "credential")],
+        };
+        Assert.True(FolderVisibility.IsOpen(remote, "folder"));
+
+        await store.SaveAsync(FolderVisibility.SetOpen(reloaded, "folder", true));
+        Assert.True(FolderVisibility.IsOpen(await store.LoadAsync(), "folder"));
+    }
+
+    [Fact]
     public async Task Settings_store_rejects_non_loopback_service_address()
     {
         var store = new JsonDesktopSettingsStore(Path.Combine(_temporaryDirectory, "settings.json"));

@@ -171,6 +171,22 @@ public partial class MainWindow : Window
         }
 
         var marker = Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_SMOKE_MARKER");
+        if (!string.IsNullOrWhiteSpace(marker) &&
+            Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_FOLDER_SMOKE") == "1")
+        {
+            try
+            {
+                await RunFolderVisibilitySmokeAsync(marker);
+                System.Windows.Application.Current.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+                File.WriteAllText(marker, JsonSerializer.Serialize(new { failed = exception.GetType().Name, message = exception.Message }));
+                System.Windows.Application.Current.Shutdown(1);
+            }
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(marker))
         {
             var optionsWindow = new OptionsDialog(_settings) { Owner = this };
@@ -753,6 +769,7 @@ public partial class MainWindow : Window
             _privacySessions,
             allowRemote: !connection.IsLocal);
         _library = new LibraryPager(_client);
+        _library.SetClosedFolders(FolderVisibility.ClosedFolderIds(_settings));
         _readingWindow = new ReadingWindowPager(_client);
         _findLoader = new ArticleFindDocumentLoader(_client);
         _findDocument = null;
@@ -1804,7 +1821,7 @@ public partial class MainWindow : Window
             var page = await GetClient().GetFoldersAsync();
             _folderFilters.Clear();
             _folderFilters.Add(new FolderFilterItem(null, "All articles", false, true));
-            foreach (var folder in page.Folders)
+            foreach (var folder in page.Folders.Where(folder => IsFolderOpen(folder.Id)))
             {
                 _folderFilters.Add(
                     new FolderFilterItem(
@@ -2107,6 +2124,8 @@ public partial class MainWindow : Window
     {
         var dialog = new FolderManagerDialog(
             GetClient(),
+            IsFolderOpen,
+            SetFolderOpenAsync,
             allowPrivacyAdministration: _settings.ActiveConnection.IsLocal)
         {
             Owner = this,
@@ -2116,6 +2135,40 @@ public partial class MainWindow : Window
         {
             await RefreshFoldersAsync();
             await RefreshLibraryAsync();
+        }
+    }
+
+    private string? _closingFolderId;
+
+    private bool IsFolderOpen(string? folderId) =>
+        (folderId is null || folderId != _closingFolderId) && FolderVisibility.IsOpen(_settings, folderId);
+
+    private async Task<bool> SetFolderOpenAsync(ReaderFolder folder, bool isOpen)
+    {
+        var closesCurrent = !isOpen && _editor?.Document?.FolderId == folder.Id;
+        if (_documentReloadInProgress || (closesCurrent &&
+            (_editor?.HasUnsavedChanges == true || _playback?.IsActive == true ||
+             _playback?.State is ReaderPlaybackState.Paused)))
+        {
+            return false;
+        }
+        _closingFolderId = isOpen ? null : folder.Id;
+        try
+        {
+            var updated = FolderVisibility.SetOpen(_settings, folder.Id, isOpen);
+            await _settingsStore.SaveAsync(updated);
+            _settings = updated;
+            if (!isOpen && _editor?.Document?.FolderId == folder.Id)
+            {
+                DocumentsGrid.SelectedItem = null;
+                ClearDocumentDisplay();
+            }
+            _library?.SetClosedFolders(FolderVisibility.ClosedFolderIds(_settings));
+            return true;
+        }
+        finally
+        {
+            _closingFolderId = null;
         }
     }
 
@@ -2154,6 +2207,11 @@ public partial class MainWindow : Window
 
     private async Task LoadDocumentAsync(ReaderDocument document, ReaderDocument? expectedDisplayedDocument = null)
     {
+        if (!IsFolderOpen(document.FolderId))
+        {
+            FooterText.Text = "This folder is closed. Check Open in Article folders to show its articles.";
+            return;
+        }
         if (_editor is null)
         {
             return;
@@ -2165,7 +2223,7 @@ public partial class MainWindow : Window
             await _documentLoadLock.WaitAsync();
             try
             {
-                if (_closed || loadGeneration != _documentLoadGeneration)
+                if (_closed || loadGeneration != _documentLoadGeneration || !IsFolderOpen(document.FolderId))
                 {
                     return;
                 }
@@ -2360,6 +2418,10 @@ public partial class MainWindow : Window
         {
             var document = await GetClient().GetDocumentAsync(documentId);
             await LoadDocumentAsync(document);
+            if (_editor?.Document?.Id != document.Id || !IsFolderOpen(document.FolderId))
+            {
+                return;
+            }
             if (_playback is not null)
             {
                 await _playback.PlayAsync(
@@ -2525,6 +2587,10 @@ public partial class MainWindow : Window
             }
             var document = await GetClient().GetDocumentAsync(next.DocumentId);
             await LoadDocumentAsync(document);
+            if (_editor?.Document?.Id != document.Id || !IsFolderOpen(document.FolderId))
+            {
+                return;
+            }
             if (_playback is not null)
             {
                 await _playback.PlayAsync(document, voice: SelectedVoiceId());
@@ -2921,6 +2987,10 @@ public partial class MainWindow : Window
                 return;
             }
             await StopEphemeralAsync(clearReplay: true);
+            if (!IsFolderOpen(document.FolderId) || _editor?.Document?.Id != document.Id)
+            {
+                return;
+            }
             await _playback.PlayAsync(document, voice: SelectedVoiceId());
         }
         catch (Exception exception) when (
@@ -2975,6 +3045,10 @@ public partial class MainWindow : Window
             }
 
             await StopEphemeralAsync(clearReplay: true);
+            if (!IsFolderOpen(refreshedDocument.FolderId) || _editor?.Document?.Id != refreshedDocument.Id)
+            {
+                return;
+            }
             await _playback.PlayAsync(
                 refreshedDocument,
                 voice: SelectedVoiceId(),
@@ -2994,6 +3068,11 @@ public partial class MainWindow : Window
         RefreshDocumentForPlaybackAsync(ReaderDocument displayedDocument)
     {
         var latestDocument = await GetClient().GetDocumentAsync(displayedDocument.Id);
+        if (!IsFolderOpen(latestDocument.FolderId))
+        {
+            FooterText.Text = "This folder is closed. Check Open in Article folders before playback.";
+            return (null, false);
+        }
         if (!ReaderDocumentVersions.CanApplyPlaybackRefresh(
             _editor?.Document, displayedDocument, _editor?.HasUnsavedChanges == true))
         {

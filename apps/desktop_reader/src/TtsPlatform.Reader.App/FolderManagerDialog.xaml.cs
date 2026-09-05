@@ -9,23 +9,82 @@ public partial class FolderManagerDialog : Window
 {
     private readonly IReaderServiceClient _client;
     private readonly bool _allowPrivacyAdministration;
-    private readonly ObservableCollection<ReaderFolder> _folders = [];
+    private readonly Func<string, bool> _isFolderOpen;
+    private readonly Func<ReaderFolder, bool, Task<bool>> _setFolderOpen;
+    private readonly ObservableCollection<FolderRow> _folders = [];
     private bool _busy;
 
     public FolderManagerDialog(
         IReaderServiceClient client,
+        Func<string, bool> isFolderOpen,
+        Func<ReaderFolder, bool, Task<bool>> setFolderOpen,
         bool allowPrivacyAdministration = true)
     {
         _client = client;
+        _isFolderOpen = isFolderOpen;
+        _setFolderOpen = setFolderOpen;
         _allowPrivacyAdministration = allowPrivacyAdministration;
         InitializeComponent();
         FolderGrid.ItemsSource = _folders;
         Loaded += async (_, _) => await RefreshAsync();
+        Closing += (_, e) => e.Cancel = _busy;
     }
 
     public bool Changed { get; private set; }
 
-    private ReaderFolder? SelectedFolder => FolderGrid.SelectedItem as ReaderFolder;
+    private ReaderFolder? SelectedFolder => (FolderGrid.SelectedItem as FolderRow)?.Folder;
+
+    private sealed record FolderRow(ReaderFolder Folder, bool IsOpen)
+    {
+        public string Id => Folder.Id;
+        public string Name => Folder.Name;
+        public int ArticleCount => Folder.ArticleCount;
+        public bool PrivacyLocked => Folder.PrivacyLocked;
+    }
+
+    private async void OpenFolderCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_busy || sender is not CheckBox checkBox || checkBox.Tag is not FolderRow row)
+        {
+            return;
+        }
+        var requestedOpen = checkBox.IsChecked == true;
+        if (requestedOpen == row.IsOpen)
+        {
+            return;
+        }
+        SetBusy(true);
+        try
+        {
+            if (await _setFolderOpen(row.Folder, requestedOpen))
+            {
+                var index = _folders.IndexOf(row);
+                if (index >= 0)
+                {
+                    var updated = row with { IsOpen = requestedOpen };
+                    _folders[index] = updated;
+                    FolderGrid.SelectedItem = updated;
+                }
+                Changed = true;
+                StatusText.Text = requestedOpen
+                    ? "Folder open: articles are shown."
+                    : "Folder closed: articles are hidden. Agent access is unchanged.";
+            }
+            else
+            {
+                StatusText.Text = "Folder unchanged. Stop playback and save or revert any active edit before closing its folder.";
+            }
+        }
+        catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = "The folder visibility setting could not be saved. Nothing changed.";
+        }
+        finally
+        {
+            checkBox.IsChecked = _isFolderOpen(row.Id);
+            SetBusy(false);
+        }
+    }
 
     private async Task RefreshAsync(string? selectedId = null)
     {
@@ -36,7 +95,7 @@ public partial class FolderManagerDialog : Window
             _folders.Clear();
             foreach (var folder in page.Folders)
             {
-                _folders.Add(folder);
+                _folders.Add(new FolderRow(folder, _isFolderOpen(folder.Id)));
             }
             FolderGrid.SelectedItem = _folders.FirstOrDefault(item => item.Id == selectedId);
             StatusText.Text = _allowPrivacyAdministration
@@ -291,7 +350,7 @@ public partial class FolderManagerDialog : Window
         }
         if (MessageBox.Show(
             this,
-            "Remove the Privacy lock? The articles remain in the folder and become visible whenever Reader is open.",
+            "Remove the Privacy lock? Articles remain in the folder and no longer require a code. The Open visibility setting is unchanged.",
             "Remove Privacy lock",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
@@ -358,6 +417,7 @@ public partial class FolderManagerDialog : Window
     {
         _busy = busy;
         FolderGrid.IsEnabled = !busy;
+        CloseButton.IsEnabled = !busy;
         FolderNameTextBox.IsEnabled = !busy;
         UpdateActionButtons();
     }
@@ -372,16 +432,16 @@ public partial class FolderManagerDialog : Window
         SetPrivacyButton.IsEnabled =
             _allowPrivacyAdministration && available && !selected!.PrivacyLocked;
         UnlockButton.IsEnabled = available && selected!.PrivacyLocked && !selected.PrivacyUnlocked;
-        RelockButton.IsEnabled = available && selected!.PrivacyUnlocked;
+        RelockButton.IsEnabled = available && selected!.PrivacyLocked && selected.PrivacyUnlocked;
         ChangeCodeButton.IsEnabled =
-            _allowPrivacyAdministration && available && selected!.PrivacyUnlocked;
+            _allowPrivacyAdministration && available && selected!.PrivacyLocked && selected.PrivacyUnlocked;
         RecoverButton.IsEnabled =
             _allowPrivacyAdministration &&
             available &&
             selected!.PrivacyLocked &&
             !selected.PrivacyUnlocked;
         RemovePrivacyButton.IsEnabled =
-            _allowPrivacyAdministration && available && selected!.PrivacyUnlocked;
+            _allowPrivacyAdministration && available && selected!.PrivacyLocked && selected.PrivacyUnlocked;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

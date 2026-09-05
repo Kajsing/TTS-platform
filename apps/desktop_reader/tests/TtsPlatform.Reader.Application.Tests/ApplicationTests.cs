@@ -219,6 +219,92 @@ public sealed class ApplicationTests
     }
 
     [Fact]
+    public async Task Closed_folders_are_filtered_from_search_paging_and_mutation_results()
+    {
+        var hidden = Document("hidden", 1) with { FolderId = "closed" };
+        var visible = Document("visible", 1) with { FolderId = "open" };
+        var root = Document("root", 1);
+        var client = new StubClient
+        {
+            DocumentPages = new Queue<DocumentPage>(
+            [
+                new([hidden], "hidden-only"),
+                new([visible, hidden], "more"),
+                new([hidden, root], null),
+                new([hidden, visible, root], null),
+            ]),
+        };
+        var pager = new LibraryPager(client);
+        pager.SetClosedFolders(["closed"]);
+        await pager.RefreshAsync(query: "search", state: "inbox");
+        Assert.Equal(["visible"], pager.Documents.Select(item => item.Id));
+        Assert.True(pager.HasMore);
+        await pager.LoadMoreAsync();
+        Assert.Equal(["visible", "root"], pager.Documents.Select(item => item.Id));
+        Assert.Equal([null, "hidden-only", "more"], client.ReceivedCursors);
+        Assert.All(client.ReceivedQueries, query => Assert.Equal("search", query));
+        Assert.False(pager.HasMore);
+
+        Assert.True(pager.ReplaceDocument(visible with { FolderId = "closed" }));
+        Assert.Equal(["root"], pager.Documents.Select(item => item.Id));
+        pager.SetClosedFolders([]);
+        await pager.RefreshAsync();
+        Assert.Equal(3, pager.Documents.Count);
+        pager.SetClosedFolders(["closed", "open"]);
+        Assert.Equal(["root"], pager.Documents.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task Hidden_only_library_scanning_is_bounded_and_can_continue()
+    {
+        var hidden = Document("hidden", 1) with { FolderId = "closed" };
+        var pages = Enumerable.Range(0, 6).Select(index =>
+            new DocumentPage([hidden], $"cursor-{index}"));
+        var client = new StubClient
+        {
+            DocumentPages = new Queue<DocumentPage>(pages.Append(new([Document("root", 1)], null))),
+        };
+        var pager = new LibraryPager(client);
+        pager.SetClosedFolders(["closed"]);
+        await pager.RefreshAsync(folderId: "closed");
+        Assert.Empty(pager.Documents);
+        Assert.Equal(5, client.ReceivedCursors.Count);
+        Assert.True(pager.HasMore);
+        await pager.LoadMoreAsync();
+        Assert.Equal("root", Assert.Single(pager.Documents).Id);
+        Assert.False(pager.HasMore);
+    }
+
+    [Fact]
+    public async Task Closing_folder_while_library_request_is_pending_does_not_leak_results()
+    {
+        var completion = new TaskCompletionSource<DocumentPage>();
+        var client = new StubClient { PendingDocumentPage = completion.Task };
+        var pager = new LibraryPager(client);
+        var refresh = pager.RefreshAsync();
+        pager.SetClosedFolders(["closed"]);
+        completion.SetResult(new([Document("hidden", 1) with { FolderId = "closed" }], null));
+        await refresh;
+        Assert.Empty(pager.Documents);
+        Assert.False(pager.IsLoading);
+    }
+
+    [Fact]
+    public async Task Hidden_only_page_rejects_non_advancing_cursor()
+    {
+        var hidden = Document("hidden", 1) with { FolderId = "closed" };
+        var client = new StubClient
+        {
+            DocumentPages = new Queue<DocumentPage>([new([hidden], "same"), new([hidden], "same")]),
+        };
+        var pager = new LibraryPager(client);
+        pager.SetClosedFolders(["closed"]);
+        var error = await Assert.ThrowsAsync<ReaderApiException>(() => pager.RefreshAsync());
+        Assert.Equal("reader_invalid_page", error.ErrorType);
+        Assert.False(pager.IsLoading);
+    }
+
+    [Fact]
     public async Task Reading_window_pages_book_scale_content_without_materializing_the_document()
     {
         var first = Enumerable.Range(0, 64).Select(index => Block($"Block {index}", index)).ToArray();
@@ -558,6 +644,7 @@ public sealed class ApplicationTests
         public UpdateDocumentRequest? LastUpdateRequest { get; private set; }
         public List<string?> ReceivedCursors { get; } = [];
         public List<string?> ReceivedFolderIds { get; } = [];
+        public List<string?> ReceivedQueries { get; } = [];
         public List<int> ReceivedBlockAfterOrdinals { get; } = [];
         public List<int> ReceivedBlockLimits { get; } = [];
 
@@ -598,6 +685,7 @@ public sealed class ApplicationTests
             CancellationToken cancellationToken = default)
         {
             ReceivedFolderIds.Add(folderId);
+            ReceivedQueries.Add(query);
             return GetDocumentsAsync(limit, cursor, query, state, cancellationToken);
         }
 

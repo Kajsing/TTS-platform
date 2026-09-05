@@ -49,7 +49,8 @@ public sealed record DesktopSettings(
     CompactControllerSettings? CompactController = null,
     bool? PauseForCallsAndAlarms = null,
     string ActiveConnectionProfileId = "local",
-    IReadOnlyList<RemoteConnectionProfileSettings>? RemoteConnectionProfiles = null)
+    IReadOnlyList<RemoteConnectionProfileSettings>? RemoteConnectionProfiles = null,
+    IReadOnlyDictionary<string, string[]>? ClosedFolderIdsByWorkspace = null)
 {
     [JsonIgnore]
     public TokenSourceSettings EffectiveTokenSource => TokenSource ?? new TokenSourceSettings();
