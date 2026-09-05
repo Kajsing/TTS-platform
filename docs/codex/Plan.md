@@ -655,6 +655,9 @@ acceptance criteria are in `docs/reader_agent_access_plan.md`.
 
 - [ ] M1: Local MCP article access limited to one owner-selected folder, with
   revocable service-enforced permissions and reliable chapter delivery.
+  Implementation, tests, isolated Windows/MCP smoke and shortcut publication
+  passed on 2026-09-05. Final live activation awaits the user's service restart;
+  the execution environment rejected process restart, so the old route is 404.
 
 Website monitoring, cloud-agent connectivity, and WireGuard/firewall setup are
 later work. U8 remains incomplete; its final acceptance test is not waived.

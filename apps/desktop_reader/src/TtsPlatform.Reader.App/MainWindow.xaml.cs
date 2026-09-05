@@ -146,10 +146,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private void MainWindow_ContentRendered(object? sender, EventArgs e)
+    private async void MainWindow_ContentRendered(object? sender, EventArgs e)
     {
         if (!_smokeTest)
         {
+            return;
+        }
+
+        ContentRendered -= MainWindow_ContentRendered;
+        var agentSmoke = AgentSmokeScenario.LoadFromEnvironment();
+        if (agentSmoke is not null)
+        {
+            try
+            {
+                await RunAgentSmokeAsync(agentSmoke);
+                System.Windows.Application.Current.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                File.WriteAllText(agentSmoke.MarkerPath, JsonSerializer.Serialize(new { failed = exception.GetType().Name, message = exception.Message }));
+                System.Windows.Application.Current.Shutdown(1);
+            }
             return;
         }
 
@@ -2133,7 +2150,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task LoadDocumentAsync(ReaderDocument document)
+    private bool _documentReloadInProgress;
+
+    private async Task LoadDocumentAsync(ReaderDocument document, ReaderDocument? expectedDisplayedDocument = null)
     {
         if (_editor is null)
         {
@@ -2150,6 +2169,14 @@ public partial class MainWindow : Window
                 {
                     return;
                 }
+                if (expectedDisplayedDocument is not null && !ReaderDocumentVersions.CanApplyPlaybackRefresh(
+                    _editor.Document, expectedDisplayedDocument, _editor.HasUnsavedChanges))
+                {
+                    FooterText.Text = "The local article changed while refreshing. Your edit has been kept.";
+                    return;
+                }
+                _documentReloadInProgress = true;
+                UpdateEditorButtons();
                 await LoadDocumentCoreAsync(document);
                 return;
             }
@@ -2166,6 +2193,8 @@ public partial class MainWindow : Window
             }
             finally
             {
+                _documentReloadInProgress = false;
+                UpdateEditorButtons();
                 _documentLoadLock.Release();
             }
             if (retryRateLimit)
@@ -2277,6 +2306,12 @@ public partial class MainWindow : Window
                     502);
             }
             afterOrdinal = nextAfterOrdinal;
+        }
+        var current = await GetClient().GetDocumentAsync(document.Id);
+        if (!ReaderDocumentVersions.AreSame(document, current))
+        {
+            throw new ReaderApiException("reader_revision_conflict",
+                "The article changed while loading. Select it again to load its current revision.", 409);
         }
         _continuousDocument = new ContinuousDocumentText(blocks);
     }
@@ -2839,7 +2874,7 @@ public partial class MainWindow : Window
     private void UpdateEditorButtons()
     {
         var editable = _editor?.IsEditable == true && _continuousDocument is not null;
-        var playbackActive = _playback?.IsActive == true;
+        var playbackActive = _playback?.IsActive == true || _documentReloadInProgress;
         EditorTextBox.IsReadOnly = playbackActive || !editable;
         SaveEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
         RevertEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
@@ -2959,12 +2994,18 @@ public partial class MainWindow : Window
         RefreshDocumentForPlaybackAsync(ReaderDocument displayedDocument)
     {
         var latestDocument = await GetClient().GetDocumentAsync(displayedDocument.Id);
+        if (!ReaderDocumentVersions.CanApplyPlaybackRefresh(
+            _editor?.Document, displayedDocument, _editor?.HasUnsavedChanges == true))
+        {
+            FooterText.Text = "The local article changed while checking playback. Your edit has been kept.";
+            return (null, false);
+        }
         if (ReaderDocumentVersions.AreSame(displayedDocument, latestDocument))
         {
             return (displayedDocument, false);
         }
 
-        await LoadDocumentAsync(latestDocument);
+        await LoadDocumentAsync(latestDocument, expectedDisplayedDocument: displayedDocument);
         if (_editor?.Document is ReaderDocument loadedDocument &&
             ReaderDocumentVersions.AreSame(loadedDocument, latestDocument))
         {

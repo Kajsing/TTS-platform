@@ -1,0 +1,61 @@
+<UserControl x:Class="TtsPlatform.Reader.App.AgentAccessPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="16">
+      <TextBlock Text="Local agent access (MCP)" FontSize="17" FontWeight="SemiBold" />
+      <TextBlock Margin="0,6,0,12" TextWrapping="Wrap"
+                 Text="An agent can create, read and edit articles in one folder you choose. It cannot delete articles, control playback or access other folders. No website monitoring or internet connection is enabled here." />
+      <TextBlock x:Name="AgentStatusText" Margin="0,0,0,10" TextWrapping="Wrap"
+                 Text="No agent access is enabled by default. Select this tab to load local grants."
+                 AutomationProperties.LiveSetting="Polite" />
+      <StackPanel x:Name="AgentControls">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <TextBlock Text="Folder" VerticalAlignment="Center" Margin="0,0,10,0" />
+          <ComboBox x:Name="AgentFolderCombo" Grid.Column="1" DisplayMemberPath="Name"
+                    AutomationProperties.Name="Folder for agent access" MinWidth="200" />
+          <TextBlock Grid.Row="1" Text="Access name" VerticalAlignment="Center" Margin="0,0,10,0" />
+          <TextBox Grid.Row="1" Grid.Column="1" x:Name="AgentNameTextBox" Text="Local agent"
+                   MaxLength="80" AutomationProperties.Name="Agent access name" />
+        </Grid>
+        <WrapPanel Margin="0,6,0,10">
+          <Button x:Name="ProvisionAgentButton" Content="Enable for selected folder" Click="Provision_Click" />
+          <Button Content="Refresh" Click="Refresh_Click" />
+        </WrapPanel>
+        <DataGrid x:Name="AgentGrantsGrid" Height="125" AutoGenerateColumns="False" IsReadOnly="True"
+                  SelectionMode="Single" SelectionChanged="Grant_SelectionChanged"
+                  AutomationProperties.Name="Agent access grants">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Access name" Binding="{Binding Name}" Width="*" />
+            <DataGridTextColumn Header="Folder" Binding="{Binding FolderName}" Width="*" />
+            <DataGridTextColumn Header="Status" Binding="{Binding Grant.Status}" Width="85" />
+          </DataGrid.Columns>
+        </DataGrid>
+        <WrapPanel Margin="0,6,0,8">
+          <Button x:Name="RevokeAgentButton" Content="Revoke selected access" Click="Revoke_Click" IsEnabled="False" />
+          <Button x:Name="CheckAgentButton" Content="Test MCP connection" Click="Check_Click" IsEnabled="False" />
+        </WrapPanel>
+        <Expander Header="Connect your agent" IsExpanded="True">
+          <StackPanel Margin="0,8,0,0">
+            <TextBlock TextWrapping="Wrap" Text="Select Python from the optional Reader agent environment. Give your MCP client the configuration below; it contains no secret. The client must run on this computer under your Windows account." />
+            <DockPanel Margin="0,5,0,5">
+              <Button DockPanel.Dock="Right" Content="Browse…" Click="PythonBrowse_Click" />
+              <TextBox x:Name="AgentPythonTextBox" TextChanged="Python_TextChanged"
+                       AutomationProperties.Name="Reader agent Python executable" />
+            </DockPanel>
+            <TextBox x:Name="AgentConfigurationTextBox" IsReadOnly="True" AcceptsReturn="True"
+                     FontFamily="Consolas" FontSize="12" MinHeight="95" MaxHeight="170"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     AutomationProperties.Name="MCP client configuration without credentials" />
+            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
+                       Text="First-time setup in the project folder: py -3 -m venv .venv-agent, then .venv-agent\Scripts\python.exe -m pip install -e &quot;.[agent]&quot;. The normal TTS environment is unchanged." />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+      <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
+                 Text="Enable and Revoke take effect immediately, independently of Save options. Windows protects the local key. Privacy-locking a folder revokes its grants. These API limits cannot restrict an agent that separately has unrestricted access to your Windows files." />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

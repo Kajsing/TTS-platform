@@ -9,6 +9,8 @@ public static class DesktopPaths
 
     public static string SettingsPath => Path.Combine(ReaderHome, "settings.json");
 
+    public static string AgentConnectionsDirectory => Path.Combine(ReaderHome, "agent-connections");
+
     public static string RemoteCredentialsDirectory => Path.Combine(
         ReaderHome,
         "remote-credentials");

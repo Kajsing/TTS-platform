@@ -64,6 +64,14 @@ and v1-readiness work:
 - automatic continuation from that same text offset after a truncated page
   segment finishes normally
 
+## Optional local agent access
+
+Reader now includes **Options -> Agent access** for folder-scoped local MCP
+article editing and retry-safe chapter delivery. It is off until explicitly
+enabled. See [Windows MCP setup and validation](docs/reader_agent_mcp.md) and
+[the service contract](docs/reader_agent_api.md). Website monitoring and cloud
+agent connections are separate future work; the normal local Reader is retained.
+
 ## Repository Layout
 
 ```text

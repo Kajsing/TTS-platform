@@ -7,6 +7,17 @@ namespace TtsPlatform.Reader.Application.Tests;
 public sealed class ReaderDocumentVersionsTests
 {
     [Fact]
+    public void External_playback_refresh_preserves_edits_and_newer_selections_during_await()
+    {
+        var requested = Document("doc", rowVersion: 4, contentRevision: 3);
+        Assert.True(ReaderDocumentVersions.CanApplyPlaybackRefresh(requested, requested, false));
+        Assert.False(ReaderDocumentVersions.CanApplyPlaybackRefresh(requested, requested, true));
+        Assert.False(ReaderDocumentVersions.CanApplyPlaybackRefresh(null, requested, false));
+        Assert.False(ReaderDocumentVersions.CanApplyPlaybackRefresh(requested with { Id = "other" }, requested, false));
+        Assert.False(ReaderDocumentVersions.CanApplyPlaybackRefresh(requested with { RowVersion = 5 }, requested, false));
+    }
+
+    [Fact]
     public void Same_version_requires_matching_document_and_both_versions()
     {
         var document = Document("doc", rowVersion: 4, contentRevision: 3);

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 
 import pytest
@@ -164,9 +165,7 @@ def test_window_clips_inside_a_block_at_the_source_character_limit(tmp_path: Pat
     assert window.next_cursor is not None
     assert window.next_cursor.block_ordinal == 0
     assert window.next_cursor.character_offset == 3
-    assert window.next_cursor.api_payload(window.blocks[0].block.text)[
-        "character_offset"
-    ] == 4
+    assert window.next_cursor.api_payload(window.blocks[0].block.text)["character_offset"] == 4
 
 
 def test_compiler_maps_normalized_danish_and_emoji_to_original_utf16_span(
@@ -427,9 +426,7 @@ def test_reader_websocket_pairs_marks_and_pcm_with_utf16_source_spans(
                 continue
             if message_type == "json" and payload["type"] == "done":
                 done = payload
-                websocket.send_json(
-                    {"type": "release", "stream_id": started["stream_id"]}
-                )
+                websocket.send_json({"type": "release", "stream_id": started["stream_id"]})
                 break
 
         assert pending_mark is None
@@ -477,9 +474,7 @@ def test_reader_websocket_continues_by_stable_cursor_without_loading_all_blocks(
             message_type, payload = _next_message(websocket)
             if message_type == "json" and payload["type"] == "done":
                 done = payload
-                websocket.send_json(
-                    {"type": "release", "stream_id": started["stream_id"]}
-                )
+                websocket.send_json({"type": "release", "stream_id": started["stream_id"]})
                 break
 
         assert done is not None
@@ -524,9 +519,7 @@ def test_reader_websocket_resumes_from_the_end_of_a_block(tmp_path: Path) -> Non
             message_type, payload = _next_message(websocket)
             if message_type == "json" and payload["type"] == "done":
                 done = payload
-                websocket.send_json(
-                    {"type": "release", "stream_id": started["stream_id"]}
-                )
+                websocket.send_json({"type": "release", "stream_id": started["stream_id"]})
                 break
 
         assert done is not None
@@ -548,12 +541,20 @@ def test_reader_websocket_holds_content_lease_until_release(tmp_path: Path) -> N
             }
         )
         started = websocket.receive_json()
+        # Generation may finish before the HTTP edit. The lease must still
+        # protect already-buffered speech until the client explicitly releases it.
+        for _ in range(128):
+            message_type, payload = _next_message(websocket)
+            if message_type == "json" and payload["type"] == "done":
+                break
+        else:
+            pytest.fail("Reader generation did not finish")
         locked = client.post(
             f"/v1/reader/documents/{document['id']}/append",
             headers=headers,
             json={"expected_row_version": 1, "text": "Wait."},
         )
-        websocket.send_json({"type": "cancel", "stream_id": started["stream_id"]})
+        websocket.send_json({"type": "release", "stream_id": started["stream_id"]})
 
     allowed = client.post(
         f"/v1/reader/documents/{document['id']}/append",
@@ -566,7 +567,63 @@ def test_reader_websocket_holds_content_lease_until_release(tmp_path: Path) -> N
     assert locked.json()["error"]["type"] == "reader_document_locked"
     assert allowed.status_code == 200
     assert streaming["active_streams"] == 0
+    assert streaming["completed_streams"] == 1
+    assert streaming["cancelled_streams"] == 0
+    assert streaming["failed_streams"] == 0
+
+
+def test_reader_cancellation_during_generation_releases_lease(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tts_service import reader_stream_routes
+
+    client, headers = _api_bundle(tmp_path)
+    document = _api_document(client, headers, text="Cancel before generation finishes.")
+    cancellation_received = threading.Event()
+    receive_control = reader_stream_routes._receive_control
+
+    async def receive_and_signal(*args, **kwargs):
+        try:
+            await receive_control(*args, **kwargs)
+        finally:
+            cancellation_received.set()
+
+    def wait_for_cancel(_iterator):
+        assert cancellation_received.wait(timeout=5), "Control receiver did not finish"
+        return None
+
+    monkeypatch.setattr(reader_stream_routes, "_receive_control", receive_and_signal)
+    monkeypatch.setattr(reader_stream_routes, "_next_chunk", wait_for_cancel)
+    with client.websocket_connect("/v1/reader/stream", headers=headers) as websocket:
+        websocket.send_json(
+            {
+                "type": "start",
+                "payload": {
+                    "document_id": document["id"],
+                    "cursor": {"block_ordinal": 0, "character_offset": 0},
+                },
+            }
+        )
+        started = websocket.receive_json()
+        assert started["type"] == "started"
+        locked = client.post(
+            f"/v1/reader/documents/{document['id']}/append",
+            headers=headers,
+            json={"expected_row_version": 1, "text": "Wait."},
+        )
+        assert locked.status_code == 409
+        websocket.send_json({"type": "cancel", "stream_id": started["stream_id"]})
+        assert websocket.receive_json()["type"] == "cancelled"
+    allowed = client.post(
+        f"/v1/reader/documents/{document['id']}/append",
+        headers=headers,
+        json={"expected_row_version": 1, "text": "Now."},
+    )
+    assert allowed.status_code == 200
+    streaming = client.get("/v1/health").json()["streaming"]
     assert streaming["cancelled_streams"] == 1
+    assert streaming["completed_streams"] == 0
+    assert streaming["active_streams"] == 0
     assert streaming["failed_streams"] == 0
 
 
@@ -633,9 +690,7 @@ def test_reader_websocket_requires_an_active_folder_privacy_session(
         **headers,
         "X-Reader-Privacy-Sessions": locked["session"]["session_token"],
     }
-    with client.websocket_connect(
-        "/v1/reader/stream", headers=unlocked_headers
-    ) as websocket:
+    with client.websocket_connect("/v1/reader/stream", headers=unlocked_headers) as websocket:
         websocket.send_json(start)
         started = websocket.receive_json()
         websocket.send_json({"type": "cancel", "stream_id": started["stream_id"]})

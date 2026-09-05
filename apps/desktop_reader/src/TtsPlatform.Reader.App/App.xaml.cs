@@ -12,11 +12,12 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         CultureInfo.DefaultThreadCurrentUICulture ??= CultureInfo.CurrentUICulture;
         var smokeTest = e.Args.Contains("--smoke-test", StringComparer.Ordinal);
-        var settingsStore = new JsonDesktopSettingsStore();
+        var agentSmoke = smokeTest ? AgentSmokeScenario.LoadFromEnvironment() : null;
+        var settingsStore = new JsonDesktopSettingsStore(agentSmoke?.SettingsPath);
         DesktopSettings settings;
         try
         {
-            settings = settingsStore.LoadAsync().GetAwaiter().GetResult();
+            settings = agentSmoke?.Settings ?? settingsStore.LoadAsync().GetAwaiter().GetResult();
         }
         catch
         {

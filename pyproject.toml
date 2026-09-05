@@ -20,8 +20,12 @@ dependencies = [
 
 [project.scripts]
 tts = "tts_service.cli:main"
+tts-reader-agent = "reader_agent.server:main"
 
 [project.optional-dependencies]
+agent = [
+  "mcp==2.1.1",
+]
 dev = [
   "pytest>=8.2.0,<9.0.0",
   "ruff>=0.6.0,<1.0.0",
@@ -32,7 +36,7 @@ real = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["packages/tts_core/src", "packages/reader_core/src", "packages/document_import/src", "packages/speech_rules/src", "apps/tts_service/src"]
+where = ["packages/tts_core/src", "packages/reader_core/src", "packages/document_import/src", "packages/speech_rules/src", "apps/tts_service/src", "apps/reader_agent/src"]
 
 [tool.setuptools.package-data]
 reader_core = ["migrations/*.sql"]
@@ -44,6 +48,7 @@ pythonpath = [
   "packages/document_import/src",
   "packages/speech_rules/src",
   "apps/tts_service/src",
+  "apps/reader_agent/src",
 ]
 testpaths = [
   "packages/tts_core/tests",
@@ -51,6 +56,7 @@ testpaths = [
   "packages/document_import/tests",
   "packages/speech_rules/tests",
   "apps/tts_service/tests",
+  "apps/reader_agent/tests",
 ]
 
 [tool.ruff]

@@ -10,6 +10,13 @@ public interface ITokenProvider
 
 public interface IReaderServiceClient
 {
+    Task<ReaderAgentGrantPage> GetAgentGrantsAsync(
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderAgentProvisionResult> ProvisionAgentAsync(
+        ReaderAgentGrantRequest request,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task RevokeAgentAsync(string grantId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default);
     Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default);
     Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default);

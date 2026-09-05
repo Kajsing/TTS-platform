@@ -36,6 +36,22 @@ public sealed class ReaderServiceClient : IReaderServiceClient
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
         SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken);
 
+    public Task<ReaderAgentGrantPage> GetAgentGrantsAsync(CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderAgentGrantPage>(HttpMethod.Get, "v1/reader/agent-access/grants", true, null, cancellationToken);
+
+    public Task<ReaderAgentProvisionResult> ProvisionAgentAsync(
+        ReaderAgentGrantRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReaderAgentProvisionResult>(HttpMethod.Post, "v1/reader/agent-access/grants", true, request, cancellationToken);
+
+    public async Task RevokeAgentAsync(string grantId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(grantId);
+        _ = await SendAsync<JsonElement>(HttpMethod.Delete,
+            $"v1/reader/agent-access/grants/{Uri.EscapeDataString(grantId)}", true, null, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
         SendAsync<ReaderCapabilities>(HttpMethod.Get, "v1/reader/capabilities", true, null, cancellationToken);
 

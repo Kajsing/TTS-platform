@@ -1,8 +1,8 @@
 # Local Reader Agent API (contract 1)
 
-This is the service foundation for Reader Agent Access M1. The MCP adapter,
-Options provisioning UI and deployed Windows acceptance are still pending.
-The running user's Reader/service have not been restarted for this slice.
+This is the service contract for Reader Agent Access M1. The optional stdio
+adapter and Windows Options setup are documented in `reader_agent_mcp.md`.
+An already-running pre-M1 service must be restarted to load these routes.
 
 ## Security boundary
 
@@ -11,9 +11,9 @@ ordinary Reader bearer token explicitly provisions one grant for one existing
 non-Privacy-locked folder. The grant stores a stable folder ID and an explicit
 operation allowlist. The credential has 256 random bits and is SHA-256 hashed
 in SQLite. Only its one-time owner provisioning response contains the secret;
-status, article results and diagnostics do not. Windows protected credential
-storage will be wired with the Options/MCP slice before the feature is handed
-over for normal use. Do not put the provisioning response into source control.
+status, article results and diagnostics do not. Options protects the credential
+with CurrentUser Windows DPAPI; the MCP client configuration contains no secret.
+Do not put the provisioning response into source control.
 
 Agent requests require that separate bearer credential, native loopback origin,
 and enabled owner authentication. Browser Origin headers (including empty or
@@ -69,7 +69,8 @@ It does not reveal original local file paths or internal importer metadata.
 Text writes accept at most 200,000 characters per call; titles at most 500.
 Article reads return at most 20,000 Unicode code points. Text offsets use Unicode
 code points, not UTF-16 offsets. The logical text joins paragraphs with two
-newlines. Continuation pages require the first page's `expected_row_version`;
+newlines. Continuation pages pass the first page's `article.row_version` as
+`expected_row_version`;
 a changed article returns a conflict rather than mixing revisions. Search uses
 the existing folder-filtered FTS/fallback implementation. Unknown cursors cannot
 broaden scope. Chapter history uses append-only offset pagination.
@@ -129,8 +130,9 @@ not a routine retry that overwrites the user's corrections.
 Agent mutations use the existing playback content lease; they never cancel
 playback. A held lease returns `reader_document_locked` (409). The normal desktop
 save retains its optimistic revision check: unsaved local text is not written
-over a newer agent revision. No new desktop refresh behavior is introduced in
-this service-only slice.
+over a newer agent revision. Desktop playback refresh checks for local edits
+after waiting for the server and again before loading; edits made during that
+wait are kept. Loading locks input and refuses pages if the revision changed.
 
 Errors retain the normal `{error: {type, message, param, details}}` envelope:
 
@@ -141,7 +143,8 @@ Errors retain the normal `{error: {type, message, param, details}}` envelope:
 - `reader_document_locked` (409): active playback; retry later.
 - `reader_database_busy` (503): storage contention; retry later.
 - `reader_agent_unavailable` / `reader_database_unavailable` (503): service or
-  storage unavailable. A connection failure is handled by the later MCP adapter.
+  storage unavailable. The MCP adapter maps connection failures to a sanitized
+  `service_unavailable` result without retrying writes automatically.
 - Existing validation/rate-limit errors (400/429); oversized bodies return
   `reader_agent_request_too_large` (413).
 
@@ -161,5 +164,7 @@ mutation, retry authorization, privacy-lock lifetime, broad-token separation,
 native-only access, remote-gateway route classification, pre-body auth/limits,
 low-sensitivity logs and playback lock order. Tests cover lost-response retry,
 restart, concurrent delivery, failure after append and at commit, Undo/Redo,
-manual removal, soft-delete/restore and stale desktop revisions. Full MCP/client
-security and Windows deployment review remain part of M1, not yet complete.
+manual removal, soft-delete/restore and stale desktop revisions. The MCP/client
+security review and real stdio/Windows acceptance are in `reader_agent_mcp.md`;
+deployment status and any remaining activation step are in
+`docs/codex/Documentation.md`.

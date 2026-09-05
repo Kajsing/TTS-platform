@@ -1,16 +1,21 @@
 using System.Windows;
 using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
+using TtsPlatform.Reader.Windows;
 
 namespace TtsPlatform.Reader.App;
 
 public partial class OptionsDialog : Window
 {
-    public OptionsDialog(DesktopSettings settings)
+    public OptionsDialog(DesktopSettings settings, AgentConnectionFiles? agentFiles = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         Settings = settings;
         InitializeComponent();
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
+        AgentAccessControl.Configure(settings, agentFiles);
+        Closing += (_, args) => args.Cancel = AgentAccessControl.IsBusy;
+        Closed += (_, _) => AgentAccessControl.Dispose();
         PauseForCallsAndAlarmsCheckBox.IsChecked = settings.EffectivePauseForCallsAndAlarms;
         ClipboardMonitoringCheckBox.IsChecked = settings.ClipboardMonitoringEnabled;
         ClipboardPromptMinimumTextBox.Text = settings.ClipboardPromptMinimumCharacters.ToString();

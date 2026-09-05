@@ -4,6 +4,12 @@ namespace TtsPlatform.Reader.Application;
 
 public static class ReaderDocumentVersions
 {
+    public static bool CanApplyPlaybackRefresh(
+        ReaderDocument? current,
+        ReaderDocument requested,
+        bool hasUnsavedChanges) =>
+        !hasUnsavedChanges && current is not null && AreSame(current, requested);
+
     public static bool AreSame(ReaderDocument left, ReaderDocument right)
     {
         ArgumentNullException.ThrowIfNull(left);

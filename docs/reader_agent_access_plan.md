@@ -4,8 +4,12 @@
 
 Approved as the next project target on 2026-09-05. U8 remains parked and
 incomplete; its resume conditions are preserved in `reader_upgrade_plan.md`.
-M1 is the active app goal. The service/API foundation is implemented and its
-slice validation passed; MCP, Options and Windows deployment remain pending.
+M1 is the active app goal. Service/API, MCP, Options, isolated Windows end-to-end
+acceptance and publication of the actual shortcut target are implemented and
+validated. The user closed Reader to allow deployment. The already-running
+old service still returns 404 on the new grant route; process restart was
+blocked by the execution environment. **Pending handoff: user restarts that
+service, then confirm its new route before marking the goal complete.**
 Its implemented contract is in `reader_agent_api.md`. The user manually stopped
 the previous U8 app goal on 2026-09-05, after which M1 registration succeeded.
 The user explicitly asked to revisit U8 after this side quest. Stopping its app

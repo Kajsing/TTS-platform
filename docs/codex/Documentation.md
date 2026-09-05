@@ -9,9 +9,13 @@ This file is the live status log and shared memory for future Codex loops.
 - Current user-selected target: Reader Agent Access M1, specified in
   `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
   local folder-scoped MCP article tools and reliable chapter delivery next.
-  M1 is registered as the active app goal. Its scoped service/API and atomic
-  chapter-storage slice is implemented; MCP, Options and Windows acceptance
-  remain pending. See `docs/reader_agent_api.md`. The user
+  M1 is registered as the active app goal. Its service/API, atomic chapter
+  storage, stdio MCP, DPAPI-backed Options and isolated Windows acceptance are
+  implemented/tested. The user closed Reader; its actual shortcut binary was
+  published and passed the end-to-end smoke. The old local service still needs
+  a user-performed restart (execution policy rejected our restart attempt).
+  Verify the new grant route afterwards; do not mark the goal complete yet.
+  See `docs/reader_agent_mcp.md` and `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return
   to U8 after M1. U8 remains incomplete and its network setup needs confirmation.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
@@ -2514,18 +2518,79 @@ python3 scripts/package_windows_bundle.py
   or restarted and no live grant/library was modified. Continue autonomously
   with the MCP adapter, preserving U8 as parked and incomplete.
 
+## Reader Agent Access M1: MCP and Options Delivery (2026-09-05)
+
+- Added the optional `reader_agent` package, pinned MCP SDK 2.1.1 extra and
+  stdio entry point. Nine tools use only the protected agent HTTP API. There is
+  no direct database access, arbitrary URL fetch, scheduling or remote listener.
+  Requests refuse redirects/proxy environment, bound responses/timeouts, reload
+  credentials on each call, sanitize errors and never automatically retry
+  ordinary writes. Tool hints distinguish read-only/edit/retry-safe operations.
+- Added **Options -> Agent access**, owner grant APIs in the .NET client and
+  `AgentConnectionFiles`. Provisioning selects one normal folder, protects the
+  one-time key with CurrentUser DPAPI and shows secret-free client JSON. Test
+  checks the optional runtime/key/API. Revoke is service-first and removes only
+  the unusable local key/config, retaining articles/history. Enable/revoke act
+  immediately, independently of the preferences Save/Cancel buttons.
+- Installed `.venv-agent` separately; did not upgrade the normal voice runtime.
+  Dependency metadata and relevant upstream license texts were reviewed and
+  recorded in `THIRD_PARTY_NOTICES.md`. No paid/cloud dependency, project
+  licensing change or configured telemetry exporter was introduced.
+- Playback's version-check await now rechecks local editor identity/dirty state
+  before applying an external revision. Document loading locks input and rejects
+  a revision that changes while fetching pages. No background reload, forced
+  playback stop, cursor remapping or timing/buffering redesign was introduced.
+- A full-suite run exposed a timing assumption in the existing streaming lease
+  test: the stub can finish generation before the cancel message, correctly
+  recording completion rather than cancellation. The test now explicitly waits
+  for generation completion and verifies the lease remains until release. A
+  separate event-synchronized test checks cancellation during generation and
+  lease cleanup. No production streaming behavior was changed for this test fix.
+- Added `scripts/check_reader_agent.py` and an explicitly opt-in isolated WPF
+  smoke hook. Production Options methods create/revoke access in temporary
+  storage; C# DPAPI output is decrypted by Python. Real stdio subprocesses call
+  a live service, create/read/rename/edit/append, paginate and concurrently import
+  a chapter once, then retry after service/MCP restart. Broad API and revoked
+  access are denied. The article appears intact/editable in the ordinary Reader
+  library and produces a complete source-mapped PCM stream (98 packets/spans).
+  The deterministic voice is not a real-voice quality/audio-device test. No
+  user's clipboard/hotkeys, database, settings or audio endpoint are used.
+- Validation passed: `py -3 -m pytest -q` **522 passed, 2 skipped** (optional MCP
+  SDK/DPAPI absent from the base Python); separate agent environment **26 passed,
+  no skips** and `pip check` clean; Ruff and touched Python formatting clean;
+  20 Reader contract fixtures valid; .NET **167 tests** (43 client, 86 application,
+  38 Windows), solution format verification, WPF build and win-x64 self-contained
+  publish passed. Both development and actual shortcut binaries passed the full
+  isolated Windows/MCP smoke. Synthetic Options/article PNGs were visually
+  inspected; Options is taller so revoke/test controls remain visible.
+- The user closed Reader after our request, so publication did not terminate
+  their active/unsaved application. Root shortcut still targets
+  `apps/desktop_reader/src/TtsPlatform.Reader.App/bin/Release/net10.0-windows/win-x64/TtsPlatform.Reader.App.exe`.
+  Its new binary is published and verified. The old service process on port 7777
+  is still running: diagnostics reported schema 10/integrity OK, zero content
+  leases and only five completed exports, but the new grant route returned 404.
+  A verified-process restart was rejected by execution policy **before running**;
+  no alternative termination mechanism was attempted. User must restart the
+  service before live activation can be confirmed. Do not mark M1 complete yet.
+- `docs/reader_agent_mcp.md` provides setup, tool/error/retry semantics, security
+  review, smoke commands and limitations. `.logs/2026-09-05-reader-agent-mcp-m1.md`
+  records the slice. User-owned `models/MANIFEST.json` remains excluded.
+- U8 remains parked/incomplete. Bring its intended WireGuard/firewall acceptance
+  back to the user after M1; no network changes are authorized by this delivery.
+
 ## Resume Instructions For The Next Codex Loop
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Agent Access M1 in `docs/reader_agent_access_plan.md` is registered as
-   the active goal. Continue from the service/API foundation documented in
-   `docs/reader_agent_api.md`: implement optional stdio MCP, Windows DPAPI-backed
-   Options setup, client configuration, isolated end-to-end Windows/MCP smoke,
-   and safe publication to the root shortcut runtime. Do not mark the service
-   slice as completion of M1. After M1, revisit U8 with the user and confirm its intended
+4. Reader Agent Access M1 is implemented, tested and published to the shortcut
+   runtime, but the old service still needs a user-performed restart. The prior
+   restart attempt was rejected by execution policy; do not work around it.
+   After the user restarts, verify `GET /v1/reader/agent-access/grants` with the
+   owner token without exposing secrets or creating a live grant. Review the
+   pushed slice and acceptance record, then mark the goal complete if no work
+   remains. Setup is in `docs/reader_agent_mcp.md`. After M1, revisit U8 with the user and confirm its intended
    WireGuard environment. U1 through U7 are complete; U8 remains parked with its
    final real firewall acceptance pending. Website monitoring and cloud MCP
    exposure are outside M1.
