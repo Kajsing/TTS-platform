@@ -1,6 +1,7 @@
 # Reader Service Center
 
-Status: user-approved active goal, 2026-09-05. T1/T2 are not yet implemented.
+Status: user-approved active goal, 2026-09-05. T1.1 is implemented and published;
+T1.2, T1.3 and T2 remain incomplete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -31,6 +32,9 @@ This track precedes parked U8 and deferred Reader Milestones 10/11.
 ## T1 - Persistent tray and local service dashboard
 
 ### T1.1: Lifecycle
+
+Implemented and validated on 2026-09-05. Evidence and boundaries are in
+`.logs/2026-09-05-reader-service-center-lifecycle.md`.
 
 Move tray ownership out of the Reader window's lifetime. Prefer reusing the
 desktop executable with a background entry mode over a second application.
@@ -75,8 +79,10 @@ enabling production autostart just to pass a check.
 
 ### T1 acceptance
 
-- [ ] One persistent icon; the actual shortcut reuses the existing host.
-- [ ] Reader close/reopen, compact/minimized mode, dirty edits and host exit are safe.
+- [x] One persistent icon; second-process activation tested using the actual
+  shortcut executable with isolated settings and activation scope.
+- [x] Reader close/reopen, compact/minimized mode, dirty-edit refusal, active
+  dialog guards and host disposal pass the isolated WPF lifecycle smoke.
 - [ ] Dashboard metrics have verified sources and truthful unavailable states.
 - [ ] Start/stop/restart are ownership-safe and protect active work.
 - [ ] Autostart defaults off, is reversible and reflects actual registration.
@@ -122,11 +128,18 @@ Record current results per slice, not historical test counts. Update
 `docs/codex/Documentation.md` and a concise `.logs/` entry; commit and push
 validated coherent slices, leaving unrelated manifest edits out.
 
-## Initial inspection and resume point
+## Inspection and resume point
 
-The goal is registered; implementation is not deployed. `ReaderTrayIcon` is
-currently created/disposed by `MainWindow`, whose exit shuts down the desktop.
-That lifetime coupling is the first T1 slice. Existing process leases and
+The goal remains active. `DesktopServiceCenterHost` now owns one tray icon and
+reloads settings when recreating a genuinely closed Reader. Normal startup uses
+an exclusive current-user/current-session named-pipe activation channel; smoke
+tests use separate scopes/settings and cannot contact the real service. Closing
+Reader no longer shuts down its host. Exiting Service Center confirms that the
+service stays running and checks dirty Reader edits before shutting down.
+The root shortcut binary is updated and passed the isolated lifecycle smoke.
+The dashboard is not implemented yet: the existing Service Status tray command
+still opens Reader's connection status. Autostart is not registered or exposed.
+Existing process leases and
 `ScheduledServiceController` can be reused with ownership safeguards.
 Health already includes uptime/readiness/backend/streaming data; Reader
 diagnostics includes content leases and export counts. Current Task Scheduler
@@ -134,5 +147,7 @@ and model-management code lives in `apps/tts_service/src/tts_service/cli.py`.
 The downloadable catalog currently contains one entry. The machine-local
 `models/MANIFEST.json` has an unrelated pre-existing change: preserve it.
 
-Next: implement T1.1 and lifecycle tests. U8 stays parked. After this track,
+Next: T1.2, the dashboard and safe activity-aware lifecycle controls; then T1.3
+Windows autostart and Options entry. Recheck live processes before publication.
+U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.

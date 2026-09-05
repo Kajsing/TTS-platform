@@ -41,16 +41,26 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> str:
-    completed = subprocess.run(
-        command,
-        cwd=cwd,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+def _run(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> str:
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DesktopReaderCheckError(f"Command timed out: {command[0]}") from exc
     if completed.returncode != 0:
         raise DesktopReaderCheckError(
             f"Command failed ({completed.returncode}): {' '.join(command)}\n{completed.stdout}"
@@ -828,10 +838,12 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
     environment = os.environ.copy()
     environment["TTS_PLATFORM_READER_SMOKE_MARKER"] = str(marker)
     environment["TTS_PLATFORM_READER_FOLDER_SMOKE"] = "1"
+    environment.pop("TTS_PLATFORM_READER_LIFECYCLE_SMOKE", None)
     _run(
         [str(extracted / "TtsPlatform.Reader.App.exe"), "--smoke-test"],
         cwd=extracted,
         env=environment,
+        timeout=45,
     )
     if not marker.is_file():
         raise DesktopReaderCheckError("The WPF process exited without rendering its main window.")
@@ -851,7 +863,44 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
     )
     if not all(payload.get(check) is True for check in folder_checks):
         raise DesktopReaderCheckError("The isolated folder visibility smoke failed.")
-    return {"status": "passed", "title": payload.get("title"), "folder_visibility": "passed"}
+    lifecycle_marker = temporary / "service-center-lifecycle.json"
+    environment["TTS_PLATFORM_READER_SMOKE_MARKER"] = str(lifecycle_marker)
+    environment["TTS_PLATFORM_READER_LIFECYCLE_SMOKE"] = "1"
+    environment.pop("TTS_PLATFORM_READER_FOLDER_SMOKE", None)
+    _run(
+        [str(extracted / "TtsPlatform.Reader.App.exe"), "--smoke-test"],
+        cwd=extracted,
+        env=environment,
+        timeout=45,
+    )
+    if not lifecycle_marker.is_file():
+        raise DesktopReaderCheckError("Service Center exited without a lifecycle result.")
+    lifecycle = json.loads(lifecycle_marker.read_text(encoding="utf-8"))
+    lifecycle_checks = (
+        "rendered",
+        "one_tray",
+        "reader_closed",
+        "secondary_activation",
+        "fresh_reader",
+        "unsaved_preserved",
+        "dialog_guard",
+        "minimize_restored",
+        "settings_reloaded",
+        "tray_disposed",
+        "ownership_released",
+        "isolated_settings",
+        "live_service_untouched",
+        "background_hidden",
+        "compact_closed",
+    )
+    if not all(lifecycle.get(check) is True for check in lifecycle_checks):
+        raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")
+    return {
+        "status": "passed",
+        "title": payload.get("title"),
+        "folder_visibility": "passed",
+        "service_center_lifecycle": "passed",
+    }
 
 
 def main() -> int:

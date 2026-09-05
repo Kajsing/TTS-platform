@@ -355,8 +355,10 @@ No autostart is enabled merely by recording this plan or testing the feature.
 Reader Agent Access M1 is complete; see `reader_agent_access_plan.md` and
 `reader_agent_mcp.md`. Before more remote-access work, bring U8's remaining
 acceptance back to the user and confirm the intended WireGuard environment.
-The active next work is Service Center T1.1, followed by the remaining T1 checks
-and T2. The new goal is registered, but implementation is not yet deployed.
+Service Center T1.1 (persistent tray and single-instance Reader lifecycle) is
+implemented, tested and published. Next is T1.2 dashboard/activity-aware service
+controls, then T1.3 Windows startup and T2 voices. The full goal remains active;
+neither the dashboard nor autostart nor the voice library is complete yet.
 
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall

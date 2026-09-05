@@ -112,11 +112,13 @@ public partial class MainWindow : Window
         IDesktopSettingsStore settingsStore,
         DesktopSettings settings,
         bool smokeTest,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ReaderTrayIcon? sharedTray = null)
     {
         _settingsStore = settingsStore;
         _settings = settings;
         _smokeTest = smokeTest;
+        _trayIcon = sharedTray;
         _clipboardPromptPolicy = new ClipboardPromptPolicy(timeProvider);
         InitializeComponent();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
@@ -154,6 +156,7 @@ public partial class MainWindow : Window
         }
 
         ContentRendered -= MainWindow_ContentRendered;
+        if (Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_LIFECYCLE_SMOKE") == "1") return;
         var agentSmoke = AgentSmokeScenario.LoadFromEnvironment();
         if (agentSmoke is not null)
         {
@@ -237,10 +240,8 @@ public partial class MainWindow : Window
         _audioInterruptionMonitor.Changed += AudioInterruptionMonitor_Changed;
         _audioInterruptionMonitor.Enabled = _settings.EffectivePauseForCallsAndAlarms;
 
-        _trayIcon = new ReaderTrayIcon();
-        _trayIcon.Command += TrayIcon_Command;
-        _trayIcon.SetClipboardMonitoring(_settings.ClipboardMonitoringEnabled);
-        _trayIcon.SetStatus("Stopped");
+        _trayIcon?.SetClipboardMonitoring(_settings.ClipboardMonitoringEnabled);
+        _trayIcon?.SetStatus("Stopped");
 
         if (_settings.ClipboardMonitoringEnabled && !clipboardRegistered)
         {
@@ -256,7 +257,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         if (!_exitRequested && _settings.MinimizeToTrayOnClose)
         {
@@ -271,7 +272,9 @@ public partial class MainWindow : Window
         if (!_exitRequested)
         {
             e.Cancel = true;
-            await ExitApplicationAsync();
+            // Finish the first Closing event before attempting the confirmed
+            // close. Stop/save can complete synchronously on an idle Reader.
+            Dispatcher.BeginInvoke(new Action(async () => await CloseReaderAsync()), DispatcherPriority.Background);
         }
     }
 
@@ -340,7 +343,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void TrayIcon_Command(object? sender, ReaderTrayCommand command)
+    internal async Task HandleTrayCommandAsync(ReaderTrayCommand command)
     {
         switch (command)
         {
@@ -366,13 +369,10 @@ public partial class MainWindow : Window
                 OpenMainWindow();
                 await RefreshConnectionAsync();
                 break;
-            case ReaderTrayCommand.Exit:
-                await ExitApplicationAsync();
-                break;
         }
     }
 
-    private void OpenMainWindow()
+    internal void OpenMainWindow()
     {
         Show();
         WindowState = WindowState.Normal;
@@ -406,16 +406,46 @@ public partial class MainWindow : Window
         _compactController.Activate();
     }
 
-    private async Task ExitApplicationAsync()
+    internal async Task<bool> CloseReaderAsync()
     {
+        if (_closed) return true;
         if (_shutdownInProgress)
         {
-            return;
+            return false;
         }
         _shutdownInProgress = true;
-        _exitRequested = true;
         try
         {
+            if (_documentLoadLock.CurrentCount == 0 || _clipboardPromptOpen)
+            {
+                FooterText.Text = "Finish the current document operation before closing Reader.";
+                return false;
+            }
+            if (OwnedWindows.Cast<Window>().Any(window => window != _compactController && window.IsVisible))
+            {
+                FooterText.Text = "Close the open Reader dialog before closing Reader.";
+                return false;
+            }
+            if (_editor?.HasUnsavedChanges == true)
+            {
+                OpenMainWindow();
+                if (_smokeTest) return false;
+                var choice = MessageBox.Show(this,
+                    "Save your text changes before closing Reader?\n\nYes: save and close. No: discard changes. Cancel: keep Reader open.",
+                    "Unsaved article changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                if (choice == MessageBoxResult.Cancel) return false;
+                if (choice == MessageBoxResult.Yes)
+                {
+                    IsEnabled = false;
+                    var result = await _editor.SaveAsync();
+                    if (!result.Saved && _editor.HasUnsavedChanges)
+                    {
+                        FooterText.Text = result.Message ?? "Changes could not be saved; Reader remains open.";
+                        return false;
+                    }
+                }
+            }
+            IsEnabled = false;
             await StopUnifiedPlaybackAsync();
             if (_compactController is not null)
             {
@@ -437,10 +467,25 @@ public partial class MainWindow : Window
                     FooterText.Text = $"Compact position was not saved: {exception.Message}";
                 }
             }
+            _exitRequested = true;
+            Close();
+            return _closed;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or
+            ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException or
+            System.Net.Http.HttpRequestException or OperationCanceledException)
+        {
+            FooterText.Text = $"Reader remains open because closing could not finish: {exception.Message}";
+            return false;
         }
         finally
         {
-            System.Windows.Application.Current.Shutdown();
+            _shutdownInProgress = false;
+            if (!_closed)
+            {
+                IsEnabled = true;
+                _exitRequested = false;
+            }
         }
     }
 
@@ -459,7 +504,7 @@ public partial class MainWindow : Window
             _audioInterruptionMonitor.Dispose();
         }
         _clipboardListener?.Dispose();
-        _trayIcon?.Dispose();
+        _trayIcon = null;
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
         _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         if (_compactController is not null)

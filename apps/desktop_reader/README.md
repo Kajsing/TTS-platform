@@ -39,7 +39,7 @@ The Milestone 9 Reader beta provides:
   restoration;
 - one-operation clipboard append that preserves paragraph boundaries, with
   durable Undo/Redo and an actionable playback-lock refusal;
-- configurable nonfatal global hotkeys, a tray menu with clean Exit, and an
+- configurable nonfatal global hotkeys, one persistent service tray, and an
   optional always-on-top compact controller;
 - privacy mode enabled by default, with monitoring state kept visible and raw
   clipboard text excluded from logs, tray text, compact controls, and taskbar;
@@ -116,6 +116,21 @@ Remote Reader access is not implemented in the current desktop. U7's candidate
 design is documented in `../../docs/reader_remote_security.md`; the existing
 strict loopback validator remains intentional until the user approves that
 design and separately starts U8.
+
+## Closing Reader and the service tray
+
+Closing Reader stops its playback and releases the editor, but leaves Service
+Center in the Windows tray. Unsaved text prompts for Save/Discard/Cancel;
+unfinished document operations and open dialogs must finish first. If the
+existing Minimize to tray on close option is on, the Reader is hidden instead
+and its clipboard/playback controls remain available.
+
+Open Reader from the tray or launch the root shortcut again to restore it.
+There is one tray owner per Windows user/session. To remove the icon, choose
+**Exit Service Center...**; it checks unsaved Reader edits and explicitly leaves
+the Python service running. Use Reader's existing service controls to stop the
+service. The independent dashboard and optional Windows-autostart setting are
+the next Service Center slice and are not available yet.
 
 ## Project boundaries
 

@@ -9,12 +9,17 @@ This file is the live status log and shared memory for future Codex loops.
   `docs/reader_service_center_plan.md`. T1 covers one persistent tray icon,
   a local-service dashboard and safe controls, with optional Windows autostart
   OFF by default; T2 adds a compatible-voice library using existing installation
-  infrastructure. The app goal is registered. Planning and initial code review
-  are complete; implementation/deployment and acceptance remain outstanding.
-  Next is T1.1: decouple tray lifetime from MainWindow and test single-owner
-  activation/close/reopen. No live service/startup/settings changes were made
-  while recording the goal. U8 remains parked. See
-  `.logs/2026-09-05-reader-service-center-plan.md`.
+  infrastructure. T1.1 is implemented: one app-owned persistent tray, bounded
+  current-user single-instance activation, fresh Reader recreation, dirty-edit/
+  dialog close guards and preserved minimize/compact behavior. The exact root
+  shortcut executable is published and passed isolated lifecycle testing.
+  Validation: 176 .NET tests, 537 Python tests (2 optional skips), Ruff,
+  zero-warning build, format verification, portable package/folder/lifecycle
+  smoke passed. Live Reader/service were absent; production settings and service
+  state were not changed. Next is T1.2 dashboard/activity-aware controls, then
+  T1.3 optional Windows startup. No startup registration was made. T1 overall
+  and T2 remain incomplete; U8 stays parked. See
+  `.logs/2026-09-05-reader-service-center-lifecycle.md`.
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Completed user-requested follow-up: Article folders -> Open is a persistent
   visibility toggle, separate from Privacy lock and agent permissions. Closed
