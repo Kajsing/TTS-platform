@@ -645,3 +645,18 @@ only as an explicit opt-in, and recommends owner-managed WireGuard without
 coupling Reader to a VPN vendor. Remote access remains disabled on this machine
 until the owner supplies the intended interface and approves its exact firewall
 rule.
+
+## Current Priority: Reader Agent Access M1
+
+On 2026-09-05 the user explicitly parked U8 for later and chose the local MCP
+article integration as the next target. This takes priority over U8 and Reader
+Milestones 10 and 11. Scope, implementation order, security boundaries, and
+acceptance criteria are in `docs/reader_agent_access_plan.md`.
+
+- [ ] M1: Local MCP article access limited to one owner-selected folder, with
+  revocable service-enforced permissions and reliable chapter delivery.
+
+Website monitoring, cloud-agent connectivity, and WireGuard/firewall setup are
+later work. U8 remains incomplete; its final acceptance test is not waived.
+The app goal tool currently refuses to register M1 while U8 remains registered
+as unfinished. Preserve that distinction from the repository's chosen priority.

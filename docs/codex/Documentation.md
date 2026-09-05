@@ -4,8 +4,14 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-04
+- Date: 2026-09-05
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
+- Current user-selected target: Reader Agent Access M1, specified in
+  `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
+  local folder-scoped MCP article tools and reliable chapter delivery next.
+  M1 is planned, not implemented. App goal registration is pending: `create_goal`
+  rejected it because the existing U8 goal is unfinished. U8 was not marked
+  complete to bypass the tool limitation.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
@@ -2384,6 +2390,27 @@ python3 scripts/package_windows_bundle.py
   Reader process was not terminated or replaced because it may contain open
   user state. The user-owned `models/MANIFEST.json` remains excluded.
 
+## Reader Agent Access Goal Handoff (2026-09-05)
+
+- The user wants an agent to create and maintain articles in a chosen folder.
+  The future use case is following fiction sites and delivering new chapters
+  ready for reading. The approved first step is local MCP access, service-side
+  folder permissions, and persistent chapter identity/import history so retries
+  do not duplicate content.
+- `docs/reader_agent_access_plan.md` records the M1 scope, proposed tool behavior,
+  transaction and revision requirements, Options setup, test/deployment gates,
+  future monitoring/cloud boundary, and the exact objective ready for the app.
+  `Plan.md` and the upgrade plan now point to M1 as the next project priority.
+- U8 stays parked and incomplete. Its remaining real WireGuard/firewall
+  acceptance condition is unchanged. The goal tool returned `cannot create a
+  new goal because this thread has an unfinished goal; complete the existing
+  goal first`. No supported goal tool can cancel, replace, or pause that record;
+  a user-side change in the app is needed before registration can be retried.
+- This handoff changes documentation only. No MCP server, credential, scheduled
+  monitor, network listener, or firewall rule was created. Source-code tests are
+  not rerun for this planning slice. Checks passed for referenced plan files,
+  Markdown fence balance, scope/resume consistency, and `git diff --check`.
+
 ## Known Issues And Follow-Ups
 
 - `README.md` previously presented a Phase 6 status snapshot, while `TASKS.md` and the Phase 7 notes showed additional completed work. The new Codex docs treat the later Phase 7 sources as stronger.
@@ -2447,12 +2474,13 @@ python3 scripts/package_windows_bundle.py
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Upgrade U1 through U7 are complete. U8 implementation is present but
-   disabled and deliberately parked; do not resume its live firewall acceptance
-   unless the user asks. Do not expose the Reader port directly to the internet.
-   The active field follow-up is to collect and review the bounded playback logs
-   before changing playback behavior. Reader Workstation Milestones 10 and 11
-   remain deferred.
+4. Reader Agent Access M1 in `docs/reader_agent_access_plan.md` is the next
+   user-selected target. The app still has unfinished U8 registered, so goal
+   registration must not be claimed until `create_goal` succeeds. U1 through U7
+   are complete; U8 remains disabled and parked with its final real firewall
+   acceptance pending. Website monitoring and cloud MCP exposure are outside M1.
+   Continue collecting playback evidence for any new field failures. Reader
+   Workstation Milestones 10 and 11 remain deferred.
 5. If a future milestone changes deployment exposure, model catalog trust, or
    extension distribution, update the threat model and rerun a scoped security
    pass before relying on the old v1 security evidence.

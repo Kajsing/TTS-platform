@@ -11,6 +11,10 @@ U8 unless the user also asks to continue.
 This track is prioritized ahead of the still-incomplete Reader Milestones 10
 and 11. It does not mark PDF extraction or release-candidate work complete.
 
+On 2026-09-05 the user reaffirmed parking U8 and selected Reader Agent Access
+M1 as the next project target. See `reader_agent_access_plan.md`; its local MCP
+integration now takes priority. U8's pending acceptance is preserved below.
+
 The existing v1 service, Reader library, Chrome integration, localhost security
 defaults, playback behavior, source mapping, and revisioned editing remain
 protected baselines.
@@ -285,7 +289,7 @@ Completed design and spike evidence:
   on 2026-08-19 and deliberately parked it on 2026-08-24 while playback
   diagnostics are collected.
 
-### U8: Secure private-network server beta
+### U8: Secure private-network server beta - parked, acceptance incomplete
 
 **Purpose:** Let a paired Reader desktop on another computer use the service,
 library, folders, and TTS engine on the owner-controlled server computer.
@@ -318,6 +322,9 @@ They resume only after the user completes or deliberately pauses this upgrade
 track.
 
 ## Current resume point
+
+Start Reader Agent Access M1 from `reader_agent_access_plan.md`. The user
+selected this local integration before further remote-access work on 2026-09-05.
 
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall
