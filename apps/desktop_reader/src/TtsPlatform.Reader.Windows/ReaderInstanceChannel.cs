@@ -11,6 +11,18 @@ public enum ReaderActivation : byte
     OpenReader = 1,
     OpenServiceCenter = 2,
     Background = 3,
+    Autostart = 4,
+}
+
+public static class ReaderActivationArguments
+{
+    public static ReaderActivation Parse(IEnumerable<string> arguments)
+    {
+        var values = arguments.ToHashSet(StringComparer.Ordinal);
+        return values.Contains("--autostart") ? ReaderActivation.Autostart :
+            values.Contains("--background") ? ReaderActivation.Background :
+            values.Contains("--service-center") ? ReaderActivation.OpenServiceCenter : ReaderActivation.OpenReader;
+    }
 }
 
 // The first pipe instance is the ownership lock: no mutex/pipe startup race and

@@ -100,6 +100,11 @@
           </Grid>
           <TextBlock Margin="3,8,0,0" Foreground="{StaticResource TextMutedBrush}"
                      Text="Shortcut availability is shown in the connection panel after saving." />
+          <TextBlock Text="Windows startup" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,6" />
+          <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
+                     Text="Optional login startup is managed in Service Center and is off by default. It starts the tray and local service, not the Reader window." />
+          <Button x:Name="OpenStartupButton" Content="Save options and open Windows startup…" HorizontalAlignment="Left"
+                  Margin="0,10,0,0" Click="OpenStartup_Click" />
         </StackPanel>
       </TabItem>
       <TabItem x:Name="AgentAccessTab" Header="Agent access">

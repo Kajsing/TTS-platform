@@ -542,6 +542,7 @@ public partial class MainWindow : Window
         await StopLocalServiceAsync();
 
     internal event EventHandler? ServiceCenterRequested;
+    internal event EventHandler? StartupSettingsRequested;
     internal Func<LocalServiceCommand, Task>? LocalServiceCommandHandler { get; set; }
     private bool _localServiceOperation;
     private bool _enabledBeforeServiceOperation;
@@ -1008,6 +1009,7 @@ public partial class MainWindow : Window
             _settings = dialog.Settings;
             ApplyRuntimeOptions(previous);
             FooterText.Text = "Options saved.";
+            if (dialog.OpenStartupRequested) StartupSettingsRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception exception) when (
             exception is ReaderClientConfigurationException or IOException or UnauthorizedAccessException)

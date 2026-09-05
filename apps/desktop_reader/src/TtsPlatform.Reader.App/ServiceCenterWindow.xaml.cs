@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using TtsPlatform.Reader.Application;
+using TtsPlatform.Reader.Windows;
 
 namespace TtsPlatform.Reader.App;
 
@@ -9,7 +10,30 @@ public partial class ServiceCenterWindow : Window
     internal event EventHandler<LocalServiceCommand>? CommandRequested;
     internal event EventHandler? RefreshRequested;
     internal event EventHandler? OpenReaderRequested;
-    public ServiceCenterWindow() => InitializeComponent();
+    internal event EventHandler<bool>? StartupChangeRequested;
+    internal event EventHandler? StartupRefreshRequested;
+    private bool? _startupEnabled;
+    public ServiceCenterWindow()
+    {
+        InitializeComponent();
+        Height = Math.Min(Height, Math.Max(MinHeight, SystemParameters.WorkArea.Height - 40));
+        Width = Math.Min(Width, Math.Max(MinWidth, SystemParameters.WorkArea.Width - 40));
+    }
+
+    internal void OpenStartupPage() => ServicePages.SelectedItem = WindowsStartupPage;
+
+    internal void ShowStartup(UserStartupState state, string taskName, bool busy)
+    {
+        _startupEnabled = state.Enabled;
+        WindowsStartupCheckBox.IsChecked = state.Enabled;
+        WindowsStartupCheckBox.IsEnabled = !busy && (state.Enabled == true ? state.CanDisable : state.CanEnable);
+        WindowsStartupStatus.Text = busy ? "Reading or updating the Windows registration…" : state.Message;
+        WindowsStartupTaskName.Text = "Windows task · " + taskName;
+        RefreshStartupButton.IsEnabled = !busy;
+    }
+
+    private void Startup_Click(object sender, RoutedEventArgs e) => StartupChangeRequested?.Invoke(this, _startupEnabled != true);
+    private void RefreshStartup_Click(object sender, RoutedEventArgs e) => StartupRefreshRequested?.Invoke(this, EventArgs.Empty);
 
     internal void ShowDashboard(ServiceDashboard value, string endpoint, bool operating, bool rateLimited, DateTimeOffset? checkedAt)
     {

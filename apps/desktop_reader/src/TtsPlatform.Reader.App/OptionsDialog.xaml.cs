@@ -31,6 +31,13 @@ public partial class OptionsDialog : Window
     }
 
     public DesktopSettings Settings { get; private set; }
+    public bool OpenStartupRequested { get; private set; }
+
+    private void OpenStartup_Click(object sender, RoutedEventArgs e)
+    {
+        Save_Click(sender, e);
+        OpenStartupRequested = DialogResult == true;
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {

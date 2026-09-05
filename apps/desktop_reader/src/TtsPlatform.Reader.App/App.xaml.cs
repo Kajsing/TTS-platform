@@ -22,7 +22,7 @@ public partial class App : System.Windows.Application
             {
                 var scope = Environment.GetEnvironmentVariable("TTS_PLATFORM_READER_ACTIVATION_SCOPE");
                 var succeeded = scope?.StartsWith("smoke-", StringComparison.Ordinal) == true &&
-                    await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.OpenReader);
+                    await ReaderInstanceChannel.SendAsync(scope, ReaderActivationArguments.Parse(e.Args));
                 Shutdown(succeeded ? 0 : 1);
                 return;
             }
@@ -34,14 +34,11 @@ public partial class App : System.Windows.Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
             {
-                var activation = e.Args.Contains("--background", StringComparer.Ordinal)
-                    ? ReaderActivation.Background
-                    : e.Args.Contains("--service-center", StringComparer.Ordinal)
-                        ? ReaderActivation.OpenServiceCenter : ReaderActivation.OpenReader;
+                var activation = ReaderActivationArguments.Parse(e.Args);
                 if (!ReaderInstanceChannel.TryAcquire(ReaderInstanceChannel.DefaultScope, out _instance))
                 {
                     var delivered = await ReaderInstanceChannel.SendAsync(ReaderInstanceChannel.DefaultScope, activation);
-                    if (!delivered) MessageBox.Show(
+                    if (!delivered && activation != ReaderActivation.Autostart) MessageBox.Show(
                         "Service Center is already starting or not responding. No second Reader or service was started. Please try opening it again.",
                         "TTS Platform", MessageBoxButton.OK, MessageBoxImage.Information);
                     Shutdown(delivered ? 0 : 1);
@@ -53,8 +50,9 @@ public partial class App : System.Windows.Application
             }
             catch (Exception exception)
             {
-                MessageBox.Show("Service Center could not start.\n\n" + exception.Message,
-                    "TTS Platform", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (ReaderActivationArguments.Parse(e.Args) != ReaderActivation.Autostart)
+                    MessageBox.Show("Service Center could not start.\n\n" + exception.Message,
+                        "TTS Platform", MessageBoxButton.OK, MessageBoxImage.Warning);
                 Shutdown(1);
             }
             return;

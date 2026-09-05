@@ -910,6 +910,10 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "independent_dashboard",
         "dashboard_state_controls",
         "service_preserved_edits",
+        "startup_off_by_default",
+        "startup_hidden_once",
+        "startup_unknown_disabled",
+        "startup_options_entry",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):
         raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")

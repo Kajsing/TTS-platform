@@ -19,7 +19,8 @@ public sealed class ReaderInstanceChannelTests
             Assert.True(await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.OpenReader));
             Assert.True(await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.OpenServiceCenter));
             Assert.True(await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.Background));
-            Assert.Equal(new[] { ReaderActivation.OpenReader, ReaderActivation.OpenServiceCenter, ReaderActivation.Background }, received);
+            Assert.True(await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.Autostart));
+            Assert.Equal(new[] { ReaderActivation.OpenReader, ReaderActivation.OpenServiceCenter, ReaderActivation.Background, ReaderActivation.Autostart }, received);
         }
         Assert.True(ReaderInstanceChannel.TryAcquire(scope, out var replacement));
         replacement!.Dispose();

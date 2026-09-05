@@ -39,6 +39,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
         {
             if (_disposed || _exiting) return;
             if (activation == ReaderActivation.Background) return;
+            if (activation == ReaderActivation.Autostart) { await RunAutostartAsync(); return; }
             if (activation == ReaderActivation.OpenServiceCenter) await OpenServiceCenterAsync();
             else await OpenReaderAsync();
         }));
@@ -61,6 +62,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
             if (_disposed || _exiting) return;
             var reader = new MainWindow(_settingsStore, settings, _isolatedSmoke, sharedTray: _tray);
             reader.ServiceCenterRequested += OpenServiceCenterRequested;
+            reader.StartupSettingsRequested += OpenStartupSettingsRequested;
             reader.LocalServiceCommandHandler = RunServiceCommandAsync;
             Reader = reader;
             reader.Closed += ReaderClosed;
@@ -88,6 +90,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
         {
             reader.Closed -= ReaderClosed;
             reader.ServiceCenterRequested -= OpenServiceCenterRequested;
+            reader.StartupSettingsRequested -= OpenStartupSettingsRequested;
             reader.LocalServiceCommandHandler = null;
         }
         Reader = null;
@@ -117,7 +120,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
 
     internal async Task<bool> ExitAsync(bool confirm = true)
     {
-        if (_exiting || _openingReader || _operationPending) return false;
+        if (_exiting || _openingReader || _operationPending || _startupBusy) return false;
         if (confirm && MessageBox.Show(
             "Exit Service Center? Its tray icon will disappear.\n\nThe local TTS service will keep running. " +
             "Reader playback will stop, but background audio exports will continue. Unsaved edits will be checked before closing.",

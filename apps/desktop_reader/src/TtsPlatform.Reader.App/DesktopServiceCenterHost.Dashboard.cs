@@ -109,6 +109,8 @@ internal sealed partial class DesktopServiceCenterHost
             panel.OpenReaderRequested += async (_, _) => await OpenReaderAsync();
             panel.RefreshRequested += async (_, _) => await RefreshMonitorAsync();
             panel.CommandRequested += async (_, command) => await RunServiceCommandAsync(command);
+            panel.StartupRefreshRequested += async (_, _) => await RefreshStartupAsync();
+            panel.StartupChangeRequested += async (_, enabled) => await ChangeStartupAsync(enabled);
             panel.Closed += (_, _) => { DashboardWindow = null; ScheduleNextCheck(); };
             DashboardWindow = panel;
             RenderDashboard();
@@ -121,6 +123,7 @@ internal sealed partial class DesktopServiceCenterHost
         }
         DashboardWindow.Activate();
         await RefreshMonitorAsync();
+        await RefreshStartupAsync();
     }
 
     private async void OpenServiceCenterRequested(object? sender, EventArgs e) => await OpenServiceCenterAsync();

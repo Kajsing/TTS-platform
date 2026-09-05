@@ -1,8 +1,9 @@
 # Reader Service Center
 
 Status: user-approved active goal, 2026-09-05. T1.1 and the T1.2 dashboard/owned
-launcher control slice are implemented and published. T1.3 and T2 remain
-incomplete; legacy scheduler ownership integration remains a T1 follow-up.
+launcher control slice are implemented and published. T1.3 Windows startup is
+implemented; T2 remains incomplete. Legacy scheduler ownership integration and
+broader legacy-startup discovery remain T1 follow-ups before the T1 audit.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -86,6 +87,20 @@ stale ownership records, missing launchers and unavailable authentication.
 
 ### T1.3: Optional Windows startup
 
+Implemented and validated on 2026-09-06. See
+`.logs/2026-09-06-reader-service-center-startup.md` and
+`docs/reader_service_center_startup.md`. The Windows startup tab reads actual
+per-user registration, not a saved boolean. Enabling creates a current-user,
+interactive-token, least-privilege logon task for the exact published executable;
+disabling removes only the verified matching entry. The normal default legacy
+service task is detected and left untouched; broader/custom-name legacy task
+discovery belongs to the remaining legacy integration slice.
+
+The separate `--autostart` activation checks a matching enabled registration,
+keeps Reader/dashboard closed, reuses a running service and starts an absent one
+at most once. It never enables itself, restarts an existing service or changes
+the Reader's active remote workspace. Startup remains OFF on the user's machine.
+
 Expose an autostart checkbox in Service Center and an entry from Reader Options.
 Show actual registration state rather than only a saved boolean. Use reversible
 current-user Task Scheduler registration, without elevation. Detect existing
@@ -104,7 +119,7 @@ enabling production autostart just to pass a check.
   dialog guards and host disposal pass the isolated WPF lifecycle smoke.
 - [x] Dashboard metrics have verified sources and truthful unavailable states.
 - [ ] Start/stop/restart are ownership-safe and protect active work.
-- [ ] Autostart defaults off, is reversible and reflects actual registration.
+- [x] Autostart defaults off, is reversible and reflects actual registration.
 - [ ] Relevant regression tests, WPF lifecycle smoke and actual-shortcut
   publication pass while the user's Reader is safely closed.
 
@@ -158,7 +173,7 @@ service stays running and checks dirty Reader edits before shutting down.
 The root shortcut binary is updated and passed the isolated lifecycle smoke.
 The Service Center tray command and Reader header entry open the independent
 dashboard. Existing Start/Stop header controls no longer bypass reservations.
-Autostart is not registered or exposed. `LocalServiceProcessControl` uses the
+Autostart is exposed but remains unregistered/off. `LocalServiceProcessControl` uses the
 existing process-lease format and verifies the service is a chronological
 descendant of its exact owned launcher before stopping it.
 Health already includes uptime/readiness/backend/streaming data; Reader
@@ -169,8 +184,11 @@ The downloadable catalog currently contains one entry. The machine-local
 
 The API, coordinator and dashboard now pass unit, isolated real HTTP, real
 synthetic Windows launcher-tree and WPF lifecycle tests. No live service was
-started or stopped for these checks. Next: T1.3 Windows autostart and Options
-entry, including legacy scheduled-task reconciliation/ownership, then T2.
+started or stopped for these checks. Windows autostart and the Options entry
+are implemented and tested, including a real disabled Task Scheduler fixture
+that is removed again and synthetic hidden-startup execution. Next: finish
+legacy scheduled-task ownership/control and broader startup-conflict discovery,
+then audit T1 before starting T2. Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.

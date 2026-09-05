@@ -5,6 +5,23 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- Latest Service Center slice: optional Windows startup is implemented under
+  Service Center > Windows startup, with a save-and-open entry from Reader
+  Options. It reflects actual per-user Task Scheduler registration, defaults
+  off, uses the published executable with an interactive token/least privilege,
+  and never silently replaces a foreign/changed or enabled default legacy task.
+  Unknown/pending operations remain unknown and serialized; errors are read back
+  instead of trusting the requested checkbox value. `--autostart` stays hidden,
+  requires matching enabled registration and starts an absent local service only
+  once. Existing service and remote Reader workspace remain untouched.
+  Validation: 216 .NET tests; 549 Python tests, 2 optional skips; Ruff; isolated
+  real disabled Task Scheduler registration/removal; portable and exact-shortcut
+  WPF startup/lifecycle smoke, including saved Options navigation and contrast.
+  Production autostart remains OFF; no test tasks remain. See
+  `docs/reader_service_center_startup.md` and
+  `.logs/2026-09-06-reader-service-center-startup.md`.
+  Next: complete legacy scheduled-owner control and broader startup-conflict
+  discovery, then audit T1 before T2. Do not close the goal on this partial slice.
 - Latest Service Center progress: the independent WPF dashboard and serialized
   local launcher controls are implemented. Open it from the tray or Reader's
   Service Center header button. Readiness/default voice/activity/uptime/CPU/RAM

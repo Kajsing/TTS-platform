@@ -56,6 +56,23 @@ public partial class App
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var capture = File.Create(Path.Combine(root, "service-center.png"))) encoder.Save(capture);
+            dashboard.OpenStartupPage();
+            dashboard.ShowStartup(new(false, true, false, "Off · No startup entry is registered. This is an isolated preview."), "TTS Platform Service Center (preview)", false);
+            Require(dashboard.WindowsStartupCheckBox.IsChecked == false && dashboard.WindowsStartupCheckBox.IsEnabled,
+                "Startup preview did not show the actual Off state.");
+            await Idle();
+            dashboard.UpdateLayout();
+            var startupBitmap = new RenderTargetBitmap((int)dashboard.ActualWidth, (int)dashboard.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            Require(dashboard.WindowsStartupStatus.Foreground is SolidColorBrush startupForeground &&
+                startupForeground.Color == ((SolidColorBrush)dashboard.FindResource("TextBrush")).Color,
+                "Selected startup tab leaked its white header color into the page text.");
+            startupBitmap.Render(dashboard);
+            var startupEncoder = new PngBitmapEncoder();
+            startupEncoder.Frames.Add(BitmapFrame.Create(startupBitmap));
+            using (var capture = File.Create(Path.Combine(root, "service-center-startup.png"))) startupEncoder.Save(capture);
+            dashboard.ShowStartup(new(null, false, false, "Windows registration is unknown."), "preview", false);
+            Require(dashboard.WindowsStartupCheckBox.IsChecked is null && !dashboard.WindowsStartupCheckBox.IsEnabled,
+                "Unknown Windows registration was presented as Off or actionable.");
             dashboard.ShowDashboard(new(LocalServiceState.Unreachable, "Synthetic status failure"), "local", false, false, null);
             Require(dashboard.CpuText.Text == "—" && dashboard.VoiceText.Text == "Unavailable" && !dashboard.StopButton.IsEnabled,
                 "A failed check retained stale metrics or enabled stop.");
@@ -134,6 +151,14 @@ public partial class App
             _instance.Dispose();
             Require(ReaderInstanceChannel.TryAcquire(scope, out var nextOwner), "Exited owner retained its lock.");
             nextOwner!.Dispose();
+            var startupOptions = new OptionsDialog(new DesktopSettings(), new AgentConnectionFiles(Path.Combine(root, "options-agent-fixture")));
+            startupOptions.ClipboardPromptMinimumTextBox.Text = "321";
+            _ = Dispatcher.BeginInvoke(new Action(() => startupOptions.OpenStartupButton.RaiseEvent(
+                new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent))), DispatcherPriority.ApplicationIdle);
+            Require(startupOptions.ShowDialog() == true && startupOptions.OpenStartupRequested &&
+                startupOptions.Settings.ClipboardPromptMinimumCharacters == 321,
+                "Opening startup from Options did not preserve the explicitly saved preferences.");
+            await VerifyIsolatedAutostartAsync(store, root);
             File.WriteAllText(marker, JsonSerializer.Serialize(new
             {
                 rendered = true,
@@ -154,6 +179,10 @@ public partial class App
                 independent_dashboard = true,
                 dashboard_state_controls = true,
                 service_preserved_edits = true,
+                startup_off_by_default = true,
+                startup_hidden_once = true,
+                startup_unknown_disabled = true,
+                startup_options_entry = true,
             }));
             Shutdown();
         }
@@ -163,6 +192,56 @@ public partial class App
             Shutdown(1);
         }
     }
+
+    private static async Task VerifyIsolatedAutostartAsync(IDesktopSettingsStore store, string root)
+    {
+        foreach (var (enabled, alreadyRunning) in new[] { (false, false), (true, false), (true, true) })
+        {
+            using var host = new DesktopServiceCenterHost(store, isolatedSmoke: true);
+            var service = new AutostartSmokeService { Started = alreadyRunning };
+            var executable = Path.Combine(root, "synthetic-reader.exe");
+            var tasks = new AutostartSmokeTasks(enabled
+                ? new StartupTaskRecord("smoke-startup", UserStartupRegistration.BuildDefinition(executable, "smoke-user"), true) : null);
+            var registration = new UserStartupRegistration(tasks, executable, "smoke-user", _ => true,
+                isolatedTaskName: "smoke-startup", legacyTaskName: "smoke-legacy");
+            host.ConfigureIsolatedAutostart(registration, new LocalServiceCoordinator(service, service));
+            await host.RunAutostartAsync();
+            await host.RunAutostartAsync();
+            if (service.Starts != (enabled && !alreadyRunning ? 1 : 0) || host.Reader is not null ||
+                host.DashboardWindow is not null || ReaderTrayIcon.LiveInstances != 1)
+                throw new InvalidOperationException("Isolated autostart duplicated a launch, opened a window, or ignored the actual startup setting.");
+        }
+        if (ReaderTrayIcon.LiveInstances != 0) throw new InvalidOperationException("Autostart fixture left a tray icon behind.");
+    }
+}
+
+internal sealed class AutostartSmokeTasks(StartupTaskRecord? record) : IUserStartupTasks
+{
+    public StartupTaskRecord? Read(string name) => record?.Name == name ? record : null;
+    public void Create(string name, string xml, string userSid) => throw new InvalidOperationException("Autostart cannot register itself.");
+    public void SetEnabled(StartupTaskRecord expected, bool enabled) => throw new InvalidOperationException("Autostart cannot enable itself.");
+    public void Remove(StartupTaskRecord expected) => throw new InvalidOperationException("Autostart cannot remove registration.");
+}
+
+internal sealed class AutostartSmokeService : ILocalServiceClient, ILocalServiceProcesses
+{
+    internal bool Started;
+    internal int Starts;
+    public Task<LocalServiceStatus> GetLocalStatusAsync(CancellationToken cancellationToken) => Started
+        ? Task.FromResult(new LocalServiceStatus(1, "smoke-instance", true, true, "test", "Test voice", 1, 1, true,
+            new(0, 0, 0, 0, 0), false, new("service_process", 42, 0, 1, 1, 1024)))
+        : Task.FromException<LocalServiceStatus>(new ReaderServiceUnavailableException("Synthetic service is stopped."));
+    public Task<bool?> IsListeningAsync(CancellationToken cancellationToken) => Task.FromResult<bool?>(Started);
+    public Task<ServiceCommandResult> StartAsync(CancellationToken cancellationToken)
+    { Starts++; Started = true; return Task.FromResult(new ServiceCommandResult(true, "Synthetic service started.")); }
+    public Task<ServiceCommandResult> VerifyOwnerAsync(LocalServiceStatus status, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Autostart cannot stop a service.");
+    public Task<ServiceCommandResult> StopAsync(LocalServiceStatus status, Func<bool> reservationValid, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Autostart cannot stop a service.");
+    public Task<ServiceMaintenanceReservation> ReserveMaintenanceAsync(string instanceId, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Autostart cannot reserve maintenance.");
+    public Task<ServiceMaintenanceRelease> ReleaseMaintenanceAsync(string reservation, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Autostart cannot release maintenance.");
 }
 
 public partial class MainWindow

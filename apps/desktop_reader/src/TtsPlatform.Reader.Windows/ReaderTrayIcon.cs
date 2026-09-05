@@ -73,6 +73,9 @@ public sealed class ReaderTrayIcon : IDisposable
 
     public void SetClipboardMonitoring(bool enabled) => _monitoringItem.Checked = enabled;
 
+    public void ShowServiceNotice(string title, string message) =>
+        _notifyIcon.ShowBalloonTip(8000, title, message, Forms.ToolTipIcon.Warning);
+
     public void SetReaderAvailable(bool available)
     {
         foreach (var item in _readerItems) item.Enabled = available;

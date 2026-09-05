@@ -1,9 +1,52 @@
 <Window x:Class="TtsPlatform.Reader.App.ServiceCenterWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TTS Platform — Service Center" Width="820" Height="800" MinWidth="680" MinHeight="560"
+        Title="TTS Platform — Service Center" Width="820" Height="840" MinWidth="680" MinHeight="560"
         Icon="Assets/TtsPlatformReader.ico" WindowStartupLocation="CenterScreen">
-  <Grid>
+  <Window.Resources>
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="Padding" Value="15,8" />
+      <Setter Property="Margin" Value="0,0,6,4" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="TabSurface" Padding="{TemplateBinding Padding}" CornerRadius="6"
+                    Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+              <ContentPresenter x:Name="TabHeader" ContentSource="Header" RecognizesAccessKey="True"
+                                TextElement.Foreground="{StaticResource TextMutedBrush}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource SurfaceBrush}" />
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource AccentBrush}" />
+                <Setter TargetName="TabHeader" Property="TextElement.Foreground" Value="White" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource NavigationBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="TabControl">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabControl">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+              <TabPanel IsItemsHost="True" Margin="8,0,8,0" KeyboardNavigation.TabIndex="1" />
+              <ContentPresenter Grid.Row="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+  <Grid Background="{StaticResource AppBackgroundBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -19,7 +62,9 @@
         </StackPanel>
       </DockPanel>
     </Border>
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <TabControl Grid.Row="1" x:Name="ServicePages" Margin="12,10,12,0">
+      <TabItem Header="Overview">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="20,18,20,10">
         <Border Style="{StaticResource CardStyle}" Padding="18">
           <StackPanel>
@@ -83,6 +128,35 @@
         <TextBlock x:Name="SampleText" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="3,10,3,0" TextWrapping="Wrap" />
       </StackPanel>
     </ScrollViewer>
+      </TabItem>
+      <TabItem x:Name="WindowsStartupPage" Header="Windows startup">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="20">
+            <TextBlock Text="Ready when you log in" FontSize="23" FontWeight="SemiBold" />
+            <TextBlock Margin="0,8,0,20" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
+                       Text="Optional startup on this computer. Reader remains closed until you open it; the tray and local service are available in the background." />
+            <Border Style="{StaticResource CardStyle}" Padding="18">
+              <StackPanel>
+                <CheckBox x:Name="WindowsStartupCheckBox" IsThreeState="True" IsEnabled="False"
+                          Click="Startup_Click" Content="Start Service Center and the local service when I log in to Windows"
+                          AutomationProperties.Name="Start Service Center and local service at Windows login" />
+                <TextBlock x:Name="WindowsStartupStatus" Text="Windows startup has not been checked."
+                           Margin="24,10,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <TextBlock x:Name="WindowsStartupTaskName" Margin="24,9,0,0" FontSize="11"
+                           TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" />
+                <Button x:Name="RefreshStartupButton" Content="Refresh Windows registration" HorizontalAlignment="Left"
+                        Margin="21,15,0,0" Click="RefreshStartup_Click" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="Off by default" FontWeight="SemiBold" Margin="2,22,2,5" />
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"
+                       Text="This uses a current-user Windows Task Scheduler entry, not an administrator-level Windows service. No Windows password is stored. Turning it off removes this startup entry; it does not stop the service or delete articles, voices or credentials." />
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,12,0,0"
+                       Text="The checkbox reflects the actual Windows registration, not a Reader preference file. If Windows denies a change, or another installation owns the task, the result is shown here. Existing legacy startup tasks are never silently replaced." />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
     <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12">
       <StackPanel>
         <TextBlock x:Name="CommandMessage" TextWrapping="Wrap" Margin="3,0,3,8" Visibility="Collapsed"
