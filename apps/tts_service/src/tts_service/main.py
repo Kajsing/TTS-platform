@@ -20,6 +20,16 @@ from .auth import rotate_auth_token
 from .bootstrap import build_application_state
 from .config import AppConfig, load_config
 from .errors import APIError, invalid_request
+from .reader_agent_routes import (
+    AGENT_ADMIN_PREFIX,
+    AGENT_PREFIX,
+    agent_rate_limiter,
+    bound_agent_body,
+    build_reader_agent_admin_router,
+    build_reader_agent_router,
+    enforce_agent_admin,
+    enforce_agent_request,
+)
 from .reader_routes import build_reader_router
 from .reader_stream_routes import build_reader_stream_router
 from .remote_routes import build_remote_admin_router
@@ -54,11 +64,14 @@ def create_app(
         repo_root=repo_root or _repo_root(),
     )
     _register_middleware(app)
+    app.state.reader_agent_limiter = agent_rate_limiter()
     _register_exception_handlers(app)
     _register_routes(app)
     app.include_router(build_reader_router())
     app.include_router(build_reader_stream_router())
     app.include_router(build_remote_admin_router())
+    app.include_router(build_reader_agent_router())
+    app.include_router(build_reader_agent_admin_router())
 
     return app
 
@@ -131,16 +144,22 @@ def _register_middleware(app: FastAPI) -> None:
     async def observe_http_requests(request: Request, call_next) -> FastAPIResponse:
         container = app.state.container
         request_id = _resolve_request_id(
-            request.headers.get("x-request-id"),
+            None if request.url.path.startswith((AGENT_PREFIX, AGENT_ADMIN_PREFIX))
+            else request.headers.get("x-request-id"),
             auth_token=container.auth.token,
         )
         start_time = monotonic()
         response: FastAPIResponse | None = None
         status_code = 500
         try:
-            if _requires_protected_http_access(request):
+            if request.url.path.startswith(AGENT_PREFIX):
+                await enforce_agent_request(request)
+            elif _requires_protected_http_access(request):
                 _enforce_protected_request(container, request)
                 request.state.tts_write_access_enforced = True
+                if request.url.path.startswith(AGENT_ADMIN_PREFIX):
+                    enforce_agent_admin(request)
+                    await bound_agent_body(request)
             response = await call_next(request)
             status_code = response.status_code
             return response
@@ -154,15 +173,22 @@ def _register_middleware(app: FastAPI) -> None:
             return response
         finally:
             duration_ms = (monotonic() - start_time) * 1000
+            endpoint = request.url.path
+            if endpoint.startswith((AGENT_PREFIX, AGENT_ADMIN_PREFIX)):
+                # Agent IDs/invalid paths and caller-controlled request IDs are
+                # not diagnostics. Keep credentials and article text out even
+                # if a client accidentally places either into a URL path.
+                route = request.scope.get("route")
+                endpoint = getattr(route, "path", "/v1/reader/agent/unknown")
             container.observability.request_metrics.record(
-                endpoint=request.url.path,
+                endpoint=endpoint,
                 status_code=status_code,
                 latency_ms=duration_ms,
             )
             container.observability.log_http_request(
                 request_id=request_id,
                 method=request.method,
-                endpoint=request.url.path,
+                endpoint=endpoint,
                 status_code=status_code,
                 duration_ms=duration_ms,
             )

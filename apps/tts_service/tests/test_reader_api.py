@@ -102,7 +102,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert health.json()["reader"] == {
         "enabled": True,
         "database_ready": True,
-            "schema_version": 9,
+        "schema_version": 10,
         "startup_error": None,
     }
     assert unauthorized.status_code == 401
@@ -111,7 +111,7 @@ def test_health_and_capabilities_report_truthful_reader_status(tmp_path: Path) -
     assert payload["contract_version"] == 1
     assert payload["database"] == {
         "ready": True,
-        "schema_version": 9,
+        "schema_version": 10,
         "search_available": True,
     }
     assert payload["imports"] == {
@@ -1524,7 +1524,7 @@ def test_queue_auto_advance_export_and_diagnostics_workflow(tmp_path: Path) -> N
     assert result.status_code == 200
     assert result.headers["content-type"] == "audio/wav"
     assert diagnostics.status_code == 200
-    assert diagnostics.json()["schema_version"] == 9
+    assert diagnostics.json()["schema_version"] == 10
     assert diagnostics.json()["export_status_counts"]["completed"] == 2
     assert diagnostics.json()["document_counts_by_state"] == {
         "inbox": 2,

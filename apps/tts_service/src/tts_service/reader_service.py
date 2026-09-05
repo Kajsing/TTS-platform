@@ -68,6 +68,7 @@ from speech_rules import (
 
 from .config import ReaderConfig
 from .observability import ObservabilityState
+from .reader_agent_service import ReaderAgentService
 from .reader_privacy import ReaderPrivacyService
 
 
@@ -206,6 +207,7 @@ class ReaderApplicationService:
         self.library = ReaderLibrary(repository)
         self.observability = observability
         self.content_leases = ReaderContentLeaseRegistry()
+        self.agents = ReaderAgentService(repository, self.content_leases)
         self.privacy = ReaderPrivacyService(repository)
         self.reader_home_path = reader_home_path or Path(config.home_path).expanduser()
         configured_managed_path = Path(config.managed_files_path).expanduser()

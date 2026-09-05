@@ -9,7 +9,9 @@ This file is the live status log and shared memory for future Codex loops.
 - Current user-selected target: Reader Agent Access M1, specified in
   `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
   local folder-scoped MCP article tools and reliable chapter delivery next.
-  M1 is registered as the active app goal; implementation is pending. The user
+  M1 is registered as the active app goal. Its scoped service/API and atomic
+  chapter-storage slice is implemented; MCP, Options and Windows acceptance
+  remain pending. See `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return
   to U8 after M1. U8 remains incomplete and its network setup needs confirmation.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
@@ -2471,6 +2473,47 @@ python3 scripts/package_windows_bundle.py
   synthesis path, but it remains an optional compatibility client. X64
   registration and product hardening are not active Reader Workstation gates.
 
+## Reader Agent Access M1: Service Foundation (2026-09-05)
+
+- Added SQLite migration 010 for hashed, revocable folder grants and durable
+  chapter/retry receipts. Privacy-lock activation revokes existing grants and
+  removing that lock does not revive old credentials.
+- Added `reader_core.agent_access`, the private SQLite transaction facade and
+  scoped repository, `ReaderAgentService`, native-loopback agent data routes and
+  separately owner-authenticated grant administration. All agent reads/writes
+  check scope in the same transaction as their operation; no SQLite access is
+  delegated to an external agent/client.
+- Chapter append, Reader edit history, saved-cursor revision advancement and
+  success receipt commit together. Repeated/concurrent imports append once;
+  changed payloads conflict. Receipts survive Undo/Redo, manual removal, history
+  trimming and soft-delete/restore, so retries never resurrect removed text.
+- Agent writes use the existing playback lease and revision checks. The normal
+  desktop stale-save path is regression-tested, without changing the editor.
+- All new routes are denied by the remote gateway. Added an independent agent
+  request budget, pre-JSON auth and a 2 MiB body bound. Agent request diagnostics
+  use route templates/generated IDs; source URLs, raw text and secrets stay out.
+- `docs/reader_agent_api.md` defines public requests/results, failure modes,
+  limitations and scoped security-review evidence. Exact replacement is one
+  unique passage within a paragraph, with ambiguous/overlapping matches refused;
+  no whole-article replacement operation is exposed. Read pages use Unicode
+  code-point offsets plus a required continuation revision, and avoid building
+  a full article text string. These are local implementation choices within M1.
+- Validation passed using the Windows `py -3` substitute: full Python suite
+  **497 passed** (including 27 new agent repository/API tests), Ruff clean,
+  20 existing Reader contract fixtures valid. Tests include restart/lost-response
+  retry, concurrent delivery, failed receipt write, actual commit failure,
+  authorization/scope changes, Unicode page boundaries, logging and content
+  leases. Migration expectations advance to schema 10; historical schema-9
+  compatibility/checksum assertions remain intact.
+- No dependency was introduced. `.logs/2026-09-05-reader-agent-service-m1.md`
+  records this implementation slice. The existing local `models/MANIFEST.json`
+  changes are user-owned and excluded from the slice.
+- This is **not M1 completion**: stdio MCP, DPAPI-backed Options provisioning,
+  client configuration, .NET/Windows end-to-end smoke and publishing the actual
+  Reader shortcut runtime remain. No user's running Reader/service was stopped
+  or restarted and no live grant/library was modified. Continue autonomously
+  with the MCP adapter, preserving U8 as parked and incomplete.
+
 ## Resume Instructions For The Next Codex Loop
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
@@ -2478,7 +2521,11 @@ python3 scripts/package_windows_bundle.py
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
 4. Reader Agent Access M1 in `docs/reader_agent_access_plan.md` is registered as
-   the active goal. After M1, revisit U8 with the user and confirm its intended
+   the active goal. Continue from the service/API foundation documented in
+   `docs/reader_agent_api.md`: implement optional stdio MCP, Windows DPAPI-backed
+   Options setup, client configuration, isolated end-to-end Windows/MCP smoke,
+   and safe publication to the root shortcut runtime. Do not mark the service
+   slice as completion of M1. After M1, revisit U8 with the user and confirm its intended
    WireGuard environment. U1 through U7 are complete; U8 remains parked with its
    final real firewall acceptance pending. Website monitoring and cloud MCP
    exposure are outside M1.

@@ -82,6 +82,7 @@ _ALLOWED_REMOTE_ROUTES = (
 )
 
 _DENIED_REMOTE_ROUTES = (
+    ("GET|POST|PATCH|DELETE", re.compile(r"^/v1/reader/agent(?:-access)?/.*$")),
     ("POST", re.compile(r"^/v1/auth/rotate$")),
     ("POST", re.compile(r"^/v1/tts/jobs$")),
     ("GET|DELETE", re.compile(rf"^/v1/tts/jobs/{_RESOURCE_ID}$")),
