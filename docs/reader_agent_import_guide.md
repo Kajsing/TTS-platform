@@ -19,7 +19,7 @@ failure:
 | Two receipts held URLs instead of chapter text | Browser-session clipboard writes did not change the Windows clipboard read by the importer. Inspect the actual payload before the first write. |
 | An advertised browser export failed | The in-app browser did not implement `tab.content.export`. Verify capabilities once, then use a supported transfer. |
 | A chapter-body lookup returned null | Navigation had not finished replacing the DOM. Wait for the body and verify chapter identity. |
-| Author notes appeared before the story | The first paragraph was not necessarily a title. Preserve notes and derive a heading from the page/menu. |
+| Author notes appeared before the story | The first paragraph was not necessarily a title. That import preserved notes; derive headings from the page/menu and apply the current content default below to future imports. |
 | A successful tool response was mistaken for a successful import | MCP correctly persisted the supplied payload. Count/hash/source and complete readback checks belong in the importing workflow. |
 
 Initial folder/grant setup and recovery also took time. There is no precise
@@ -30,6 +30,37 @@ article was verified through all 23 MCP text pages: 11 ordered receipts and exac
 equality with the normalized source text. No private article text, credentials,
 local grant IDs or production database contents are included in this guide.
 
+## Content default: story only
+
+On 2026-09-05 the owner chose **omit clearly marked author notes** as the default
+for future agent imports. An explicit request to keep notes overrides it. This
+is an agent-workflow preference, not a Reader checkbox or a service-side filter.
+It does not authorize editing existing articles, including the first import.
+
+- Capture the complete source before filtering. Remove only clearly identified
+  note passages with verified start/end boundaries, such as a distinct `A/N` or
+  `Author's Note` section. Those labels are evidence to inspect, not a regex that
+  deletes the rest of a chapter. A story may resume after a mid-chapter note.
+- Preserve ambiguous passages and all story prose, dialogue, epigraphs, letters,
+  headings and source attribution. Italics, brackets or separators alone are not
+  evidence of commentary. Forum reader mode can retain notes inside chapter posts.
+- Keep raw captures in ignored staging and review each removed range against
+  them. Record source hashes and removed character ranges/reasons as separate
+  provenance; do not put omitted text in normal logs, chat or version control.
+  Record the selected content policy, so retries reuse the same cleaned payload.
+- Check source capture against the page, then check that the cleaned copy differs
+  only by the reviewed omissions. The delivery bundle's `text` and `sha256` refer
+  to the cleaned text; full MCP readback must still match that bundle exactly.
+  The offline checker validates delivery integrity, not note classification.
+- Report how many note passages were omitted and whether uncertain passages were
+  retained. If a supposed chapter contains only commentary, stop for source/count
+  review instead of sending an empty body or silently dropping a chapter.
+
+Boundary examples: remove a separate opening note ending before a verified
+chapter heading; remove a clearly bounded closing note; keep a character saying
+"I found the author's note" in dialogue; retain a mixed note/story paragraph when
+its boundary cannot be established. Do not paraphrase prose to make it fit.
+
 ## Preferred workflow
 
 1. Confirm the requested story and observed chapter count/order. Confirm or reuse
@@ -37,8 +68,9 @@ local grant IDs or production database contents are included in this guide.
    file to the import agent. Verify `reader_workspace` and search the destination
    with pagination before creating anything.
 2. Fetch every requested body before starting a new article. Use normal HTTP or
-   supported browser access. Keep prose, paragraph breaks and author notes;
-   remove page navigation/reviews/ads. Preserve source attribution and headings.
+   supported browser access. Apply the content default above, keeping all story
+   prose and paragraph breaks; remove page navigation/reviews/ads. Preserve source
+   attribution and headings.
 3. Transfer to a UTF-8 file in a task-specific ignored directory. Prefer a working
    file export/download. Browser and Windows clipboards must not be assumed to
    share state. If necessary, use a temporary loopback-only staging form, with a
@@ -81,11 +113,14 @@ The JSON package has `story_key`, `intro` (title/author/source introduction), an
 - `chapter_key`: stable source identity, not a new UUID on each attempt;
 - `source_url`: observed HTTP(S) chapter URL without embedded credentials;
 - `title`: the spoken heading;
-- `text`: heading, blank line, then the complete captured chapter body;
+- `text`: heading, blank line, then the complete chapter body after reviewed
+  note removal (or with notes intact when explicitly requested);
 - `sha256`: lowercase SHA-256 of the exact UTF-8 `text`, before Reader normalization.
 
-Extra provenance fields such as observed source lengths may be retained. Supply
-the expected count/story key from the source observation, not merely by copying
+Extra provenance fields such as observed source lengths, source hashes, content
+policy and reviewed removal ranges may be retained; they do not replace the
+required delivery-text hash. Supply the expected count/story key from the source
+observation, not merely by copying
 the package's own assertions. Repeated bodies or URLs require review; a warning
 must not be bypassed by editing keys until the underlying source is understood.
 

@@ -34,6 +34,14 @@ This file is the live status log and shared memory for future Codex loops.
   runtime, permissions, articles or service state; U8 remains parked.
   Validation: 15 new offline cases; full Python suite 537 passed / 2 optional
   skips, Ruff, targeted format check and Skill Creator validation passed.
+- Subsequent owner preference: future agent imports default to story-only text,
+  omitting clearly bounded author notes while retaining ambiguous passages.
+  `docs/reader_agent_import_guide.md` and the personal `reader-chapter-import`
+  skill distinguish raw-source verification from exact cleaned-text readback.
+  Explicit requests may retain notes. This is a guide-only change: existing
+  articles, Reader UI/runtime, grants and service state remain unchanged.
+  Validation for this narrow follow-up is recorded in
+  `.logs/2026-09-05-reader-import-story-only.md`.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
