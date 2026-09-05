@@ -646,18 +646,19 @@ coupling Reader to a VPN vendor. Remote access remains disabled on this machine
 until the owner supplies the intended interface and approves its exact firewall
 rule.
 
-## Current Priority: Reader Agent Access M1
+## Reader Agent Access M1 - complete
 
 On 2026-09-05 the user explicitly parked U8 for later and chose the local MCP
 article integration as the next target. This takes priority over U8 and Reader
 Milestones 10 and 11. Scope, implementation order, security boundaries, and
 acceptance criteria are in `docs/reader_agent_access_plan.md`.
 
-- [ ] M1: Local MCP article access limited to one owner-selected folder, with
+- [x] M1: Local MCP article access limited to one owner-selected folder, with
   revocable service-enforced permissions and reliable chapter delivery.
   Implementation, tests, isolated Windows/MCP smoke and shortcut publication
-  passed on 2026-09-05. Final live activation awaits the user's service restart;
-  the execution environment rejected process restart, so the old route is 404.
+  passed on 2026-09-05. After the user explicitly authorized restarting the
+  service, live health/Kokoro/database and the protected grant route passed.
+  No live article or grant was created. Completion audit is in Documentation.md.
 
 Website monitoring, cloud-agent connectivity, and WireGuard/firewall setup are
 later work. U8 remains incomplete; its final acceptance test is not waived.

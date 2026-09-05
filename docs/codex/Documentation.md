@@ -6,22 +6,23 @@ This file is the live status log and shared memory for future Codex loops.
 
 - Date: 2026-09-05
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
-- Current user-selected target: Reader Agent Access M1, specified in
+- Latest completed user-selected target: Reader Agent Access M1, specified in
   `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
   local folder-scoped MCP article tools and reliable chapter delivery next.
-  M1 remains the selected target; its app goal is blocked awaiting the user's
-  service restart. Its service/API, atomic chapter
+  M1 is complete after the user's explicit service-restart authorization.
+  Its service/API, atomic chapter
   storage, stdio MCP, DPAPI-backed Options and isolated Windows acceptance are
   implemented/tested. The user closed Reader; its actual shortcut binary was
-  published and passed the end-to-end smoke. The old local service still needs
-  a user-performed restart (execution policy rejected our restart attempt).
-  The same PID 16268 and grant-route 404 were verified in three consecutive
-  goal turns, then the app goal was marked blocked. Do not restart automatic
-  work without a user reply or relevant external-state change.
-  Verify the new grant route afterwards; do not mark the goal complete yet.
+  published and passed the end-to-end smoke. The temporary restart blocker was
+  resolved after renewed explicit user permission: the updated service is
+  healthy, Kokoro is ready, database integrity is OK and the protected grant
+  route returns 200 with no grants enabled. No live article/permission was changed.
   See `docs/reader_agent_mcp.md` and `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return
   to U8 after M1. U8 remains incomplete and its network setup needs confirmation.
+- The user also suggested an independent service tray icon for later. It is
+  recorded in `docs/reader_upgrade_plan.md`; no tray/startup implementation or
+  new background application was added in this handoff.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in
@@ -2582,19 +2583,57 @@ python3 scripts/package_windows_bundle.py
 - U8 remains parked/incomplete. Bring its intended WireGuard/firewall acceptance
   back to the user after M1; no network changes are authorized by this delivery.
 
+## Reader Agent Access M1: Live Activation and Completion Audit (2026-09-05)
+
+The user explicitly authorized giving the remaining service a restart after
+closing Reader. Fresh diagnostics confirmed no Reader process, zero active
+streams/content leases and only completed exports. The verified old service
+PID 16268 was stopped. Launching its base Python command directly failed before
+binding (`reader_core` missing from that shell's import path); that process
+exited. The existing `scripts/windows/run_service.ps1` launcher supplies the
+normal project module paths and selects the existing voice environment. It
+successfully started the service (launcher PID 8444, listener PID 48428).
+Only the new startup logs were written; no dependencies, voice configuration,
+tokens, articles or grants were changed.
+
+Live checks now confirm `status: ok`, backend/default voice loaded,
+`kokoro-en-v1_0-af-heart`, authentication enabled, Reader schema 10/integrity OK,
+zero content leases and HTTP 200 from `/v1/reader/agent-access/grants` with zero
+grants. The service remains bound only to `127.0.0.1:7777`. The prior 404/restart
+blocker is resolved; the preceding blocked entries are historical, not current.
+
+| Goal requirement | Acceptance evidence |
+|---|---|
+| Optional local MCP; service-owned data; one chosen folder | Adapter uses only fixed protected HTTP routes; nine real stdio tools pass the live isolated smoke. Local grants default off, including on the actual restarted service. |
+| Per-call scope, direct IDs, search/pages, moves/deletion/privacy/revocation; no broad-token bypass | `test_agent_repository.py` and `test_reader_agent_api.py` cover these paths, including retries after scope changes and permanent revocation on privacy-lock activation. |
+| Credential protection; no secrets in config/results/logs | Hash-storage tests, Windows DPAPI/config tests, sanitized-error/log tests and real C#-to-Python DPAPI smoke pass. Setup/security boundaries are in `reader_agent_mcp.md`. |
+| Read/create/search/rename/edit/append/chapter tools | All nine tools exercised through a real stdio subprocess and HTTP service; Unicode revision-checked pagination and explicit unique-passage replacement are covered. |
+| Atomic durable chapter import/provenance/order/retry behavior | Repository tests cover concurrent delivery, restart/lost response, changed payload, actual commit failure, order warnings and Undo/Redo/manual-removal/soft-delete receipts. Smoke also restarts both service and MCP host before retry. |
+| Playback leases, revisions and unsaved desktop edits | Agent API lease/stale-save tests, deterministic generation/release/cancel tests and .NET editor/version-guard tests pass; guards are present after the playback version-check await and before document reload. |
+| Options provision/revoke and usable local configuration | Production Options methods provision/revoke in isolated Windows smoke; protected key is usable by Python, article remains after revocation, broader API and revoked access fail. |
+| Article visible and ordinary Reader reading | Exact shortcut executable displays the complete editable MCP article in its normal library/editor and returns 98 PCM packets with 98 source spans through the ordinary Reader stream. |
+| Tests, lint, formatting, build, licenses and security review | Unchanged implementation commit `9dfed1c` has the full 522-Python/167-.NET test and format/build/publish record above. Fresh final run: 53 agent/service/repository tests and 167 .NET tests pass; Ruff and exact-target Windows/MCP smoke pass again. One upstream Starlette/AnyIO deprecation warning in the optional environment; no failures. Dependency notices/review are recorded. |
+| Safe exact-target deployment, documentation, commit/push | User closed Reader before publish; root shortcut target was verified, published and smoke-tested. Implemented slice is pushed as `9dfed1c`; this handoff updates completion/resume records and is committed/pushed separately. |
+| No required paid/cloud dependency; preserve U8 pause | Optional separate MCP environment, no hosted account/scheduler or remote transport. U8 and cloud/site monitoring remain outside M1; confirm WireGuard environment with user before any future network changes. |
+
+The service restart is the only live activation change. The request to consider
+service presence in the Windows tray is recorded as later usability work in
+`reader_upgrade_plan.md`, not folded into M1. No required M1 implementation or
+activation work remains. Reader was not reopened; its updated shortcut
+is ready for the user. Revisit U8's intended machine/WireGuard setup with the
+user before selecting further remote work.
+
 ## Resume Instructions For The Next Codex Loop
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for
    current status and any newly recorded blockers.
 3. Treat v1 as complete unless a new blocker is discovered from fresh evidence.
-4. Reader Agent Access M1 is implemented, tested and published to the shortcut
-   runtime, but the old service still needs a user-performed restart. The prior
-   restart attempt was rejected by execution policy; do not work around it.
-   After the user restarts, verify `GET /v1/reader/agent-access/grants` with the
-   owner token without exposing secrets or creating a live grant. Review the
-   pushed slice and acceptance record, then mark the goal complete if no work
-   remains. Setup is in `docs/reader_agent_mcp.md`. After M1, revisit U8 with the user and confirm its intended
+4. Reader Agent Access M1 is complete, including safe service restart, live
+   route activation and exact-shortcut Windows/MCP acceptance. Do not repeat the
+   historical restart blocker. Setup is in `docs/reader_agent_mcp.md`; grant
+   provisioning remains the owner's explicit choice, not a required live smoke
+   mutation. Before further remote work, revisit U8 with the user and confirm its intended
    WireGuard environment. U1 through U7 are complete; U8 remains parked with its
    final real firewall acceptance pending. Website monitoring and cloud MCP
    exposure are outside M1.

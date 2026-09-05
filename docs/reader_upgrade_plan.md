@@ -13,7 +13,7 @@ and 11. It does not mark PDF extraction or release-candidate work complete.
 
 On 2026-09-05 the user reaffirmed parking U8 and selected Reader Agent Access
 M1 as the next project target. See `reader_agent_access_plan.md`; its local MCP
-integration now takes priority. U8's pending acceptance is preserved below.
+integration is now complete. U8's pending acceptance is preserved below.
 The user manually stopped the U8 app goal, M1 registration succeeded, and the
 user asked to revisit U8 after M1. Confirm its intended network setup then.
 
@@ -323,10 +323,24 @@ packaging, accessibility, security, and release candidate) remain incomplete.
 They resume only after the user completes or deliberately pauses this upgrade
 track.
 
+## Later usability idea: service tray presence
+
+On 2026-09-05 the user requested considering a tray icon for the local service,
+because Reader can be closed while the service remains running unnoticed.
+This is a backlog note, not a new active milestone or implemented feature.
+Reader's existing minimize-to-tray option is not the same as independent service
+presence. A future design should consider visible running/stopped status, opening
+Reader, safe start/stop/restart and clear ownership of the managed service process.
+Decide its lifecycle and interaction with active playback/exports with the user
+before implementation. Do not change startup registration or add another
+background process merely to record this idea.
+
 ## Current resume point
 
-Start Reader Agent Access M1 from `reader_agent_access_plan.md`. The user
-selected this local integration before further remote-access work on 2026-09-05.
+Reader Agent Access M1 is complete; see `reader_agent_access_plan.md` and
+`reader_agent_mcp.md`. Before more remote-access work, bring U8's remaining
+acceptance back to the user and confirm the intended WireGuard environment.
+The service-tray idea above is a later option, not permission to start it now.
 
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall

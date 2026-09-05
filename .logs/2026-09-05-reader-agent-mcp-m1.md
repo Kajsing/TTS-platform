@@ -39,3 +39,12 @@
   blocker, the live process was still PID 16268 and the grant route was still
   404. Marked the app goal blocked, not complete. Source and deployment remain
   validated/pushed as 9dfed1c; resume when the user restarts the service.
+- Final activation: user explicitly authorized restart. Verified idle PID 16268
+  stopped successfully. Base-Python direct startup exited with missing module
+  path; normal `run_service.ps1` successfully selected the existing environment
+  and paths (launcher 8444, service 48428). Health/Kokoro/database OK, loopback
+  unchanged, grant route 200 with zero grants. No live article/permission edits.
+- Re-ran actual-shortcut Windows/MCP smoke (all nine tools, 98 PCM/source-span
+  pairs), 53 agent/API/repository tests and 167 .NET tests; Ruff clean. Existing
+  complete-suite/build/format/license evidence is tied to unchanged 9dfed1c.
+  Completion audit and future service-tray note recorded in workflow docs.

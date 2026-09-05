@@ -4,14 +4,14 @@
 
 Approved as the next project target on 2026-09-05. U8 remains parked and
 incomplete; its resume conditions are preserved in `reader_upgrade_plan.md`.
-M1 remains the selected target; its app goal is **blocked awaiting the user's
-service restart** after the same condition was verified in three consecutive
-goal turns. Service/API, MCP, Options, isolated Windows end-to-end
-acceptance and publication of the actual shortcut target are implemented and
-validated. The user closed Reader to allow deployment. The already-running
-old service still returns 404 on the new grant route; process restart was
-blocked by the execution environment. **Pending handoff: user restarts that
-service, then confirm its new route before marking the goal complete.**
+**M1 is complete (2026-09-05).** Service/API, MCP, Options, isolated Windows
+end-to-end acceptance and publication of the actual shortcut target are
+implemented and validated. After a temporary restart blocker, the user explicitly
+authorized service restart. The normal Windows launcher started the updated
+service: health/backend/default Kokoro voice and database integrity are OK;
+the protected grant route returns 200 with zero grants by default. No live
+articles were changed or agent permissions provisioned. The final audit is in
+`docs/codex/Documentation.md` and setup is in `reader_agent_mcp.md`.
 Its implemented contract is in `reader_agent_api.md`. The user manually stopped
 the previous U8 app goal on 2026-09-05, after which M1 registration succeeded.
 The user explicitly asked to revisit U8 after this side quest. Stopping its app
