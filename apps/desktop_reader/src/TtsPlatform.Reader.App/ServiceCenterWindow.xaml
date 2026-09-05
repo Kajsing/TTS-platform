@@ -1,0 +1,102 @@
+<Window x:Class="TtsPlatform.Reader.App.ServiceCenterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TTS Platform — Service Center" Width="820" Height="800" MinWidth="680" MinHeight="560"
+        Icon="Assets/TtsPlatformReader.ico" WindowStartupLocation="CenterScreen">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Border Background="{StaticResource NavigationBrush}" Padding="24,18">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="Open Reader" VerticalAlignment="Center"
+                Style="{StaticResource HeaderButtonStyle}" Click="OpenReader_Click" />
+        <StackPanel>
+          <TextBlock Text="THIS COMPUTER" Foreground="#AFC3D3" FontSize="11" />
+          <TextBlock Text="Service Center" Foreground="White" FontSize="26" FontWeight="SemiBold" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="20,18,20,10">
+        <Border Style="{StaticResource CardStyle}" Padding="18">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="StateDot" Fill="#B77913" Width="12" Height="12" Margin="0,0,10,0" />
+              <TextBlock x:Name="StateText" Text="Checking service" FontSize="23" FontWeight="SemiBold"
+                         AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+            <TextBlock x:Name="StatusMessage" Text="Checking this computer's local TTS service…"
+                       Margin="0,8,0,4" TextWrapping="Wrap" />
+            <TextBlock x:Name="EndpointText" Foreground="{StaticResource TextMutedBrush}" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <UniformGrid Columns="3" Margin="0,12,0,12">
+          <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,0,6,0">
+            <StackPanel>
+              <TextBlock Text="CPU" Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock x:Name="CpuText" Text="—" FontSize="26" Margin="0,5,0,0" />
+              <TextBlock Text="of processor capacity" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource CardStyle}" Padding="16" Margin="3,0,3,0">
+            <StackPanel>
+              <TextBlock Text="MEMORY" Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock x:Name="RamText" Text="—" FontSize="26" Margin="0,5,0,0" />
+              <TextBlock Text="current working set" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource CardStyle}" Padding="16" Margin="6,0,0,0">
+            <StackPanel>
+              <TextBlock Text="UPTIME" Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock x:Name="UptimeText" Text="—" FontSize="26" Margin="0,5,0,0" />
+              <TextBlock Text="since service startup" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Border>
+        </UniformGrid>
+        <Border Style="{StaticResource CardStyle}" Padding="18">
+          <StackPanel>
+            <TextBlock Text="Service voice" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock x:Name="VoiceText" Text="Unavailable" FontSize="17" Margin="0,7,0,3" TextWrapping="Wrap" />
+            <TextBlock x:Name="ReadinessText" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />
+            <TextBlock Text="Reader may use its own preferred voice. This panel always controls the local service, even when Reader uses a remote workspace."
+                       FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          </StackPanel>
+        </Border>
+        <Border Style="{StaticResource CardStyle}" Padding="18" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Text="Live activity" FontSize="16" FontWeight="SemiBold" />
+            <UniformGrid Columns="5" Margin="0,10,0,3">
+              <StackPanel><TextBlock x:Name="RequestsText" Text="—" FontSize="21" /><TextBlock Text="Requests" FontSize="12" /></StackPanel>
+              <StackPanel><TextBlock x:Name="StreamsText" Text="—" FontSize="21" /><TextBlock Text="Streams" FontSize="12" /></StackPanel>
+              <StackPanel><TextBlock x:Name="LeasesText" Text="—" FontSize="21" /><TextBlock Text="Reading leases" FontSize="12" /></StackPanel>
+              <StackPanel><TextBlock x:Name="ExportsText" Text="—" FontSize="21" /><TextBlock Text="Audio exports" FontSize="12" /></StackPanel>
+              <StackPanel><TextBlock x:Name="JobsText" Text="—" FontSize="21" /><TextBlock Text="Speech jobs" FontSize="12" /></StackPanel>
+            </UniformGrid>
+            <TextBlock Text="Counts may overlap. CPU and memory cover the service process only, not Reader or external workers. — means unavailable."
+                       FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          </StackPanel>
+        </Border>
+        <TextBlock x:Name="SampleText" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="3,10,3,0" TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+    <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+      <StackPanel>
+        <TextBlock x:Name="CommandMessage" TextWrapping="Wrap" Margin="3,0,3,8" Visibility="Collapsed"
+                   AutomationProperties.LiveSetting="Polite" />
+        <WrapPanel>
+          <Button x:Name="StartButton" Content="Start service" Style="{StaticResource PrimaryButtonStyle}" Click="Start_Click" IsEnabled="False" />
+          <Button x:Name="StopButton" Content="Stop…" Click="Stop_Click" IsEnabled="False" />
+          <Button x:Name="RestartButton" Content="Restart…" Click="Restart_Click" IsEnabled="False" />
+          <Button x:Name="RefreshStatusButton" Content="Refresh status" Click="Refresh_Click" />
+          <Button Content="Back to tray" Click="Close_Click" />
+        </WrapPanel>
+        <TextBlock Text="Closing this panel leaves the local service and tray running."
+                   Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="3,7,3,0" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

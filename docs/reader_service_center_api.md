@@ -1,8 +1,8 @@
 # Local Service Center contract v1
 
 This is an additive local-owner API. Existing health, Reader and synthesis
-contracts are unchanged. Its desktop dashboard/control wiring is still in
-progress; these routes do not themselves stop a Windows process.
+contracts are unchanged. The desktop dashboard/control wiring uses these routes;
+the routes themselves never stop a Windows process.
 
 All three routes require the existing owner bearer token, enabled token
 authentication, a native loopback client, and no Origin header. Folder-scoped
@@ -95,5 +95,18 @@ The normal desktop verifier enables `TTS_PLATFORM_SERVICE_CENTER_SMOKE=1` only
 for its isolated live fixture. The compiled .NET smoke reads real HTTP status,
 reserves idle maintenance, observes a blocked Reader request, releases it and
 continues normal Reader paging/synthesis/editing. It never stops the fixture or
-touches the user's service. Production dashboard and Windows command ownership/
-deadline enforcement are the next T1.2 slice, not yet delivered by this API.
+touches the user's service. The desktop coordinator now serializes checks and
+commands and enforces the reservation deadline from before the POST, with one
+second of margin. The Windows adapter rechecks it immediately before mutation.
+It verifies the persisted launcher executable/start time and the service's
+chronological process ancestry, and refuses stale, unrelated or unowned PIDs.
+Restart requires confirmed endpoint shutdown and subsequently observed readiness.
+Existing Reader Start/Stop and tray/dashboard commands share this path.
+
+The native monitor disables redirects/proxies, bounds each HTTP request to four
+seconds, uses saved local settings even when Reader selects a remote workspace,
+and applies 5/15-second visible/hidden polling, 30-second failure backoff and
+65-second rate-limit backoff. CPU/RAM are never read from unrelated processes.
+Legacy scheduled/terminal services without a verified launcher lease can be
+observed, but must be stopped through their known owner. There is no task-name-
+only termination fallback; legacy task integration belongs to the startup slice.

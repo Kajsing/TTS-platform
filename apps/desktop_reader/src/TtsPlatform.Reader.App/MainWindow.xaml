@@ -59,6 +59,8 @@
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
           <Button Content="Options…" Style="{StaticResource HeaderButtonStyle}"
                   Click="OptionsButton_Click" AutomationProperties.Name="Open Reader options" />
+          <Button Content="Service Center" Style="{StaticResource HeaderButtonStyle}"
+                  Click="ServiceCenterButton_Click" AutomationProperties.Name="Open local Service Center" />
           <Ellipse x:Name="ServiceStatusDot" Width="9" Height="9" Fill="#E0A52B" Margin="0,0,7,0" />
           <TextBlock x:Name="ServiceStatusText" Foreground="White" Margin="0,4,12,0"
                      Text="Service: checking" AutomationProperties.LiveSetting="Polite" />

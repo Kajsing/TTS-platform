@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using TtsPlatform.Reader.Application;
 using TtsPlatform.Reader.Client;
 using TtsPlatform.Reader.Windows;
@@ -35,6 +37,31 @@ public partial class App
             Require(await ReaderInstanceChannel.SendAsync(scope, ReaderActivation.Background), "Background activation was not acknowledged.");
             await Idle();
             Require(_serviceCenter.Reader is null, "Background activation opened a Reader window.");
+            await _serviceCenter.OpenServiceCenterAsync();
+            await Idle();
+            var dashboard = _serviceCenter.DashboardWindow!;
+            Require(dashboard.IsVisible && _serviceCenter.Reader is null, "Service Center opened a Reader just to show status.");
+            await _serviceCenter.OpenServiceCenterAsync();
+            Require(_serviceCenter.DashboardWindow == dashboard && ReaderTrayIcon.LiveInstances == 1, "Dashboard duplicated its window or tray.");
+            var sample = new LocalServiceStatus(1, "synthetic", true, true, "voice", "Kokoro English af_heart", 5,
+                7384, true, new(0, 0, 0, 0, 0), false, new("service_process", 42, 5, 10, 8, 402653184));
+            var view = ServiceDashboard.FromStatus(sample) with { CpuPercent = 12.3 };
+            dashboard.ShowDashboard(view, "http://127.0.0.1:7777/", false, false, DateTimeOffset.UtcNow);
+            Require(dashboard.StopButton.IsEnabled && dashboard.RestartButton.IsEnabled && !dashboard.StartButton.IsEnabled,
+                "Ready dashboard actions do not match status.");
+            await Idle();
+            dashboard.UpdateLayout();
+            var bitmap = new RenderTargetBitmap((int)dashboard.ActualWidth, (int)dashboard.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(dashboard);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var capture = File.Create(Path.Combine(root, "service-center.png"))) encoder.Save(capture);
+            dashboard.ShowDashboard(new(LocalServiceState.Unreachable, "Synthetic status failure"), "local", false, false, null);
+            Require(dashboard.CpuText.Text == "—" && dashboard.VoiceText.Text == "Unavailable" && !dashboard.StopButton.IsEnabled,
+                "A failed check retained stale metrics or enabled stop.");
+            dashboard.Close();
+            Require(_serviceCenter.DashboardWindow is null && _serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,
+                "Dashboard close did not return to the tray independently.");
             await _serviceCenter.OpenReaderAsync();
             await Idle();
             var first = _serviceCenter.Reader!;
@@ -72,6 +99,11 @@ public partial class App
                 "Activation did not create a fresh Reader in the existing host.");
             var second = _serviceCenter.Reader!;
             second.PrepareLifecycleSmokeEdit();
+            Require(await second.PrepareLocalServiceOperationAsync() && second.HasLifecycleSmokeEdit && !second.IsEnabled,
+                "Service preparation lost unsaved text or failed to inhibit the local Reader.");
+            Require(!await second.CloseReaderAsync(), "Reader closed during service maintenance.");
+            second.EndLocalServiceOperation();
+            Require(second.IsEnabled && second.HasLifecycleSmokeEdit, "Reader did not recover after service maintenance.");
             Require(!await second.CloseReaderAsync() && second.HasLifecycleSmokeEdit,
                 "Reader close discarded an unsaved edit.");
             Require(!await _serviceCenter.ExitAsync(confirm: false) && second.HasLifecycleSmokeEdit,
@@ -119,6 +151,9 @@ public partial class App
                 live_service_untouched = true,
                 background_hidden = true,
                 compact_closed = true,
+                independent_dashboard = true,
+                dashboard_state_controls = true,
+                service_preserved_edits = true,
             }));
             Shutdown();
         }

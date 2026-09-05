@@ -5,7 +5,26 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
-- Latest Service Center progress: T1.2 status/safety foundation is implemented,
+- Latest Service Center progress: the independent WPF dashboard and serialized
+  local launcher controls are implemented. Open it from the tray or Reader's
+  Service Center header button. Readiness/default voice/activity/uptime/CPU/RAM
+  have explicit unavailable states and modest polling/backoff. Reader's old
+  Start/Stop bypass is removed. Ownership is verified against the persisted
+  launcher and service process ancestry; short maintenance reservations protect
+  work and are checked again immediately before stop. Unsaved Reader edits stay
+  in memory; local playback/close is inhibited during the confirmed operation.
+  Legacy scheduled/terminal launches without a verified ownership record are
+  visible but safely refused, not killed by task name or adopted by API PID.
+  Validation: 199 .NET tests, 549 Python tests (2 optional skips), Ruff, real
+  synthetic Windows process-tree tests, isolated HTTP/portable WPF smoke and
+  actual-shortcut lifecycle/dashboard smoke passed. Visual evidence is at
+  `logs/service-center-dashboard-20260906/service-center.png` (synthetic values).
+  Next: T1.3 actual optional Windows startup registration + Options entry and
+  legacy scheduler reconciliation/ownership, then T2 voice management. The goal
+  is not complete. No production service, database, models, token, clipboard or
+  Windows startup registration changed. Details:
+  `.logs/2026-09-06-reader-service-center-dashboard.md`.
+- Earlier Service Center slice: T1.2 status/safety foundation was implemented,
   not yet connected to a new dashboard. Native local owner-only status reports
   readiness, voices, uptime, global live work and measured process CPU/RAM.
   Short atomic maintenance reservations guard the future stop/restart race and

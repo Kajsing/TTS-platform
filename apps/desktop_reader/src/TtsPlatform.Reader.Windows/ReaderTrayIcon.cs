@@ -12,6 +12,9 @@ public enum ReaderTrayCommand
     ReadClipboard,
     ToggleClipboardMonitoring,
     ServiceStatus,
+    StartService,
+    StopService,
+    RestartService,
     Exit,
 }
 
@@ -24,6 +27,11 @@ public sealed class ReaderTrayIcon : IDisposable
     private readonly Forms.ToolStripMenuItem _monitoringItem;
     private readonly List<Forms.ToolStripMenuItem> _readerItems = [];
     private readonly Icon _icon;
+    private readonly Forms.ToolStripMenuItem _startService;
+    private readonly Forms.ToolStripMenuItem _stopService;
+    private readonly Forms.ToolStripMenuItem _restartService;
+    private string _serviceStatus = "Checking";
+    private string _readerStatus = "Reader closed";
 
     public ReaderTrayIcon()
     {
@@ -40,7 +48,11 @@ public sealed class ReaderTrayIcon : IDisposable
             ReaderTrayCommand.ToggleClipboardMonitoring);
         menu.Items.Add(_monitoringItem);
         _readerItems.Add(_monitoringItem);
-        Add(menu, "Service Status", ReaderTrayCommand.ServiceStatus);
+        Add(menu, "Service Center…", ReaderTrayCommand.ServiceStatus);
+        _startService = Add(menu, "Start local service", ReaderTrayCommand.StartService);
+        _stopService = Add(menu, "Stop local service…", ReaderTrayCommand.StopService);
+        _restartService = Add(menu, "Restart local service…", ReaderTrayCommand.RestartService);
+        _startService.Enabled = _stopService.Enabled = _restartService.Enabled = false;
         menu.Items.Add(new Forms.ToolStripSeparator());
         Add(menu, "Exit Service Center...", ReaderTrayCommand.Exit);
 
@@ -69,7 +81,21 @@ public sealed class ReaderTrayIcon : IDisposable
 
     public void SetStatus(string status)
     {
-        var text = $"TTS Platform Reader — {status}";
+        _readerStatus = status;
+        UpdateTooltip();
+    }
+
+    public void SetServiceStatus(string status, bool canStart, bool canStop)
+    {
+        _serviceStatus = status;
+        _startService.Enabled = canStart;
+        _stopService.Enabled = _restartService.Enabled = canStop;
+        UpdateTooltip();
+    }
+
+    private void UpdateTooltip()
+    {
+        var text = $"TTS · {_serviceStatus} · {_readerStatus}";
         _notifyIcon.Text = text.Length <= 63 ? text : text[..63];
     }
 
@@ -84,7 +110,7 @@ public sealed class ReaderTrayIcon : IDisposable
         Interlocked.Decrement(ref _liveInstances);
     }
 
-    private void Add(
+    private Forms.ToolStripMenuItem Add(
         Forms.ContextMenuStrip menu,
         string label,
         ReaderTrayCommand command,
@@ -94,5 +120,6 @@ public sealed class ReaderTrayIcon : IDisposable
         item.Click += (_, _) => Command?.Invoke(this, command);
         menu.Items.Add(item);
         if (readerOnly) _readerItems.Add(item);
+        return item;
     }
 }

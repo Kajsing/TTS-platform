@@ -408,6 +408,7 @@ public partial class MainWindow : Window
 
     internal async Task<bool> CloseReaderAsync()
     {
+        if (_localServiceOperation) return false;
         if (_closed) return true;
         if (_shutdownInProgress)
         {
@@ -540,101 +541,78 @@ public partial class MainWindow : Window
     private async void StopServiceButton_Click(object sender, RoutedEventArgs e) =>
         await StopLocalServiceAsync();
 
-    private async Task StartLocalServiceAsync()
+    internal event EventHandler? ServiceCenterRequested;
+    internal Func<LocalServiceCommand, Task>? LocalServiceCommandHandler { get; set; }
+    private bool _localServiceOperation;
+    private bool _enabledBeforeServiceOperation;
+    private bool _desktopPollingBeforeServiceOperation;
+
+    private void ServiceCenterButton_Click(object sender, RoutedEventArgs e) =>
+        ServiceCenterRequested?.Invoke(this, EventArgs.Empty);
+
+    private Task StartLocalServiceAsync() => RunLocalServiceCommandAsync(LocalServiceCommand.Start);
+    private Task StopLocalServiceAsync() => RunLocalServiceCommandAsync(LocalServiceCommand.Stop);
+
+    private async Task RunLocalServiceCommandAsync(LocalServiceCommand command)
     {
         if (!_settings.ActiveConnection.IsLocal)
         {
-            StatusText.Text = "Switch to Local to start the service on this computer.";
+            StatusText.Text = "Use Service Center to manage this computer's local service; remote workspaces are unaffected.";
             return;
         }
-        SetBusy(true, "Starting the local service...");
-        try
-        {
-            if (!ScheduledServiceController.TryStart(out var message))
-            {
-                StatusText.Text = message;
-                FooterText.Text = "Service start failed";
-                return;
-            }
+        if (LocalServiceCommandHandler is { } handler) await handler(command);
+        else FooterText.Text = "Service controls are unavailable in this isolated Reader window.";
+    }
 
-            StatusText.Text = message;
-            ServiceStatusText.Text = "Service: starting";
-            ServiceStatusDot.Fill = new SolidColorBrush(Color.FromRgb(224, 165, 43));
-            await WaitForServiceAvailabilityAsync(shouldBeAvailable: true);
-            await RefreshConnectionAsync();
-        }
-        finally
+    internal async Task<bool> PrepareLocalServiceOperationAsync()
+    {
+        if (!_settings.ActiveConnection.IsLocal || _closed) return true;
+        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 ||
+            _clipboardPromptOpen ||
+            OwnedWindows.Cast<Window>().Any(window => window != _compactController && window.IsVisible))
         {
-            SetBusy(false);
+            FooterText.Text = "Finish the open Reader operation before stopping the local service.";
+            return false;
+        }
+        _localServiceOperation = true;
+        _enabledBeforeServiceOperation = IsEnabled;
+        _desktopPollingBeforeServiceOperation = _desktopOpenTimer.IsEnabled;
+        _desktopOpenTimer.Stop();
+        IsEnabled = false;
+        if (_compactController is not null) _compactController.IsEnabled = false;
+        await StopUnifiedPlaybackAsync();
+        return true;
+    }
+
+    internal void EndLocalServiceOperation()
+    {
+        if (!_localServiceOperation) return;
+        _localServiceOperation = false;
+        if (!_closed)
+        {
+            IsEnabled = _enabledBeforeServiceOperation;
+            if (_compactController is not null) _compactController.IsEnabled = true;
+            if (_desktopPollingBeforeServiceOperation) _desktopOpenTimer.Start();
         }
     }
 
-    private async Task StopLocalServiceAsync()
+    internal async Task RefreshAfterLocalServiceCommandAsync(ServiceDashboard dashboard)
     {
-        if (!_settings.ActiveConnection.IsLocal)
+        if (_closed || !_settings.ActiveConnection.IsLocal || _smokeTest) return;
+        if (dashboard.State == LocalServiceState.Stopped)
         {
-            StatusText.Text = "Switch to Local to stop the service on this computer.";
+            _desktopPollingBeforeServiceOperation = false;
+            _desktopOpenTimer.Stop();
+        }
+        if (_editor?.HasUnsavedChanges == true || _documentLoadLock.CurrentCount == 0 || _clipboardPromptOpen)
+        {
+            // A connection/library refresh can rebuild the visible document or
+            // relock privacy folders. Keep the draft until its normal save flow.
+            ServiceStatusText.Text = $"Service: {dashboard.State.ToString().ToLowerInvariant()}";
+            FooterText.Text = "Local service updated. Your unsaved text is kept; save it before refreshing the library.";
             return;
         }
-        var confirmation = MessageBox.Show(
-            "Stop the local TTS service? Current Reader and browser playback will be interrupted.",
-            "Stop local service",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (confirmation != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
-        SetBusy(true, "Stopping the local service...");
-        try
-        {
-            await StopUnifiedPlaybackAsync();
-            if (!ScheduledServiceController.TryStop(out var message))
-            {
-                StatusText.Text = message;
-                FooterText.Text = "Service stop was refused safely";
-                return;
-            }
-
-            _privacySessions?.Clear();
-
-            StatusText.Text = message;
-            ServiceStatusText.Text = "Service: stopping";
-            ServiceStatusDot.Fill = new SolidColorBrush(Color.FromRgb(224, 165, 43));
-            await WaitForServiceAvailabilityAsync(shouldBeAvailable: false);
-            await RefreshConnectionAsync();
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
-    private async Task WaitForServiceAvailabilityAsync(bool shouldBeAvailable)
-    {
-        for (var attempt = 0; attempt < 30; attempt++)
-        {
-            var available = false;
-            try
-            {
-                _ = await GetClient().GetHealthAsync();
-                available = true;
-            }
-            catch (Exception exception) when (
-                exception is ReaderServiceUnavailableException or
-                    ReaderTokenUnavailableException or
-                    ReaderApiException)
-            {
-                // A transition is expected while the local process starts or stops.
-            }
-
-            if (available == shouldBeAvailable)
-            {
-                return;
-            }
-            await Task.Delay(250);
-        }
+        await RefreshConnectionAsync();
     }
 
     private async Task RefreshConnectionAsync(bool rebuildClient = false)
@@ -705,7 +683,7 @@ public partial class MainWindow : Window
 
     private async Task CheckDesktopOpenRequestAsync()
     {
-        if (_closed || !_desktopOpenLock.Wait(0))
+        if (_closed || _localServiceOperation || !_desktopOpenLock.Wait(0))
         {
             return;
         }
@@ -1631,6 +1609,11 @@ public partial class MainWindow : Window
 
     private bool PlaybackBlockedByAudioInterruption()
     {
+        if (_localServiceOperation)
+        {
+            FooterText.Text = "Reading is waiting for the local service operation to finish.";
+            return true;
+        }
         if (!_settings.EffectivePauseForCallsAndAlarms || !_audioInterruptionActive)
         {
             return false;

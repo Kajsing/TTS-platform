@@ -8,7 +8,7 @@ namespace TtsPlatform.Reader.App;
 
 // Owns presentation lifetime, never synthesis or article storage. A closed
 // Reader is disposed; the tray does not retain a hidden editor to stay alive.
-internal sealed class DesktopServiceCenterHost : IDisposable
+internal sealed partial class DesktopServiceCenterHost : IDisposable
 {
     private readonly IDesktopSettingsStore _settingsStore;
     private readonly Dispatcher _dispatcher;
@@ -29,6 +29,7 @@ internal sealed class DesktopServiceCenterHost : IDisposable
         _tray.Command += TrayCommand;
         _tray.SetReaderAvailable(false);
         _tray.SetStatus("Reader closed; service is independent");
+        InitializeMonitor();
     }
 
     internal void QueueActivation(ReaderActivation activation)
@@ -38,9 +39,8 @@ internal sealed class DesktopServiceCenterHost : IDisposable
         {
             if (_disposed || _exiting) return;
             if (activation == ReaderActivation.Background) return;
-            await OpenReaderAsync();
-            if (activation == ReaderActivation.OpenServiceCenter && Reader is { } reader)
-                await reader.HandleTrayCommandAsync(ReaderTrayCommand.ServiceStatus);
+            if (activation == ReaderActivation.OpenServiceCenter) await OpenServiceCenterAsync();
+            else await OpenReaderAsync();
         }));
     }
 
@@ -60,6 +60,8 @@ internal sealed class DesktopServiceCenterHost : IDisposable
             var settings = await _settingsStore.LoadAsync();
             if (_disposed || _exiting) return;
             var reader = new MainWindow(_settingsStore, settings, _isolatedSmoke, sharedTray: _tray);
+            reader.ServiceCenterRequested += OpenServiceCenterRequested;
+            reader.LocalServiceCommandHandler = RunServiceCommandAsync;
             Reader = reader;
             reader.Closed += ReaderClosed;
             _tray?.SetReaderAvailable(true);
@@ -82,7 +84,12 @@ internal sealed class DesktopServiceCenterHost : IDisposable
 
     private void ReaderClosed(object? sender, EventArgs e)
     {
-        if (sender is MainWindow reader) reader.Closed -= ReaderClosed;
+        if (sender is MainWindow reader)
+        {
+            reader.Closed -= ReaderClosed;
+            reader.ServiceCenterRequested -= OpenServiceCenterRequested;
+            reader.LocalServiceCommandHandler = null;
+        }
         Reader = null;
         System.Windows.Application.Current.MainWindow = null;
         _tray?.SetReaderAvailable(false);
@@ -97,13 +104,20 @@ internal sealed class DesktopServiceCenterHost : IDisposable
             await ExitAsync();
             return;
         }
-        if (command is ReaderTrayCommand.OpenReader or ReaderTrayCommand.ServiceStatus) await OpenReaderAsync();
+        if (command == ReaderTrayCommand.ServiceStatus) { await OpenServiceCenterAsync(); return; }
+        if (command is ReaderTrayCommand.StartService or ReaderTrayCommand.StopService or ReaderTrayCommand.RestartService)
+        {
+            await RunServiceCommandAsync(command == ReaderTrayCommand.StartService ? LocalServiceCommand.Start :
+                command == ReaderTrayCommand.StopService ? LocalServiceCommand.Stop : LocalServiceCommand.Restart);
+            return;
+        }
+        if (command == ReaderTrayCommand.OpenReader) await OpenReaderAsync();
         if (Reader is { } reader) await reader.HandleTrayCommandAsync(command);
     }
 
     internal async Task<bool> ExitAsync(bool confirm = true)
     {
-        if (_exiting || _openingReader) return false;
+        if (_exiting || _openingReader || _operationPending) return false;
         if (confirm && MessageBox.Show(
             "Exit Service Center? Its tray icon will disappear.\n\nThe local TTS service will keep running. " +
             "Reader playback will stop, but background audio exports will continue. Unsaved edits will be checked before closing.",
@@ -126,6 +140,7 @@ internal sealed class DesktopServiceCenterHost : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        DisposeMonitor();
         if (_tray is not null)
         {
             _tray.Command -= TrayCommand;

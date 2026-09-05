@@ -1,7 +1,8 @@
 # Reader Service Center
 
-Status: user-approved active goal, 2026-09-05. T1.1 is implemented and published;
-T1.2, T1.3 and T2 remain incomplete.
+Status: user-approved active goal, 2026-09-05. T1.1 and the T1.2 dashboard/owned
+launcher control slice are implemented and published. T1.3 and T2 remain
+incomplete; legacy scheduler ownership integration remains a T1 follow-up.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -51,12 +52,23 @@ tray ownership or Windows startup registration.
 
 ### T1.2: Dashboard and controls
 
-Status/safety foundation implemented on 2026-09-06; UI and Windows command wiring
-remain outstanding. See `reader_service_center_api.md` and
+Status/safety foundation and the WPF dashboard/owned-launcher controls are
+implemented on 2026-09-06. See `reader_service_center_api.md` and
 `.logs/2026-09-06-reader-service-center-status.md`. Existing Reader diagnostics
 proved unsuitable for polling/global work safety (database integrity scan and
 folder-filtered export counts), so an additive native-owner status projection
 and short atomic maintenance reservation reuse the existing runtime counters.
+
+The dashboard opens independently from Reader, polls at 5 seconds visible / 15
+seconds hidden, backs off on failures and rate limits, and displays unavailable
+values rather than stale/zero metrics. Tray and Reader controls now use one
+serialized coordinator. Stop/restart requires current idle activity, confirmed
+Reader cleanup, an unexpired reservation and a verified launcher/service process
+tree. The old task-name-only Run/End fallback has been removed. Legacy scheduled
+or terminal-started services without a matching ownership lease remain visible
+but are refused with an explanation; they are not silently adopted by PID. The
+remaining startup slice must reconcile legacy tasks without changing them merely
+to pass validation. See `.logs/2026-09-06-reader-service-center-dashboard.md`.
 
 Provide service readiness, default voice, voice count, uptime, activity, CPU and
 working-set RAM, plus Open Reader and start/stop/restart. Show stopped, starting,
@@ -90,7 +102,7 @@ enabling production autostart just to pass a check.
   shortcut executable with isolated settings and activation scope.
 - [x] Reader close/reopen, compact/minimized mode, dirty-edit refusal, active
   dialog guards and host disposal pass the isolated WPF lifecycle smoke.
-- [ ] Dashboard metrics have verified sources and truthful unavailable states.
+- [x] Dashboard metrics have verified sources and truthful unavailable states.
 - [ ] Start/stop/restart are ownership-safe and protect active work.
 - [ ] Autostart defaults off, is reversible and reflects actual registration.
 - [ ] Relevant regression tests, WPF lifecycle smoke and actual-shortcut
@@ -144,19 +156,21 @@ tests use separate scopes/settings and cannot contact the real service. Closing
 Reader no longer shuts down its host. Exiting Service Center confirms that the
 service stays running and checks dirty Reader edits before shutting down.
 The root shortcut binary is updated and passed the isolated lifecycle smoke.
-The dashboard is not implemented yet: the existing Service Status tray command
-still opens Reader's connection status. Autostart is not registered or exposed.
-Existing process leases and
-`ScheduledServiceController` can be reused with ownership safeguards.
+The Service Center tray command and Reader header entry open the independent
+dashboard. Existing Start/Stop header controls no longer bypass reservations.
+Autostart is not registered or exposed. `LocalServiceProcessControl` uses the
+existing process-lease format and verifies the service is a chronological
+descendant of its exact owned launcher before stopping it.
 Health already includes uptime/readiness/backend/streaming data; Reader
 diagnostics includes content leases and export counts. Current Task Scheduler
 and model-management code lives in `apps/tts_service/src/tts_service/cli.py`.
 The downloadable catalog currently contains one entry. The machine-local
 `models/MANIFEST.json` has an unrelated pre-existing change: preserve it.
 
-The local status/reservation API and .NET dashboard policy now pass unit and
-isolated real HTTP integration tests. No dashboard window has been added yet.
-Next: finish T1.2, the dashboard and safe activity-aware lifecycle controls; then T1.3
-Windows autostart and Options entry. Recheck live processes before publication.
+The API, coordinator and dashboard now pass unit, isolated real HTTP, real
+synthetic Windows launcher-tree and WPF lifecycle tests. No live service was
+started or stopped for these checks. Next: T1.3 Windows autostart and Options
+entry, including legacy scheduled-task reconciliation/ownership, then T2.
+Recheck live processes before publication.
 U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.
