@@ -177,12 +177,22 @@ class ReaderExportManager:
     def shutdown(self, *, wait: bool = True) -> None:
         self._executor.shutdown(wait=wait, cancel_futures=False)
 
+    def active_count(self) -> int:
+        with self._lock:
+            return sum(not future.done() for future in self._futures.values())
+
+    def _completed(self, job_id: str, future: Future[None]) -> None:
+        with self._lock:
+            if self._futures.get(job_id) is future:
+                self._futures.pop(job_id, None)
+
     def _submit(self, job_id: str) -> None:
         with self._lock:
             current = self._futures.get(job_id)
             if current is not None and not current.done():
                 return
             self._futures[job_id] = self._executor.submit(self._run, job_id)
+            self._futures[job_id].add_done_callback(lambda future: self._completed(job_id, future))
 
     def _output_path(self, filename: str) -> Path:
         candidate = (self.output_directory / filename).resolve()

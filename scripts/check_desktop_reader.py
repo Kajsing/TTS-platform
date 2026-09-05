@@ -531,15 +531,23 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         / "TtsPlatform.Reader.Client.Smoke.dll"
     )
     with _live_reader_service(repo_root, temporary) as (base_url, token_path):
+        environment = os.environ.copy()
+        environment["TTS_PLATFORM_SERVICE_CENTER_SMOKE"] = "1"
         output = _run(
             [str(dotnet), str(smoke_dll), base_url, str(token_path)],
             cwd=repo_root,
+            env=environment,
+            timeout=90,
         )
         structured_import = _check_live_structured_import(base_url, token_path)
         speech_rules = _check_live_speech_rules(base_url, token_path)
     payload = json.loads(output)
     if payload.get("live_reader_paging") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm live Reader paging.")
+    if payload.get("live_service_center") is not True:
+        raise DesktopReaderCheckError(
+            "The .NET client did not confirm local status and maintenance."
+        )
     if payload.get("live_utf16_edit") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm a live UTF-16 edit.")
     if (

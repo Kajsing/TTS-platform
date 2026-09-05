@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace TtsPlatform.Reader.Client;
 
-public sealed class ReaderServiceClient : IReaderServiceClient
+public sealed class ReaderServiceClient : IReaderServiceClient, ILocalServiceClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -35,6 +35,19 @@ public sealed class ReaderServiceClient : IReaderServiceClient
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
         SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken);
+
+    public Task<LocalServiceStatus> GetLocalStatusAsync(CancellationToken cancellationToken = default) =>
+        SendAsync<LocalServiceStatus>(HttpMethod.Get, "v1/service/status", true, null, cancellationToken);
+
+    public Task<ServiceMaintenanceReservation> ReserveMaintenanceAsync(
+        string instanceId, CancellationToken cancellationToken = default) =>
+        SendAsync<ServiceMaintenanceReservation>(HttpMethod.Post, "v1/service/maintenance", true,
+            new { InstanceId = instanceId }, cancellationToken);
+
+    public Task<ServiceMaintenanceRelease> ReleaseMaintenanceAsync(
+        string reservation, CancellationToken cancellationToken = default) =>
+        SendAsync<ServiceMaintenanceRelease>(HttpMethod.Post, "v1/service/maintenance/release", true,
+            new { Reservation = reservation }, cancellationToken);
 
     public Task<ReaderAgentGrantPage> GetAgentGrantsAsync(CancellationToken cancellationToken = default) =>
         SendAsync<ReaderAgentGrantPage>(HttpMethod.Get, "v1/reader/agent-access/grants", true, null, cancellationToken);

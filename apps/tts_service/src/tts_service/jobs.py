@@ -48,6 +48,7 @@ class InMemoryJobManager:
     _jobs: dict[str, JobRecord] = field(default_factory=dict)
     _executions: dict[str, SynthesisExecution] = field(default_factory=dict)
     _futures: dict[str, Future[None]] = field(default_factory=dict)
+    _live_futures: set[Future[None]] = field(default_factory=set)
     _timers: dict[str, threading.Timer] = field(default_factory=dict)
     _executor: ThreadPoolExecutor = field(init=False, repr=False)
 
@@ -86,6 +87,8 @@ class InMemoryJobManager:
                 execution,
                 synthesis_service,
             )
+            self._live_futures = {future for future in self._live_futures if not future.done()}
+            self._live_futures.add(self._futures[job_id])
             timeout_timer.start()
         self._record_job_event("created")
         return record
@@ -97,6 +100,14 @@ class InMemoryJobManager:
             if record is None:
                 raise not_found("Job not found.", details={"job_id": job_id})
             return record
+
+    def active_count(self) -> int:
+        with self._lock:
+            # Record TTL/eviction can outlive cancellation but precede worker exit.
+            # Keep worker ownership separately from public job history.
+            self._live_futures.update(self._futures.values())
+            self._live_futures = {future for future in self._live_futures if not future.done()}
+            return len(self._live_futures)
 
     def get_job_result(self, job_id: str) -> SynthesisResult:
         record = self.get_job(job_id)

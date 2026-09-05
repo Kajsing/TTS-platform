@@ -40,6 +40,7 @@ from .security import (
     extract_bearer_token_from_headers,
     validate_auth_token,
 )
+from .service_control import ServiceActivityMiddleware, build_service_control_router
 from .synthesis import SynthesisCancelledError, SynthesisService
 
 _CLIENT_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,35}$")
@@ -72,6 +73,8 @@ def create_app(
     app.include_router(build_remote_admin_router())
     app.include_router(build_reader_agent_router())
     app.include_router(build_reader_agent_admin_router())
+    app.include_router(build_service_control_router())
+    app.add_middleware(ServiceActivityMiddleware, state=app.state.container.service_control)
 
     return app
 
@@ -497,7 +500,7 @@ def _enforce_protected_request(container: object, request: Request) -> None:
 def _requires_protected_http_access(request: Request) -> bool:
     path = request.url.path
     method = request.method.upper()
-    if path.startswith("/v1/reader"):
+    if path.startswith(("/v1/reader", "/v1/service/")):
         return True
     if path == "/v1/tts" and method == "POST":
         return True

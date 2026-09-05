@@ -51,6 +51,13 @@ tray ownership or Windows startup registration.
 
 ### T1.2: Dashboard and controls
 
+Status/safety foundation implemented on 2026-09-06; UI and Windows command wiring
+remain outstanding. See `reader_service_center_api.md` and
+`.logs/2026-09-06-reader-service-center-status.md`. Existing Reader diagnostics
+proved unsuitable for polling/global work safety (database integrity scan and
+folder-filtered export counts), so an additive native-owner status projection
+and short atomic maintenance reservation reuse the existing runtime counters.
+
 Provide service readiness, default voice, voice count, uptime, activity, CPU and
 working-set RAM, plus Open Reader and start/stop/restart. Show stopped, starting,
 ready, busy, degraded and unreachable states honestly: a process or HTTP response
@@ -147,7 +154,9 @@ and model-management code lives in `apps/tts_service/src/tts_service/cli.py`.
 The downloadable catalog currently contains one entry. The machine-local
 `models/MANIFEST.json` has an unrelated pre-existing change: preserve it.
 
-Next: T1.2, the dashboard and safe activity-aware lifecycle controls; then T1.3
+The local status/reservation API and .NET dashboard policy now pass unit and
+isolated real HTTP integration tests. No dashboard window has been added yet.
+Next: finish T1.2, the dashboard and safe activity-aware lifecycle controls; then T1.3
 Windows autostart and Options entry. Recheck live processes before publication.
 U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.

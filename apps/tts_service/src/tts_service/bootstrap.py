@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,6 +23,7 @@ from .reader_exports import ReaderExportManager, resolve_export_directory
 from .reader_service import ReaderRuntimeState, initialize_reader_runtime
 from .remote_access import RemoteAccessManager
 from .security import OriginPolicy, RateLimiter
+from .service_control import ServiceControlState
 from .streaming import StreamingMetrics
 
 
@@ -46,6 +47,7 @@ class ApplicationState:
     backend_ready: bool
     default_voice_loaded: bool
     startup_error: str | None = None
+    service_control: ServiceControlState = field(default_factory=ServiceControlState)
 
 
 def build_application_state(

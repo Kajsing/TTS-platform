@@ -4,7 +4,19 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-05
+- Date: 2026-09-06
+- Latest Service Center progress: T1.2 status/safety foundation is implemented,
+  not yet connected to a new dashboard. Native local owner-only status reports
+  readiness, voices, uptime, global live work and measured process CPU/RAM.
+  Short atomic maintenance reservations guard the future stop/restart race and
+  expire automatically; they do not terminate processes. Added .NET contracts,
+  state/polling policy and isolated live HTTP verification. Python: 549 passed,
+  2 optional skips; .NET: 182 passed; portable folder/lifecycle smoke passed.
+  Next is the WPF monitor/panel and serialized Windows controls with exact
+  ownership, deadline and post-stop checks, including Reader button routing.
+  T1.3 and T2 remain untouched; no production service or startup registration
+  was changed. See `docs/reader_service_center_api.md` and
+  `.logs/2026-09-06-reader-service-center-status.md`.
 - Active user-selected goal: Reader Service Center, specified in
   `docs/reader_service_center_plan.md`. T1 covers one persistent tray icon,
   a local-service dashboard and safe controls, with optional Windows autostart

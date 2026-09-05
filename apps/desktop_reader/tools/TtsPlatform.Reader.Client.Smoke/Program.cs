@@ -10,6 +10,31 @@ if (args.Length != 2)
 using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 var tokenProvider = new SmokeTokenProvider(args[1]);
 var client = new ReaderServiceClient(httpClient, args[0], tokenProvider);
+var serviceCenterSmoke = Environment.GetEnvironmentVariable("TTS_PLATFORM_SERVICE_CENTER_SMOKE") == "1";
+if (serviceCenterSmoke)
+{
+    var status = await client.GetLocalStatusAsync();
+    if (status.ContractVersion != 1 || string.IsNullOrWhiteSpace(status.InstanceId) ||
+        status.Resources.ProcessId <= 0 || status.Resources.Scope != "service_process")
+        throw new InvalidOperationException("Live Service Center status was invalid.");
+    var reservation = await client.ReserveMaintenanceAsync(status.InstanceId);
+    try
+    {
+        if (!(await client.GetLocalStatusAsync()).Maintenance)
+            throw new InvalidOperationException("Live maintenance reservation was not visible.");
+        try
+        {
+            await client.GetDocumentsAsync(limit: 1);
+            throw new InvalidOperationException("New work bypassed the live maintenance reservation.");
+        }
+        catch (ReaderApiException exception) when (exception.StatusCode == 503 && exception.ErrorType == "service_maintenance") { }
+    }
+    finally
+    {
+        if (!(await client.ReleaseMaintenanceAsync(reservation.Reservation)).Released)
+            throw new InvalidOperationException("Live maintenance reservation was not released.");
+    }
+}
 var first = await client.GetDocumentsAsync(limit: 1);
 if (first.Documents.Count != 1 || first.NextCursor is null)
 {
@@ -172,6 +197,7 @@ if (rangeRestoredBlocks.Blocks.Count != 3 ||
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
+    live_service_center = serviceCenterSmoke,
     live_utf16_edit = true,
     first_page_count = first.Documents.Count,
     second_page_count = second.Documents.Count,

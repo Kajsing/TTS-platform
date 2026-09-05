@@ -7,6 +7,53 @@ namespace TtsPlatform.Reader.Client.Tests;
 public sealed class ReaderServiceClientTests
 {
     [Fact]
+    public async Task Service_center_status_and_maintenance_are_authenticated_with_body_only_reservation()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/service/status" => Json(HttpStatusCode.OK, """
+                {"contract_version":1,"instance_id":"instance","backend_ready":true,"default_voice_loaded":true,
+                 "default_voice_id":"voice","default_voice_name":"Example","voice_count":5,"uptime_s":123,"reader_ready":true,
+                 "activity":{"active_requests":0,"active_streams":1,"content_leases":1,"pending_exports":2,"pending_jobs":0},
+                 "maintenance":false,"resources":{"scope":"service_process","process_id":42,"cpu_seconds":10.5,
+                 "sample_monotonic_s":200,"logical_processors":8,"working_set_bytes":104857600}}
+                """),
+            "/v1/service/maintenance" => Json(HttpStatusCode.OK, """{"reservation":"ephemeral-lease","expires_in_seconds":15}"""),
+            "/v1/service/maintenance/release" => Json(HttpStatusCode.OK, """{"released":true}"""),
+            _ => Json(HttpStatusCode.NotFound, "{}"),
+        });
+        ILocalServiceClient client = new ReaderServiceClient(new HttpClient(handler), "http://127.0.0.1:7777/", new StaticTokenProvider("owner-token"));
+        var status = await client.GetLocalStatusAsync();
+        Assert.Equal(2, status.Activity.PendingExports);
+        Assert.Equal(123, status.UptimeS);
+        Assert.Equal(104857600, status.Resources.WorkingSetBytes);
+        var lease = await client.ReserveMaintenanceAsync(status.InstanceId);
+        Assert.Equal(15, lease.ExpiresInSeconds);
+        Assert.True((await client.ReleaseMaintenanceAsync(lease.Reservation)).Released);
+        Assert.All(handler.Requests, request => Assert.Equal("Bearer owner-token", request.Authorization));
+        Assert.Equal("{\"instance_id\":\"instance\"}", handler.Requests[1].Body);
+        Assert.Equal("{\"reservation\":\"ephemeral-lease\"}", handler.Requests[2].Body);
+        Assert.All(handler.Requests, request => Assert.Empty(request.Uri.Query));
+    }
+
+    [Fact]
+    public async Task Service_center_requires_token_and_preserves_busy_or_rate_limit_failures()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.Conflict,
+            """{"error":{"type":"service_busy","message":"Work is active"}}"""));
+        var missing = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider(null));
+        await Assert.ThrowsAsync<ReaderTokenUnavailableException>(() => missing.GetLocalStatusAsync());
+        Assert.Empty(handler.Requests);
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        var busy = await Assert.ThrowsAsync<ReaderApiException>(() => client.ReserveMaintenanceAsync("instance"));
+        Assert.Equal("service_busy", busy.ErrorType);
+        Assert.Equal(409, busy.StatusCode);
+        var throttled = new ReaderServiceClient(new HttpClient(new RecordingHandler(_ => Json(HttpStatusCode.TooManyRequests,
+            """{"error":{"type":"rate_limit_exceeded","message":"Wait"}}"""))), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        Assert.Equal(429, (await Assert.ThrowsAsync<ReaderApiException>(() => throttled.GetLocalStatusAsync())).StatusCode);
+    }
+
+    [Fact]
     public async Task Health_is_public_and_capabilities_use_bearer_token()
     {
         var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
