@@ -9,11 +9,15 @@ This file is the live status log and shared memory for future Codex loops.
 - Current user-selected target: Reader Agent Access M1, specified in
   `docs/reader_agent_access_plan.md`. The user reaffirmed parking U8 and selected
   local folder-scoped MCP article tools and reliable chapter delivery next.
-  M1 is registered as the active app goal. Its service/API, atomic chapter
+  M1 remains the selected target; its app goal is blocked awaiting the user's
+  service restart. Its service/API, atomic chapter
   storage, stdio MCP, DPAPI-backed Options and isolated Windows acceptance are
   implemented/tested. The user closed Reader; its actual shortcut binary was
   published and passed the end-to-end smoke. The old local service still needs
   a user-performed restart (execution policy rejected our restart attempt).
+  The same PID 16268 and grant-route 404 were verified in three consecutive
+  goal turns, then the app goal was marked blocked. Do not restart automatic
+  work without a user reply or relevant external-state change.
   Verify the new grant route afterwards; do not mark the goal complete yet.
   See `docs/reader_agent_mcp.md` and `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return

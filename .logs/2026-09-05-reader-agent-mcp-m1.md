@@ -35,3 +35,7 @@
 - Preserve/exclude user models/MANIFEST.json. Commit/push validated source/docs.
 - U8 is still parked/incomplete; revisit with user after M1, never silently open
   ports, configure WireGuard or create firewall rules.
+- Blocked audit: after three consecutive goal turns observing the same restart
+  blocker, the live process was still PID 16268 and the grant route was still
+  404. Marked the app goal blocked, not complete. Source and deployment remain
+  validated/pushed as 9dfed1c; resume when the user restarts the service.
