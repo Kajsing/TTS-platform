@@ -4,9 +4,10 @@
 
 Approved as the next project target on 2026-09-05. U8 remains parked and
 incomplete; its resume conditions are preserved in `reader_upgrade_plan.md`.
-M1 is planned, not implemented. Registration as the app's active goal is
-pending because the goal tool refuses to replace the existing unfinished U8
-goal. Do not mark U8 complete to bypass that restriction.
+M1 is the active app goal; implementation is pending. The user manually stopped
+the previous U8 app goal on 2026-09-05, after which M1 registration succeeded.
+The user explicitly asked to revisit U8 after this side quest. Stopping its app
+goal does not mark the remaining U8 acceptance complete.
 
 Build an optional local MCP integration through which an agent can maintain
 articles in one owner-selected Reader folder. The motivating future workflow
@@ -141,10 +142,10 @@ commit is documentation-only; it does not satisfy M1 implementation acceptance.
   Do not assume a cloud agent can use local stdio or join the owner's WireGuard
   network. A reachable authenticated MCP transport or an explicitly selected
   bridge needs a separate deployment/security decision.
-- Resume U8 with the owner's intended WireGuard interface and its reversible
-  elevated firewall acceptance test when the user asks.
+- After M1, bring U8 back to the user and confirm the intended WireGuard
+  environment before resuming its reversible elevated firewall acceptance test.
 
-## App goal text ready for registration
+## Registered app goal scope
 
 Implement Reader Agent Access M1: optional local MCP access to one user-selected
 folder, service-enforced revocable permissions, article creation/reading/editing,
@@ -153,3 +154,4 @@ history. Preserve playback leases and revision conflicts. Include Options setup,
 client configuration, tests, end-to-end Windows smoke, safe deployment to the
 actual Reader shortcut target, documentation, commit, and push. Keep U8, website
 monitoring, and cloud connectivity parked; require no paid dependency.
+After M1, revisit U8 with the user before making network configuration changes.

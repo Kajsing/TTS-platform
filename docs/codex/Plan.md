@@ -658,5 +658,6 @@ acceptance criteria are in `docs/reader_agent_access_plan.md`.
 
 Website monitoring, cloud-agent connectivity, and WireGuard/firewall setup are
 later work. U8 remains incomplete; its final acceptance test is not waived.
-The app goal tool currently refuses to register M1 while U8 remains registered
-as unfinished. Preserve that distinction from the repository's chosen priority.
+The user manually stopped the U8 app goal on 2026-09-05 and M1 was then
+successfully registered as active. After M1, return to the user about U8 and
+confirm its intended WireGuard environment before network configuration work.

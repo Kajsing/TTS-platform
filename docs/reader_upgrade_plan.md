@@ -14,6 +14,8 @@ and 11. It does not mark PDF extraction or release-candidate work complete.
 On 2026-09-05 the user reaffirmed parking U8 and selected Reader Agent Access
 M1 as the next project target. See `reader_agent_access_plan.md`; its local MCP
 integration now takes priority. U8's pending acceptance is preserved below.
+The user manually stopped the U8 app goal, M1 registration succeeded, and the
+user asked to revisit U8 after M1. Confirm its intended network setup then.
 
 The existing v1 service, Reader library, Chrome integration, localhost security
 defaults, playback behavior, source mapping, and revisioned editing remain
