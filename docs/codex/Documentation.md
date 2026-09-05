@@ -16,13 +16,24 @@ This file is the live status log and shared memory for future Codex loops.
   published and passed the end-to-end smoke. The temporary restart blocker was
   resolved after renewed explicit user permission: the updated service is
   healthy, Kokoro is ready, database integrity is OK and the protected grant
-  route returns 200 with no grants enabled. No live article/permission was changed.
+  route returned 200 with no grants enabled at that acceptance checkpoint.
   See `docs/reader_agent_mcp.md` and `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return
   to U8 after M1. U8 remains incomplete and its network setup needs confirmation.
 - The user also suggested an independent service tray icon for later. It is
   recorded in `docs/reader_upgrade_plan.md`; no tray/startup implementation or
   new background application was added in this handoff.
+- Subsequent user-authorized field use provisioned one folder-scoped local MCP
+  connection and imported one complete multi-chapter article. The first agent
+  attempt mixed browser and Windows clipboards and delivered URLs as text;
+  only its unchanged failed draft was soft-deleted. The corrected import passed
+  full MCP readback verification. See `docs/reader_agent_import_guide.md` for the
+  sanitized lessons and `scripts/check_reader_chapter_bundle.py` for offline
+  preflight/readback checks. A personal `reader-chapter-import` skill was created
+  under the owner's Codex skills directory. This follow-up changes no Reader
+  runtime, permissions, articles or service state; U8 remains parked.
+  Validation: 15 new offline cases; full Python suite 537 passed / 2 optional
+  skips, Ruff, targeted format check and Skill Creator validation passed.
 - Project status: Phases 1 through 7 and the v1 local reader are complete at the
   repository behavior and test-contract level. The active post-v1 product track
   is now the Reader Workstation defined in

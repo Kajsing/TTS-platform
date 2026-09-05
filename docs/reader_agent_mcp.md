@@ -100,6 +100,11 @@ the user's reading. No scheduler or background website monitoring is installed.
 See `reader_agent_api.md` for exact HTTP fields, conflict semantics, provenance,
 order warnings and the authorization contract.
 
+For agent-side website chapter capture, payload validation, checkpointing and
+full-text verification, use [the import guide](reader_agent_import_guide.md).
+It documents the browser/Windows clipboard mismatch found during field use and
+an offline package checker; it does not add website fetching to this adapter.
+
 ## Credentials and security review
 
 - Options saves a configuration JSON and a sibling encrypted `.bin` under
