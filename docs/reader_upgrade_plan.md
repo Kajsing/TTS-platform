@@ -339,24 +339,24 @@ packaging, accessibility, security, and release candidate) remain incomplete.
 They resume only after the user completes or deliberately pauses this upgrade
 track.
 
-## Later usability idea: service tray presence
+## Service Center - promoted to active goal
 
 On 2026-09-05 the user requested considering a tray icon for the local service,
 because Reader can be closed while the service remains running unnoticed.
-This is a backlog note, not a new active milestone or implemented feature.
-Reader's existing minimize-to-tray option is not the same as independent service
-presence. A future design should consider visible running/stopped status, opening
-Reader, safe start/stop/restart and clear ownership of the managed service process.
-Decide its lifecycle and interaction with active playback/exports with the user
-before implementation. Do not change startup registration or add another
-background process merely to record this idea.
+The user subsequently approved two stages: T1 persistent tray/status and safe
+service controls, then T2 compatible-voice installation/selection. They explicitly
+requested a goal and an optional Windows-autostart setting, off by default.
+`reader_service_center_plan.md` is now the active scope and acceptance plan.
+Reader's existing minimize-to-tray option is not independent service presence.
+No autostart is enabled merely by recording this plan or testing the feature.
 
 ## Current resume point
 
 Reader Agent Access M1 is complete; see `reader_agent_access_plan.md` and
 `reader_agent_mcp.md`. Before more remote-access work, bring U8's remaining
 acceptance back to the user and confirm the intended WireGuard environment.
-The service-tray idea above is a later option, not permission to start it now.
+The active next work is Service Center T1.1, followed by the remaining T1 checks
+and T2. The new goal is registered, but implementation is not yet deployed.
 
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall

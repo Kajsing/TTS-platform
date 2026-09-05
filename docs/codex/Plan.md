@@ -663,5 +663,21 @@ acceptance criteria are in `docs/reader_agent_access_plan.md`.
 Website monitoring, cloud-agent connectivity, and WireGuard/firewall setup are
 later work. U8 remains incomplete; its final acceptance test is not waived.
 The user manually stopped the U8 app goal on 2026-09-05 and M1 was then
-successfully registered as active. After M1, return to the user about U8 and
-confirm its intended WireGuard environment before network configuration work.
+successfully registered as active. M1 is now complete. The user subsequently
+selected the Service Center track below; U8 remains parked. Confirm its intended
+WireGuard environment before any future network configuration work.
+
+## Reader Service Center - active
+
+On 2026-09-05 the user approved the persistent service tray/status panel and
+compatible-voice library, added optional Windows autostart, and explicitly asked
+to register this as the next goal. Scope and acceptance criteria are in
+`docs/reader_service_center_plan.md`. Autostart is off by default.
+
+- [ ] T1: Persistent single tray owner, truthful local-service dashboard, safe
+  lifecycle controls and reversible per-user Windows autostart.
+- [ ] T2: Compatible-voice library with metadata, checked installation/progress,
+  preview and safe default-voice selection, reusing existing infrastructure.
+
+Complete and validate T1 before T2. Preserve the working local Reader and
+service; no U8 networking, cloud dependency or unrelated model changes.

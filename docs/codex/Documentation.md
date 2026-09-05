@@ -5,6 +5,16 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-05
+- Active user-selected goal: Reader Service Center, specified in
+  `docs/reader_service_center_plan.md`. T1 covers one persistent tray icon,
+  a local-service dashboard and safe controls, with optional Windows autostart
+  OFF by default; T2 adds a compatible-voice library using existing installation
+  infrastructure. The app goal is registered. Planning and initial code review
+  are complete; implementation/deployment and acceptance remain outstanding.
+  Next is T1.1: decouple tray lifetime from MainWindow and test single-owner
+  activation/close/reopen. No live service/startup/settings changes were made
+  while recording the goal. U8 remains parked. See
+  `.logs/2026-09-05-reader-service-center-plan.md`.
 - Workflow status: `docs/codex/` is the Codex source of truth for project spec, execution order, operating rules, and resume context. After a successful run, Codex should commit and push the completed slice by default.
 - Completed user-requested follow-up: Article folders -> Open is a persistent
   visibility toggle, separate from Privacy lock and agent permissions. Closed
@@ -31,9 +41,8 @@ This file is the live status log and shared memory for future Codex loops.
   See `docs/reader_agent_mcp.md` and `docs/reader_agent_api.md`. The user
   manually stopped the U8 app goal on 2026-09-05 and explicitly asked to return
   to U8 after M1. U8 remains incomplete and its network setup needs confirmation.
-- The user also suggested an independent service tray icon for later. It is
-  recorded in `docs/reader_upgrade_plan.md`; no tray/startup implementation or
-  new background application was added in this handoff.
+- The earlier service-tray backlog suggestion is now promoted to the active
+  Service Center goal above. The plan does not claim the feature is deployed.
 - Subsequent user-authorized field use provisioned one folder-scoped local MCP
   connection and imported one complete multi-chapter article. The first agent
   attempt mixed browser and Windows clipboards and delivered URLs as text;
