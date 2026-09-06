@@ -84,6 +84,7 @@ public partial class App
             await Idle();
             var first = _serviceCenter.Reader!;
             Require(first.IsVisible && ReaderTrayIcon.LiveInstances == 1, "Reader created another icon.");
+            await first.VerifyPlaybackDiagnosticsAsync(root);
             first.Close();
             await Idle();
             Require(_serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,
@@ -194,6 +195,7 @@ public partial class App
                 voice_preview_cancel_and_close = true,
                 voice_preview_preserved_edits = true,
                 voice_preview_activity_guards = true,
+                playback_input_diagnostics = true,
             }));
             Shutdown();
         }

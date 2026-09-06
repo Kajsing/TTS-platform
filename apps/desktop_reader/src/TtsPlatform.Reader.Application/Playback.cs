@@ -62,7 +62,9 @@ public sealed record PlaybackPerformanceEvent(
     double? MaxBufferMs = null,
     long? UnderrunDelta = null,
     bool? NextWindowAvailable = null,
-    bool? DocumentComplete = null);
+    bool? DocumentComplete = null,
+    PlaybackInteraction? Interaction = null,
+    string? Operation = null);
 
 public interface IPlaybackPerformanceSink
 {
@@ -139,6 +141,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     public event EventHandler<ReaderStreamWarning>? RuleWarning;
 
     public ReaderPlaybackState State { get; private set; } = ReaderPlaybackState.Stopped;
+    public string? DiagnosticRunId => _runId;
     public ReaderCursor? LastFullyPlayedCursor => _lastFullyPlayedCursor;
     public bool IsActive => State == ReaderPlaybackState.Playing;
     public bool IsTransitioning => _transitionLock.CurrentCount == 0;
@@ -676,15 +679,34 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             return;
         }
 
-        var saved = await _serviceClient.SavePositionAsync(
-            document.Id,
-            new SavePositionRequest(
-                cursor,
-                PipelineVersion: 1,
-                RulesVersion: 1,
-                Completed: completed,
-                ExpectedRowVersion: _positionRowVersion ?? 0),
-            cancellationToken).ConfigureAwait(false);
+        ReaderPosition saved;
+        try
+        {
+            saved = await _serviceClient.SavePositionAsync(
+                document.Id,
+                new SavePositionRequest(
+                    cursor,
+                    PipelineVersion: 1,
+                    RulesVersion: 1,
+                    Completed: completed,
+                    ExpectedRowVersion: _positionRowVersion ?? 0),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
+        {
+            var api = exception as ReaderApiException;
+            RecordPerformance(new PlaybackPerformanceEvent(
+                "playback_operation_failed",
+                DocumentId: document.Id,
+                BlockOrdinal: cursor.BlockOrdinal,
+                CharacterOffset: cursor.CharacterOffset,
+                ErrorCategory: exception.GetType().Name,
+                ErrorCode: NormalizeDiagnosticCode(api?.ErrorType ?? exception.GetType().Name),
+                StatusCode: api?.StatusCode,
+                RequestId: api?.RequestId,
+                Operation: "save_position"));
+            throw;
+        }
         _positionRowVersion = saved.RowVersion;
         _positionCompleted = completed;
     }

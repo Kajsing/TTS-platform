@@ -15,7 +15,7 @@
       </Grid.ColumnDefinitions>
       <Button x:Name="PlayPauseButton" Content="Play" Click="PlayPause_Click"
               AutomationProperties.Name="Play or pause" />
-      <Button Grid.Column="1" Content="Stop" Click="Stop_Click"
+      <Button x:Name="StopButton" Grid.Column="1" Content="Stop" Click="Stop_Click"
               AutomationProperties.Name="Stop playback" />
       <StackPanel Grid.Column="2" Margin="10,0">
         <TextBlock x:Name="ContextText" Text="No active document" FontWeight="SemiBold"

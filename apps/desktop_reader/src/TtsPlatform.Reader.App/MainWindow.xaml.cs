@@ -121,6 +121,7 @@ public partial class MainWindow : Window
         _trayIcon = sharedTray;
         _clipboardPromptPolicy = new ClipboardPromptPolicy(timeProvider);
         InitializeComponent();
+        InitializePlaybackDiagnostics();
         ServiceUrlTextBox.Text = settings.ServiceBaseUrl;
         TokenPathTextBox.Text = settings.EffectiveTokenSource.Path;
         RefreshWorkspaceChoices();
@@ -329,16 +330,18 @@ public partial class MainWindow : Window
         switch (command)
         {
             case GlobalHotkeyCommand.ReadClipboard:
+                TracePlaybackCommand(PlaybackUiCommand.ReadClipboard, PlaybackCommandSource.GlobalHotkey);
                 await ReadClipboardAsync();
                 break;
             case GlobalHotkeyCommand.CopySelectionAndRead:
+                TracePlaybackCommand(PlaybackUiCommand.CopySelectionAndRead, PlaybackCommandSource.GlobalHotkey);
                 await CopySelectionAndReadAsync();
                 break;
             case GlobalHotkeyCommand.PlayPause:
-                await ToggleUnifiedPlaybackAsync();
+                await ToggleUnifiedPlaybackAsync(PlaybackCommandSource.GlobalHotkey);
                 break;
             case GlobalHotkeyCommand.Stop:
-                await StopUnifiedPlaybackAsync();
+                await StopUnifiedPlaybackAsync(PlaybackCommandSource.GlobalHotkey);
                 break;
         }
     }
@@ -354,12 +357,13 @@ public partial class MainWindow : Window
                 ShowCompactController();
                 break;
             case ReaderTrayCommand.PlayPause:
-                await ToggleUnifiedPlaybackAsync();
+                await ToggleUnifiedPlaybackAsync(PlaybackCommandSource.TrayMenu);
                 break;
             case ReaderTrayCommand.Stop:
-                await StopUnifiedPlaybackAsync();
+                await StopUnifiedPlaybackAsync(PlaybackCommandSource.TrayMenu);
                 break;
             case ReaderTrayCommand.ReadClipboard:
+                TracePlaybackCommand(PlaybackUiCommand.ReadClipboard, PlaybackCommandSource.TrayMenu);
                 await ReadClipboardAsync();
                 break;
             case ReaderTrayCommand.ToggleClipboardMonitoring:
@@ -396,10 +400,11 @@ public partial class MainWindow : Window
                 _compactController.Top = top;
             }
             _compactController.PlayPauseRequested += async (_, _) =>
-                await ToggleUnifiedPlaybackAsync();
+                await ToggleUnifiedPlaybackAsync(PlaybackCommandSource.CompactButton);
             _compactController.StopRequested += async (_, _) =>
-                await StopUnifiedPlaybackAsync();
+                await StopUnifiedPlaybackAsync(PlaybackCommandSource.CompactButton);
             _compactController.OpenReaderRequested += (_, _) => OpenMainWindow();
+            ObservePlaybackWindow(_compactController, PlaybackUiWindow.Compact);
         }
         UpdateCompactController();
         _compactController.Show();
@@ -447,7 +452,7 @@ public partial class MainWindow : Window
                 }
             }
             IsEnabled = false;
-            await StopUnifiedPlaybackAsync();
+            await StopUnifiedPlaybackAsync(PlaybackCommandSource.ReaderClose);
             if (_compactController is not null)
             {
                 var compact = _settings.EffectiveCompactController;
@@ -581,7 +586,7 @@ public partial class MainWindow : Window
         _desktopOpenTimer.Stop();
         IsEnabled = false;
         if (_compactController is not null) _compactController.IsEnabled = false;
-        await StopUnifiedPlaybackAsync();
+        await StopUnifiedPlaybackAsync(PlaybackCommandSource.ServiceOperation);
         return true;
     }
 
@@ -1552,6 +1557,15 @@ public partial class MainWindow : Window
             }
 
             _audioInterruptionActive = change.IsActive;
+            _diagnosticInterruption = !change.IsActive ? PlaybackInterruptionKind.None : change.Source switch
+            {
+                "Microsoft Teams" => PlaybackInterruptionKind.Teams,
+                "Windows alarm" => PlaybackInterruptionKind.WindowsAlarm,
+                "Windows alert or alarm" => PlaybackInterruptionKind.WindowsAlertOrAlarm,
+                _ => PlaybackInterruptionKind.Other,
+            };
+            _interactionTrace?.Observe(PlaybackUiEvent.AudioInterruptionChanged,
+                InteractionContext(this, PlaybackUiWindow.Reader));
             if (change.IsActive)
             {
                 await PauseForAudioInterruptionAsync(change.Source ?? "an audio interruption");
@@ -1580,6 +1594,7 @@ public partial class MainWindow : Window
 
     private async Task PauseForAudioInterruptionAsync(string source)
     {
+        TracePlaybackCommand(PlaybackUiCommand.Pause, PlaybackCommandSource.AudioInterruption);
         if (_automaticPauseKind != AutomaticPauseKind.None)
         {
             _automaticPauseSource = source;
@@ -1613,6 +1628,7 @@ public partial class MainWindow : Window
 
     private async Task ResumeAfterAudioInterruptionAsync()
     {
+        TracePlaybackCommand(PlaybackUiCommand.Resume, PlaybackCommandSource.AutomaticResume);
         var pausedKind = _automaticPauseKind;
         var source = _automaticPauseSource ?? "the interruption";
         CancelAutomaticInterruptionResume();
@@ -1671,6 +1687,7 @@ public partial class MainWindow : Window
         }
         if (_playback?.IsActive == true)
         {
+            TracePlaybackCommand(PlaybackUiCommand.Stop, PlaybackCommandSource.ClipboardReading);
             await _playback.StopAsync();
         }
         await StopEphemeralAsync(clearReplay: false);
@@ -1797,8 +1814,9 @@ public partial class MainWindow : Window
         }));
     }
 
-    private async Task ToggleUnifiedPlaybackAsync()
+    private async Task ToggleUnifiedPlaybackAsync(PlaybackCommandSource source)
     {
+        TracePlaybackCommand(PlaybackUiCommand.PlayPause, source);
         if (PlaybackBlockedByAudioInterruption())
         {
             return;
@@ -1823,8 +1841,9 @@ public partial class MainWindow : Window
         await TogglePlaybackAsync();
     }
 
-    private async Task StopUnifiedPlaybackAsync()
+    private async Task StopUnifiedPlaybackAsync(PlaybackCommandSource source)
     {
+        TracePlaybackCommand(PlaybackUiCommand.Stop, source);
         CancelAutomaticInterruptionResume();
         await StopEphemeralAsync(clearReplay: true);
         if (_playback is not null)
@@ -1950,7 +1969,7 @@ public partial class MainWindow : Window
             var currentFolderId = _editor?.Document?.FolderId;
             if (currentFolderId is not null && e.RemovedFolderIds.Contains(currentFolderId))
             {
-                await StopUnifiedPlaybackAsync();
+                await StopUnifiedPlaybackAsync(PlaybackCommandSource.PrivacySessionEnded);
                 DocumentsGrid.SelectedItem = null;
                 ClearDocumentDisplay();
                 FooterText.Text = "The Privacy lock session ended. The folder is hidden again.";
@@ -2339,6 +2358,7 @@ public partial class MainWindow : Window
             _findDocument = null;
             if (_playback?.IsActive == true)
             {
+                TracePlaybackCommand(PlaybackUiCommand.Stop, PlaybackCommandSource.DocumentLoad);
                 await _playback.StopAsync();
             }
 
@@ -3015,7 +3035,7 @@ public partial class MainWindow : Window
     }
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) =>
-        await ToggleUnifiedPlaybackAsync();
+        await ToggleUnifiedPlaybackAsync(PlaybackCommandSource.MainButton);
 
     private async Task TogglePlaybackAsync()
     {
@@ -3063,10 +3083,11 @@ public partial class MainWindow : Window
     }
 
     private async void StopButton_Click(object sender, RoutedEventArgs e) =>
-        await StopUnifiedPlaybackAsync();
+        await StopUnifiedPlaybackAsync(PlaybackCommandSource.MainButton);
 
     private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e)
     {
+        TracePlaybackCommand(PlaybackUiCommand.StartAtCursor, PlaybackCommandSource.MainButton);
         if (PlaybackBlockedByAudioInterruption())
         {
             return;
@@ -4276,7 +4297,7 @@ public partial class MainWindow : Window
                 _playback?.State is not ReaderPlaybackState.Stopped))
         {
             e.Handled = true;
-            await StopUnifiedPlaybackAsync();
+            await StopUnifiedPlaybackAsync(PlaybackCommandSource.LocalEscape);
             return;
         }
         if (e.Key == Key.Space &&
@@ -4284,7 +4305,7 @@ public partial class MainWindow : Window
             Keyboard.FocusedElement is not TextBox)
         {
             e.Handled = true;
-            await ToggleUnifiedPlaybackAsync();
+            await ToggleUnifiedPlaybackAsync(PlaybackCommandSource.LocalSpace);
         }
     }
 

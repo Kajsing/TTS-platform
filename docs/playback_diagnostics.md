@@ -37,6 +37,45 @@ preserved in full.
   time to first audio, buffer range, maximum gap, and underrun change;
 - stable error categories, status codes, and request IDs when available.
 
+### Input and focus trace (2026-09-06)
+
+The updated desktop also writes `playback_ui` records with a versioned,
+typed `interaction` object. `Command` identifies the actual entry point:
+`MainButton`, `CompactButton`, `TrayMenu`, `GlobalHotkey`, `LocalSpace`,
+`LocalEscape`, `AudioInterruption`, `AutomaticResume`, `ClipboardReading`,
+`DocumentLoad`, `ReaderClose`, `ServiceOperation`, or `PrivacySessionEnded`.
+These are command **requests**, not proof the command succeeded; correlate
+them with the subsequent `playback_interrupt_requested` and `state_change`.
+
+Reader and compact-window activation/deactivation, keyboard-focus categories,
+and routed mouse down/up events are recorded without consuming those events.
+Context includes active/visible/minimized state, whether the pointer is over
+that window, the category of any captured control, and the fixed Teams/Windows
+alarm/Windows alert interruption category. Recent local input and activation
+ages use a monotonic clock. An older mouse event is context, not proof it
+caused a later command. Global hotkeys are identified by command, not a record
+of the keys the user pressed in another application.
+
+Only this app's windows are observed. There is no global mouse hook, mouse
+movement/coordinate recording, foreign window/process identification, arbitrary
+key recording, control text or clipboard capture. Only Space/Enter on playback
+buttons and the existing handled Space/Escape shortcuts have input labels.
+Noisy editor/library pointer and focus observations are sampled at up to ten
+per second; playback controls, commands and activation edges are not sampled.
+The existing two-file 4 MiB rotation remains in force, with immediate flushing.
+Windows can report an old file `LastWriteTime` while the writer is open:
+inspect the timestamps **inside** the JSONL, rather than assuming no new logs.
+
+`playback_operation_failed` with `operation: save_position` identifies failure
+of the reading-position HTTP write, including a 429 and its request ID, before
+the existing playback fault handling runs. This is diagnostic only: no retry,
+rate-limit, buffering, shortcut or pause behavior was changed in this slice.
+
+After updating, restart Reader/Service Center once to load the new logging code.
+Normal use needs no diagnostic switch. When a problem occurs, note the local
+time, whether highlighting continues, and whether you clicked Stop afterward.
+Leave the app open if convenient; the files can be read while it is running.
+
 The log does **not** contain article titles, article text, clipboard contents,
 tokens, speech-rule text, or imported-file paths. It is still local diagnostic
 metadata and should be treated as private when shared.

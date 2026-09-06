@@ -6,6 +6,33 @@ namespace TtsPlatform.Reader.Windows.Tests;
 public sealed class PlaybackPerformanceLogTests
 {
     [Fact]
+    public void Interaction_is_readable_before_shutdown_and_uses_only_typed_metadata()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"tts-reader-interaction-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "playback-performance.jsonl");
+        try
+        {
+            using var sink = new JsonlPlaybackPerformanceSink(path);
+            var trace = new PlaybackInteractionTrace(interaction => sink.Record(new PlaybackPerformanceEvent(
+                "playback_ui", RunId: "run", Interaction: interaction)));
+            trace.Observe(PlaybackUiEvent.Command,
+                new(PlaybackUiWindow.Reader, false, false, PlaybackUiTarget.None, false, false),
+                source: PlaybackCommandSource.GlobalHotkey, command: PlaybackUiCommand.Stop);
+            // Read the open file itself, not LastWriteTime (Windows can delay that metadata).
+            using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
+            using var entry = JsonDocument.Parse(reader.ReadToEnd());
+            var interaction = entry.RootElement.GetProperty("performance").GetProperty("interaction");
+            Assert.Equal("GlobalHotkey", interaction.GetProperty("source").GetString());
+            Assert.Equal("Stop", interaction.GetProperty("command").GetString());
+            Assert.False(interaction.GetProperty("context").GetProperty("reader_active").GetBoolean());
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Jsonl_sink_writes_versioned_privacy_safe_entries_and_rotates_existing_file()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"tts-reader-log-{Guid.NewGuid():N}");

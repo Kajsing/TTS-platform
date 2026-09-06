@@ -9,6 +9,29 @@ namespace TtsPlatform.Reader.Application.Tests;
 public sealed class PlaybackTests
 {
     [Fact]
+    public async Task Position_rate_limit_records_the_failed_operation_without_changing_fault_semantics()
+    {
+        var service = new PlaybackService { SaveError = new ReaderApiException("rate_limited", "PRIVATE server detail", 429, "request-123") };
+        var diagnostics = new FakePerformanceSink();
+        await using var playback = new ReaderPlaybackCoordinator(service,
+            new FakeStreamClient(request => CompletedSession(request)), new FakeAudioOutput(), diagnostics);
+        try
+        {
+            await playback.PlayAsync(Document());
+            await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Faulted);
+            var failure = Assert.Single(diagnostics.Events, entry => entry.Name == "playback_operation_failed");
+            Assert.Equal("save_position", failure.Operation);
+            Assert.Equal(429, failure.StatusCode);
+            Assert.Equal("rate_limited", failure.ErrorCode);
+            Assert.Equal("request-123", failure.RequestId);
+            Assert.Equal(playback.DiagnosticRunId, failure.RunId);
+            Assert.DoesNotContain("PRIVATE", JsonSerializer.Serialize(diagnostics.Events));
+            Assert.Contains(diagnostics.Events, entry => entry.Name == "playback_run_faulted");
+        }
+        finally { service.SaveError = null; }
+    }
+
+    [Fact]
     public async Task Pause_persists_only_fully_played_audio_and_resume_starts_there()
     {
         var service = new PlaybackService();
@@ -404,6 +427,7 @@ public sealed class PlaybackTests
     {
         public List<SavePositionRequest> SavedPositions { get; } = [];
         public ReaderPosition? Position { get; init; }
+        public Exception? SaveError { get; set; }
 
         public Task<ReaderPosition?> GetPositionAsync(
             string documentId,
@@ -414,6 +438,7 @@ public sealed class PlaybackTests
             SavePositionRequest request,
             CancellationToken cancellationToken = default)
         {
+            if (SaveError is not null) throw SaveError;
             SavedPositions.Add(request);
             return Task.FromResult(new ReaderPosition(
                 documentId,

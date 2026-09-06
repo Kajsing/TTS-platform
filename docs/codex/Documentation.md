@@ -5,6 +5,21 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- Completed user-requested slice: trace unexpected playback pauses/stops while
+  switching to another window. Added typed command-origin and local WPF input/
+  focus/capture observations to the existing bounded JSONL, plus explicit
+  reading-position-save failure records. No global mouse/key tracking, text,
+  foreign window identity or behavior/rate-limit changes. Earlier live evidence
+  included Pause requests at 15:20:20 and 16:22:09, a service-unavailable fault
+  at 15:45:05 and a separate 429 at 16:58:42 (local time). Existing logs do not
+  prove a click/hotkey caused these events. The user closed Reader and its tray
+  host for safe publication; no production service was stopped/restarted by this
+  implementation. The exact root shortcut is updated and its isolated WPF
+  input/lifecycle tests pass. Full validation: 276 .NET tests, 626 Python tests
+  (2 optional skips), Ruff, scoped format and portable/live-HTTP checks passed.
+  Reader/Service Center must be opened normally to collect the next field trace.
+  Root cause remains unproven; this slice does not fix the separate 429. See
+  `.logs/2026-09-06-reader-playback-input-diagnostics.md`.
 - Service Center T1/T2 is complete and validated. The root shortcut includes the
   persistent tray, local resources/status/control panel, optional Windows startup,
   installed/available library, safe installer, fixed-text preview and deferred

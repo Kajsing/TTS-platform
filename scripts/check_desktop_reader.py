@@ -924,6 +924,7 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "voice_preview_cancel_and_close",
         "voice_preview_preserved_edits",
         "voice_preview_activity_guards",
+        "playback_input_diagnostics",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):
         raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")
