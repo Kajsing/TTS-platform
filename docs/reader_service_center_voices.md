@@ -1,13 +1,37 @@
 # Service Center voice library implementation
 
-Status: T2 installation foundation implemented, 2026-09-06. The desktop voice
-tab, expanded catalog, preview and service-default controls are **not yet
-implemented**. This document records the local bridge contract for that UI.
+Status: T2 installation foundation and desktop voice tab implemented and
+published, 2026-09-06. Catalog expansion, preview and service-default controls
+remain **incomplete**. The whole Service Center goal remains active.
+
+## Desktop use
+
+Open **Service Center > Voices**. Installed lists local voice metadata and file
+presence separately from the running engine. Available packages shows the local
+catalog, model family, language, size and availability. Select a package, open
+its source/voice-license links and explicitly accept that package's license to
+enable Download and install. Selection or inventory changes reset acceptance.
+Already-installed/conflicting packages cannot be overwritten from this menu.
+
+Progress and Cancel install remain visible after closing/reopening the panel:
+the tray host owns the operation. Exiting Service Center is refused until the
+helper actually exits, including after cancellation. Service lifecycle actions
+are inhibited during model operations; the running service and Reader playback
+are not changed by installation. Small windows can scroll to all review/actions.
+
+The .NET adapter uses the launcher directory and the same Python preference as
+`scripts/windows/run_service.ps1`: `TTS_PLATFORM_PYTHON`, local `.venv`, `py -3`,
+then `python`. It sets the existing source paths and UTF-8 on the child only,
+uses separate arguments without a shell and hides the helper console. It drains
+bounded JSON lines/stderr, requires a compatible terminal event plus matching
+exit code and retains serialization until real process exit. A read-only list
+helper may be stopped on timeout; an installer is only cancelled through stdin.
+Raw stderr/command lines are never surfaced as UI errors.
 
 ## Local boundary
 
 `tts_service.model_manager` is a fixed-purpose local subprocess, not an HTTP or
-MCP server. The desktop will select the trusted repository/Python runtime using
+MCP server. The desktop selects the trusted repository/Python runtime using
 the existing launcher configuration, with fixed argument lists and no shell
 interpolation. Python remains responsible for the catalog, assets and manifest;
 the existing CLI implementation is reused. No new network management endpoint,
@@ -104,12 +128,12 @@ Reader playback or active exports.
 
 ## Remaining T2 work
 
-- Connect the local bridge to the WPF installed/package library and progress UI.
 - Expand the catalog only with primary-source artifact hashes, accurate sizes,
   supported model layouts and voice-specific license terms.
 - Add guarded fixed-text preview and clearly separated service-default selection.
-- Test helper lifetime, cancellation and install states in the desktop, then
-  publish and smoke-test the exact Reader shortcut target while safely closed.
+- Extend the desktop tests for preview/default behavior and rerun exact-shortcut
+  publication after those controls are implemented. The current voice-library
+  UI/helper lifetime and cancellation tests already pass.
 
 No real model download, license acceptance or production voice/config mutation
 is needed for automated smoke tests; use synthetic archives and isolated roots.

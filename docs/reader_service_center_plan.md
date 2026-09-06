@@ -2,8 +2,8 @@
 
 Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
 including optional Windows startup and the legacy scheduled-owner integration.
-T2's local installation foundation is implemented; its desktop UI, catalog
-expansion, preview and default selection remain incomplete. The whole goal is
+T2's installation foundation and desktop library/progress UI are implemented;
+catalog expansion, preview and default selection remain incomplete. The whole goal is
 not complete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
@@ -133,8 +133,11 @@ a broad model-management HTTP endpoint. It provides bounded metadata inventory,
 reviewed-license/catalog gating, progress, cooperative cancellation, structural
 asset checks, staged rollback and atomic manifest publication. Multi-voice
 packages share assets, with CLI removal/overwrite protection for dependents.
-The desktop has not been connected yet. See `reader_service_center_voices.md`
-and `.logs/2026-09-06-reader-service-center-voice-installer.md`.
+The desktop is now connected with installed/package tabs, source/license review,
+progress/cancel and host-owned helper lifetime across panel close/reopen. It
+requires actual helper exit, not just a terminal message or observation timeout,
+before releasing ownership. See `reader_service_center_voices.md` and the
+voice-installer/voice-menu implementation logs under `.logs/`.
 
 Begin after T1 acceptance. Reuse the existing catalog/install/check pipeline.
 Separate installed voices from downloadable packages: one model can contain
@@ -159,7 +162,7 @@ download large models or accept license terms merely for a smoke test.
 ### T2 acceptance
 
 - [ ] Installed/available voices and accurate package/license metadata.
-- [ ] Verified installation with visible progress and safe cancellation.
+- [x] Verified installation with visible progress and safe cancellation.
 - [x] Tests for bad checksums, failed extraction, unavailable downloads,
   existing-package conflicts and manifest preservation.
 - [ ] Preview/default selection respect playback/export activity.
@@ -206,8 +209,11 @@ published actual-shortcut lifecycle/startup smoke and portable/live-HTTP checks.
 T2 installer foundation: 109 focused model tests, 593 Python tests (2 optional
 skips), Ruff and a read-only real inventory pass. No new desktop publication or
 real model installation occurred for this Python-only slice.
-Next: connect T2 WPF voice/progress UI and helper lifecycle, expand verified
-catalog metadata, add guarded preview/default selection and validate/publish.
+T2 voice menu: 242 .NET tests, 593 Python tests (2 optional skips), Ruff/.NET
+format, real read-only C# -> Python inventory and actual-shortcut/portable WPF
+voice/lifecycle smoke pass. No real package download/activation occurred.
+Next: expand verified catalog metadata, add guarded preview/default selection
+and validate/publish their complete end-to-end behavior.
 Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,

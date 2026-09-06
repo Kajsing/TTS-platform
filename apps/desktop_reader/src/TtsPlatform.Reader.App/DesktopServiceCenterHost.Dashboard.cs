@@ -92,7 +92,7 @@ internal sealed partial class DesktopServiceCenterHost
     {
         if (_disposed) return;
         var value = _monitorFailure ?? _coordinator?.Dashboard ?? new ServiceDashboard(LocalServiceState.Unknown, "No local status sample yet.");
-        var operating = _operationPending || _coordinator?.IsOperating == true;
+        var operating = _operationPending || _coordinator?.IsOperating == true || _voices?.IsBusy == true;
         var limited = _coordinator?.IsRateLimited == true;
         DashboardWindow?.ShowDashboard(value, _monitorFailure is null ? _localEndpoint : "Unavailable", operating, limited,
             _monitorFailure is null ? _coordinator?.LastCheckedAt : null);
@@ -111,6 +111,7 @@ internal sealed partial class DesktopServiceCenterHost
             panel.CommandRequested += async (_, command) => await RunServiceCommandAsync(command);
             panel.StartupRefreshRequested += async (_, _) => await RefreshStartupAsync();
             panel.StartupChangeRequested += async (_, enabled) => await ChangeStartupAsync(enabled);
+            WireVoiceLibrary(panel);
             panel.Closed += (_, _) => { DashboardWindow = null; ScheduleNextCheck(); };
             DashboardWindow = panel;
             RenderDashboard();
@@ -130,9 +131,14 @@ internal sealed partial class DesktopServiceCenterHost
 
     internal async Task RunServiceCommandAsync(LocalServiceCommand command)
     {
+        if (_voices?.IsBusy == true)
+        {
+            DashboardWindow?.ShowCommandMessage("A local voice operation is still running. Wait for it to finish before changing service state.");
+            return;
+        }
         if (_disposed || _operationPending) return;
         await OpenServiceCenterAsync();
-        if (_isolatedSmoke || _disposed || _operationPending) return;
+        if (_isolatedSmoke || _disposed || _operationPending || _voices?.IsBusy == true) return;
         _operationPending = true;
         _monitorTimer?.Stop();
         MainWindow? preparedReader = null;

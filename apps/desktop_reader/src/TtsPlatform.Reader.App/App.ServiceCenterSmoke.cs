@@ -79,6 +79,7 @@ public partial class App
             dashboard.Close();
             Require(_serviceCenter.DashboardWindow is null && _serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,
                 "Dashboard close did not return to the tray independently.");
+            await VerifyIsolatedVoiceLibraryAsync(_serviceCenter, root);
             await _serviceCenter.OpenReaderAsync();
             await Idle();
             var first = _serviceCenter.Reader!;
@@ -183,6 +184,11 @@ public partial class App
                 startup_hidden_once = true,
                 startup_unknown_disabled = true,
                 startup_options_entry = true,
+                voice_library_rendered = true,
+                voice_license_gate = true,
+                voice_progress_survives_panel_close = true,
+                voice_cancel_waits_for_helper = true,
+                voice_install_exit_guard = true,
             }));
             Shutdown();
         }

@@ -674,7 +674,7 @@ compatible-voice library, added optional Windows autostart, and explicitly asked
 to register this as the next goal. Scope and acceptance criteria are in
 `docs/reader_service_center_plan.md`. Autostart is off by default.
 
-- [ ] T1: Persistent single tray owner, truthful local-service dashboard, safe
+- [x] T1: Persistent single tray owner, truthful local-service dashboard, safe
   lifecycle controls and reversible per-user Windows autostart.
 - [ ] T2: Compatible-voice library with metadata, checked installation/progress,
   preview and safe default-voice selection, reusing existing infrastructure.

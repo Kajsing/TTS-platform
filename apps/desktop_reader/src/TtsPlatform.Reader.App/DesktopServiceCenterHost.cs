@@ -120,6 +120,13 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
 
     internal async Task<bool> ExitAsync(bool confirm = true)
     {
+        if (_voices?.IsBusy == true)
+        {
+            await OpenServiceCenterAsync();
+            DashboardWindow?.OpenVoicesPage();
+            DashboardWindow?.ShowCommandMessage("A voice operation is still running. You can cancel the installation here; wait for its final result before exiting Service Center.");
+            return false;
+        }
         if (_exiting || _openingReader || _operationPending || _startupBusy) return false;
         if (confirm && MessageBox.Show(
             "Exit Service Center? Its tray icon will disappear.\n\nThe local TTS service will keep running. " +
@@ -143,6 +150,11 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        if (_voices is not null)
+        {
+            _voices.Changed -= VoiceLibraryChanged;
+            _voices.OwnerClosing();
+        }
         DisposeMonitor();
         if (_tray is not null)
         {

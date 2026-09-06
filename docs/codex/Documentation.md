@@ -5,6 +5,26 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- T2 voice menu and local helper adapter are now implemented and published to
+  the exact root-shortcut executable. Service Center > Voices separates installed
+  metadata from downloadable packages, shows source/license/size, resets explicit
+  license acceptance on selection/refresh, and provides progress/cancellation.
+  The tray host retains the helper across panel close/reopen, blocks exit and
+  lifecycle changes while it is pending, and waits for actual process exit after
+  cancellation or a terminal event. No forced installer termination on timeout.
+  Read-only timeouts, malformed/truncated/oversized output and safe error text are
+  covered; the real C# -> Python adapter read 5 voices/1 package with the manifest
+  hash unchanged. Validation: 242 .NET tests; 593 Python tests, 2 optional skips;
+  Ruff, zero-warning build, .NET format; actual-shortcut and portable WPF voice/
+  lifecycle/startup/folder smoke; isolated live HTTP checks passed. Physical
+  audio/clipboard/hotkeys were not exercised. No user service, articles, models,
+  config or startup settings changed. See `docs/reader_service_center_voices.md`
+  and `.logs/2026-09-06-reader-service-center-voice-menu.md`.
+  Remaining: catalog expansion, guarded fixed-text preview and separate service-
+  default selection, followed by their publication/acceptance audit. The catalog
+  still contains one default entry; new package research is recorded in
+  `docs/reader_voice_catalog_review.md`, not silently treated as accepted licensing
+  or installation. T2/overall goal stay active; U8 stays parked.
 - T2 voice-library foundation is implemented, not yet exposed in the desktop.
   The fixed local `tts_service.model_manager` JSON-lines subprocess reuses the
   catalog/CLI installer; it adds package/license review fingerprints, installed

@@ -76,7 +76,7 @@ internal sealed partial class DesktopServiceCenterHost
             if (_startupRegistration?.State.Enabled != false) StartupNotice();
             return;
         }
-        if (_operationPending) return;
+        if (_operationPending || _voices?.IsBusy == true) return;
         _operationPending = true;
         _monitorTimer?.Stop();
         try
