@@ -132,6 +132,20 @@ public sealed class UserStartupRegistrationTests
     }
 
     [Fact]
+    public async Task Custom_named_legacy_discovery_prevents_duplicate_startup_without_changing_task()
+    {
+        var tasks = new Tasks();
+        var custom = new StartupTaskRecord(@"\My tasks\Book reader", "<legacy />", true);
+        var manager = new UserStartupRegistration(tasks, Executable, Sid, _ => true,
+            findLegacyStartup: () => [custom]);
+        var result = await manager.SetEnabledAsync(true);
+        Assert.False(result.Enabled);
+        Assert.False(result.CanEnable);
+        Assert.Contains(custom.Name, result.Message);
+        Assert.Empty(tasks.Items);
+    }
+
+    [Fact]
     public async Task Missing_executable_and_moved_installation_do_not_create_startup()
     {
         var tasks = new Tasks(); var manager = new UserStartupRegistration(tasks, Executable, Sid, _ => false);

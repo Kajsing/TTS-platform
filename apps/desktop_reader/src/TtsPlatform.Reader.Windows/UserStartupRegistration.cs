@@ -21,7 +21,8 @@ public interface IUserStartupTasks
 
 public sealed class UserStartupRegistration(
     IUserStartupTasks tasks, string executable, string userSid, Func<string, bool>? fileExists = null,
-    string? isolatedTaskName = null, string? legacyTaskName = null, TimeSpan? observationTimeout = null)
+    string? isolatedTaskName = null, string? legacyTaskName = null, TimeSpan? observationTimeout = null,
+    Func<IReadOnlyList<StartupTaskRecord>>? findLegacyStartup = null)
 {
     private const string Source = "TTS Platform Service Center startup v1";
     private static readonly XNamespace Ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
@@ -125,7 +126,12 @@ public sealed class UserStartupRegistration(
     private UserStartupState ReadCurrent(StartupTaskRecord? record = null, bool ownTaskRead = false)
     {
         if (!ownTaskRead) record = tasks.Read(TaskName);
-        try { return Inspect(record, tasks.Read(LegacyTaskName)); }
+        try
+        {
+            var legacy = tasks.Read(LegacyTaskName);
+            if (legacy?.Enabled != true) legacy = findLegacyStartup?.Invoke().FirstOrDefault(task => task.Enabled) ?? legacy;
+            return Inspect(record, legacy);
+        }
         catch (Exception exception) when (exception is COMException or UnauthorizedAccessException or IOException)
         {
             return Inspect(record, null) with
@@ -151,7 +157,7 @@ public sealed class UserStartupRegistration(
                 : "On · Service Center and the local service start at Windows login. Reader stays closed.");
         if (legacyEnabled)
             return new(false, false, record is not null,
-                "The legacy 'TTS Platform Local Reader' startup task is enabled. Disable or remove it in Windows Task Scheduler before enabling Service Center startup. It was left unchanged.");
+                $"The legacy startup task '{legacy!.Name}' is enabled. Disable or remove it in Windows Task Scheduler before enabling Service Center startup. It was left unchanged.");
         return new(false, true, record is not null,
             "Off · No Service Center startup will run. Enabling this does not open Reader or start the service right now.");
     }
@@ -223,7 +229,7 @@ public sealed class UserStartupRegistration(
     private static bool PathEquals(string? value, string expected) => value is not null &&
         string.Equals(Path.GetFullPath(value), Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase);
 
-    private static bool SameUser(string? value, string expectedSid)
+    internal static bool SameUser(string? value, string expectedSid)
     {
         if (string.Equals(value, expectedSid, StringComparison.Ordinal)) return true;
         // Scheduler may serialize the logon trigger as DOMAIN\name. Match only
@@ -276,7 +282,7 @@ public sealed class WindowsUserStartupTasks : IUserStartupTasks
         finally { Release(task); }
     });
 
-    private static T WithFolder<T>(Func<dynamic, T> operation)
+    internal static T WithFolder<T>(Func<dynamic, T> operation)
     {
         object? service = null;
         object? folder = null;
@@ -292,6 +298,6 @@ public sealed class WindowsUserStartupTasks : IUserStartupTasks
         finally { Release(folder); Release(service); }
     }
 
-    private static void Release(object? value)
+    internal static void Release(object? value)
     { if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
 }

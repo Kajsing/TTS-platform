@@ -1,9 +1,8 @@
 # Reader Service Center
 
-Status: user-approved active goal, 2026-09-05. T1.1 and the T1.2 dashboard/owned
-launcher control slice are implemented and published. T1.3 Windows startup is
-implemented; T2 remains incomplete. Legacy scheduler ownership integration and
-broader legacy-startup discovery remain T1 follow-ups before the T1 audit.
+Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
+including optional Windows startup and the legacy scheduled-owner integration.
+T2 remains incomplete and is the next slice. The whole goal is not complete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -65,11 +64,12 @@ seconds hidden, backs off on failures and rate limits, and displays unavailable
 values rather than stale/zero metrics. Tray and Reader controls now use one
 serialized coordinator. Stop/restart requires current idle activity, confirmed
 Reader cleanup, an unexpired reservation and a verified launcher/service process
-tree. The old task-name-only Run/End fallback has been removed. Legacy scheduled
-or terminal-started services without a matching ownership lease remain visible
-but are refused with an explanation; they are not silently adopted by PID. The
-remaining startup slice must reconcile legacy tasks without changing them merely
-to pass validation. See `.logs/2026-09-06-reader-service-center-dashboard.md`.
+tree. The old task-name-only Run/End fallback has been removed. Compatible legacy
+current-user scheduled tasks are now discovered by exact launcher/action, not
+name, and their live action token, command line, instance and process ancestry
+are verified. Unknown terminal/custom/shared-engine owners remain visible but
+are refused, never adopted from a PID. See `reader_service_center_legacy.md` and
+`.logs/2026-09-06-reader-service-center-dashboard.md`.
 
 Provide service readiness, default voice, voice count, uptime, activity, CPU and
 working-set RAM, plus Open Reader and start/stop/restart. Show stopped, starting,
@@ -92,9 +92,9 @@ Implemented and validated on 2026-09-06. See
 `docs/reader_service_center_startup.md`. The Windows startup tab reads actual
 per-user registration, not a saved boolean. Enabling creates a current-user,
 interactive-token, least-privilege logon task for the exact published executable;
-disabling removes only the verified matching entry. The normal default legacy
-service task is detected and left untouched; broader/custom-name legacy task
-discovery belongs to the remaining legacy integration slice.
+disabling removes only the verified matching entry. Enabled automatic tasks for
+the current user's exact legacy launcher are detected, including custom names
+and nested task paths, and left untouched. Conflicts block competing startup.
 
 The separate `--autostart` activation checks a matching enabled registration,
 keeps Reader/dashboard closed, reuses a running service and starts an absent one
@@ -118,9 +118,9 @@ enabling production autostart just to pass a check.
 - [x] Reader close/reopen, compact/minimized mode, dirty-edit refusal, active
   dialog guards and host disposal pass the isolated WPF lifecycle smoke.
 - [x] Dashboard metrics have verified sources and truthful unavailable states.
-- [ ] Start/stop/restart are ownership-safe and protect active work.
+- [x] Start/stop/restart are ownership-safe and protect active work.
 - [x] Autostart defaults off, is reversible and reflects actual registration.
-- [ ] Relevant regression tests, WPF lifecycle smoke and actual-shortcut
+- [x] Relevant regression tests, WPF lifecycle smoke and actual-shortcut
   publication pass while the user's Reader is safely closed.
 
 ## T2 - Compatible voice library
@@ -186,9 +186,13 @@ The API, coordinator and dashboard now pass unit, isolated real HTTP, real
 synthetic Windows launcher-tree and WPF lifecycle tests. No live service was
 started or stopped for these checks. Windows autostart and the Options entry
 are implemented and tested, including a real disabled Task Scheduler fixture
-that is removed again and synthetic hidden-startup execution. Next: finish
-legacy scheduled-task ownership/control and broader startup-conflict discovery,
-then audit T1 before starting T2. Do not mark the whole goal complete yet.
+that is removed again and synthetic hidden-startup execution. Legacy task
+integration also passes real no-trigger synthetic task start/stop/restart,
+changed-definition/command, unrelated-PID and expired-reservation tests. A native
+operation observation timeout retains serialization and cancels late mutations.
+T1 acceptance: 223 .NET tests, 549 Python tests (2 optional skips), Ruff,
+published actual-shortcut lifecycle/startup smoke and portable/live-HTTP checks.
+Next: T2 compatible-voice library. Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.

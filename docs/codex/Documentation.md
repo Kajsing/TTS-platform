@@ -5,6 +5,21 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- Service Center T1 is now implemented and published, including legacy task
+  compatibility and custom-name startup-conflict discovery. Exact current-user
+  task definitions, live token/command, instance identity and process ancestry
+  protect scheduled start/stop/restart. Native tests found WM_CLOSE-based task
+  stop insufficient within the maintenance window; the verified idle action
+  tree uses the existing direct-launcher termination policy, never a shared
+  engine or delayed forced fallback. Pending native commands remain serialized
+  and cancel late mutations after their observation timeout. See
+  `docs/reader_service_center_legacy.md` and
+  `.logs/2026-09-06-reader-service-center-legacy.md`.
+  Validation: 223 .NET tests, 549 Python tests (2 optional skips), Ruff and
+  republished exact-shortcut WPF lifecycle/dashboard/startup smoke pass. Native
+  synthetic task fixtures are removed; no production autostart was enabled.
+  Next is T2 compatible voices using the existing catalog/install/check path.
+  The full goal remains active; do not mark it complete until T2 acceptance.
 - Latest Service Center slice: optional Windows startup is implemented under
   Service Center > Windows startup, with a save-and-open entry from Reader
   Options. It reflects actual per-user Task Scheduler registration, defaults

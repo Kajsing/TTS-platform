@@ -16,7 +16,10 @@ internal sealed partial class DesktopServiceCenterHost
         var executable = Path.Combine(AppContext.BaseDirectory, "TtsPlatform.Reader.App.exe");
         _startupRegistration = new UserStartupRegistration(new WindowsUserStartupTasks(), executable,
             UserStartupRegistration.CurrentUserSid(), path => File.Exists(path) &&
-                File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "coreclr.dll")));
+                File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "coreclr.dll")) &&
+                ScheduledServiceController.FindLocalServiceLauncher(AppContext.BaseDirectory) is not null,
+            findLegacyStartup: new LegacyServiceTasks(AppContext.BaseDirectory,
+                UserStartupRegistration.CurrentUserSid(), 7777).ReadStartupConflicts);
     }
 
     private async Task RefreshStartupAsync()

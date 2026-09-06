@@ -8,15 +8,20 @@ using TtsPlatform.Reader.Client;
 
 namespace TtsPlatform.Reader.Windows;
 
-// All mutations use a persisted, exact launcher identity. Unknown or legacy
-// scheduler-owned processes are visible in the dashboard, never adopted by PID.
+// Mutations require an exact persisted launcher or verified current-user task
+// instance. Unknown processes are visible, never adopted from an API PID alone.
 public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirectory = null,
-    string? leasePath = null) : ILocalServiceProcesses
+    string? leasePath = null, TimeSpan? operationTimeout = null,
+    Func<IReadOnlyList<StartupTaskRecord>>? readLegacyTasks = null) : ILocalServiceProcesses
 {
     private readonly Uri _endpoint = ServiceBaseUrl.Parse(endpoint.AbsoluteUri);
     private readonly string _startDirectory = startDirectory ?? AppContext.BaseDirectory;
     private readonly ReaderServiceProcessLeaseStore _leases = new(leasePath ?? DesktopPaths.ServiceProcessLeasePath);
     private (int Pid, long Started)? _verifiedService;
+    private readonly LegacyServiceTasks _legacy = new(startDirectory ?? AppContext.BaseDirectory,
+        UserStartupRegistration.CurrentUserSid(), endpoint.Port, readLegacyTasks);
+    private bool _scheduledOwner;
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
 
     public Task<bool?> IsListeningAsync(CancellationToken cancellationToken) => Task.Run<bool?>(() =>
     {
@@ -25,11 +30,17 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
         catch (NetworkInformationException) { return null; }
     }, cancellationToken);
 
-    public Task<ServiceCommandResult> VerifyOwnerAsync(LocalServiceStatus status, CancellationToken cancellationToken) => Task.Run(() =>
+    public Task<ServiceCommandResult> VerifyOwnerAsync(LocalServiceStatus status, CancellationToken cancellationToken) => RunOperationAsync(token =>
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        token.ThrowIfCancellationRequested();
         _verifiedService = null;
-        if (!TryOpenOwner(out var owner, out var error)) return new ServiceCommandResult(false, error);
+        _scheduledOwner = false;
+        if (!TryOpenOwner(out var owner, out _))
+        {
+            var result = _legacy.VerifyOwner(status);
+            _scheduledOwner = result.Succeeded;
+            return result;
+        }
         using (owner)
         {
             try
@@ -49,14 +60,15 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
     {
         if (await IsListeningAsync(cancellationToken) != false)
             return new(false, "The local port is occupied or could not be checked. No second service was started.");
-        return await Task.Run(() =>
+        return await RunOperationAsync(token =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            token.ThrowIfCancellationRequested();
             if (TryOpenOwner(out var existing, out _))
             {
                 existing!.Dispose();
                 return new ServiceCommandResult(false, "A recorded service launcher is already running. Wait for it to finish starting; no duplicate was launched.");
             }
+            if (_legacy.Start(token) is { } legacyResult) return legacyResult;
             var launcher = ScheduledServiceController.FindLocalServiceLauncher(_startDirectory);
             if (launcher is null) return new(false, "The local service launcher is missing from this installation.");
             try
@@ -70,6 +82,7 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
                     ArgumentList = { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launcher.FullName,
                         "-HostOverride", "127.0.0.1", "-Port", _endpoint.Port.ToString(System.Globalization.CultureInfo.InvariantCulture) },
                 };
+                token.ThrowIfCancellationRequested();
                 using var process = Process.Start(info);
                 if (process is null) return new(false, "Windows could not start the local service launcher.");
                 try { _leases.Save(process, launcher.FullName); }
@@ -87,8 +100,9 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
     }
 
     public Task<ServiceCommandResult> StopAsync(LocalServiceStatus status, Func<bool> reservationValid,
-        CancellationToken cancellationToken) => Task.Run(() =>
+        CancellationToken cancellationToken) => RunOperationAsync(token =>
     {
+        if (_scheduledOwner) return _legacy.Stop(status, reservationValid, token);
         if (!TryOpenOwner(out var owner, out var error)) return new ServiceCommandResult(false, error);
         using (owner)
         {
@@ -100,7 +114,7 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
                     return new(false, "Service ownership changed during confirmation. Nothing was stopped.");
                 // This is the last check before the actual OS mutation, not a timer
                 // computed after an HTTP request or before queued background work.
-                if (cancellationToken.IsCancellationRequested || !reservationValid())
+                if (token.IsCancellationRequested || !reservationValid())
                     return new(false, "The maintenance reservation expired. Nothing was stopped; please try again.");
                 owner!.Kill(entireProcessTree: true);
                 if (!owner.WaitForExit(5000) || !service.WaitForExit(5000))
@@ -113,6 +127,29 @@ public sealed class LocalServiceProcessControl(Uri endpoint, string? startDirect
             { return new(false, "Service shutdown could not be confirmed. No unrelated process was terminated."); }
         }
     }, cancellationToken);
+
+    private async Task<ServiceCommandResult> RunOperationAsync(Func<CancellationToken, ServiceCommandResult> operation,
+        CancellationToken cancellationToken)
+    {
+        if (!await _operationGate.WaitAsync(0, cancellationToken))
+            return new(false, "Windows is still finishing the previous operation. No duplicate operation was started.");
+        var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var work = Task.Run(() =>
+        {
+            try { return operation(lifetime.Token); }
+            finally { lifetime.Dispose(); _operationGate.Release(); }
+        });
+        _ = work.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        try { return await work.WaitAsync(operationTimeout ?? TimeSpan.FromSeconds(12), cancellationToken); }
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException)
+        {
+            // Native COM calls are not abortable. Retain the gate until they
+            // return, but cancel any mutation they have not reached yet.
+            try { lifetime.Cancel(); } catch (ObjectDisposedException) { }
+            return new(false, "Windows has not confirmed completion. Refresh status before trying again; no duplicate operation or forced fallback was started.");
+        }
+    }
 
     private bool TryOpenOwner(out Process? process, out string error)
     {

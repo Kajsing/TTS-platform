@@ -44,8 +44,11 @@ Mutations re-read the expected XML first; task creation uses create-only flags.
 When the default legacy **TTS Platform Local Reader** task is enabled, the new
 startup option explains the conflict and will not create a competing owner.
 The legacy task remains untouched. Disable/remove it through its existing owner
-before enabling the new option. Broader discovery and control of legacy/custom
-scheduled launchers remain part of the next T1 integration slice.
+before enabling the new option. Discovery also covers accessible custom-named
+and nested tasks using this installation's exact PowerShell/launcher and the
+current user, with enabled automatic triggers. Inaccessible or incomplete
+discovery is not treated as proof of absence. Disabled/manual-only tasks do not
+create an autostart conflict. See `reader_service_center_legacy.md` for control.
 
 Missing or moved installations, foreign/changed definitions, access denial and
 unknown registration states are reported. Failed changes are read back when
