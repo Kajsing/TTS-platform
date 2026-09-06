@@ -5,6 +5,25 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- T2 voice-library foundation is implemented, not yet exposed in the desktop.
+  The fixed local `tts_service.model_manager` JSON-lines subprocess reuses the
+  catalog/CLI installer; it adds package/license review fingerprints, installed
+  inventory, progress and cooperative cancellation without a new network API.
+  Installation stages downloads/assets, verifies SHA-256 and structural assets,
+  compares the manifest under a cross-process lock and publishes it atomically.
+  Caught commit failures restore previous package state; GUI operations never
+  overwrite, activate or remove voices. Multi-voice packages share one asset
+  directory; legacy CLI removal/overwrite now protects dependent voice entries.
+  Validation: 109 focused model tests; 593 full Python tests, 2 optional skips;
+  Ruff and diff checks pass. A real read-only inventory found 5 installed voices
+  and 1 already-installed catalog package, with the manifest hash unchanged.
+  No real download, service restart, config edit or desktop publication occurred
+  in this Python-only slice. See `docs/reader_service_center_voices.md` and
+  `.logs/2026-09-06-reader-service-center-voice-installer.md`.
+  Next: WPF voice tab/progress and helper lifetime, primary-source catalog
+  expansion, guarded preview and separate service-default selection; then
+  desktop tests and exact-shortcut publication. T2 and the overall goal remain
+  incomplete; U8 remains parked. Continue autonomously within these boundaries.
 - Service Center T1 is now implemented and published, including legacy task
   compatibility and custom-name startup-conflict discovery. Exact current-user
   task definitions, live token/command, instance identity and process ancestry

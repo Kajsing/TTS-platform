@@ -2,7 +2,9 @@
 
 Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
 including optional Windows startup and the legacy scheduled-owner integration.
-T2 remains incomplete and is the next slice. The whole goal is not complete.
+T2's local installation foundation is implemented; its desktop UI, catalog
+expansion, preview and default selection remain incomplete. The whole goal is
+not complete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -125,6 +127,15 @@ enabling production autostart just to pass a check.
 
 ## T2 - Compatible voice library
 
+Installation foundation implemented on 2026-09-06. The fixed-purpose local
+`tts_service.model_manager` subprocess reuses the Python CLI instead of adding
+a broad model-management HTTP endpoint. It provides bounded metadata inventory,
+reviewed-license/catalog gating, progress, cooperative cancellation, structural
+asset checks, staged rollback and atomic manifest publication. Multi-voice
+packages share assets, with CLI removal/overwrite protection for dependents.
+The desktop has not been connected yet. See `reader_service_center_voices.md`
+and `.logs/2026-09-06-reader-service-center-voice-installer.md`.
+
 Begin after T1 acceptance. Reuse the existing catalog/install/check pipeline.
 Separate installed voices from downloadable packages: one model can contain
 several voices. Display language, model family, size, source and license before
@@ -149,7 +160,7 @@ download large models or accept license terms merely for a smoke test.
 
 - [ ] Installed/available voices and accurate package/license metadata.
 - [ ] Verified installation with visible progress and safe cancellation.
-- [ ] Tests for bad checksums, failed extraction, unavailable downloads,
+- [x] Tests for bad checksums, failed extraction, unavailable downloads,
   existing-package conflicts and manifest preservation.
 - [ ] Preview/default selection respect playback/export activity.
 - [ ] Published desktop smoke and relevant Python/.NET regressions pass.
@@ -192,7 +203,12 @@ changed-definition/command, unrelated-PID and expired-reservation tests. A nativ
 operation observation timeout retains serialization and cancels late mutations.
 T1 acceptance: 223 .NET tests, 549 Python tests (2 optional skips), Ruff,
 published actual-shortcut lifecycle/startup smoke and portable/live-HTTP checks.
-Next: T2 compatible-voice library. Do not mark the whole goal complete yet.
+T2 installer foundation: 109 focused model tests, 593 Python tests (2 optional
+skips), Ruff and a read-only real inventory pass. No new desktop publication or
+real model installation occurred for this Python-only slice.
+Next: connect T2 WPF voice/progress UI and helper lifecycle, expand verified
+catalog metadata, add guarded preview/default selection and validate/publish.
+Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,
 return its remaining acceptance to the user before any networking changes.

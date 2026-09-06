@@ -29,6 +29,7 @@ from tts_core.backends.sherpa_onnx import SherpaOnnxVoiceRuntimeConfig
 
 from .auth import initialize_auth
 from .config import SecurityConfig, load_config
+from .model_installation import ModelInstallControl, atomic_write, manifest_lock, read_snapshot
 
 DEFAULT_MODEL_CATALOG_PATH = "models/catalog.json"
 DEFAULT_MAX_MODEL_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
@@ -1360,6 +1361,8 @@ def _model_install_dir(*, models_root: Path, model_id: str) -> Path:
         or resolved_models_root not in resolved_install_dir.parents
     ):
         raise SystemExit(f"Model install path escapes models root: {install_dir}")
+    if resolved_install_dir != resolved_models_root / safe_model_id:
+        raise SystemExit(f"Model install path is redirected: {install_dir}")
     return install_dir
 
 
@@ -1567,9 +1570,14 @@ def _install_model_from_catalog(
     config_path: Path | None = None,
     progress: Callable[[str], None] | None = None,
     allow_missing_checksum: bool = False,
+    control: ModelInstallControl | None = None,
+    catalog_snapshot: tuple[dict[str, object], CatalogLocation] | None = None,
 ) -> dict[str, object]:
+    control = control or ModelInstallControl()
+    control.report("resolving", force=True)
     model_id = _require_safe_model_id(model_id)
-    catalog_payload, catalog_location = _load_model_catalog(catalog_source)
+    original_manifest = read_snapshot(manifest_path)
+    catalog_payload, catalog_location = catalog_snapshot or _load_model_catalog(catalog_source)
     models = _catalog_models(catalog_payload)
     model = next((candidate for candidate in models if candidate.get("id") == model_id), None)
     if model is None:
@@ -1598,7 +1606,26 @@ def _install_model_from_catalog(
             f"Model directory already exists: {install_dir}. "
             "Use --overwrite to replace it."
         )
-    manifest_entry = _build_manifest_voice_entry(model_id=model_id, model=model)
+    manifest_entries = _build_manifest_voice_entries(model_id=model_id, model=model)
+    if overwrite and original_manifest is not None:
+        installed = json.loads(original_manifest)
+        retained_ids = {entry["id"] for entry in manifest_entries}
+        if isinstance(installed, dict) and isinstance(installed.get("voices"), list):
+            for voice in installed["voices"]:
+                if not isinstance(voice, dict):
+                    continue
+                source = _normalized_backend_path(str(voice.get("source", ""))).rstrip("/")
+                if source == f"models/voices/{model_id}" and voice.get("id") not in retained_ids:
+                    raise SystemExit(
+                        "Other voices share this package but are absent from the new definition. "
+                        "The existing package was not replaced."
+                    )
+    if not overwrite and manifest_path.exists():
+        for entry in manifest_entries:
+            if _manifest_contains_voice(manifest_path=manifest_path, model_id=str(entry["id"])):
+                raise SystemExit(
+                    f"Voice '{entry['id']}' already exists in the manifest. It was not replaced."
+                )
     expected_sha = str(model.get("artifact_sha256", "")).strip().lower()
     if not expected_sha and not allow_missing_checksum:
         _record_install_step(
@@ -1627,12 +1654,14 @@ def _install_model_from_catalog(
         )
 
     with tempfile.TemporaryDirectory(prefix=f"tts-platform-artifact-{model_id}-") as temp_dir:
+        control.report("downloading", total=catalog_artifact_size_bytes, force=True)
         artifact = _load_artifact_file(
             artifact_url=artifact_url,
             catalog_location=catalog_location,
             destination=Path(temp_dir) / "artifact",
             catalog_artifact_size_bytes=catalog_artifact_size_bytes,
             max_artifact_size_bytes=max_artifact_size_bytes,
+            control=control,
         )
         _record_install_step(
             install_steps,
@@ -1644,7 +1673,8 @@ def _install_model_from_catalog(
 
         checksum_verified = False
         if expected_sha:
-            actual_sha = _sha256_file(artifact.path)
+            control.report("verifying", total=artifact.bytes, force=True)
+            actual_sha = _sha256_file(artifact.path, control=control)
             if actual_sha != expected_sha:
                 raise SystemExit(
                     f"Checksum mismatch for '{model_id}'. "
@@ -1672,11 +1702,56 @@ def _install_model_from_catalog(
             tempfile.mkdtemp(prefix=f".{model_id}.", dir=models_root)
         )
         try:
-            _extract_model_artifact(artifact_path=artifact.path, out_dir=temp_install_dir)
-            if install_dir.exists():
-                shutil.rmtree(install_dir)
-            temp_install_dir.rename(install_dir)
-            temp_install_dir = None
+            control.report("extracting", force=True)
+            _extract_model_artifact(
+                artifact_path=artifact.path, out_dir=temp_install_dir, control=control
+            )
+            if control.require_assets:
+                _validate_staged_model(model_id=model_id, model=model, staging=temp_install_dir)
+            control.report("committing", cancellable=False, force=True)
+            control.check()  # Last cancellable boundary; no observer runs inside commit.
+            with manifest_lock(manifest_path):
+                if read_snapshot(manifest_path) != original_manifest:
+                    raise RuntimeError(
+                        "The manifest changed during installation. "
+                        "Existing voices were preserved; refresh and try again."
+                    )
+                _model_install_dir(models_root=models_root, model_id=model_id)
+                if install_dir.exists() and not overwrite:
+                    raise RuntimeError(
+                        "The model directory appeared during installation. It was not replaced."
+                    )
+                backup = temp_install_dir.with_name(temp_install_dir.name + ".previous")
+                has_backup = False
+                moved_new = False
+                try:
+                    if install_dir.exists():
+                        install_dir.rename(backup)
+                        has_backup = True
+                    temp_install_dir.rename(install_dir)
+                    moved_new = True
+                    _upsert_manifest_entries(manifest_path=manifest_path, entries=manifest_entries)
+                    temp_install_dir = None
+                except BaseException:
+                    if moved_new:
+                        shutil.rmtree(install_dir)
+                    if has_backup:
+                        backup.rename(install_dir)
+                    raise
+                if has_backup:
+                    # An explicit CLI --overwrite owns this backup, not the GUI.
+                    try:
+                        shutil.rmtree(backup)
+                    except OSError:
+                        # Installation committed successfully. A cleanup failure
+                        # must not pretend that the new package was rolled back.
+                        _record_install_step(
+                            install_steps,
+                            step="cleanup_previous",
+                            status="warning",
+                            progress=progress,
+                            path=str(backup),
+                        )
         finally:
             if temp_install_dir is not None and temp_install_dir.exists():
                 shutil.rmtree(temp_install_dir)
@@ -1698,7 +1773,6 @@ def _install_model_from_catalog(
         if catalog_artifact_size_bytes is None
         else catalog_artifact_size_bytes == artifact.bytes
     )
-    _upsert_manifest_entry(manifest_path=manifest_path, entry=manifest_entry)
     _record_install_step(
         install_steps,
         step="update_manifest",
@@ -1709,6 +1783,7 @@ def _install_model_from_catalog(
 
     result: dict[str, object] = {
         "installed_model": model_id,
+        "installed_voice_ids": [entry["id"] for entry in manifest_entries],
         "catalog_source": catalog_source,
         "artifact_url": artifact_url,
         "artifact_bytes": artifact.bytes,
@@ -1753,7 +1828,41 @@ def _install_model_from_catalog(
             path=str(resolved_config_path),
         )
 
+    control.report("completed", cancellable=False, force=True)
     return result
+
+
+def _validate_staged_model(*, model_id: str, model: dict[str, object], staging: Path) -> None:
+    if model.get("engine", "sherpa_onnx") != "sherpa_onnx" or not isinstance(
+        model.get("backend"), dict
+    ):
+        raise RuntimeError("This package does not define a compatible sherpa-onnx voice.")
+    prefix = f"models/voices/{model_id}/"
+
+    def relative(value: object) -> object:
+        if isinstance(value, str):
+            return value.removeprefix(prefix)
+        if isinstance(value, list):
+            return [relative(item) for item in value]
+        return value
+
+    backend = {key: relative(value) for key, value in model["backend"].items()}
+    runtime = SherpaOnnxVoiceRuntimeConfig.from_mapping(backend)
+    checks, errors = _model_backend_asset_checks(
+        repo_root=staging, voice_source_root=staging, runtime_config=runtime
+    )
+    if errors or any(check.get("exists") is not True for check in checks):
+        raise RuntimeError(
+            "The verified archive is missing required voice assets or has invalid backend paths."
+        )
+    for check in checks:
+        path = Path(str(check["path"]))
+        if check["field"] in {"data_dir", "dict_dir"}:
+            valid = path.is_dir() and next(path.iterdir(), None) is not None
+        else:
+            valid = path.is_file() and path.stat().st_size > 0
+        if not valid:
+            raise RuntimeError("The package contains an empty asset or incorrect asset type.")
 
 
 def _record_install_step(
@@ -1790,7 +1899,10 @@ def _load_artifact_file(
     destination: Path,
     catalog_artifact_size_bytes: int | None,
     max_artifact_size_bytes: int,
+    control: ModelInstallControl | None = None,
 ) -> ArtifactFile:
+    control = control or ModelInstallControl()
+    control.check()
     destination.parent.mkdir(parents=True, exist_ok=True)
     parsed = urlparse(artifact_url)
     if parsed.scheme in {"http", "https"}:
@@ -1800,6 +1912,7 @@ def _load_artifact_file(
             catalog_location=catalog_location,
             catalog_artifact_size_bytes=catalog_artifact_size_bytes,
             max_artifact_size_bytes=max_artifact_size_bytes,
+            control=control,
         )
         return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
@@ -1811,6 +1924,7 @@ def _load_artifact_file(
             catalog_location=catalog_location,
             catalog_artifact_size_bytes=catalog_artifact_size_bytes,
             max_artifact_size_bytes=max_artifact_size_bytes,
+            control=control,
         )
         return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
@@ -1823,7 +1937,7 @@ def _load_artifact_file(
         max_artifact_size_bytes=max_artifact_size_bytes,
     )
     with artifact_path.open("rb") as source, destination.open("wb") as target:
-        shutil.copyfileobj(source, target)
+        control.copy(source, target, phase="downloading", total=artifact_path.stat().st_size)
     return ArtifactFile(path=destination, bytes=destination.stat().st_size)
 
 
@@ -1858,7 +1972,9 @@ def _download_artifact_to_file(
     catalog_location: CatalogLocation,
     catalog_artifact_size_bytes: int | None,
     max_artifact_size_bytes: int,
+    control: ModelInstallControl | None = None,
 ) -> None:
+    control = control or ModelInstallControl()
     trusted_private_origin = (
         _remote_origin(catalog_location)
         if isinstance(catalog_location, str)
@@ -1871,8 +1987,9 @@ def _download_artifact_to_file(
     )
     redirect_count = 0
     try:
-        with httpx.Client(timeout=120.0) as client:
+        with httpx.Client(timeout=10.0) as client:
             while True:
+                control.check()
                 with client.stream("GET", current_url) as response:
                     _assert_response_peer_allowed(
                         response=response,
@@ -1909,6 +2026,7 @@ def _download_artifact_to_file(
                         destination=destination,
                         catalog_artifact_size_bytes=catalog_artifact_size_bytes,
                         max_artifact_size_bytes=max_artifact_size_bytes,
+                        control=control,
                     )
                     return
     except BaseException:
@@ -2059,10 +2177,13 @@ def _write_downloaded_artifact(
     destination: Path,
     catalog_artifact_size_bytes: int | None,
     max_artifact_size_bytes: int,
+    control: ModelInstallControl | None = None,
 ) -> None:
+    control = control or ModelInstallControl()
     bytes_written = 0
     with destination.open("wb") as artifact_file:
         for chunk in chunks:
+            control.check()
             if not chunk:
                 continue
             bytes_written += len(chunk)
@@ -2072,6 +2193,12 @@ def _write_downloaded_artifact(
                 max_artifact_size_bytes=max_artifact_size_bytes,
             )
             artifact_file.write(chunk)
+            control.report(
+                "downloading", completed=bytes_written, total=catalog_artifact_size_bytes
+            )
+    control.report(
+        "downloading", completed=bytes_written, total=catalog_artifact_size_bytes, force=True
+    )
 
 
 def _assert_artifact_size_allowed(
@@ -2092,21 +2219,30 @@ def _assert_artifact_size_allowed(
         )
 
 
-def _sha256_file(path: Path) -> str:
+def _sha256_file(path: Path, *, control: ModelInstallControl | None = None) -> str:
+    control = control or ModelInstallControl()
     digest = hashlib.sha256()
+    completed = 0
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            control.check()
             digest.update(chunk)
+            completed += len(chunk)
+            control.report("verifying", completed=completed, total=path.stat().st_size)
     return digest.hexdigest().lower()
 
 
-def _extract_model_artifact(*, artifact_path: Path, out_dir: Path) -> None:
+def _extract_model_artifact(
+    *, artifact_path: Path, out_dir: Path, control: ModelInstallControl | None = None
+) -> None:
+    control = control or ModelInstallControl()
+    control.check()
     if zipfile.is_zipfile(artifact_path):
-        _extract_zip(artifact_path=artifact_path, out_dir=out_dir)
+        _extract_zip(artifact_path=artifact_path, out_dir=out_dir, control=control)
         return
 
     if tarfile.is_tarfile(artifact_path):
-        _extract_tar(artifact_path=artifact_path, out_dir=out_dir)
+        _extract_tar(artifact_path=artifact_path, out_dir=out_dir, control=control)
         return
 
     raise SystemExit(
@@ -2115,20 +2251,35 @@ def _extract_model_artifact(*, artifact_path: Path, out_dir: Path) -> None:
     )
 
 
-def _extract_zip(*, artifact_path: Path, out_dir: Path) -> None:
+def _extract_zip(
+    *, artifact_path: Path, out_dir: Path, control: ModelInstallControl | None = None
+) -> None:
+    control = control or ModelInstallControl()
     try:
         _assert_zip_member_count_hint(artifact_path)
         with zipfile.ZipFile(artifact_path) as archive:
             _assert_safe_zip_members(archive=archive, out_dir=out_dir)
-            archive.extractall(out_dir)
+            for member in archive.infolist():
+                control.check()
+                destination = _archive_member_destination(
+                    member_name=member.filename, out_dir_resolved=out_dir.resolve()
+                )
+                if member.is_dir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(member) as source, destination.open("wb") as target:
+                    control.copy(source, target, phase="extracting", total=member.file_size)
     except zipfile.BadZipFile as exc:
         raise SystemExit(f"Model artifact is not a valid zip file: {exc}") from exc
 
 
-def _extract_tar(*, artifact_path: Path, out_dir: Path) -> None:
+def _extract_tar(
+    *, artifact_path: Path, out_dir: Path, control: ModelInstallControl | None = None
+) -> None:
     try:
         with tarfile.open(artifact_path) as archive:
-            _extract_safe_tar_members(archive=archive, out_dir=out_dir)
+            _extract_safe_tar_members(archive=archive, out_dir=out_dir, control=control)
     except tarfile.TarError as exc:
         raise SystemExit(f"Model artifact is not a valid tar file: {exc}") from exc
 
@@ -2173,11 +2324,15 @@ def _assert_safe_zip_members(*, archive: zipfile.ZipFile, out_dir: Path) -> None
     )
 
 
-def _extract_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> None:
+def _extract_safe_tar_members(
+    *, archive: tarfile.TarFile, out_dir: Path, control: ModelInstallControl | None = None
+) -> None:
+    control = control or ModelInstallControl()
     out_dir_resolved = out_dir.resolve()
     file_count = 0
     total_uncompressed_bytes = 0
     for member in archive:
+        control.check()
         _assert_safe_archive_member_path(
             member_name=member.name,
             out_dir_resolved=out_dir_resolved,
@@ -2212,7 +2367,7 @@ def _extract_safe_tar_members(*, archive: tarfile.TarFile, out_dir: Path) -> Non
             destination.parent.mkdir(parents=True, exist_ok=True)
             try:
                 with destination.open("wb") as target:
-                    shutil.copyfileobj(source, target)
+                    control.copy(source, target, phase="extracting", total=member.size)
             finally:
                 source.close()
 
@@ -2296,6 +2451,42 @@ def _build_manifest_voice_entry(*, model_id: str, model: dict[str, object]) -> d
     return entry
 
 
+def _build_manifest_voice_entries(
+    *, model_id: str, model: dict[str, object]
+) -> list[dict[str, object]]:
+    base = _build_manifest_voice_entry(model_id=model_id, model=model)
+    variants = model.get("voices")
+    if variants is None:
+        return [base]
+    if not isinstance(variants, list) or not variants or len(variants) > 256:
+        raise SystemExit("Catalog voices must be a nonempty list of at most 256 entries.")
+    result: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for variant in variants:
+        if not isinstance(variant, dict):
+            raise SystemExit("Catalog voice variant must be an object.")
+        voice_id = _require_safe_model_id(str(variant.get("id", "")))
+        speaker_id = variant.get("speaker_id")
+        if voice_id in seen or type(speaker_id) is not int or speaker_id < 0:
+            raise SystemExit(
+                "Catalog voice IDs must be unique and speaker IDs nonnegative integers."
+            )
+        seen.add(voice_id)
+        entry = dict(base)
+        entry.update(
+            id=voice_id,
+            name=str(variant.get("name", voice_id)),
+            language=str(variant.get("language", base["language"])),
+        )
+        entry["backend"] = {**base.get("backend", {}), "speaker_id": speaker_id}
+        result.append(entry)
+    if model_id not in seen:
+        raise SystemExit(
+            "The package's default voice must retain the package ID for CLI compatibility."
+        )
+    return result
+
+
 def _rewrite_backend_paths(*, source: str, backend: dict[str, object]) -> dict[str, object]:
     path_keys = {
         "model",
@@ -2359,6 +2550,10 @@ def _backend_path_validation_error(raw_path: str) -> str | None:
 
 
 def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> None:
+    _upsert_manifest_entries(manifest_path=manifest_path, entries=[entry])
+
+
+def _upsert_manifest_entries(*, manifest_path: Path, entries: list[dict[str, object]]) -> None:
     payload: dict[str, object]
     if manifest_path.exists():
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -2373,15 +2568,18 @@ def _upsert_manifest_entry(*, manifest_path: Path, entry: dict[str, object]) -> 
     voices = payload.get("voices", [])
     if not isinstance(voices, list):
         raise SystemExit("Manifest field 'voices' must be a list.")
+    if any(not isinstance(voice, dict) for voice in voices):
+        raise SystemExit("Manifest contains an invalid voice entry; it was not rewritten.")
+    replaced = {str(entry["id"]) for entry in entries}
     filtered = [
         voice
         for voice in voices
-        if isinstance(voice, dict) and str(voice.get("id", "")).strip() != str(entry["id"])
+        if str(voice.get("id", "")).strip() not in replaced
     ]
-    filtered.append(entry)
+    filtered.extend(entries)
     payload["voices"] = filtered
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    atomic_write(manifest_path, (json.dumps(payload, indent=2) + "\n").encode("utf-8"))
 
 
 def _activate_model(*, model_id: str, manifest_path: Path, config_path: Path) -> dict[str, object]:
@@ -2408,6 +2606,8 @@ def _manifest_contains_voice(*, manifest_path: Path, model_id: str) -> bool:
     voices = payload.get("voices", [])
     if not isinstance(voices, list):
         raise SystemExit("Manifest field 'voices' must be a list.")
+    if any(not isinstance(voice, dict) for voice in voices):
+        raise SystemExit("Manifest contains an invalid voice entry; it was not rewritten.")
     return any(
         isinstance(voice, dict) and str(voice.get("id", "")).strip() == model_id
         for voice in voices
@@ -2483,7 +2683,36 @@ def _remove_model(
     manifest_path: Path,
     config_path: Path | None = None,
 ) -> dict[str, object]:
+    with manifest_lock(manifest_path):
+        return _remove_model_locked(
+            model_id=model_id,
+            models_root=models_root,
+            manifest_path=manifest_path,
+            config_path=config_path,
+        )
+
+
+def _remove_model_locked(
+    *,
+    model_id: str,
+    models_root: Path,
+    manifest_path: Path,
+    config_path: Path | None = None,
+) -> dict[str, object]:
     model_id = _require_safe_model_id(model_id)
+    if manifest_path.exists():
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("voices", []), list):
+            raise SystemExit("Invalid manifest. No model files were removed.")
+        for voice in payload.get("voices", []):
+            if not isinstance(voice, dict):
+                raise SystemExit("Invalid manifest voice entry. No model files were removed.")
+            source = _normalized_backend_path(str(voice.get("source", ""))).rstrip("/")
+            if voice.get("id") != model_id and source == f"models/voices/{model_id}":
+                raise SystemExit(
+                    "Other voices share this package. Remove those voice entries first; "
+                    "shared assets were preserved."
+                )
     config_default_status = _inspect_config_default_for_remove(
         model_id=model_id,
         config_path=config_path,
@@ -2510,7 +2739,7 @@ def _remove_model(
         removed_manifest_entry = len(updated_voices) != len(voices)
         if removed_manifest_entry:
             payload["voices"] = updated_voices
-            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            atomic_write(manifest_path, (json.dumps(payload, indent=2) + "\n").encode("utf-8"))
 
     result: dict[str, object] = {
         "model_id": model_id,
