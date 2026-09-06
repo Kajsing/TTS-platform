@@ -3,8 +3,8 @@
 Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
 including optional Windows startup and the legacy scheduled-owner integration.
 T2's installation foundation and desktop library/progress UI are implemented;
-service-default selection is implemented as a deferred configuration change;
-catalog expansion and preview remain incomplete. The whole goal is
+service-default selection and guarded fixed-text preview are published;
+catalog expansion remains incomplete. The whole goal is
 not complete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
@@ -166,8 +166,9 @@ download large models or accept license terms merely for a smoke test.
 - [x] Verified installation with visible progress and safe cancellation.
 - [x] Tests for bad checksums, failed extraction, unavailable downloads,
   existing-package conflicts and manifest preservation.
-- [ ] Preview/default selection respect playback/export activity.
-- [ ] Published desktop smoke and relevant Python/.NET regressions pass.
+- [x] Preview/default selection respect playback/export activity.
+- [x] Published desktop smoke and relevant Python/.NET regressions pass for the
+  implemented library/default/preview. Revalidate after catalog expansion.
 
 ## Validation and delivery
 
@@ -217,8 +218,15 @@ Service-default selection now saves only `tts.default_voice` after explicit
 confirmation and fresh config/manifest checks. It never contacts, interrupts or
 restarts the running engine, and never changes Reader's separate preference.
 Configuration DACLs, comments and unrelated values are preserved.
-Next: expand verified catalog metadata, add guarded fixed-text preview and
-validate/publish their complete end-to-end behavior.
+Guarded fixed-text preview is now published. It consumes an idle render
+reservation until the native worker exits, then obtains a separate bounded
+audible-playback lease. Reader paused/active/transition/dialog guards preserve
+drafts; Stop or panel close stops/disposes audio before releasing admission.
+Validation: 621 Python tests (2 optional skips), 268 .NET tests, Ruff, exact
+shortcut lifecycle/preview and live HTTP/portable WPF smoke pass. See
+`.logs/2026-09-06-reader-service-center-preview.md`. No physical audio or actual
+model/config/startup changes were made for these tests.
+Next: expand verified catalog metadata and validate the actual inventory/menu.
 Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,

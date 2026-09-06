@@ -5,6 +5,28 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- T2 fixed-text voice preview is implemented and published to the exact root
+  shortcut. Service Center > Voices > Installed > Preview voice uses the selected
+  running-registry voice without changing Reader preference or service defaults.
+  Stop preview and panel close stop/dispose audio before release; unsaved Reader
+  edits survive. Active/paused/transitioning local Reader speech (also when using
+  a remote workspace), open operations/dialogs and global service/export activity
+  guard preview. Native rendering owns its reservation until actual worker exit,
+  including client cancellation/expiry; audible playback obtains a fresh bounded
+  idle reservation. The additive fixed-text owner route is explicitly denied to
+  remote/browser/MCP access and accepts no article text. Test-discovered invalid
+  WAV errors now become safe UI messages. Validation: 621 Python tests, 2 optional
+  skips; 268 .NET tests; Ruff; zero-warning publish; exact-shortcut synthetic
+  preview/Stop/close/draft-preservation/lifecycle; compiled live HTTP WAV preview
+  and portable WPF checks pass. Screenshots inspected. No real audio/model/default
+  change, service start/stop or startup enablement occurred. Existing unrelated
+  `models/MANIFEST.json` changes remain untouched. Broad Ruff formatting has
+  pre-existing drift; only changed Python preview files were formatted. An early
+  existing completion/replay test timed out once, then passed alone and in two
+  full suite runs; no speculative playback tuning was made. See
+  `.logs/2026-09-06-reader-service-center-preview.md` for detail.
+  Next: reviewed catalog expansion. Overall Service Center goal is active;
+  U8 remains parked. It is safe to continue with read-only upstream review.
 - T2 deferred service-default selection is implemented and published to the exact
   root-shortcut executable. Service Center > Voices > Installed > Use as service
   default confirms a config-only change for the next explicit restart. Current

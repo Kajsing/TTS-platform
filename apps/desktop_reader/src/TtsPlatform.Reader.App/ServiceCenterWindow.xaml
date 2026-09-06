@@ -191,6 +191,12 @@
                   </ListBox.ItemTemplate>
                 </ListBox>
                 <StackPanel Grid.Row="2" Margin="3,10,3,3">
+                  <WrapPanel Margin="0,0,0,6">
+                    <Button x:Name="PreviewVoiceButton" Content="Preview voice" IsEnabled="False" Click="PreviewVoice_Click" />
+                    <Button x:Name="StopVoicePreviewButton" Content="Stop preview" IsEnabled="False" Click="StopVoicePreview_Click" Margin="6,0,0,0" />
+                  </WrapPanel>
+                  <TextBlock x:Name="VoicePreviewMessage" Text="A short fixed sample. Stop paused/active Reader playback first. Closing this panel stops the preview."
+                             TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite" />
                   <Button x:Name="SetServiceDefaultButton" Content="Use as service default…" HorizontalAlignment="Left"
                           IsEnabled="False" Click="SetServiceDefault_Click" />
                   <TextBlock Text="Saved for the next explicit service restart. Current playback and Reader's own voice preference stay unchanged."

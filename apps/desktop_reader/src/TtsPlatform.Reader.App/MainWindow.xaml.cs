@@ -597,6 +597,34 @@ public partial class MainWindow : Window
         }
     }
 
+    internal string? TryBeginVoicePreview()
+    {
+        if (_closed) return null;
+        if (_ephemeralPlaying || _ephemeralReplayText is not null || _ephemeralTask?.IsCompleted == false ||
+            _playback?.IsActive == true || _playback?.IsTransitioning == true || _playback?.State == ReaderPlaybackState.Paused ||
+            _audioInterruptionActive || _automaticPauseKind != AutomaticPauseKind.None)
+            return "Stop Reader playback first, including paused reading. Voice preview will not move its position or interrupt a call/alarm.";
+        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 || _autoAdvanceLock.CurrentCount == 0 ||
+            _clipboardPromptOpen || OwnedWindows.Cast<Window>().Any(window => window != _compactController && window.IsVisible))
+            return "Finish the open Reader operation before previewing a voice.";
+        _localServiceOperation = true; // Also guards remote-workspace Reader audio on this computer.
+        _enabledBeforeServiceOperation = IsEnabled;
+        _desktopPollingBeforeServiceOperation = _desktopOpenTimer.IsEnabled;
+        _desktopOpenTimer.Stop();
+        IsEnabled = false;
+        if (_compactController is not null) _compactController.IsEnabled = false;
+        return null;
+    }
+
+    private async Task StartReaderPlaybackAsync(ReaderDocument document, string? voice = null, ReaderCursor? startCursor = null, bool seek = false)
+    {
+        // Recheck after callers' awaited metadata/page loads, immediately before
+        // the coordinator enters its observable transition lock.
+        if (PlaybackBlockedByAudioInterruption() || _playback is null) return;
+        if (seek && startCursor is not null) await _playback.SeekAsync(document, startCursor, voice);
+        else await _playback.PlayAsync(document, voice, startCursor);
+    }
+
     internal async Task RefreshAfterLocalServiceCommandAsync(ServiceDashboard dashboard)
     {
         if (_closed || !_settings.ActiveConnection.IsLocal || _smokeTest) return;
@@ -1646,6 +1674,7 @@ public partial class MainWindow : Window
             await _playback.StopAsync();
         }
         await StopEphemeralAsync(clearReplay: false);
+        if (PlaybackBlockedByAudioInterruption()) return;
         _ephemeralReplayText = text;
         _ephemeralCancellation = new CancellationTokenSource();
         _ephemeralPlaying = true;
@@ -2454,7 +2483,7 @@ public partial class MainWindow : Window
             }
             if (_playback is not null)
             {
-                await _playback.PlayAsync(
+                await StartReaderPlaybackAsync(
                     document,
                     voice: SelectedVoiceId(),
                     startCursor: cursor);
@@ -2623,7 +2652,7 @@ public partial class MainWindow : Window
             }
             if (_playback is not null)
             {
-                await _playback.PlayAsync(document, voice: SelectedVoiceId());
+                await StartReaderPlaybackAsync(document, voice: SelectedVoiceId());
             }
             FooterText.Text = "Advanced to the next queue item.";
         }
@@ -3021,7 +3050,7 @@ public partial class MainWindow : Window
             {
                 return;
             }
-            await _playback.PlayAsync(document, voice: SelectedVoiceId());
+            await StartReaderPlaybackAsync(document, voice: SelectedVoiceId());
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -3079,7 +3108,7 @@ public partial class MainWindow : Window
             {
                 return;
             }
-            await _playback.PlayAsync(
+            await StartReaderPlaybackAsync(
                 refreshedDocument,
                 voice: SelectedVoiceId(),
                 startCursor: cursor);
@@ -3160,15 +3189,15 @@ public partial class MainWindow : Window
                 return;
             }
 
-            await _playback.SeekAsync(
+            await StartReaderPlaybackAsync(
                 document,
-                new ReaderCursor(
+                startCursor: new ReaderCursor(
                     document.Id,
                     target.Id,
                     target.Ordinal,
                     0,
                     document.ContentRevision),
-                voice: SelectedVoiceId());
+                voice: SelectedVoiceId(), seek: true);
             FooterText.Text = next
                 ? "Started the next section."
                 : "Started the previous section.";

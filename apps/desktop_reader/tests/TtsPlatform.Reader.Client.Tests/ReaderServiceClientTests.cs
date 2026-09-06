@@ -7,6 +7,60 @@ namespace TtsPlatform.Reader.Client.Tests;
 public sealed class ReaderServiceClientTests
 {
     [Fact]
+    public async Task Voice_preview_sends_only_selected_voice_and_body_only_reservation()
+    {
+        var handler = new RecordingHandler(request =>
+        {
+            Assert.Equal("audio/wav", Assert.Single(request.Headers.Accept).MediaType);
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) };
+            response.Content.Headers.ContentType = new("audio/wav");
+            return response;
+        });
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        Assert.Equal(new byte[] { 1, 2, 3 }, await client.RenderVoicePreviewAsync("ticket", "selected"));
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/v1/service/voice-preview", request.Uri.AbsolutePath);
+        Assert.Empty(request.Uri.Query);
+        Assert.Equal("Bearer owner", request.Authorization);
+        Assert.Equal("{\"reservation\":\"ticket\",\"voice_id\":\"selected\"}", request.Body);
+    }
+
+    [Theory]
+    [InlineData("wrong-media")]
+    [InlineData("empty")]
+    [InlineData("oversize-length")]
+    [InlineData("oversize-stream")]
+    public async Task Voice_preview_rejects_invalid_or_unbounded_responses(string fault)
+    {
+        var bytes = new byte[fault.StartsWith("oversize") ? 2 * 1024 * 1024 + 1 : fault == "empty" ? 0 : 3];
+        var handler = new RecordingHandler(_ =>
+        {
+            var content = new ByteArrayContent(bytes);
+            content.Headers.ContentType = new(fault == "wrong-media" ? "text/html" : "audio/wav");
+            // A dishonest/missing Content-Length must not bypass the read-loop bound.
+            if (fault == "oversize-stream") content.Headers.ContentLength = 1;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        });
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        await Assert.ThrowsAsync<ReaderServiceUnavailableException>(() => client.RenderVoicePreviewAsync("ticket", "selected"));
+    }
+
+    [Fact]
+    public async Task Voice_preview_preserves_reservation_failure_and_requires_owner_token()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.Conflict,
+            """{"error":{"type":"service_preview_reservation","message":"Expired"}}"""));
+        var missing = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider(null));
+        await Assert.ThrowsAsync<ReaderTokenUnavailableException>(() => missing.RenderVoicePreviewAsync("ticket", "voice"));
+        Assert.Empty(handler.Requests);
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        var error = await Assert.ThrowsAsync<ReaderApiException>(() => client.RenderVoicePreviewAsync("ticket", "voice"));
+        Assert.Equal("service_preview_reservation", error.ErrorType);
+        Assert.Equal(409, error.StatusCode);
+    }
+
+    [Fact]
     public async Task Service_center_status_and_maintenance_are_authenticated_with_body_only_reservation()
     {
         var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch

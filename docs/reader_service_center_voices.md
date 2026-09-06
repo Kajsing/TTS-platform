@@ -167,15 +167,24 @@ distinguishes service configuration from Reader's saved voice preference. Use th
 existing activity-aware explicit restart path to apply it. Preview must avoid overlapping
 Reader playback or active exports.
 
+## Voice preview
+
+Service Center > Voices > Installed > Preview voice reads a short fixed sample
+with the selected voice in the local running service. Stop preview or closing
+the panel stops the sample. A missing/newly installed voice needs an explicit
+idle restart before the service can use it. Preview never restarts anything or
+changes the service default or Reader preference. Stop Reader first if it is
+playing or paused; ongoing exports cause a safe refusal. Unsaved article edits
+are retained. See `reader_service_center_api.md` for the two-stage reservation
+and bounded audio contract.
+
 ## Remaining T2 work
 
 - Expand the catalog only with primary-source artifact hashes, accurate sizes,
   supported model layouts and voice-specific license terms.
-- Add guarded fixed-text preview. Deferred service-default selection is implemented
-  and tested separately from Reader's own preference.
-- Extend the desktop tests for preview behavior and rerun exact-shortcut
-  publication after it is implemented. The current voice-library/default
-  UI/helper lifetime and cancellation tests already pass.
+- Catalog expansion remains. Exact-shortcut preview acceptance passes. Fixed-text
+  preview and deferred service-default selection are separate from Reader's own
+  preference. UI/helper lifetime and cancellation have dedicated regression tests.
 
 No real model download, license acceptance or production voice/config mutation
 is needed for automated smoke tests; use synthetic archives and isolated roots.

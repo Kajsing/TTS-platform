@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace TtsPlatform.Reader.Client;
 
-public sealed class ReaderServiceClient : IReaderServiceClient, ILocalServiceClient
+public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePreviewClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -48,6 +48,30 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalServiceCli
         string reservation, CancellationToken cancellationToken = default) =>
         SendAsync<ServiceMaintenanceRelease>(HttpMethod.Post, "v1/service/maintenance/release", true,
             new { Reservation = reservation }, cancellationToken);
+
+    public async Task<byte[]> RenderVoicePreviewAsync(string reservation, string voiceId, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "v1/service/voice-preview");
+        await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
+        request.Content = JsonContent.Create(new { Reservation = reservation, VoiceId = voiceId }, options: JsonOptions);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/wav"));
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        const int limit = 2 * 1024 * 1024;
+        if (response.Content.Headers.ContentType?.MediaType != "audio/wav" || response.Content.Headers.ContentLength > limit)
+            throw new ReaderServiceUnavailableException("The service returned an invalid voice preview.");
+        using var result = new MemoryStream();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var buffer = new byte[8192];
+        int count;
+        while ((count = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
+        {
+            if (result.Length + count > limit) throw new ReaderServiceUnavailableException("The voice preview is too large.");
+            result.Write(buffer, 0, count);
+        }
+        if (result.Length == 0) throw new ReaderServiceUnavailableException("The voice preview is empty.");
+        return result.ToArray();
+    }
 
     public Task<ReaderAgentGrantPage> GetAgentGrantsAsync(CancellationToken cancellationToken = default) =>
         SendAsync<ReaderAgentGrantPage>(HttpMethod.Get, "v1/reader/agent-access/grants", true, null, cancellationToken);

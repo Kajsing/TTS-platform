@@ -122,6 +122,8 @@ public partial class App
             Require(!await second.CloseReaderAsync(), "Reader closed during service maintenance.");
             second.EndLocalServiceOperation();
             Require(second.IsEnabled && second.HasLifecycleSmokeEdit, "Reader did not recover after service maintenance.");
+            second.VerifyPreviewReaderGuards();
+            await VerifyIsolatedVoicePreviewAsync(_serviceCenter, root);
             Require(!await second.CloseReaderAsync() && second.HasLifecycleSmokeEdit,
                 "Reader close discarded an unsaved edit.");
             Require(!await _serviceCenter.ExitAsync(confirm: false) && second.HasLifecycleSmokeEdit,
@@ -189,6 +191,9 @@ public partial class App
                 voice_progress_survives_panel_close = true,
                 voice_cancel_waits_for_helper = true,
                 voice_install_exit_guard = true,
+                voice_preview_cancel_and_close = true,
+                voice_preview_preserved_edits = true,
+                voice_preview_activity_guards = true,
             }));
             Shutdown();
         }

@@ -25,6 +25,10 @@ internal sealed partial class DesktopServiceCenterHost
             if (_disposed || _operationPending || _voices is null) return;
             await _voices.SetDefaultAsync(voice.Id);
         };
+        panel.VoicePreviewRequested += async (_, voice) => await PreviewVoiceAsync(voice.Id);
+        panel.VoicePreviewStopRequested += (_, _) => CancelVoicePreview();
+        panel.Closed += (_, _) => CancelVoicePreview();
+        if (_previewCancellation is not null) panel.ShowVoicePreview(_previewMessage, true, _previewCancellation.IsCancellationRequested);
         if (_voices is not null) panel.ShowVoiceLibrary(_voices);
     }
 

@@ -13,6 +13,9 @@ public partial class ServiceCenterWindow
     internal event EventHandler<VoiceLibraryPackage>? VoiceInstallRequested;
     internal event EventHandler? VoiceCancelRequested;
     internal event EventHandler<InstalledLibraryVoice>? VoiceDefaultRequested;
+    internal event EventHandler<InstalledLibraryVoice>? VoicePreviewRequested;
+    internal event EventHandler? VoicePreviewStopRequested;
+    private bool _previewBusy;
     internal Func<InstalledLibraryVoice, bool>? ConfirmDefaultForSmoke { get; set; }
     private VoiceLibraryController? _voices;
     private VoiceLibraryInventory? _displayedInventory;
@@ -44,9 +47,9 @@ public partial class ServiceCenterWindow
         InstalledVoiceSummary.Text = inventory is null ? "No current inventory. Use Refresh library to retry." :
             $"{inventory.InstalledVoices.Count} installed voices · Configured service default: {inventory.ConfiguredDefault ?? "unknown"}. Reader's own voice preference is separate.";
         VoiceLibraryMessage.Text = controller.Message;
-        RefreshVoicesButton.IsEnabled = !controller.IsBusy;
-        VoicePackageList.IsEnabled = !controller.IsBusy;
-        InstalledVoiceList.IsEnabled = !controller.IsBusy;
+        RefreshVoicesButton.IsEnabled = !controller.IsBusy && !_previewBusy;
+        VoicePackageList.IsEnabled = !controller.IsBusy && !_previewBusy;
+        InstalledVoiceList.IsEnabled = !controller.IsBusy && !_previewBusy;
         VoiceInstallProgressPanel.Visibility = controller.IsInstalling ? Visibility.Visible : Visibility.Collapsed;
         VoiceInstallProgressText.Text = controller.CancelRequested ? "Waiting for safe cancellation or commit…" : controller.Progress?.Display ?? "Starting installer…";
         VoiceInstallProgressBar.IsIndeterminate = controller.Progress?.Percent is null;
@@ -60,8 +63,23 @@ public partial class ServiceCenterWindow
     private void RenderInstalledSelection()
     {
         if (SetServiceDefaultButton is null) return;
-        SetServiceDefaultButton.IsEnabled = _voices?.CanSetDefault((InstalledVoiceList.SelectedItem as InstalledLibraryVoice)?.Id) == true;
+        SetServiceDefaultButton.IsEnabled = !_previewBusy && _voices?.CanSetDefault((InstalledVoiceList.SelectedItem as InstalledLibraryVoice)?.Id) == true;
+        PreviewVoiceButton.IsEnabled = !_previewBusy && _voices is { IsBusy: false } &&
+            InstalledVoiceList.SelectedItem is InstalledLibraryVoice { AssetsPresent: true };
     }
+    internal void ShowVoicePreview(string message, bool busy, bool cancellationRequested = false)
+    {
+        _previewBusy = busy;
+        VoicePreviewMessage.Text = message;
+        StopVoicePreviewButton.IsEnabled = busy && !cancellationRequested;
+        if (_voices is not null) ShowVoiceLibrary(_voices);
+    }
+    private void PreviewVoice_Click(object sender, RoutedEventArgs e)
+    {
+        if (PreviewVoiceButton.IsEnabled && InstalledVoiceList.SelectedItem is InstalledLibraryVoice voice)
+            VoicePreviewRequested?.Invoke(this, voice);
+    }
+    private void StopVoicePreview_Click(object sender, RoutedEventArgs e) => VoicePreviewStopRequested?.Invoke(this, EventArgs.Empty);
     private void SetServiceDefault_Click(object sender, RoutedEventArgs e)
     {
         if (!SetServiceDefaultButton.IsEnabled || InstalledVoiceList.SelectedItem is not InstalledLibraryVoice voice) return;
@@ -94,7 +112,7 @@ public partial class ServiceCenterWindow
         SelectedPackageLicense.Text = package is null ? "" : $"License: {package.License} · {package.SizeLabel}";
         PackageLicenseButton.IsEnabled = SafeWebUri(package?.LicenseUrl) is not null;
         PackageSourceButton.IsEnabled = SafeWebUri(package?.SourceUrl) is not null;
-        AcceptVoiceLicenseCheckBox.IsEnabled = package?.CanInstall == true && _voices?.IsBusy != true;
+        AcceptVoiceLicenseCheckBox.IsEnabled = package?.CanInstall == true && _voices?.IsBusy != true && !_previewBusy;
         InstallVoiceButton.IsEnabled = AcceptVoiceLicenseCheckBox.IsEnabled && AcceptVoiceLicenseCheckBox.IsChecked == true;
     }
 

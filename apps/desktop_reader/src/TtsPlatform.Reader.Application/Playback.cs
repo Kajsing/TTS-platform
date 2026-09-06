@@ -141,6 +141,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     public ReaderPlaybackState State { get; private set; } = ReaderPlaybackState.Stopped;
     public ReaderCursor? LastFullyPlayedCursor => _lastFullyPlayedCursor;
     public bool IsActive => State == ReaderPlaybackState.Playing;
+    public bool IsTransitioning => _transitionLock.CurrentCount == 0;
 
     public async Task PlayAsync(
         ReaderDocument document,

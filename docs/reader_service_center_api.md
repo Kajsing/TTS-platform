@@ -4,7 +4,7 @@ This is an additive local-owner API. Existing health, Reader and synthesis
 contracts are unchanged. The desktop dashboard/control wiring uses these routes;
 the routes themselves never stop a Windows process.
 
-All three routes require the existing owner bearer token, enabled token
+All routes require the existing owner bearer token, enabled token
 authentication, a native loopback client, and no Origin header. Folder-scoped
 MCP credentials and remote-device credentials are not owner tokens. The remote
 gateway explicitly denies these routes. No public-server or U8 setup is enabled.
@@ -14,6 +14,7 @@ gateway explicitly denies these routes. No public-server or U8 setup is enabled.
 | GET `/v1/service/status` | None | Status object below |
 | POST `/v1/service/maintenance` | `{"instance_id":"..."}` | `reservation` and `expires_in_seconds` |
 | POST `/v1/service/maintenance/release` | `{"reservation":"..."}` | `{"released":true}` or `false` |
+| POST `/v1/service/voice-preview` | `{"reservation":"...","voice_id":"..."}` | Bounded `audio/wav`, `Cache-Control: no-store` |
 
 ## Status fields
 
@@ -84,6 +85,47 @@ missing/invalid owner auth is 401, and disabled token auth is 503. Existing rate
 limiting still applies; the dashboard policy backs off after 429.
 
 ## Acceptance evidence and remaining integration
+
+### Fixed-text voice preview
+
+The additive preview route accepts only a running-registry voice ID and a valid
+idle reservation. It rejects extra fields (including arbitrary text) and uses a
+short service-owned English sample, or Danish for `da` voices. It reuses the
+existing synthesis service; it does not mutate articles, voice preferences,
+configuration or the running default. Unavailable voices return 409
+`service_preview_unavailable`; invalid/expired/reused tickets return 409
+`service_preview_reservation`.
+
+Rendering consumes the reservation and keeps admission closed until the actual
+synchronous native worker exits. During that work `maintenance` stays true and
+`active_requests` includes the preview, even after the original 15 seconds or a
+client disconnect. Explicit release returns false while the worker is alive;
+the worker's `finally` releases it. This is not an indefinitely renewable idle
+reservation: if a backend hangs, service control correctly reports busy rather
+than killing it or admitting overlapping work. Normal idle reservations retain
+their 15-second expiry.
+
+After receiving the WAV, the desktop validates size (2 MiB), format (mono PCM16)
+and duration (maximum 10 seconds). It obtains a fresh idle reservation before
+audible playback; any intervening export/work prevents playback. Its conservative
+deadline starts before the reservation request, subtracts one second and must
+fit the full sample plus 500 ms. Cancellation/deadline stops and disposes the
+audio before release. Closing the preview panel cancels audio, unlike closing an
+installation panel (which keeps its installer alive).
+
+The same host refuses preview while its Reader is playing, paused, starting,
+handling a call/alarm or showing an active dialog, including a remote-workspace
+Reader playing on this computer. It preserves unsaved edits and disables Reader
+commands for the sample. The service cannot detect already-buffered audio in
+unrelated clients; this is a single-local-host guard, not a claim to control
+audio devices on other computers.
+
+`VoicePreviewTests`, client/audio tests, the isolated WPF lifecycle preview and
+the compiled live-HTTP smoke cover reservation reuse, worker expiry, busy races,
+bounded WAV delivery, fixed voice selection, Stop/close and draft preservation.
+Automated audio output is synthetic; it does not verify subjective voice quality.
+
+### Earlier dashboard/control evidence
 
 `test_service_control.py` exercises auth/native/remote boundaries, no database
 scan, busy/cancelled workers, request/WS tracking, invalid/expired reservations,

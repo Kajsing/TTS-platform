@@ -48,6 +48,12 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
     internal async Task OpenReaderAsync()
     {
         if (_disposed || _exiting || _openingReader) return;
+        if (_previewCancellation is not null)
+        {
+            await OpenServiceCenterAsync();
+            DashboardWindow?.OpenVoicesPage();
+            return;
+        }
         if (Reader is not null)
         {
             Reader.OpenMainWindow();
@@ -150,6 +156,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _previewCancellation?.Cancel();
         if (_voices is not null)
         {
             _voices.Changed -= VoiceLibraryChanged;

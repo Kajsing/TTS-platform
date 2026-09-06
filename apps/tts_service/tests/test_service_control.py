@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ from tts_service.main import create_app
 from tts_service.remote_gateway import is_remote_route_allowed
 from tts_service.service_control import (
     MAINTENANCE_SECONDS,
+    PREVIEW_TEXT,
     ServiceActivityMiddleware,
     ServiceControlState,
     process_resources,
@@ -54,8 +56,145 @@ def test_status_is_local_native_owner_only(service_api):
         ("GET", "/v1/service/status"),
         ("POST", "/v1/service/maintenance"),
         ("POST", "/v1/service/maintenance/release"),
+        ("POST", "/v1/service/voice-preview"),
     ):
         assert not is_remote_route_allowed(method, path)
+
+
+def test_preview_is_fixed_text_native_only_and_consumes_one_reservation(service_api, monkeypatch):
+    from tts_service import main
+
+    client, app, owner = service_api
+    container = app.state.container
+    voice = container.voice_registry.list()[0]
+    observed = []
+
+    def synthesize(payload):
+        observed.append(payload)
+        return SimpleNamespace(audio_bytes=b"synthetic WAV")
+
+    monkeypatch.setattr(
+        main, "_build_synthesis_service", lambda container: SimpleNamespace(synthesize=synthesize)
+    )
+    reserve = client.post(
+        "/v1/service/maintenance",
+        headers=owner,
+        json={"instance_id": container.service_control.instance_id},
+    ).json()["reservation"]
+    payload = {"reservation": reserve, "voice_id": voice.id}
+    assert client.post("/v1/service/voice-preview", json=payload).status_code == 401
+    assert (
+        client.post(
+            "/v1/service/voice-preview",
+            headers=owner | {"Origin": "http://localhost"},
+            json=payload,
+        ).status_code
+        == 403
+    )
+    with TestClient(app, client=("198.51.100.23", 50000)) as remote:
+        assert (
+            remote.post("/v1/service/voice-preview", headers=owner, json=payload).status_code == 403
+        )
+    assert (
+        client.post(
+            "/v1/service/voice-preview", headers=owner, json=payload | {"text": "private article"}
+        ).status_code
+        == 400
+    )
+    result = client.post("/v1/service/voice-preview", headers=owner, json=payload)
+    assert result.status_code == 200, result.text
+    assert result.headers["cache-control"] == "no-store"
+    assert result.content == b"synthetic WAV"
+    assert len(observed) == 1 and observed[0].text == PREVIEW_TEXT and observed[0].voice == voice.id
+    assert container.service_control.snapshot() == {"active_requests": 0, "maintenance": False}
+    assert client.post("/v1/service/voice-preview", headers=owner, json=payload).status_code == 409
+
+
+def test_preview_keeps_live_worker_protected_after_expiry_and_release_request(
+    service_api, monkeypatch
+):
+    from tts_service import main
+
+    client, app, owner = service_api
+    container = app.state.container
+    now = [1.0]
+    container.service_control._clock = lambda: now[0]
+    started, finish = threading.Event(), threading.Event()
+
+    def synthesize(payload):
+        started.set()
+        assert finish.wait(10)
+        return SimpleNamespace(audio_bytes=b"synthetic WAV")
+
+    monkeypatch.setattr(
+        main, "_build_synthesis_service", lambda container: SimpleNamespace(synthesize=synthesize)
+    )
+    reserve = client.post(
+        "/v1/service/maintenance",
+        headers=owner,
+        json={"instance_id": container.service_control.instance_id},
+    ).json()["reservation"]
+    payload = {"reservation": reserve, "voice_id": container.voice_registry.list()[0].id}
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        task = pool.submit(client.post, "/v1/service/voice-preview", headers=owner, json=payload)
+        try:
+            assert started.wait(5)
+            now[0] += 100
+            state = client.get("/v1/service/status", headers=owner).json()
+            assert state["maintenance"] and state["activity"]["active_requests"] == 1
+            assert not client.post(
+                "/v1/service/maintenance/release", headers=owner, json={"reservation": reserve}
+            ).json()["released"]
+            assert (
+                client.post("/v1/tts", headers=owner, json={"text": "Not admitted"}).status_code
+                == 503
+            )
+            assert (
+                client.post("/v1/service/voice-preview", headers=owner, json=payload).status_code
+                == 409
+            )
+            assert not task.done()
+        finally:
+            finish.set()
+        assert task.result(timeout=5).status_code == 200
+    assert container.service_control.snapshot() == {"active_requests": 0, "maintenance": False}
+
+
+@pytest.mark.parametrize("failure", ["unknown", "not-ready", "synthesis", "oversized"])
+def test_preview_failures_release_the_consumed_reservation(service_api, monkeypatch, failure):
+    from tts_service import main
+    from tts_service.errors import ErrorBody
+
+    client, app, owner = service_api
+    container = app.state.container
+
+    def synthesize(payload):
+        if failure == "synthesis":
+            raise APIError(
+                status_code=502, error=ErrorBody(type="fixture", message="Synthetic failure")
+            )
+        return SimpleNamespace(audio_bytes=b"x" * (2 * 1024 * 1024 + 1))
+
+    monkeypatch.setattr(
+        main, "_build_synthesis_service", lambda container: SimpleNamespace(synthesize=synthesize)
+    )
+    if failure == "not-ready":
+        container.backend_ready = False
+    reserve = container.service_control.reserve(
+        container.service_control.instance_id, lambda: False
+    )
+    response = client.post(
+        "/v1/service/voice-preview",
+        headers=owner,
+        json={
+            "reservation": reserve,
+            "voice_id": "missing"
+            if failure == "unknown"
+            else container.voice_registry.list()[0].id,
+        },
+    )
+    assert response.status_code in (409, 502)
+    assert container.service_control.snapshot() == {"active_requests": 0, "maintenance": False}
 
 
 def test_status_uses_no_database_queries_and_no_private_text(service_api, monkeypatch):

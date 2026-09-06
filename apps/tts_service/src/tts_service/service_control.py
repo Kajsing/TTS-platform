@@ -19,12 +19,15 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from .errors import APIError, ErrorBody
+from .schemas import SynthesizeRequestPayload
 
 PREFIX = "/v1/service"
 MAINTENANCE_SECONDS = 15
+PREVIEW_TEXT = "Hello. This is a short voice preview from TTS Platform Reader."
+PREVIEW_TEXT_DA = "Hej. Dette er en kort stemmeprøve fra TTS Platform Reader."
 
 
 def _error(kind: str, message: str, status: int) -> APIError:
@@ -39,9 +42,10 @@ class ServiceControlState:
         self._requests = 0
         self._reservation: str | None = None
         self._expires = 0.0
+        self._previewing = False
 
     def _reserved(self) -> bool:
-        if self._reservation and self._clock() >= self._expires:
+        if not self._previewing and self._reservation and self._clock() >= self._expires:
             self._reservation = None
         return self._reservation is not None
 
@@ -80,12 +84,43 @@ class ServiceControlState:
 
     def release(self, reservation: str) -> bool:
         with self._lock:
-            if not reservation.isascii() or not self._reserved() or not secrets.compare_digest(
-                reservation, self._reservation or ""
+            if (
+                self._previewing
+                or not reservation.isascii()
+                or not self._reserved()
+                or not secrets.compare_digest(reservation, self._reservation or "")
             ):
                 return False
             self._reservation = None
             return True
+
+    def begin_preview(self, reservation: str) -> None:
+        """Consume one idle reservation; hold admission until native work exits.
+
+        Client cancellation/expiry must not release a live synthesis worker.
+        Playback reserves a separate short window after receiving the audio.
+        """
+        with self._lock:
+            if (
+                self._previewing
+                or not reservation.isascii()
+                or not self._reserved()
+                or not secrets.compare_digest(reservation, self._reservation or "")
+            ):
+                raise _error(
+                    "service_preview_reservation",
+                    "Refresh and reserve idle service time before previewing.",
+                    409,
+                )
+            self._previewing = True
+            self._requests += 1
+
+    def end_preview(self) -> None:
+        with self._lock:
+            if self._previewing:
+                self._requests -= 1
+                self._previewing = False
+                self._reservation = None
 
 
 class ServiceActivityMiddleware:
@@ -227,8 +262,42 @@ class ReleaseRequest(BaseModel):
     reservation: str = Field(min_length=1, max_length=128)
 
 
-def build_service_control_router() -> APIRouter:
+class VoicePreviewRequest(ReleaseRequest):
+    voice_id: str = Field(min_length=1, max_length=256)
+
+
+def build_service_control_router(synthesize: Callable) -> APIRouter:
     router = APIRouter(prefix=PREFIX, tags=["local-service"])
+
+    @router.post("/voice-preview")
+    def voice_preview(request: Request, payload: VoicePreviewRequest):
+        _native_owner(request)
+        container = request.app.state.container
+        # This synchronous route stays in its worker thread until the actual
+        # native call finishes. Reservation ownership is not tied to socket cancellation.
+        container.service_control.begin_preview(payload.reservation)
+        try:
+            voice = next(
+                (v for v in container.voice_registry.list() if v.id == payload.voice_id), None
+            )
+            if voice is None or not container.backend_ready:
+                raise _error(
+                    "service_preview_unavailable",
+                    "This voice is unavailable in the running service. "
+                    "Check readiness and restart explicitly if needed.",
+                    409,
+                )
+            text = PREVIEW_TEXT_DA if voice.language.lower().startswith("da") else PREVIEW_TEXT
+            result = synthesize(container, SynthesizeRequestPayload(text=text, voice=voice.id))
+            if not result.audio_bytes or len(result.audio_bytes) > 2 * 1024 * 1024:
+                raise _error(
+                    "service_preview_audio", "The voice returned an invalid preview size.", 502
+                )
+            return Response(
+                result.audio_bytes, media_type="audio/wav", headers={"Cache-Control": "no-store"}
+            )
+        finally:
+            container.service_control.end_preview()
 
     @router.get("/status")
     def status(request: Request):

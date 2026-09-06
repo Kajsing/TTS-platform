@@ -555,6 +555,8 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         raise DesktopReaderCheckError(
             "The .NET client did not confirm local status and maintenance."
         )
+    if payload.get("live_voice_preview") is not True:
+        raise DesktopReaderCheckError("The .NET client did not confirm bounded fixed-text preview.")
     if payload.get("live_utf16_edit") is not True:
         raise DesktopReaderCheckError("The .NET client did not confirm a live UTF-16 edit.")
     if (
@@ -914,6 +916,14 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "startup_hidden_once",
         "startup_unknown_disabled",
         "startup_options_entry",
+        "voice_library_rendered",
+        "voice_license_gate",
+        "voice_progress_survives_panel_close",
+        "voice_cancel_waits_for_helper",
+        "voice_install_exit_guard",
+        "voice_preview_cancel_and_close",
+        "voice_preview_preserved_edits",
+        "voice_preview_activity_guards",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):
         raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")

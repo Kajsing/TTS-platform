@@ -34,6 +34,14 @@ if (serviceCenterSmoke)
         if (!(await client.ReleaseMaintenanceAsync(reservation.Reservation)).Released)
             throw new InvalidOperationException("Live maintenance reservation was not released.");
     }
+    var previewLease = await client.ReserveMaintenanceAsync(status.InstanceId);
+    var previewWave = await client.RenderVoicePreviewAsync(previewLease.Reservation, status.DefaultVoiceId!);
+    if (previewWave.Length < 44 || System.Text.Encoding.ASCII.GetString(previewWave, 0, 4) != "RIFF" ||
+        System.Text.Encoding.ASCII.GetString(previewWave, 8, 4) != "WAVE")
+        throw new InvalidOperationException("Live fixed-text voice preview did not return WAV audio.");
+    var afterPreview = await client.GetLocalStatusAsync();
+    if (afterPreview.Maintenance || !afterPreview.Activity.IsIdle || afterPreview.DefaultVoiceId != status.DefaultVoiceId)
+        throw new InvalidOperationException("Live voice preview leaked a reservation or changed the service default.");
 }
 var first = await client.GetDocumentsAsync(limit: 1);
 if (first.Documents.Count != 1 || first.NextCursor is null)
@@ -198,6 +206,7 @@ Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
     live_service_center = serviceCenterSmoke,
+    live_voice_preview = serviceCenterSmoke,
     live_utf16_edit = true,
     first_page_count = first.Documents.Count,
     second_page_count = second.Documents.Count,

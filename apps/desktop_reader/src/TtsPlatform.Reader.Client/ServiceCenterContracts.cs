@@ -1,5 +1,10 @@
 namespace TtsPlatform.Reader.Client;
 
+public interface ILocalVoicePreviewClient : ILocalServiceClient
+{
+    Task<byte[]> RenderVoicePreviewAsync(string reservation, string voiceId, CancellationToken cancellationToken = default);
+}
+
 public interface ILocalServiceClient
 {
     Task<LocalServiceStatus> GetLocalStatusAsync(CancellationToken cancellationToken = default);

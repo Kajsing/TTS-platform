@@ -73,7 +73,11 @@ def create_app(
     app.include_router(build_remote_admin_router())
     app.include_router(build_reader_agent_router())
     app.include_router(build_reader_agent_admin_router())
-    app.include_router(build_service_control_router())
+    app.include_router(
+        build_service_control_router(
+            lambda container, payload: _build_synthesis_service(container).synthesize(payload)
+        )
+    )
     app.add_middleware(ServiceActivityMiddleware, state=app.state.container.service_control)
 
     return app
@@ -147,7 +151,8 @@ def _register_middleware(app: FastAPI) -> None:
     async def observe_http_requests(request: Request, call_next) -> FastAPIResponse:
         container = app.state.container
         request_id = _resolve_request_id(
-            None if request.url.path.startswith((AGENT_PREFIX, AGENT_ADMIN_PREFIX))
+            None
+            if request.url.path.startswith((AGENT_PREFIX, AGENT_ADMIN_PREFIX))
             else request.headers.get("x-request-id"),
             auth_token=container.auth.token,
         )
@@ -203,9 +208,7 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/v1/health")
     async def health() -> dict[str, object]:
         container = app.state.container
-        uptime_seconds = int(
-            (datetime.now(timezone.utc) - container.started_at).total_seconds()
-        )
+        uptime_seconds = int((datetime.now(timezone.utc) - container.started_at).total_seconds())
         default_voice = container.voice_registry.default_voice
         checks = {
             "process_running": True,
@@ -528,10 +531,7 @@ def _build_synthesis_service(container: object) -> SynthesisService:
 
 
 def _websocket_start_message_limit(container: object) -> int:
-    return (
-        int(container.config.tts.max_chars_per_stream)
-        + WEBSOCKET_START_MESSAGE_OVERHEAD_CHARS
-    )
+    return int(container.config.tts.max_chars_per_stream) + WEBSOCKET_START_MESSAGE_OVERHEAD_CHARS
 
 
 async def _receive_initial_websocket_message(
