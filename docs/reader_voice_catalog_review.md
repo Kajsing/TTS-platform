@@ -1,15 +1,29 @@
-# Voice catalog research — pending integration
+# Voice catalog review — integrated Kokoro bundles
 
-Read-only upstream review on 2026-09-06. **No package download, license acceptance,
-model installation or catalog edit was performed.** This is a resume note, not
-completed T2 catalog acceptance. Verify licensing/layout before offering an entry.
+The 2026-09-06 review below led to two new optional US-English Kokoro v1.0
+bundles in `models/catalog.json`: 20 speakers each, FP32 and INT8. Exact hashes,
+sizes and asset layouts are pinned from primary sources; the package review
+separates model/voice licensing from eSpeak and other bundled component terms.
+See [package/license review](voice_licenses/kokoro-v1.md).
+
+No actual package was downloaded or installed, and no license was accepted for
+the user. Separate package IDs/directories preserve the existing single-voice
+installations. The visible full-download warning explains this disk/network
+tradeoff. Automatic reuse/migration of old assets is intentionally not offered.
+
+Kokoro variants with identical validated resolved asset paths share one native
+runtime in RAM. Speaker ID remains per-generation; native calls on that shared
+instance serialize. Different lexicons/models/paths do not share. A real
+read-only probe of the user's already-installed FP32/INT8 weights generated
+distinct SID 3/11 PCM16 WAVs through one engine per asset set; no audible output.
 
 ## Existing reusable Kokoro catalog
 
 `models/catalog.kokoro.json` already defines `kokoro-en-v1_0-af-heart`, including
 the supported asset paths, speaker ID 3 and US English lexicon. Do not invent a
-new backend or downgrade to v0.19. The default `models/catalog.json` currently
-has only Lessac Medium; the local bridge intentionally reads that fixed catalog.
+new backend or downgrade to v0.19. The default catalog now contains the unchanged
+Lessac Medium entry plus two new bundle definitions. The local bridge reads that
+fixed catalog; the legacy standalone Kokoro catalog remains unchanged.
 
 The primary [sherpa-onnx release API](https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/tts-models)
 reported these exact archive metadata values:
@@ -49,5 +63,5 @@ whole archive/model as CC0 or infer its terms from a repository-level MIT label.
 Confirm the applicable voice/model terms and archive layout before integrating.
 The general sherpa vits page does not document this specific archive's file list.
 
-No claim about audible quality or native model readiness has been made from
-these metadata reads. Installation checks and a permitted preview are separate.
+No subjective audible-quality claim is made from metadata or synthetic tests.
+Installation checks and a user-selected preview remain separate actions.

@@ -37,6 +37,328 @@
         "data_dir": "vits-piper-en_US-lessac-medium/espeak-ng-data",
         "speaker_id": 0
       }
+    },
+    {
+      "id": "kokoro-v1_0-us-20",
+      "name": "Kokoro v1.0 · 20 US voices · FP32 full bundle",
+      "engine": "sherpa_onnx",
+      "language": "en-US",
+      "sample_rate_hz": 24000,
+      "license": "Apache-2.0 model/voices; GPL-3.0-or-later eSpeak data; other bundled component terms — see package review",
+      "license_url": "https://github.com/Kajsing/TTS-platform/blob/main/docs/voice_licenses/kokoro-v1.md",
+      "source_url": "https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html#kokoro-multi-lang-v1-0-chinese-english-53-speakers",
+      "upstream_url": "https://huggingface.co/hexgrad/Kokoro-82M",
+      "artifact_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+      "artifact_sha256": "c133d26353d776da730870dac7da07dbfc9a5e3bc80cc5e8e83ab6e823be7046",
+      "artifact_size_bytes": 349418188,
+      "quality_tier": "high",
+      "latency_tier": "local",
+      "tags": [
+        "english",
+        "en-us",
+        "kokoro",
+        "fp32",
+        "sherpa-onnx",
+        "multi-speaker"
+      ],
+      "install_note": "Separate full-bundle download, even if a single Kokoro voice is already installed. Existing voices/assets stay unchanged. All 20 voices share this package's files. Restart the idle service explicitly to load newly installed voices.",
+      "capabilities": {
+        "supports_pitch": false,
+        "supports_streaming": true,
+        "supports_multi_speaker": true
+      },
+      "backend": {
+        "model_type": "kokoro",
+        "model": "kokoro-multi-lang-v1_0/model.onnx",
+        "voices": "kokoro-multi-lang-v1_0/voices.bin",
+        "tokens": "kokoro-multi-lang-v1_0/tokens.txt",
+        "data_dir": "kokoro-multi-lang-v1_0/espeak-ng-data",
+        "lexicon": "kokoro-multi-lang-v1_0/lexicon-us-en.txt",
+        "speaker_id": 3
+      },
+      "voices": [
+        {
+          "id": "kokoro-v1_0-us-20-af-alloy",
+          "name": "Kokoro af_alloy · FP32",
+          "language": "en-US",
+          "speaker_id": 0
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-aoede",
+          "name": "Kokoro af_aoede · FP32",
+          "language": "en-US",
+          "speaker_id": 1
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-bella",
+          "name": "Kokoro af_bella · FP32",
+          "language": "en-US",
+          "speaker_id": 2
+        },
+        {
+          "id": "kokoro-v1_0-us-20",
+          "name": "Kokoro af_heart · FP32",
+          "language": "en-US",
+          "speaker_id": 3
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-jessica",
+          "name": "Kokoro af_jessica · FP32",
+          "language": "en-US",
+          "speaker_id": 4
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-kore",
+          "name": "Kokoro af_kore · FP32",
+          "language": "en-US",
+          "speaker_id": 5
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-nicole",
+          "name": "Kokoro af_nicole · FP32",
+          "language": "en-US",
+          "speaker_id": 6
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-nova",
+          "name": "Kokoro af_nova · FP32",
+          "language": "en-US",
+          "speaker_id": 7
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-river",
+          "name": "Kokoro af_river · FP32",
+          "language": "en-US",
+          "speaker_id": 8
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-sarah",
+          "name": "Kokoro af_sarah · FP32",
+          "language": "en-US",
+          "speaker_id": 9
+        },
+        {
+          "id": "kokoro-v1_0-us-20-af-sky",
+          "name": "Kokoro af_sky · FP32",
+          "language": "en-US",
+          "speaker_id": 10
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-adam",
+          "name": "Kokoro am_adam · FP32",
+          "language": "en-US",
+          "speaker_id": 11
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-echo",
+          "name": "Kokoro am_echo · FP32",
+          "language": "en-US",
+          "speaker_id": 12
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-eric",
+          "name": "Kokoro am_eric · FP32",
+          "language": "en-US",
+          "speaker_id": 13
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-fenrir",
+          "name": "Kokoro am_fenrir · FP32",
+          "language": "en-US",
+          "speaker_id": 14
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-liam",
+          "name": "Kokoro am_liam · FP32",
+          "language": "en-US",
+          "speaker_id": 15
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-michael",
+          "name": "Kokoro am_michael · FP32",
+          "language": "en-US",
+          "speaker_id": 16
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-onyx",
+          "name": "Kokoro am_onyx · FP32",
+          "language": "en-US",
+          "speaker_id": 17
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-puck",
+          "name": "Kokoro am_puck · FP32",
+          "language": "en-US",
+          "speaker_id": 18
+        },
+        {
+          "id": "kokoro-v1_0-us-20-am-santa",
+          "name": "Kokoro am_santa · FP32",
+          "language": "en-US",
+          "speaker_id": 19
+        }
+      ]
+    },
+    {
+      "id": "kokoro-v1_0-us-20-int8",
+      "name": "Kokoro v1.0 · 20 US voices · INT8 full bundle",
+      "engine": "sherpa_onnx",
+      "language": "en-US",
+      "sample_rate_hz": 24000,
+      "license": "Apache-2.0 model/voices; GPL-3.0-or-later eSpeak data; other bundled component terms — see package review",
+      "license_url": "https://github.com/Kajsing/TTS-platform/blob/main/docs/voice_licenses/kokoro-v1.md",
+      "source_url": "https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html#kokoro-multi-lang-v1-0-chinese-english-53-speakers",
+      "upstream_url": "https://huggingface.co/hexgrad/Kokoro-82M",
+      "artifact_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2",
+      "artifact_sha256": "75654a84864be26f345f020f4070c2c019e96dd1b7f9bf6e2ffd59efac6aa5a3",
+      "artifact_size_bytes": 131839838,
+      "quality_tier": "quantized",
+      "latency_tier": "local",
+      "tags": [
+        "english",
+        "en-us",
+        "kokoro",
+        "int8",
+        "sherpa-onnx",
+        "multi-speaker"
+      ],
+      "install_note": "Separate full-bundle download, even if a single Kokoro voice is already installed. Existing voices/assets stay unchanged. All 20 voices share this package's files. Restart the idle service explicitly to load newly installed voices.",
+      "capabilities": {
+        "supports_pitch": false,
+        "supports_streaming": true,
+        "supports_multi_speaker": true
+      },
+      "backend": {
+        "model_type": "kokoro",
+        "model": "kokoro-int8-multi-lang-v1_0/model.int8.onnx",
+        "voices": "kokoro-int8-multi-lang-v1_0/voices.bin",
+        "tokens": "kokoro-int8-multi-lang-v1_0/tokens.txt",
+        "data_dir": "kokoro-int8-multi-lang-v1_0/espeak-ng-data",
+        "lexicon": "kokoro-int8-multi-lang-v1_0/lexicon-us-en.txt",
+        "speaker_id": 3
+      },
+      "voices": [
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-alloy",
+          "name": "Kokoro af_alloy · INT8",
+          "language": "en-US",
+          "speaker_id": 0
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-aoede",
+          "name": "Kokoro af_aoede · INT8",
+          "language": "en-US",
+          "speaker_id": 1
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-bella",
+          "name": "Kokoro af_bella · INT8",
+          "language": "en-US",
+          "speaker_id": 2
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8",
+          "name": "Kokoro af_heart · INT8",
+          "language": "en-US",
+          "speaker_id": 3
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-jessica",
+          "name": "Kokoro af_jessica · INT8",
+          "language": "en-US",
+          "speaker_id": 4
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-kore",
+          "name": "Kokoro af_kore · INT8",
+          "language": "en-US",
+          "speaker_id": 5
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-nicole",
+          "name": "Kokoro af_nicole · INT8",
+          "language": "en-US",
+          "speaker_id": 6
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-nova",
+          "name": "Kokoro af_nova · INT8",
+          "language": "en-US",
+          "speaker_id": 7
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-river",
+          "name": "Kokoro af_river · INT8",
+          "language": "en-US",
+          "speaker_id": 8
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-sarah",
+          "name": "Kokoro af_sarah · INT8",
+          "language": "en-US",
+          "speaker_id": 9
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-af-sky",
+          "name": "Kokoro af_sky · INT8",
+          "language": "en-US",
+          "speaker_id": 10
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-adam",
+          "name": "Kokoro am_adam · INT8",
+          "language": "en-US",
+          "speaker_id": 11
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-echo",
+          "name": "Kokoro am_echo · INT8",
+          "language": "en-US",
+          "speaker_id": 12
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-eric",
+          "name": "Kokoro am_eric · INT8",
+          "language": "en-US",
+          "speaker_id": 13
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-fenrir",
+          "name": "Kokoro am_fenrir · INT8",
+          "language": "en-US",
+          "speaker_id": 14
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-liam",
+          "name": "Kokoro am_liam · INT8",
+          "language": "en-US",
+          "speaker_id": 15
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-michael",
+          "name": "Kokoro am_michael · INT8",
+          "language": "en-US",
+          "speaker_id": 16
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-onyx",
+          "name": "Kokoro am_onyx · INT8",
+          "language": "en-US",
+          "speaker_id": 17
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-puck",
+          "name": "Kokoro am_puck · INT8",
+          "language": "en-US",
+          "speaker_id": 18
+        },
+        {
+          "id": "kokoro-v1_0-us-20-int8-am-santa",
+          "name": "Kokoro am_santa · INT8",
+          "language": "en-US",
+          "speaker_id": 19
+        }
+      ]
     }
   ]
 }

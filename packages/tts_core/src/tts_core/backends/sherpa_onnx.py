@@ -6,7 +6,7 @@ import queue
 import threading
 from array import array
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -25,6 +25,21 @@ from .base import BackendError, BackendNotReadyError
 
 class _RuntimeStreamingCallbackUnavailable(RuntimeError):
     """Internal marker for sherpa-onnx runtimes without callback streaming."""
+
+
+class _SharedKokoroRuntime:
+    """Reuse weights without assuming the native generator is thread-safe."""
+
+    def __init__(self, runtime: object) -> None:
+        self._runtime = runtime
+        self._generation_lock = threading.Lock()
+
+    def __getattr__(self, name: str):
+        return getattr(self._runtime, name)
+
+    def generate(self, *args, **kwargs):
+        with self._generation_lock:
+            return self._runtime.generate(*args, **kwargs)
 
 
 def build_stub_voice() -> VoiceDescriptor:
@@ -114,6 +129,9 @@ class SherpaOnnxBackend:
     _cancel_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _runtime_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _runtime_by_voice_id: dict[str, object] = field(default_factory=dict, init=False, repr=False)
+    _kokoro_by_assets: dict[SherpaOnnxVoiceRuntimeConfig, object] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _module_cache: object | None = field(default=None, init=False, repr=False)
     _module_missing: bool = field(default=False, init=False, repr=False)
 
@@ -524,6 +542,15 @@ class SherpaOnnxBackend:
             if runtime is not None:
                 return runtime
             resolved = self._resolve_runtime_paths(voice_id, runtime_config)
+            # SID is a per-generation argument, not an OfflineTts model setting.
+            # Resolve/validate every path before reuse; never match just basenames.
+            shared_key = (
+                replace(resolved, speaker_id=0) if resolved.model_type == "kokoro" else None
+            )
+            if shared_key is not None and shared_key in self._kokoro_by_assets:
+                runtime = self._kokoro_by_assets[shared_key]
+                self._runtime_by_voice_id[voice_id] = runtime
+                return runtime
             module = self._load_runtime_module()
             tts_config = module.OfflineTtsConfig(
                 model=module.OfflineTtsModelConfig(
@@ -573,6 +600,9 @@ class SherpaOnnxBackend:
                 raise BackendNotReadyError(
                     f"Failed to initialize sherpa-onnx runtime for voice '{voice_id}': {exc}"
                 ) from exc
+            if shared_key is not None:
+                runtime = _SharedKokoroRuntime(runtime)
+                self._kokoro_by_assets[shared_key] = runtime
             self._runtime_by_voice_id[voice_id] = runtime
             return runtime
 

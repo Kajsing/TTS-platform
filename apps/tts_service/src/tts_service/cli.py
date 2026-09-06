@@ -727,6 +727,9 @@ def _setup_local_next_steps(
     )
     if install_step:
         steps.append(install_step)
+    elif not default_voice_has_backend_config and _catalog_has_installable_model(catalog_status):
+        # Multiple reviewed choices must not silently pick a new default voice.
+        steps.append("tts model-list")
     _append_sherpa_onnx_install_step(
         steps,
         runtime_status=runtime_status,

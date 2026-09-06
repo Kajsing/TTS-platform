@@ -10,6 +10,19 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CHECK_SCRIPT_PATH = REPO_ROOT / "scripts" / "check_windows_bundle_install.py"
 
 
+def test_installed_bootstrap_requires_catalog_choice_for_multiple_packages():
+    module = _load_check_module()
+    payload = {
+        "catalog": {"exists": True, "single_installable_model_id": None,
+                    "installable_model_ids": ["one", "two"]},
+        "next_steps": ["tts model-list", "tts model-check", "tts serve"],
+    }
+    module._assert_setup_next_steps(payload)
+    payload["next_steps"][0] = "tts model-install one --activate"
+    with pytest.raises(module.WindowsBundleInstallError):
+        module._assert_setup_next_steps(payload)
+
+
 def test_windows_bundle_install_check_orchestrates_installed_cli_flow(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

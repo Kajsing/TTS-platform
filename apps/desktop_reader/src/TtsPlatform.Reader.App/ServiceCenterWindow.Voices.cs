@@ -110,6 +110,8 @@ public partial class ServiceCenterWindow
         var package = VoicePackageList.SelectedItem as VoiceLibraryPackage;
         SelectedPackageTitle.Text = package?.Name ?? "Select a package to review its license and source.";
         SelectedPackageLicense.Text = package is null ? "" : $"License: {package.License} · {package.SizeLabel}";
+        SelectedPackageNote.Text = package?.InstallNote ?? "";
+        SelectedPackageNote.Visibility = string.IsNullOrWhiteSpace(package?.InstallNote) ? Visibility.Collapsed : Visibility.Visible;
         PackageLicenseButton.IsEnabled = SafeWebUri(package?.LicenseUrl) is not null;
         PackageSourceButton.IsEnabled = SafeWebUri(package?.SourceUrl) is not null;
         AcceptVoiceLicenseCheckBox.IsEnabled = package?.CanInstall == true && _voices?.IsBusy != true && !_previewBusy;

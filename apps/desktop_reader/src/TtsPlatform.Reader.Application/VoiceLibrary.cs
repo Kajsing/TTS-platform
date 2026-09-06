@@ -12,7 +12,8 @@ public sealed record InstalledLibraryVoice(string Id, string Name, string Langua
 public sealed record PackageLibraryVoice(string Id, string Name, string Language);
 public sealed record VoiceLibraryPackage(string Id, string Name, string Language, string Family,
     long? SizeBytes, string License, string? LicenseUrl, string? SourceUrl,
-    IReadOnlyList<PackageLibraryVoice> Voices, bool Installed, bool CanInstall, string? UnavailableReason)
+    IReadOnlyList<PackageLibraryVoice> Voices, bool Installed, bool CanInstall, string? UnavailableReason,
+    string? InstallNote = null)
 {
     public string SizeLabel => SizeBytes is > 0 ? $"{SizeBytes.Value / 1048576d:N1} MiB download" : "Download size unknown";
     public string Details => $"{Language} · {Family} · {SizeLabel} · {Voices.Count} voice(s)";

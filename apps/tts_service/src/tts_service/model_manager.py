@@ -160,6 +160,7 @@ def inventory(repo_root: Path) -> dict[str, object]:
                 "installed": present,
                 "can_install": reason is None,
                 "unavailable_reason": reason,
+                "install_note": str(model.get("install_note", ""))[:2048],
             }
         )
     return {

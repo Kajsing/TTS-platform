@@ -178,13 +178,25 @@ playing or paused; ongoing exports cause a safe refusal. Unsaved article edits
 are retained. See `reader_service_center_api.md` for the two-stage reservation
 and bounded audio contract.
 
-## Remaining T2 work
+## Reviewed catalog and supported limits
 
-- Expand the catalog only with primary-source artifact hashes, accurate sizes,
-  supported model layouts and voice-specific license terms.
-- Catalog expansion remains. Exact-shortcut preview acceptance passes. Fixed-text
-  preview and deferred service-default selection are separate from Reader's own
-  preference. UI/helper lifetime and cancellation have dedicated regression tests.
+The fixed catalog contains Lessac Medium plus two optional Kokoro v1.0 bundles:
+20 US-English voices in FP32 (333.2 MiB download) or INT8 (125.7 MiB). These
+separate full downloads preserve older single-voice packages; there is no silent
+asset adoption or overwrite. `install_note` is an additive optional local-helper
+metadata field, shown before license acceptance. See
+`voice_licenses/kokoro-v1.md` for exact hashes, sizes, source and component terms.
+
+Identical Kokoro resolved assets share a native model within this backend
+instance, using per-request speaker IDs and serialized native generation.
+Different model/lexicon paths remain separate. This avoids twenty in-memory
+weight copies merely from previewing a twenty-voice package. FP32 and INT8 still
+load separately. This changes neither public API nor backend choice.
+
+The first catalog deliberately does not offer arbitrary Hub URLs or the proposed
+Danish Piper download with unresolved model-versus-dataset licensing. Further
+languages and in-place migration of older single-voice assets are future additions,
+not hidden actions. Default activation always requires explicit idle restart.
 
 No real model download, license acceptance or production voice/config mutation
 is needed for automated smoke tests; use synthetic archives and isolated roots.

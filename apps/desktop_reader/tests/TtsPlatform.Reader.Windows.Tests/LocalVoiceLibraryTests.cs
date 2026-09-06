@@ -119,13 +119,17 @@ public sealed class LocalVoiceLibraryTests
                 configured_default = "da",
                 config_valid = true,
                 installed_voices = new[] { new { id = "da", name = "Dansk stemme æøå", language = "da-DK", family = "vits", license = "fixture", package_source = "models/voices/da", assets_present = true, is_configured_default = true } },
-                packages = Array.Empty<object>(),
+                packages = new[] { new { id = "bundle", name = "20 voice bundle", language = "en-US", family = "kokoro",
+                    size_bytes = 131839838, license = "Synthetic component terms", license_url = "https://example.test/license",
+                    source_url = "https://example.test/source", voices = new[] { new { id = "voice", name = "Voice", language = "en-US" } },
+                    installed = false, can_install = true, install_note = "Separate full-bundle download." } },
             },
         });
         using var fixture = new Fixture($"[Console]::Out.WriteLine('{payload}')\nexit 0");
         var inventory = await fixture.Library.ListAsync(CancellationToken.None);
         Assert.Equal("Dansk stemme æøå", Assert.Single(inventory.InstalledVoices).Name);
         Assert.True(inventory.InstalledVoices[0].AssetsPresent);
+        Assert.Equal("Separate full-bundle download.", Assert.Single(inventory.Packages).InstallNote);
     }
 
     [Fact]

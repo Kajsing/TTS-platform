@@ -737,16 +737,19 @@ def _assert_setup_next_steps(setup_payload: dict[str, object]) -> None:
     single_installable_model_id = str(
         catalog.get("single_installable_model_id") or ""
     ).strip()
-    if not single_installable_model_id:
+    if not single_installable_model_id and len(
+        _string_list(catalog.get("installable_model_ids"))
+    ) < 2:
         raise WindowsBundleInstallError(
-            "Installed setup-local default catalog did not expose one installable model."
+            "Installed setup-local default catalog did not expose installable choices."
         )
     expected_install_step = (
         f"tts model-install {single_installable_model_id} --activate"
+        if single_installable_model_id else "tts model-list"
     )
     if not next_steps or next_steps[0] != expected_install_step:
         raise WindowsBundleInstallError(
-            "Installed setup-local did not put the default catalog install step first."
+            "Installed setup-local did not put the appropriate catalog choice/install step first."
         )
 
 

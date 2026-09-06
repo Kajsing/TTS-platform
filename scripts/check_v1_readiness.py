@@ -229,7 +229,7 @@ REQUIRED_TEXT_MARKERS = {
         "models/catalog.json",
         "_assert_setup_guidance",
         "catalog_single_installable_model",
-        "setup-local did not put the default catalog install step first",
+        "setup-local did not put the appropriate catalog choice/install step first",
     ),
     "scripts/package_windows_bundle.py": (
         "docs/v1_completion_audit.md",
@@ -312,11 +312,11 @@ REQUIRED_TEXT_MARKERS = {
         '"dependencies_installed"',
         '"real_runtime_installed"',
         "catalog_single_installable_model",
-        "Installed setup-local did not put the default catalog install step first",
+        "Installed setup-local did not put the appropriate catalog choice/install step first",
     ),
     "scripts/check_windows_bundle_bootstrap.py": (
         "catalog_single_installable_model",
-        "setup-local did not put the default catalog install step first",
+        "setup-local did not put the appropriate catalog choice/install step first",
         "TROUBLESHOOTING.md",
     ),
     "apps/tts_service/src/tts_service/cli.py": (

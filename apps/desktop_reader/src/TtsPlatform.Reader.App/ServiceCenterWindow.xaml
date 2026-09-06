@@ -226,13 +226,14 @@
                   <StackPanel>
                     <TextBlock x:Name="SelectedPackageTitle" Text="Select a package to review its license and source." FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock x:Name="SelectedPackageLicense" Margin="0,5,0,6" TextWrapping="Wrap" />
+                    <TextBlock x:Name="SelectedPackageNote" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed" />
                     <WrapPanel>
-                      <Button x:Name="PackageLicenseButton" Content="Read voice license ↗" Click="PackageLicense_Click" IsEnabled="False" />
+                      <Button x:Name="PackageLicenseButton" Content="Read package licenses ↗" Click="PackageLicense_Click" IsEnabled="False" />
                       <Button x:Name="PackageSourceButton" Content="Upstream source ↗" Click="PackageSource_Click" IsEnabled="False" />
                     </WrapPanel>
                     <CheckBox x:Name="AcceptVoiceLicenseCheckBox" Margin="3,10,0,8" IsEnabled="False"
                               Checked="License_Checked" Unchecked="License_Checked">
-                      <TextBlock Text="I have reviewed and accept this package's voice license." TextWrapping="Wrap" />
+                      <TextBlock Text="I have reviewed and accept this package's voice and component licenses." TextWrapping="Wrap" />
                     </CheckBox>
                     <Button x:Name="InstallVoiceButton" Content="Download and install" HorizontalAlignment="Left" IsEnabled="False"
                             Style="{StaticResource PrimaryButtonStyle}" Click="InstallVoice_Click" />

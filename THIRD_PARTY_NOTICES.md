@@ -3,6 +3,15 @@
 This file records direct runtime dependencies added by TTS Platform Reader.
 Transitive package notices remain available in their respective distributions.
 
+## Optional Kokoro v1.0 voice packages
+
+Service Center can explicitly download publisher-hosted FP32/INT8 bundles;
+the Reader executable does not include model weights. Model/voice tensors are
+declared Apache-2.0 by their author; eSpeak NG data and other bundled components
+have their own terms. See [the package review and primary license sources](docs/voice_licenses/kokoro-v1.md)
+before accepting a download or redistributing model files. Existing runtime and
+project licensing is unchanged. No package is automatically installed.
+
 ## Optional Reader MCP adapter (2026-09-05 dependency review)
 
 - Direct optional dependency: `mcp==2.1.1`, official Python MCP SDK.

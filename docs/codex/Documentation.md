@@ -5,6 +5,30 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- Service Center T1/T2 is complete and validated. The root shortcut includes the
+  persistent tray, local resources/status/control panel, optional Windows startup,
+  installed/available library, safe installer, fixed-text preview and deferred
+  service-default selection. The catalog adds FP32/INT8 Kokoro v1.0 bundles with
+  20 US speakers each, pinned publisher hashes/sizes/layout, mixed-component
+  license review and explicit full-download/separate-install warning. Existing
+  single-voice files and the user's dirty MANIFEST remain untouched. Identical
+  Kokoro assets share one native engine (per-request SID, serialized generation);
+  different model/lexicon paths remain separate. This local support fix prevents
+  twenty weight copies when comparing a bundle's voices. Bootstrap guidance and
+  verifiers now handle multiple choices without choosing a default for the user.
+  Final validation: 626 Python tests passed, 2 optional skips; 268 .NET tests;
+  Ruff, scoped .NET format, zero-warning exact-shortcut publish; WPF lifecycle/
+  preview/dirty-edit/installer/scroll checks; real HTTP WAV preview and portable
+  package checks. Read-only production bridge found 5 unchanged installed voices
+  and 3 catalog packages (2 new available). Native probes against the user's
+  existing FP32/INT8 files produced distinct SID 3/11 PCM16 WAVs using one engine
+  per asset set; no audible output or real download/installation/default/service/
+  startup mutation. See `.logs/2026-09-06-reader-service-center-catalog.md`,
+  `docs/reader_service_center_plan.md` and `docs/voice_licenses/kokoro-v1.md`.
+  Danish Piper remains a future catalog candidate with unresolved complete-model
+  terms, not a required T1/T2 deliverable. U8 remains parked; ask the user about
+  the intended WireGuard host/network before resuming. No new work is authorized
+  merely because this Service Center goal is complete.
 - T2 fixed-text voice preview is implemented and published to the exact root
   shortcut. Service Center > Voices > Installed > Preview voice uses the selected
   running-registry voice without changing Reader preference or service defaults.

@@ -1,11 +1,10 @@
 # Reader Service Center
 
-Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
-including optional Windows startup and the legacy scheduled-owner integration.
-T2's installation foundation and desktop library/progress UI are implemented;
-service-default selection and guarded fixed-text preview are published;
-catalog expansion remains incomplete. The whole goal is
-not complete.
+Status: T1 and T2 completed and validated, 2026-09-06 (approved 2026-09-05).
+The exact root shortcut is published with persistent tray/dashboard, optional
+Windows startup, legacy scheduled-owner integration, compatible voice library,
+safe installation/cancellation, deferred default selection and fixed-text preview.
+The reviewed catalog now includes two optional 20-speaker US Kokoro bundles.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
 ## Approved outcome and boundaries
@@ -162,13 +161,14 @@ download large models or accept license terms merely for a smoke test.
 
 ### T2 acceptance
 
-- [ ] Installed/available voices and accurate package/license metadata.
+- [x] Installed/available voices and accurate package/license metadata.
 - [x] Verified installation with visible progress and safe cancellation.
 - [x] Tests for bad checksums, failed extraction, unavailable downloads,
   existing-package conflicts and manifest preservation.
 - [x] Preview/default selection respect playback/export activity.
-- [x] Published desktop smoke and relevant Python/.NET regressions pass for the
-  implemented library/default/preview. Revalidate after catalog expansion.
+- [x] Published desktop smoke and relevant Python/.NET regressions pass after
+  catalog expansion: 626 Python tests (2 optional skips), 268 .NET tests, native
+  read-only FP32/INT8 probes and exact-shortcut/portable WPF acceptance.
 
 ## Validation and delivery
 
@@ -180,7 +180,7 @@ validated coherent slices, leaving unrelated manifest edits out.
 
 ## Inspection and resume point
 
-The goal remains active. `DesktopServiceCenterHost` now owns one tray icon and
+T1/T2 acceptance is complete. `DesktopServiceCenterHost` now owns one tray icon and
 reloads settings when recreating a genuinely closed Reader. Normal startup uses
 an exclusive current-user/current-session named-pipe activation channel; smoke
 tests use separate scopes/settings and cannot contact the real service. Closing
@@ -195,7 +195,8 @@ descendant of its exact owned launcher before stopping it.
 Health already includes uptime/readiness/backend/streaming data; Reader
 diagnostics includes content leases and export counts. Current Task Scheduler
 and model-management code lives in `apps/tts_service/src/tts_service/cli.py`.
-The downloadable catalog currently contains one entry. The machine-local
+The downloadable catalog contains Lessac Medium and two Kokoro v1.0 bundles.
+The machine-local
 `models/MANIFEST.json` has an unrelated pre-existing change: preserve it.
 
 The API, coordinator and dashboard now pass unit, isolated real HTTP, real
@@ -226,8 +227,15 @@ Validation: 621 Python tests (2 optional skips), 268 .NET tests, Ruff, exact
 shortcut lifecycle/preview and live HTTP/portable WPF smoke pass. See
 `.logs/2026-09-06-reader-service-center-preview.md`. No physical audio or actual
 model/config/startup changes were made for these tests.
-Next: expand verified catalog metadata and validate the actual inventory/menu.
-Do not mark the whole goal complete yet.
-Recheck live processes before publication.
-U8 stays parked. After this track,
-return its remaining acceptance to the user before any networking changes.
+Catalog expansion and final acceptance now pass. Exact upstream checksums,
+sizes, source/component-license review and visible separate-download warning
+cover the FP32/INT8 US bundles. Identical Kokoro asset sets share one serialized
+native engine with request-specific speaker IDs. A real read-only probe reused
+existing installed weights and produced distinct SID 3/11 WAVs without changing
+the manifest or opening an audio device. See
+`.logs/2026-09-06-reader-service-center-catalog.md`.
+No real model installation, user license acceptance, default change or service
+restart was needed for validation. Further languages and migration of old
+single-voice packages remain optional future work, not unfinished T1/T2 criteria.
+U8 stays parked. Ask about the intended WireGuard server environment before
+resuming its remaining acceptance or making any networking changes.

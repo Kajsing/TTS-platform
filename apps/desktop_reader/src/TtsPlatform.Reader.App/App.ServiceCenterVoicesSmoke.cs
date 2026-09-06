@@ -66,6 +66,9 @@ public partial class App
         panel.VoicePackageList.SelectedIndex = 1;
         Require(panel.AcceptVoiceLicenseCheckBox.IsEnabled && !panel.InstallVoiceButton.IsEnabled,
             "New package did not require license review.");
+        await Idle();
+        Require(panel.SelectedPackageNote.IsVisible && panel.SelectedPackageNote.Text.Contains("full-bundle download"),
+            "Separate-package download/disk warning was hidden before license acceptance.");
         panel.AcceptVoiceLicenseCheckBox.IsChecked = true;
         panel.VoicePackageList.SelectedIndex = 0;
         panel.VoicePackageList.SelectedIndex = 1;
@@ -131,7 +134,8 @@ internal sealed class VoiceLibrarySmokeFixture : ILocalVoiceLibrary
             [new("old", "Existing package · synthetic preview", "en-US", "kokoro", 85000000, "Fixture only",
                 "https://example.test/license", "https://example.test/source", [new("old", "Existing voice", "en-US")], true, false, "Already installed. Existing files will not be replaced."),
              new("new", "Danish voice package · synthetic preview", "da-DK", "vits", 63000000, "Synthetic fixture only — not a real download",
-                "https://example.test/license", "https://example.test/source", [new("new", "Danish voice", "da-DK")], false, true, null)], new string('c', 64)));
+                "https://example.test/license", "https://example.test/source", [new("new", "Danish voice", "da-DK")], false, true, null,
+                "Separate full-bundle download, even if a single voice is already installed. Existing voices/assets stay unchanged. All voices share this package's files. Restart the idle service explicitly to load newly installed voices.")], new string('c', 64)));
     }
     public Task SetDefaultAsync(string voice, string manifest, string config, CancellationToken token)
     {
