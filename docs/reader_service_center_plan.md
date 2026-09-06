@@ -3,7 +3,8 @@
 Status: user-approved active goal, 2026-09-05. T1 is implemented and published,
 including optional Windows startup and the legacy scheduled-owner integration.
 T2's installation foundation and desktop library/progress UI are implemented;
-catalog expansion, preview and default selection remain incomplete. The whole goal is
+service-default selection is implemented as a deferred configuration change;
+catalog expansion and preview remain incomplete. The whole goal is
 not complete.
 This track precedes parked U8 and deferred Reader Milestones 10/11.
 
@@ -212,8 +213,12 @@ real model installation occurred for this Python-only slice.
 T2 voice menu: 242 .NET tests, 593 Python tests (2 optional skips), Ruff/.NET
 format, real read-only C# -> Python inventory and actual-shortcut/portable WPF
 voice/lifecycle smoke pass. No real package download/activation occurred.
-Next: expand verified catalog metadata, add guarded preview/default selection
-and validate/publish their complete end-to-end behavior.
+Service-default selection now saves only `tts.default_voice` after explicit
+confirmation and fresh config/manifest checks. It never contacts, interrupts or
+restarts the running engine, and never changes Reader's separate preference.
+Configuration DACLs, comments and unrelated values are preserved.
+Next: expand verified catalog metadata, add guarded fixed-text preview and
+validate/publish their complete end-to-end behavior.
 Do not mark the whole goal complete yet.
 Recheck live processes before publication.
 U8 stays parked. After this track,

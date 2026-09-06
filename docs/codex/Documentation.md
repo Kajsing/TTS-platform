@@ -5,6 +5,26 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-06
+- T2 deferred service-default selection is implemented and published to the exact
+  root-shortcut executable. Service Center > Voices > Installed > Use as service
+  default confirms a config-only change for the next explicit restart. Current
+  service work/paused reading/exports and Reader's separate voice preference are
+  untouched. The local bridge compares reviewed config/manifest fingerprints,
+  verifies installed asset presence, preserves unrelated TOML values/comments/
+  newlines and stages config with its original Windows DACL before writing.
+  Native replacement keeps a private recovery copy on ambiguous failure; no
+  weaker-permission fallback. Unusual TOML layouts/EFS/linked configs are refused.
+  The tray retains ownership through actual helper exit; stale busy warnings
+  now clear on completion. Validation: 615 Python tests (2 optional skips),
+  248 .NET tests, Ruff/.NET format, zero-warning publication, read-only real
+  C# -> Python inventory (5 voices/1 package, manifest unchanged), published
+  actual-shortcut WPF default/confirmation/exit-guard/lifecycle smoke and portable
+  live-HTTP/WPF checks pass. No physical-audio test or real default change was
+  performed. See `.logs/2026-09-06-reader-service-center-default-voice.md` and
+  `docs/reader_service_center_voices.md` for files, limits and resume context.
+  Next: fixed-text preview with local Reader playback/paused guards and global
+  service/export admission checks, then verified catalog expansion. Overall
+  goal remains active; U8 stays parked. Continue within the approved plan.
 - T2 voice menu and local helper adapter are now implemented and published to
   the exact root-shortcut executable. Service Center > Voices separates installed
   metadata from downloadable packages, shows source/license/size, resets explicit

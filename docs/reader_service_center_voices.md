@@ -1,10 +1,47 @@
 # Service Center voice library implementation
 
 Status: T2 installation foundation and desktop voice tab implemented and
-published, 2026-09-06. Catalog expansion, preview and service-default controls
+published, 2026-09-06. Deferred service-default selection is implemented too.
+Catalog expansion and preview
 remain **incomplete**. The whole Service Center goal remains active.
 
 ## Desktop use
+
+### Service default, not Reader preference
+
+Under **Installed**, select a voice with files present and choose **Use as
+service default...**. Confirmation explicitly saves it for the next restart.
+This changes only this installation's `config/config.toml` `tts.default_voice`;
+it does not contact the service, interrupt current/paused reading or exports,
+change Reader's preference, or trigger an automatic restart. Use the existing
+idle-checked, confirmed **Restart service** separately. The configured default
+in this tab is not proof that it is active; Overview reports the running default.
+
+The fixed local bridge adds `set-default` with voice ID, manifest fingerprint and
+config fingerprint. It requires an existing valid config and one installed voice
+with present assets. Config/manifest changes invalidate the reviewed choice.
+A manifest lock serializes registry operations and a config lock serializes
+these saves. Conventional `[tts]` scalar layouts preserve comments and newlines;
+unsupported dotted/inline/multiline layouts are refused. Reparsing verifies that
+all other TOML values are identical. This is not a general config editor.
+
+On Windows, an empty same-directory staging file receives the original DACL
+before any config content is written. After flush and a final snapshot check,
+`ReplaceFileW` preserves original security/attributes without IGNORE_ACL flags.
+A private backup protects its documented partial-failure paths. Failed recovery
+retains the `.config.toml.*.recovery` file for review; successful saves normally
+remove it. Those local staging/lock/recovery files are excluded from Git.
+EFS-encrypted configs and linked config files are refused rather than weakening
+their protection. POSIX staging preserves file mode. External non-cooperating
+editors can still race the last snapshot check; do not edit config concurrently.
+
+Primary Windows behavior references: [GetFileSecurityW](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-getfilesecurityw),
+[SetFileSecurityW](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-setfilesecurityw),
+and [ReplaceFileW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).
+Tests cover custom protected DACLs on staging/final files, byte-preserving edits,
+stale intent, missing assets, cancellation and caught replacement failures.
+
+### Packages and installation
 
 Open **Service Center > Voices**. Installed lists local voice metadata and file
 presence separately from the running engine. Available packages shows the local
@@ -43,6 +80,9 @@ Commands:
 python -m tts_service.model_manager list --repo-root <repository>
 python -m tts_service.model_manager install --repo-root <repository>
     --package-id <catalog-id> --catalog-fingerprint <reviewed-sha256> --accept-license
+python -m tts_service.model_manager set-default --repo-root <repository>
+    --voice-id <installed-id> --manifest-fingerprint <reviewed-sha256>
+    --config-fingerprint <reviewed-sha256>
 ```
 
 Paths are fixed beneath that root: `models/catalog.json`, `models/MANIFEST.json`
@@ -57,13 +97,14 @@ artifacts or contact the running service. It separates `installed_voices` from
 downloadable `packages`, including language, family, size, source/license URLs,
 conflicts and availability reasons. `assets_present` is not service readiness
 or an audio-quality assertion. Config output contains only validity and the
-configured default voice, never tokens or raw config errors.
+configured default voice and an opaque config fingerprint, never tokens or raw
+config errors.
 
 ## Progress and cancellation contract
 
 Each stdout line is JSON with `contract_version: 1` and an `event`:
 
-- `result`: `data` contains inventory or the committed installation outcome.
+- `result`: `data` contains inventory, committed installation, or saved default.
 - `progress`: `phase`, nullable `completed`/`total` byte counts, and `cancellable`.
 - `cancelled`: staging was cancelled before commit; previous voices are unchanged.
 - `failed`: a sanitized phase-specific message; refresh actual state before retry.
@@ -121,18 +162,19 @@ CLI removal refuses to delete shared assets while other voice entries reference
 them; explicit overwrite refuses to drop unlisted dependent voices.
 
 Installation returns `activation: restart_required`; it neither edits the
-configured default nor changes the active service. The future UI must distinguish
-service-default selection from Reader's saved voice preference and use the
-existing activity-aware explicit restart path. Preview must avoid overlapping
+configured default nor changes the active service. The separate default control
+distinguishes service configuration from Reader's saved voice preference. Use the
+existing activity-aware explicit restart path to apply it. Preview must avoid overlapping
 Reader playback or active exports.
 
 ## Remaining T2 work
 
 - Expand the catalog only with primary-source artifact hashes, accurate sizes,
   supported model layouts and voice-specific license terms.
-- Add guarded fixed-text preview and clearly separated service-default selection.
-- Extend the desktop tests for preview/default behavior and rerun exact-shortcut
-  publication after those controls are implemented. The current voice-library
+- Add guarded fixed-text preview. Deferred service-default selection is implemented
+  and tested separately from Reader's own preference.
+- Extend the desktop tests for preview behavior and rerun exact-shortcut
+  publication after it is implemented. The current voice-library/default
   UI/helper lifetime and cancellation tests already pass.
 
 No real model download, license acceptance or production voice/config mutation

@@ -13,6 +13,7 @@ public partial class ServiceCenterWindow : Window
     internal event EventHandler<bool>? StartupChangeRequested;
     internal event EventHandler? StartupRefreshRequested;
     private bool? _startupEnabled;
+    private bool _voiceCommandMessage;
     public ServiceCenterWindow()
     {
         InitializeComponent();
@@ -83,8 +84,12 @@ public partial class ServiceCenterWindow : Window
         if (seconds >= 86400) return $"{seconds / 86400:N0}d {seconds % 86400 / 3600}h";
         return $"{seconds / 3600:00}:{seconds % 3600 / 60:00}:{seconds % 60:00}";
     }
-    internal void ShowCommandMessage(string message)
-    { CommandMessage.Text = message; CommandMessage.Visibility = Visibility.Visible; }
+    internal void ShowCommandMessage(string message, bool voiceOperation = false)
+    {
+        _voiceCommandMessage = voiceOperation;
+        CommandMessage.Text = message;
+        CommandMessage.Visibility = Visibility.Visible;
+    }
     private void Start_Click(object sender, RoutedEventArgs e) => CommandRequested?.Invoke(this, LocalServiceCommand.Start);
     private void Stop_Click(object sender, RoutedEventArgs e) => CommandRequested?.Invoke(this, LocalServiceCommand.Stop);
     private void Restart_Click(object sender, RoutedEventArgs e) => CommandRequested?.Invoke(this, LocalServiceCommand.Restart);

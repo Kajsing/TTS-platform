@@ -133,7 +133,7 @@ internal sealed partial class DesktopServiceCenterHost
     {
         if (_voices?.IsBusy == true)
         {
-            DashboardWindow?.ShowCommandMessage("A local voice operation is still running. Wait for it to finish before changing service state.");
+            DashboardWindow?.ShowCommandMessage("A local voice operation is still running. Wait for it to finish before changing service state.", voiceOperation: true);
             return;
         }
         if (_disposed || _operationPending) return;

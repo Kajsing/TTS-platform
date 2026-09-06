@@ -1,7 +1,7 @@
 """Bounded local JSON-lines bridge for Service Center model management.
 
-This is not a network server. It exposes only the repository's catalog and
-non-overwriting installation, using the same Python implementation as the CLI.
+This is not a network server. It exposes the repository's catalog,
+non-overwriting installation and deferred service-default selection.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from typing import TextIO
 from urllib.parse import urlparse
 
 from . import cli
-from .model_installation import ModelInstallCancelled, ModelInstallControl
+from .model_defaults import config_bytes, save_default
+from .model_installation import ModelInstallCancelled, ModelInstallControl, manifest_lock
 
 CONTRACT_VERSION = 1
 MAX_METADATA_BYTES = 2 * 1024 * 1024
@@ -75,7 +76,11 @@ def inventory(repo_root: Path) -> dict[str, object]:
     models = cli._catalog_models(catalog)
     if len(models) > 512:
         raise ValueError("The model catalog contains too many packages.")
-    config = cli._inspect_config_for_model_check(root / "config" / "config.toml")
+    config_path = root / "config" / "config.toml"
+    config_snapshot = config_bytes(config_path)
+    config = cli._inspect_config_for_model_check(config_path)
+    if config_bytes(config_path) != config_snapshot:
+        raise ValueError("The local configuration changed while reading it. Refresh the library.")
     default = config.get("default_voice")
     installed: list[dict[str, object]] = []
     for voice in voices:
@@ -162,6 +167,7 @@ def inventory(repo_root: Path) -> dict[str, object]:
         "manifest_fingerprint": manifest_digest,
         "configured_default": default,
         "config_valid": config.get("valid") is True,
+        "config_fingerprint": fingerprint(config_snapshot),
         "installed_voices": installed,
         "packages": packages,
     }
@@ -209,6 +215,38 @@ def install_package(
     }
 
 
+def set_default_voice(
+    repo_root: Path,
+    voice_id: str,
+    manifest_fingerprint: str,
+    config_fingerprint: str,
+    control: ModelInstallControl,
+) -> dict[str, object]:
+    root = repo_root.resolve()
+    with manifest_lock(root / "models" / "MANIFEST.json"):
+        current = inventory(root)
+        if (
+            not current["config_valid"]
+            or current["manifest_fingerprint"] != manifest_fingerprint
+            or current["config_fingerprint"] != config_fingerprint
+        ):
+            raise ValueError("The reviewed configuration or voice list changed. Refresh first.")
+        selected = [voice for voice in current["installed_voices"] if voice["id"] == voice_id]
+        if (
+            not cli._is_safe_model_id(voice_id)
+            or len(selected) != 1
+            or selected[0]["assets_present"] is not True
+        ):
+            raise ValueError("Select one installed voice whose files are present.")
+        path = root / "config" / "config.toml"
+        original = config_bytes(path)
+        if original is None or fingerprint(original) != config_fingerprint:
+            raise ValueError("The configuration changed before saving. Refresh first.")
+        control.check()  # The short atomic commit is non-cancellable after this point.
+        save_default(path, original, voice_id)
+    return {"voice_id": voice_id, "activation": "restart_required"}
+
+
 def watch_cancel(stream: TextIO, cancelled: threading.Event) -> None:
     # Pipe closure also cancels staging if the desktop disappears. Never kill a
     # helper during its non-cancellable commit; it owns cleanup and final outcome.
@@ -233,6 +271,15 @@ def run(
     root = Path(args.repo_root).resolve()
     if args.command == "list":
         send({"event": "result", "data": inventory(root)})
+    elif args.command == "set-default":
+        result = set_default_voice(
+            root,
+            args.voice_id,
+            args.manifest_fingerprint,
+            args.config_fingerprint,
+            ModelInstallControl(cancelled=cancelled.is_set),
+        )
+        send({"event": "result", "data": result})
     else:
         control = ModelInstallControl(
             cancelled=cancelled.is_set, progress=lambda event: send({"event": "progress", **event})
@@ -245,14 +292,17 @@ def run(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["list", "install"])
+    parser.add_argument("command", choices=["list", "install", "set-default"])
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--package-id", default="")
     parser.add_argument("--catalog-fingerprint", default="")
     parser.add_argument("--accept-license", action="store_true")
+    parser.add_argument("--voice-id", default="")
+    parser.add_argument("--manifest-fingerprint", default="")
+    parser.add_argument("--config-fingerprint", default="")
     args = parser.parse_args(argv)
     cancelled = threading.Event()
-    phase = "metadata"
+    phase = "default" if args.command == "set-default" else "metadata"
 
     def send(event: dict[str, object]) -> None:
         nonlocal phase
@@ -260,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
             phase = str(event["phase"])
         print(json.dumps({"contract_version": CONTRACT_VERSION, **event}), flush=True)
 
-    if args.command == "install":
+    if args.command != "list":
         threading.Thread(target=watch_cancel, args=(sys.stdin, cancelled), daemon=True).start()
     try:
         run(args, send, cancelled)
@@ -269,7 +319,10 @@ def main(argv: list[str] | None = None) -> int:
         send(
             {
                 "event": "cancelled",
-                "message": "Installation cancelled before commit. Existing voices are unchanged.",
+                "message": (
+                    "Voice operation cancelled before commit. "
+                    "Existing settings and voices are unchanged."
+                ),
             }
         )
         return 2
@@ -278,6 +331,11 @@ def main(argv: list[str] | None = None) -> int:
     except (Exception, SystemExit):
         # No raw config, command lines, signed URLs or credentials in UI/logs.
         messages = {
+            "default": (
+                "The service default could not be confirmed. Refresh before retrying. "
+                "Check the installed voice, config permissions and conventional [tts] layout. "
+                "Any private .config.toml.*.recovery file is kept for recovery."
+            ),
             "metadata": (
                 "Package or license review is no longer valid. "
                 "Refresh the library before trying again."

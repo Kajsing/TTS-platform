@@ -11,6 +11,7 @@ build/
 logs/
 *.egg-info/
 config/config.toml
+config/.config.toml.*
 config/token.txt
 models/voices/
 models/.*.lock

@@ -40,6 +40,24 @@ public partial class App
         await Idle();
         Require(panel.InstalledVoiceList.Items.Count == 2 && panel.VoicePackageList.Items.Count == 2,
             "Installed voices and available packages were not separated.");
+        panel.InstalledVoiceList.SelectedIndex = 0;
+        Require(!panel.SetServiceDefaultButton.IsEnabled, "Already configured voice offered a redundant save.");
+        panel.InstalledVoiceList.SelectedIndex = 1;
+        Require(panel.SetServiceDefaultButton.IsEnabled, "Installed alternative cannot be saved as default.");
+        panel.ConfirmDefaultForSmoke = _ => false;
+        Click(panel.SetServiceDefaultButton);
+        Require(fixture.Defaults == 0, "Cancelling default confirmation changed a setting.");
+        panel.ConfirmDefaultForSmoke = _ => true;
+        Click(panel.SetServiceDefaultButton);
+        await Idle();
+        Require(fixture.Defaults == 1 && !panel.SetServiceDefaultButton.IsEnabled && !panel.RefreshVoicesButton.IsEnabled,
+            "Default save did not retain serialized ownership.");
+        Require(!await host.ExitAsync(confirm: false), "Tray exited during a default commit.");
+        fixture.DefaultCompletion.SetResult();
+        await Idle();
+        Require(panel.RefreshVoicesButton.IsEnabled && panel.CommandMessage.Visibility == Visibility.Collapsed &&
+            panel.VoiceLibraryMessage.Text.Contains("next explicit restart"),
+            "Saved default was not labeled as deferred activation.");
         Capture(panel, Path.Combine(root, "service-center-voices-installed.png"));
         Available(panel);
         panel.VoicePackageList.SelectedIndex = 0;
@@ -91,7 +109,7 @@ public partial class App
         fixture.Completion.SetResult(new(false, true, "Synthetic installation cancelled safely."));
         await Idle();
         Require(panel.RefreshVoicesButton.IsEnabled && panel.VoiceInstallProgressPanel.Visibility == Visibility.Collapsed &&
-            fixture.Lists == 2, "Terminal helper result did not refresh actual inventory and release controls.");
+            fixture.Lists == 3, "Terminal helper result did not refresh actual inventory and release controls.");
         panel.Close();
     }
 }
@@ -100,6 +118,8 @@ internal sealed class VoiceLibrarySmokeFixture : ILocalVoiceLibrary
 {
     internal int Lists;
     internal int Installs;
+    internal int Defaults;
+    internal readonly TaskCompletionSource DefaultCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal CancellationToken Token;
     internal readonly TaskCompletionSource<VoiceInstallationOutcome> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Task<VoiceLibraryInventory> ListAsync(CancellationToken cancellationToken)
@@ -111,7 +131,14 @@ internal sealed class VoiceLibrarySmokeFixture : ILocalVoiceLibrary
             [new("old", "Existing package · synthetic preview", "en-US", "kokoro", 85000000, "Fixture only",
                 "https://example.test/license", "https://example.test/source", [new("old", "Existing voice", "en-US")], true, false, "Already installed. Existing files will not be replaced."),
              new("new", "Danish voice package · synthetic preview", "da-DK", "vits", 63000000, "Synthetic fixture only — not a real download",
-                "https://example.test/license", "https://example.test/source", [new("new", "Danish voice", "da-DK")], false, true, null)]));
+                "https://example.test/license", "https://example.test/source", [new("new", "Danish voice", "da-DK")], false, true, null)], new string('c', 64)));
+    }
+    public Task SetDefaultAsync(string voice, string manifest, string config, CancellationToken token)
+    {
+        if (voice != "piper" || manifest != new string('b', 64) || config != new string('c', 64))
+            throw new InvalidOperationException("Default save lost its reviewed configuration/voice.");
+        Defaults++;
+        return DefaultCompletion.Task;
     }
     public Task<VoiceInstallationOutcome> InstallAsync(string packageId, string fingerprint, bool accepted,
         IProgress<VoiceInstallationProgress> progress, CancellationToken cancellationToken)

@@ -5,9 +5,49 @@ namespace TtsPlatform.Reader.Application.Tests;
 public sealed class VoiceLibraryTests
 {
     private static readonly VoiceLibraryInventory Inventory = new(new string('a', 64), new string('b', 64), "old", true,
-        [new("old", "Existing voice", "en-US", "vits", "test", "models/voices/old", true, true)],
+        [new("old", "Existing voice", "en-US", "vits", "test", "models/voices/old", true, true),
+         new("second", "Second voice", "en-US", "vits", "test", "fixture", true, false)],
         [new("new", "New voice", "da-DK", "vits", 1048576, "Fixture only", "https://example.test/license", "https://example.test/source",
-            [new("new", "New voice", "da-DK")], false, true, null)]);
+            [new("new", "New voice", "da-DK")], false, true, null)], new string('c', 64));
+
+    [Fact]
+    public async Task Service_default_requires_reviewed_installed_voice_and_holds_gate_until_commit()
+    {
+        var fake = new Library();
+        var controller = new VoiceLibraryController(fake);
+        await controller.RefreshAsync();
+        Assert.False(controller.CanSetDefault("old"));
+        Assert.False(controller.CanSetDefault("new"));
+        Assert.True(controller.CanSetDefault("second"));
+        var pending = controller.SetDefaultAsync("second");
+        Assert.True(controller.IsBusy);
+        Assert.False(controller.IsInstalling);
+        Assert.False(controller.CanCancel);
+        await controller.InstallAsync("new", true);
+        await controller.SetDefaultAsync("second");
+        Assert.Equal(1, fake.Defaults);
+        Assert.Equal(0, fake.Installs);
+        fake.DefaultCompletion.SetResult();
+        await pending;
+        Assert.False(controller.IsBusy);
+        Assert.Equal(2, fake.Lists);
+        Assert.Contains("next explicit restart", controller.Message);
+        Assert.Contains("Reader's own voice preference", controller.Message);
+    }
+
+    [Fact]
+    public async Task Uncertain_default_outcome_invalidates_inventory_and_does_not_offer_blind_retry()
+    {
+        var fake = new Library();
+        var controller = new VoiceLibraryController(fake);
+        await controller.RefreshAsync();
+        var pending = controller.SetDefaultAsync("second");
+        fake.DefaultCompletion.SetException(new IOException("secret"));
+        await pending;
+        Assert.Null(controller.Inventory);
+        Assert.False(controller.CanSetDefault("second"));
+        Assert.DoesNotContain("secret", controller.Message);
+    }
 
     [Fact]
     public async Task License_review_is_required_and_duplicates_are_blocked_until_actual_completion()
@@ -88,10 +128,20 @@ public sealed class VoiceLibraryTests
     {
         internal int Lists;
         internal int Installs;
+        internal int Defaults;
+        internal readonly TaskCompletionSource DefaultCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal string? Fingerprint;
         internal bool ReadFailure;
         internal CancellationToken Token;
         internal readonly TaskCompletionSource<VoiceInstallationOutcome> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task SetDefaultAsync(string id, string manifest, string config, CancellationToken token)
+        {
+            Assert.Equal("second", id);
+            Assert.Equal(Inventory.ManifestFingerprint, manifest);
+            Assert.Equal(Inventory.ConfigFingerprint, config);
+            Defaults++;
+            return DefaultCompletion.Task;
+        }
         public Task<VoiceLibraryInventory> ListAsync(CancellationToken token)
         {
             Lists++;

@@ -124,7 +124,7 @@ internal sealed partial class DesktopServiceCenterHost : IDisposable
         {
             await OpenServiceCenterAsync();
             DashboardWindow?.OpenVoicesPage();
-            DashboardWindow?.ShowCommandMessage("A voice operation is still running. You can cancel the installation here; wait for its final result before exiting Service Center.");
+            DashboardWindow?.ShowCommandMessage("A voice operation is still running. Wait for its confirmed result before exiting Service Center.", voiceOperation: true);
             return false;
         }
         if (_exiting || _openingReader || _operationPending || _startupBusy) return false;

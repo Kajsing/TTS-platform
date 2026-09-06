@@ -20,6 +20,11 @@ internal sealed partial class DesktopServiceCenterHost
             await _voices.InstallAsync(package.Id, panel.AcceptVoiceLicenseCheckBox.IsChecked == true);
         };
         panel.VoiceCancelRequested += (_, _) => _voices?.Cancel();
+        panel.VoiceDefaultRequested += async (_, voice) =>
+        {
+            if (_disposed || _operationPending || _voices is null) return;
+            await _voices.SetDefaultAsync(voice.Id);
+        };
         if (_voices is not null) panel.ShowVoiceLibrary(_voices);
     }
 

@@ -7,6 +7,31 @@ namespace TtsPlatform.Reader.Windows.Tests;
 
 public sealed class LocalVoiceLibraryTests
 {
+    [Theory]
+    [InlineData("next", "restart_required", true)]
+    [InlineData("wrong", "restart_required", false)]
+    [InlineData("next", "applied", false)]
+    public async Task Default_selection_requires_matching_confirmed_deferred_result(string voice, string activation, bool success)
+    {
+        var payload = JsonSerializer.Serialize(new { contract_version = 1, @event = "result", data = new { voice_id = voice, activation } });
+        using var fixture = new Fixture($"[Console]::Out.WriteLine('{payload}')\nexit 0");
+        var operation = fixture.Library.SetDefaultAsync("next", Fingerprint, Fingerprint, CancellationToken.None);
+        if (success) await operation;
+        else await Assert.ThrowsAsync<VoiceLibraryException>(() => operation);
+    }
+
+    [Fact]
+    public async Task Default_commit_waits_for_actual_exit_even_after_late_cancel()
+    {
+        var payload = JsonSerializer.Serialize(new { contract_version = 1, @event = "result", data = new { voice_id = "next", activation = "restart_required" } });
+        using var fixture = new Fixture($"[Console]::Out.WriteLine('{payload}')\n[Console]::Out.Flush()\n$line = [Console]::ReadLine()\nexit 0");
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var operation = fixture.Library.SetDefaultAsync("next", Fingerprint, Fingerprint, cancellation.Token);
+        await Assert.ThrowsAsync<VoiceLibraryException>(() => fixture.Library.ListAsync(CancellationToken.None));
+        await operation.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(cancellation.IsCancellationRequested);
+    }
+
     private const string Fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Result = """{"contract_version":1,"event":"result","data":{"checksum_verified":true,"activation":"restart_required"}}""";
     private const string Progress = """{"contract_version":1,"event":"progress","phase":"downloading","completed":5,"total":10,"cancellable":true}""";
@@ -90,6 +115,7 @@ public sealed class LocalVoiceLibraryTests
             {
                 catalog_fingerprint = Fingerprint,
                 manifest_fingerprint = Fingerprint,
+                config_fingerprint = Fingerprint,
                 configured_default = "da",
                 config_valid = true,
                 installed_voices = new[] { new { id = "da", name = "Dansk stemme æøå", language = "da-DK", family = "vits", license = "fixture", package_source = "models/voices/da", assets_present = true, is_configured_default = true } },

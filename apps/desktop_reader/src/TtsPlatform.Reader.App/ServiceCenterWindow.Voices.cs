@@ -12,6 +12,8 @@ public partial class ServiceCenterWindow
     internal event EventHandler? VoicesRefreshRequested;
     internal event EventHandler<VoiceLibraryPackage>? VoiceInstallRequested;
     internal event EventHandler? VoiceCancelRequested;
+    internal event EventHandler<InstalledLibraryVoice>? VoiceDefaultRequested;
+    internal Func<InstalledLibraryVoice, bool>? ConfirmDefaultForSmoke { get; set; }
     private VoiceLibraryController? _voices;
     private VoiceLibraryInventory? _displayedInventory;
     private bool _voicesOpened;
@@ -26,6 +28,11 @@ public partial class ServiceCenterWindow
     internal void ShowVoiceLibrary(VoiceLibraryController controller)
     {
         _voices = controller;
+        if (!controller.IsBusy && _voiceCommandMessage)
+        {
+            _voiceCommandMessage = false;
+            CommandMessage.Visibility = Visibility.Collapsed;
+        }
         if (!ReferenceEquals(_displayedInventory, controller.Inventory))
         {
             _displayedInventory = controller.Inventory;
@@ -39,12 +46,29 @@ public partial class ServiceCenterWindow
         VoiceLibraryMessage.Text = controller.Message;
         RefreshVoicesButton.IsEnabled = !controller.IsBusy;
         VoicePackageList.IsEnabled = !controller.IsBusy;
+        InstalledVoiceList.IsEnabled = !controller.IsBusy;
         VoiceInstallProgressPanel.Visibility = controller.IsInstalling ? Visibility.Visible : Visibility.Collapsed;
         VoiceInstallProgressText.Text = controller.CancelRequested ? "Waiting for safe cancellation or commit…" : controller.Progress?.Display ?? "Starting installer…";
         VoiceInstallProgressBar.IsIndeterminate = controller.Progress?.Percent is null;
         VoiceInstallProgressBar.Value = controller.Progress?.Percent ?? 0;
         CancelVoiceInstallButton.IsEnabled = controller.CanCancel;
         RenderPackageReview();
+        RenderInstalledSelection();
+    }
+
+    private void InstalledVoice_SelectionChanged(object sender, SelectionChangedEventArgs e) => RenderInstalledSelection();
+    private void RenderInstalledSelection()
+    {
+        if (SetServiceDefaultButton is null) return;
+        SetServiceDefaultButton.IsEnabled = _voices?.CanSetDefault((InstalledVoiceList.SelectedItem as InstalledLibraryVoice)?.Id) == true;
+    }
+    private void SetServiceDefault_Click(object sender, RoutedEventArgs e)
+    {
+        if (!SetServiceDefaultButton.IsEnabled || InstalledVoiceList.SelectedItem is not InstalledLibraryVoice voice) return;
+        var confirmed = ConfirmDefaultForSmoke?.Invoke(voice) ?? MessageBox.Show(this,
+            $"Save {voice.Name} as this computer's service default?\n\nThis does not change running speech or Reader's own voice preference. Use Restart service explicitly when idle to apply the saved default.",
+            "Service default for next restart", MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.Cancel) == MessageBoxResult.OK;
+        if (confirmed) VoiceDefaultRequested?.Invoke(this, voice);
     }
 
     internal void OpenVoicesPage() => ServicePages.SelectedItem = VoicesPage;

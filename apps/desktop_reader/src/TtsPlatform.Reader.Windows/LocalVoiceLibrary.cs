@@ -23,6 +23,7 @@ public sealed class LocalVoiceLibrary(string? startDirectory = null,
             var inventory = terminal.Data.Deserialize<VoiceLibraryInventory>(Json);
             if (inventory is null || inventory.InstalledVoices is null || inventory.Packages is null ||
                 !ValidFingerprint(inventory.CatalogFingerprint) || !ValidFingerprint(inventory.ManifestFingerprint) ||
+                !ValidFingerprint(inventory.ConfigFingerprint) ||
                 inventory.InstalledVoices.Count > 2048 || inventory.Packages.Count > 512 ||
                 inventory.InstalledVoices.Any(voice => voice is null || string.IsNullOrWhiteSpace(voice.Id) || voice.Name is null) ||
                 inventory.Packages.Any(package => package is null || string.IsNullOrWhiteSpace(package.Id) ||
@@ -55,6 +56,20 @@ public sealed class LocalVoiceLibrary(string? startDirectory = null,
 
     private sealed record Terminal(string Event, JsonElement Data, string Message);
 
+    public async Task SetDefaultAsync(string voiceId, string manifestFingerprint, string configFingerprint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(voiceId) || voiceId.Length > 256 ||
+            !ValidFingerprint(manifestFingerprint) || !ValidFingerprint(configFingerprint))
+            throw new VoiceLibraryException("Refresh the installed voices before selecting a service default.");
+        var result = await ExecuteAsync("set-default", ["--voice-id", voiceId,
+            "--manifest-fingerprint", manifestFingerprint, "--config-fingerprint", configFingerprint], null, cancellationToken).ConfigureAwait(false);
+        if (result.Event != "result") throw new VoiceLibraryException(result.Message);
+        if (result.Data.ValueKind != JsonValueKind.Object ||
+            !result.Data.TryGetProperty("voice_id", out var selected) || selected.ValueKind != JsonValueKind.String || selected.GetString() != voiceId ||
+            !result.Data.TryGetProperty("activation", out var activation) || activation.ValueKind != JsonValueKind.String || activation.GetString() != "restart_required")
+            throw new VoiceLibraryException("The saved service default could not be verified. Refresh before retrying.");
+    }
+
     private async Task<Terminal> ExecuteAsync(string command, IReadOnlyList<string> arguments,
         IProgress<VoiceInstallationProgress>? progress, CancellationToken cancellationToken)
     {
@@ -71,7 +86,7 @@ public sealed class LocalVoiceLibrary(string? startDirectory = null,
             start.StandardOutputEncoding = start.StandardErrorEncoding = Encoding.UTF8;
             using var process = Process.Start(start) ?? throw new VoiceLibraryException("The local model helper could not start.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(command == "list" ? readTimeout ?? TimeSpan.FromSeconds(20) : installTimeout ?? TimeSpan.FromMinutes(31));
+            timeout.CancelAfter(command == "install" ? installTimeout ?? TimeSpan.FromMinutes(31) : readTimeout ?? TimeSpan.FromSeconds(20));
             var cancelSent = 0;
             Task? cancelWrite = null;
             void CancelHelper()
@@ -125,7 +140,7 @@ public sealed class LocalVoiceLibrary(string? startDirectory = null,
             if (invalid || terminal is null || process.ExitCode != expected)
                 throw new VoiceLibraryException(command == "list"
                     ? "The local voice inventory could not be read. Check Python and refresh."
-                    : "The installer exited without a verified outcome. Refresh actual state before retrying.");
+                    : "The voice helper exited without a verified outcome. Refresh actual state before retrying.");
             return terminal;
         }
         finally { _gate.Release(); }
@@ -176,7 +191,7 @@ public sealed class LocalVoiceLibrary(string? startDirectory = null,
 
     public static ProcessStartInfo BuildStartInfo(string command, IReadOnlyList<string> arguments, string? startDirectory = null)
     {
-        if (command is not ("list" or "install")) throw new ArgumentOutOfRangeException(nameof(command));
+        if (command is not ("list" or "install" or "set-default")) throw new ArgumentOutOfRangeException(nameof(command));
         var launcher = ScheduledServiceController.FindLocalServiceLauncher(startDirectory ?? AppContext.BaseDirectory)
             ?? throw new VoiceLibraryException("The local TTS installation could not be found.");
         var root = launcher.Directory!.Parent!.Parent!.FullName;

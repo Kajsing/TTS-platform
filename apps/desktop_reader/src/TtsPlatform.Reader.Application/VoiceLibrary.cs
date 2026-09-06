@@ -21,7 +21,7 @@ public sealed record VoiceLibraryPackage(string Id, string Name, string Language
 
 public sealed record VoiceLibraryInventory(string CatalogFingerprint, string ManifestFingerprint,
     string? ConfiguredDefault, bool ConfigValid, IReadOnlyList<InstalledLibraryVoice> InstalledVoices,
-    IReadOnlyList<VoiceLibraryPackage> Packages);
+    IReadOnlyList<VoiceLibraryPackage> Packages, string? ConfigFingerprint = null);
 
 public sealed record VoiceInstallationProgress(string Phase, long? Completed, long? Total, bool Cancellable)
 {
@@ -48,6 +48,7 @@ public interface ILocalVoiceLibrary
     Task<VoiceLibraryInventory> ListAsync(CancellationToken cancellationToken);
     Task<VoiceInstallationOutcome> InstallAsync(string packageId, string catalogFingerprint,
         bool acceptedLicense, IProgress<VoiceInstallationProgress> progress, CancellationToken cancellationToken);
+    Task SetDefaultAsync(string voiceId, string manifestFingerprint, string configFingerprint, CancellationToken cancellationToken);
 }
 
 // Owned by the tray host, not a window. Closing/reopening the panel keeps the
@@ -133,6 +134,33 @@ public sealed class VoiceLibraryController(ILocalVoiceLibrary library)
         Message = "Cancellation requested. Waiting for the installer to finish safely; a commit already in progress will complete.";
         _operation!.Cancel();
         Notify();
+    }
+
+    public bool CanSetDefault(string? voiceId) => !IsBusy && Inventory is { ConfigValid: true, ConfigFingerprint.Length: 64 } &&
+        Inventory.InstalledVoices.Count(voice => voice.Id == voiceId) == 1 &&
+        Inventory.InstalledVoices.Any(voice => voice.Id == voiceId && voice.AssetsPresent && !voice.IsConfiguredDefault);
+
+    public async Task SetDefaultAsync(string voiceId)
+    {
+        if (!CanSetDefault(voiceId)) return;
+        var reviewed = Inventory!;
+        Begin(installing: false);
+        Message = "Saving the service default for the next restart. Current playback is unchanged…";
+        Notify();
+        try
+        {
+            await library.SetDefaultAsync(voiceId, reviewed.ManifestFingerprint, reviewed.ConfigFingerprint!, _operation!.Token);
+            Message = "Service default saved for the next explicit restart. Running speech and Reader's own voice preference are unchanged.";
+            try { Inventory = await library.ListAsync(CancellationToken.None); }
+            catch (Exception exception) when (IsExpected(exception))
+            { Inventory = null; Message += " Refresh to confirm the saved setting."; }
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            Inventory = null;
+            Message = SafeMessage(exception) + " Refresh before retrying.";
+        }
+        finally { End(); }
     }
 
     public void OwnerClosing() => _operation?.Cancel();
