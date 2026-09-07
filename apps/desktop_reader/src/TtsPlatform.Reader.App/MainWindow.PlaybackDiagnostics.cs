@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using TtsPlatform.Reader.Application;
+using TtsPlatform.Reader.Client;
 
 namespace TtsPlatform.Reader.App;
 
@@ -9,6 +10,18 @@ public partial class MainWindow
 {
     private PlaybackInteractionTrace? _interactionTrace;
     private PlaybackInterruptionKind _diagnosticInterruption;
+
+    private void RecordDocumentOperation(string operation, string documentId, Exception? error = null)
+    {
+        try
+        {
+            _playbackPerformance?.Record(new PlaybackPerformanceEvent(
+                error is null ? "document_operation_completed" : "document_operation_failed",
+                DocumentId: documentId, Operation: operation,
+                ErrorCategory: error?.GetType().Name, StatusCode: (error as ReaderApiException)?.StatusCode));
+        }
+        catch (Exception) { /* Diagnostics must not change document operations. */ }
+    }
 
     private void InitializePlaybackDiagnostics()
     {

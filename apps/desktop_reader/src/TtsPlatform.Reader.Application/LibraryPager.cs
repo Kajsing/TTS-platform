@@ -5,6 +5,14 @@ namespace TtsPlatform.Reader.Application;
 
 public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
 {
+    private readonly HashSet<string> _removedDocumentIds = new(StringComparer.Ordinal);
+
+    public void RemoveDocument(string documentId)
+    {
+        _removedDocumentIds.Add(documentId);
+        var removed = Documents.FirstOrDefault(item => item.Id == documentId);
+        if (removed is not null) Documents.Remove(removed);
+    }
     private string? _nextCursor;
     private string? _query;
     private string? _state;
@@ -29,7 +37,8 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
     }
 
     private bool IsVisible(ReaderDocument document) =>
-        document.FolderId is null || !_closedFolderIds.Contains(document.FolderId);
+        document.DeletedAt is null && !_removedDocumentIds.Contains(document.Id) &&
+        (document.FolderId is null || !_closedFolderIds.Contains(document.FolderId));
 
     private async Task<DocumentPage> ReadVisiblePageAsync(
         string? cursor, string? query, string? state, string? folderId,

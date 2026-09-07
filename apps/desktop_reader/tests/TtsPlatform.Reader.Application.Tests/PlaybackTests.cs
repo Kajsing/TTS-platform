@@ -8,6 +8,35 @@ namespace TtsPlatform.Reader.Application.Tests;
 
 public sealed class PlaybackTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Leaving_an_active_or_paused_article_preserves_position_and_detaches_it(bool pauseFirst)
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(request => SessionWithPackets(request, includeSecondPacket: true),
+            request => CompletedSession(request));
+        var audio = new FakeAudioOutput(blockCall: 2);
+        await using var playback = new ReaderPlaybackCoordinator(service, streams, audio);
+        await playback.PlayAsync(Document());
+        await audio.WaitForCallAsync(2);
+        if (pauseFirst) await playback.PauseAsync();
+        await playback.LeaveDocumentAsync();
+        Assert.Equal(3, service.SavedPositions.Last().Cursor.CharacterOffset);
+        Assert.Equal(ReaderPlaybackState.Stopped, playback.State);
+        Assert.Null(playback.DocumentId);
+        Assert.Null(playback.LastFullyPlayedCursor);
+        var saves = service.SavedPositions.Count;
+        await playback.StopAsync();
+        await playback.LeaveDocumentAsync();
+        Assert.Equal(saves, service.SavedPositions.Count);
+        var saved = service.SavedPositions.Last();
+        service.Position = new ReaderPosition("doc", saved.Cursor, null, 1, 1, DateTimeOffset.UtcNow, false, saves);
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => streams.Requests.Count == 2);
+        Assert.Equal(3, streams.Requests.Last().Cursor.CharacterOffset);
+    }
+
     [Fact]
     public async Task Position_rate_limit_records_the_failed_operation_without_changing_fault_semantics()
     {
@@ -426,7 +455,7 @@ public sealed class PlaybackTests
     private sealed class PlaybackService : IReaderServiceClient
     {
         public List<SavePositionRequest> SavedPositions { get; } = [];
-        public ReaderPosition? Position { get; init; }
+        public ReaderPosition? Position { get; set; }
         public Exception? SaveError { get; set; }
 
         public Task<ReaderPosition?> GetPositionAsync(

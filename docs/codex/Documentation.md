@@ -4,7 +4,34 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-06
+- Date: 2026-09-07
+- Current user-requested reliability slice: article switching/deletion during
+  playback. The field trace proves DocumentLoad issued a rewinding Stop at
+  17:54:15 local time; the deletion itself succeeded at 17:54:20 while the UI
+  later showed a stale selection/editor and a revision-conflict footer. A
+  consistent offline SQLite backup passed integrity validation before cleanup.
+  The user closed Reader/tray/service and authorized removing both articles;
+  one was already soft-deleted, and the remaining article was soft-deleted via
+  the existing repository operation. Active article count is zero, integrity OK.
+  This is an empty library, not a destructive reset of historical rows, folders,
+  grants, rules, model state or settings. Backup is under the per-user Reader
+  `backups/2026-09-07-before-article-cleanup.db`; the original trace is copied to
+  ignored `logs/article-switch-20260907/`.
+  Implemented: preserve-and-detach on navigation/close/service/privacy stop;
+  explicit user Stop still rewinds. Fresh, bounded, revision-checked snapshots
+  replace the editor atomically with generation checks. Failed loads retain
+  the complete previous editor and restore its selection. Delete is guarded
+  before/after confirmation and while in flight; successful deletions stay
+  removed even across failed/late refreshes. Added private-content-free operation
+  records and unit/WPF race tests. Validation passed: 285 .NET tests, 626 Python
+  tests (2 optional skips), Ruff, scoped format, zero-warning build/publish and
+  isolated live-HTTP/portable WPF checks. The exact root-shortcut win-x64 binary
+  also passed `document_switch_safety` and lifecycle/input smoke. No physical
+  audio/game-click reproduction was performed; the historical stall's exact
+  duration/cause remains unproven. Reader/service are left closed. See
+  `.logs/2026-09-07-reader-document-switch.md` for the acceptance evidence.
+  The chapter feature is planning only: automatic continuation is confirmed in
+  `docs/reader_chapters_plan.md`. U8 stays parked. No new goal was created.
 - Completed user-requested slice: trace unexpected playback pauses/stops while
   switching to another window. Added typed command-origin and local WPF input/
   focus/capture observations to the existing bounded JSONL, plus explicit

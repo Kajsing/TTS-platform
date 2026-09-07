@@ -422,7 +422,7 @@ public partial class MainWindow : Window
         _shutdownInProgress = true;
         try
         {
-            if (_documentLoadLock.CurrentCount == 0 || _clipboardPromptOpen)
+            if (_documentLoadLock.CurrentCount == 0 || _documentMutationInProgress || _clipboardPromptOpen)
             {
                 FooterText.Text = "Finish the current document operation before closing Reader.";
                 return false;
@@ -573,7 +573,7 @@ public partial class MainWindow : Window
     internal async Task<bool> PrepareLocalServiceOperationAsync()
     {
         if (!_settings.ActiveConnection.IsLocal || _closed) return true;
-        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 ||
+        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 || _documentMutationInProgress ||
             _clipboardPromptOpen ||
             OwnedWindows.Cast<Window>().Any(window => window != _compactController && window.IsVisible))
         {
@@ -609,7 +609,7 @@ public partial class MainWindow : Window
             _playback?.IsActive == true || _playback?.IsTransitioning == true || _playback?.State == ReaderPlaybackState.Paused ||
             _audioInterruptionActive || _automaticPauseKind != AutomaticPauseKind.None)
             return "Stop Reader playback first, including paused reading. Voice preview will not move its position or interrupt a call/alarm.";
-        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 || _autoAdvanceLock.CurrentCount == 0 ||
+        if (_localServiceOperation || _documentLoadLock.CurrentCount == 0 || _documentMutationInProgress || _autoAdvanceLock.CurrentCount == 0 ||
             _clipboardPromptOpen || OwnedWindows.Cast<Window>().Any(window => window != _compactController && window.IsVisible))
             return "Finish the open Reader operation before previewing a voice.";
         _localServiceOperation = true; // Also guards remote-workspace Reader audio on this computer.
@@ -625,7 +625,8 @@ public partial class MainWindow : Window
     {
         // Recheck after callers' awaited metadata/page loads, immediately before
         // the coordinator enters its observable transition lock.
-        if (PlaybackBlockedByAudioInterruption() || _playback is null) return;
+        if (PlaybackBlockedByAudioInterruption() || _playback is null || _documentReloadInProgress ||
+            _documentMutationInProgress || _editor?.Document?.Id != document.Id) return;
         if (seek && startCursor is not null) await _playback.SeekAsync(document, startCursor, voice);
         else await _playback.PlayAsync(document, voice, startCursor);
     }
@@ -638,7 +639,7 @@ public partial class MainWindow : Window
             _desktopPollingBeforeServiceOperation = false;
             _desktopOpenTimer.Stop();
         }
-        if (_editor?.HasUnsavedChanges == true || _documentLoadLock.CurrentCount == 0 || _clipboardPromptOpen)
+        if (_editor?.HasUnsavedChanges == true || _documentLoadLock.CurrentCount == 0 || _documentMutationInProgress || _clipboardPromptOpen)
         {
             // A connection/library refresh can rebuild the visible document or
             // relock privacy folders. Keep the draft until its normal save flow.
@@ -1817,6 +1818,7 @@ public partial class MainWindow : Window
     private async Task ToggleUnifiedPlaybackAsync(PlaybackCommandSource source)
     {
         TracePlaybackCommand(PlaybackUiCommand.PlayPause, source);
+        if (_documentReloadInProgress || _documentMutationInProgress) return;
         if (PlaybackBlockedByAudioInterruption())
         {
             return;
@@ -1848,7 +1850,11 @@ public partial class MainWindow : Window
         await StopEphemeralAsync(clearReplay: true);
         if (_playback is not null)
         {
-            await _playback.StopAsync();
+            if (source is PlaybackCommandSource.ReaderClose or PlaybackCommandSource.ServiceOperation or
+                PlaybackCommandSource.PrivacySessionEnded)
+                await _playback.LeaveDocumentAsync();
+            else
+                await _playback.StopAsync();
         }
         SetEphemeralState("Stopped", playing: false);
     }
@@ -2282,11 +2288,29 @@ public partial class MainWindow : Window
     }
 
     private bool _documentReloadInProgress;
+    private bool _documentMutationInProgress;
+
+    private void RestoreDisplayedDocumentSelection()
+    {
+        var suppressed = _suppressDocumentSelectionLoad;
+        _suppressDocumentSelectionLoad = true;
+        try
+        {
+            DocumentsGrid.SelectedItem = _library?.Documents.FirstOrDefault(item => item.Id == _editor?.Document?.Id);
+        }
+        finally { _suppressDocumentSelectionLoad = suppressed; }
+    }
 
     private async Task LoadDocumentAsync(ReaderDocument document, ReaderDocument? expectedDisplayedDocument = null)
     {
+        if (_documentMutationInProgress)
+        {
+            RestoreDisplayedDocumentSelection();
+            return;
+        }
         if (!IsFolderOpen(document.FolderId))
         {
+            RestoreDisplayedDocumentSelection();
             FooterText.Text = "This folder is closed. Check Open in Article folders to show its articles.";
             return;
         }
@@ -2313,7 +2337,8 @@ public partial class MainWindow : Window
                 }
                 _documentReloadInProgress = true;
                 UpdateEditorButtons();
-                await LoadDocumentCoreAsync(document);
+                UpdatePlaybackControls();
+                await LoadDocumentCoreAsync(document, loadGeneration);
                 return;
             }
             catch (ReaderApiException exception) when (
@@ -2322,19 +2347,32 @@ public partial class MainWindow : Window
                 retryRateLimit = true;
             }
             catch (Exception exception) when (
-                exception is ReaderApiException or ReaderServiceUnavailableException)
+                exception is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
             {
-                FooterText.Text = $"Document: {exception.Message}";
+                if (loadGeneration == _documentLoadGeneration)
+                {
+                    if (exception is ReaderApiException { StatusCode: 404 })
+                    {
+                        if (_editor.Document?.Id == document.Id && !_editor.HasUnsavedChanges)
+                            ClearDocumentDisplay();
+                        _library?.RemoveDocument(document.Id);
+                    }
+                    RestoreDisplayedDocumentSelection();
+                    FooterText.Text = $"Document: {exception.Message}";
+                    RecordDocumentOperation("load_document", document.Id, exception);
+                }
                 return;
             }
             finally
             {
                 _documentReloadInProgress = false;
-                UpdateEditorButtons();
                 _documentLoadLock.Release();
+                UpdateEditorButtons();
+                UpdatePlaybackControls();
             }
             if (retryRateLimit)
             {
+                RestoreDisplayedDocumentSelection();
                 FooterText.Text =
                     "The local service is temporarily busy. The document is not locked; Reader will retry automatically in one minute.";
                 await Task.Delay(DocumentRateLimitRetryDelay);
@@ -2342,11 +2380,16 @@ public partial class MainWindow : Window
                 {
                     return;
                 }
+                if (_editor.HasUnsavedChanges)
+                {
+                    FooterText.Text = "Automatic reload cancelled to preserve your edit. Select the article again when ready.";
+                    return;
+                }
             }
         }
     }
 
-    private async Task LoadDocumentCoreAsync(ReaderDocument document)
+    private async Task LoadDocumentCoreAsync(ReaderDocument document, int loadGeneration)
     {
         if (_editor is null)
         {
@@ -2354,37 +2397,37 @@ public partial class MainWindow : Window
         }
         try
         {
-            CancelFindWork(clearHighlights: true);
-            _findDocument = null;
-            if (_playback?.IsActive == true)
+            CancelAutomaticInterruptionResume();
+            if (_playback?.DocumentId is not null)
             {
                 TracePlaybackCommand(PlaybackUiCommand.Stop, PlaybackCommandSource.DocumentLoad);
-                await _playback.StopAsync();
+                await _playback.LeaveDocumentAsync();
             }
 
-            _continuousDocument = null;
-            await LoadContinuousDocumentAsync(document);
-            ReadingWindowPage? readingPage = null;
-            if (_continuousDocument is not null)
+            var loaded = await new ReaderDocumentLoader(GetClient(),
+                ContinuousEditorMaxCharacters, ContinuousEditorMaxBlocks).LoadAsync(document.Id);
+            if (_closed || loadGeneration != _documentLoadGeneration || !IsFolderOpen(loaded.Document.FolderId))
             {
-                _editor.LoadBlock(document, _continuousDocument.Blocks.FirstOrDefault());
-                readingPage = _readingWindow?.UseLoadedDocument(
-                    document.Id,
-                    _continuousDocument.Blocks);
+                if (!_closed && loadGeneration == _documentLoadGeneration) RestoreDisplayedDocumentSelection();
+                return;
             }
-            else if (_readingWindow is not null)
-            {
-                readingPage = await _readingWindow.LoadAsync(document.Id, 0);
-                _editor.LoadBlock(document, readingPage.Blocks.FirstOrDefault());
-            }
-            else
-            {
-                await _editor.LoadAsync(document);
-            }
-            if (readingPage is not null)
-            {
-                await ShowReadingPageAsync(readingPage);
-            }
+
+            // Only publish a fully loaded, still-current snapshot. A failed or
+            // superseded request must not mix the old editor with another row.
+            document = loaded.Document;
+            CancelFindWork(clearHighlights: true);
+            _findDocument = null;
+            ClearWordHighlights();
+            _continuousHighlightAdorner?.Clear();
+            _continuousDocument = loaded.ContinuousText;
+            _readingWindow = loaded.ReadingWindow;
+            _editor.LoadBlock(document, loaded.Page.Blocks.FirstOrDefault());
+            await ShowReadingPageAsync(loaded.Page);
+
+            var suppressed = _suppressDocumentSelectionLoad;
+            _suppressDocumentSelectionLoad = true;
+            try { _library?.ReplaceDocument(document); RestoreDisplayedDocumentSelection(); }
+            finally { _suppressDocumentSelectionLoad = suppressed; }
 
             _textCursor = null;
             _updatingEditor = true;
@@ -2404,6 +2447,7 @@ public partial class MainWindow : Window
             UpdateEditorButtons();
             UpdatePlaybackControls();
             ScheduleFindRefresh();
+            RecordDocumentOperation("load_document", document.Id);
             await RefreshWordHighlightsAsync();
         }
         finally
@@ -2533,7 +2577,7 @@ public partial class MainWindow : Window
 
     private async void DeleteDocumentButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_editor?.Document is not ReaderDocument document || _playback?.IsActive == true)
+        if (_editor?.Document is not ReaderDocument document || !CanDeleteDisplayedDocument(document))
         {
             return;
         }
@@ -2541,8 +2585,8 @@ public partial class MainWindow : Window
         var unsavedWarning = _editor.HasUnsavedChanges
             ? "\n\nYour unsaved text changes will also be discarded."
             : string.Empty;
-        var choice = MessageBox.Show(
-            "Delete this article from the Reader library?\n\n" +
+        var choice = MessageBox.Show(this,
+            $"Delete “{document.Title}” from the Reader library?\n\n" +
             "It will also be removed from the reading queue. The original imported file will not be deleted." +
             unsavedWarning,
             "Delete article",
@@ -2554,17 +2598,41 @@ public partial class MainWindow : Window
             return;
         }
 
+        await DeleteDisplayedDocumentAsync(document);
+    }
+
+    private bool CanDeleteDisplayedDocument(ReaderDocument document) =>
+        !_documentReloadInProgress && !_documentMutationInProgress &&
+        _documentLoadLock.CurrentCount != 0 && _playback?.IsActive != true &&
+        _editor?.Document is ReaderDocument displayed && ReaderDocumentVersions.AreSame(displayed, document) &&
+        (DocumentsGrid.SelectedItem is not ReaderDocument selected || selected.Id == document.Id);
+
+    private async Task DeleteDisplayedDocumentAsync(ReaderDocument document)
+    {
+        // Recheck after the confirmation's nested dispatcher loop, then prevent
+        // another selection/delete from racing this versioned mutation.
+        if (!CanDeleteDisplayedDocument(document)) return;
+        _documentMutationInProgress = true;
+        ++_documentLoadGeneration;
+        UpdateEditorButtons();
+        UpdatePlaybackControls();
+        var deleted = false;
         try
         {
+            CancelAutomaticInterruptionResume();
+            if (_playback?.DocumentId is not null) await _playback.LeaveDocumentAsync();
             await GetClient().DeleteDocumentAsync(document.Id, document.RowVersion);
             DocumentsGrid.SelectedItem = null;
             ClearDocumentDisplay();
+            // Remove locally before refreshing: a failed refresh must never
+            // leave an actionable ghost for an already successful deletion.
+            _library?.RemoveDocument(document.Id);
             await RefreshLibraryAsync();
-            if (_library?.Documents.FirstOrDefault() is ReaderDocument next)
-            {
-                DocumentsGrid.SelectedItem = next;
-            }
-            FooterText.Text = "Article deleted from the Reader library.";
+            deleted = true;
+            RecordDocumentOperation("delete_document", document.Id);
+            FooterText.Text = _library?.LastError is null
+                ? "Article deleted from the Reader library."
+                : "Article deleted. The remaining library could not be refreshed; use Search to retry.";
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -2572,7 +2640,16 @@ public partial class MainWindow : Window
                 ReaderTokenUnavailableException)
         {
             FooterText.Text = $"Delete article: {exception.Message}";
+            RecordDocumentOperation("delete_document", document.Id, exception);
         }
+        finally
+        {
+            _documentMutationInProgress = false;
+            UpdateEditorButtons();
+            UpdatePlaybackControls();
+        }
+        if (deleted && _library?.Documents.FirstOrDefault() is ReaderDocument next)
+            DocumentsGrid.SelectedItem = next;
     }
 
     private async void RenameDocumentButton_Click(object sender, RoutedEventArgs e)
@@ -2632,6 +2709,8 @@ public partial class MainWindow : Window
         ClearWordHighlights();
         _editor?.Clear();
         _continuousDocument = null;
+        _readingWindow = _client is null ? null : new ReadingWindowPager(_client);
+        _continuousHighlightAdorner?.Clear();
         _textCursor = null;
         _readingBlocks.Clear();
         _updatingEditor = true;
@@ -3019,7 +3098,10 @@ public partial class MainWindow : Window
     private void UpdateEditorButtons()
     {
         var editable = _editor?.IsEditable == true && _continuousDocument is not null;
-        var playbackActive = _playback?.IsActive == true || _documentReloadInProgress;
+        var playbackActive = _playback?.IsActive == true || _documentReloadInProgress || _documentMutationInProgress;
+        DocumentsGrid.IsEnabled = !_documentMutationInProgress;
+        MoveArticlesButton.IsEnabled = !playbackActive && _playback?.State != ReaderPlaybackState.Paused &&
+            DocumentsGrid.SelectedItems.Count > 0;
         EditorTextBox.IsReadOnly = playbackActive || !editable;
         SaveEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
         RevertEditButton.IsEnabled = editable && !playbackActive && _editor!.HasUnsavedChanges;
@@ -3027,10 +3109,10 @@ public partial class MainWindow : Window
         RedoButton.IsEnabled = editable && !playbackActive && !_editor!.HasUnsavedChanges;
         var document = _editor?.Document;
         RenameDocumentButton.IsEnabled = document is not null && !playbackActive;
-        DeleteDocumentButton.IsEnabled = document is not null && !playbackActive;
-        FinishDocumentButton.IsEnabled = document is not null && document.State != "finished";
-        ArchiveDocumentButton.IsEnabled = document is not null && document.State != "archived";
-        RestoreDocumentButton.IsEnabled = document is not null &&
+        DeleteDocumentButton.IsEnabled = document is not null && CanDeleteDisplayedDocument(document);
+        FinishDocumentButton.IsEnabled = document is not null && !playbackActive && document.State != "finished";
+        ArchiveDocumentButton.IsEnabled = document is not null && !playbackActive && document.State != "archived";
+        RestoreDocumentButton.IsEnabled = document is not null && !playbackActive &&
             document.State is "archived" or "finished";
     }
 
@@ -3088,6 +3170,7 @@ public partial class MainWindow : Window
     private async void PlayFromCursorButton_Click(object sender, RoutedEventArgs e)
     {
         TracePlaybackCommand(PlaybackUiCommand.StartAtCursor, PlaybackCommandSource.MainButton);
+        if (_documentReloadInProgress || _documentMutationInProgress) return;
         if (PlaybackBlockedByAudioInterruption())
         {
             return;
@@ -3181,6 +3264,7 @@ public partial class MainWindow : Window
 
     private async Task NavigateSectionAsync(bool next)
     {
+        if (_documentReloadInProgress || _documentMutationInProgress) return;
         if (_playback is null ||
             _readingWindow is null ||
             _editor?.Document is not ReaderDocument document)
@@ -3274,6 +3358,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(async () =>
         {
+            if (change.DocumentId is not null && change.DocumentId != _editor?.Document?.Id) return;
             PlaybackStatusText.Text = change.Message is null
                 ? change.State.ToString()
                 : $"{change.State}: {change.Message}";
@@ -3649,7 +3734,8 @@ public partial class MainWindow : Window
 
     private async Task ShowHighlightAsync(PlaybackHighlight highlight)
     {
-        if (_editor?.Document is not ReaderDocument document ||
+        if (_documentReloadInProgress || _documentMutationInProgress ||
+            _editor?.Document is not ReaderDocument document ||
             !string.Equals(document.Id, highlight.DocumentId, StringComparison.Ordinal) ||
             highlight.SourceSpans.Count == 0 ||
             _playback?.IsActive != true)
@@ -3670,6 +3756,8 @@ public partial class MainWindow : Window
             var page = await _readingWindow.FollowPlaybackAsync(
                 document.Id,
                 firstSpan.BlockOrdinal);
+            if (_documentReloadInProgress || _documentMutationInProgress || _editor?.Document?.Id != document.Id)
+                return;
             if (page.StartOrdinal != priorStartOrdinal || _readingBlocks.Count == 0)
             {
                 await ShowReadingPageAsync(page);
@@ -4213,8 +4301,10 @@ public partial class MainWindow : Window
         PlayPauseLabel.Text = pauseVisible ? "Pause" : "Play";
         PlayPauseIcon.Data = (Geometry)FindResource(
             pauseVisible ? "PauseGeometry" : "PlayGeometry");
-        PlayPauseButton.IsEnabled = hasDocument || _ephemeralPlaying || ephemeralPaused;
+        var documentBusy = _documentReloadInProgress || _documentMutationInProgress;
+        PlayPauseButton.IsEnabled = !documentBusy && (hasDocument || _ephemeralPlaying || ephemeralPaused);
         PlayFromCursorButton.IsEnabled = continuousEditableDocument &&
+            !documentBusy &&
             !documentActive &&
             !_ephemeralPlaying &&
             !ephemeralPaused &&
@@ -4229,9 +4319,11 @@ public partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         PreviousSectionButton.IsEnabled = showSectionNavigation &&
+            !documentBusy &&
             !_ephemeralPlaying &&
             !ephemeralPaused;
         NextSectionButton.IsEnabled = showSectionNavigation &&
+            !documentBusy &&
             !_ephemeralPlaying &&
             !ephemeralPaused;
         var showContinuousEditor = continuousEditableDocument;

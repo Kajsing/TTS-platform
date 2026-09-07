@@ -19,6 +19,14 @@ public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize
 
     public ReadingWindowPage Current { get; private set; } = new([], 0, null);
 
+    public ReadingWindowPage UsePage(ReadingWindowPage page)
+    {
+        _loadedDocumentId = null;
+        _loadedBlocks = null;
+        Current = page;
+        return Current;
+    }
+
     public ReadingWindowPage UseLoadedDocument(
         string documentId,
         IReadOnlyList<ReaderBlock> blocks,

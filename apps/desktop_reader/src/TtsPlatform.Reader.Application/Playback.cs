@@ -142,6 +142,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
 
     public ReaderPlaybackState State { get; private set; } = ReaderPlaybackState.Stopped;
     public string? DiagnosticRunId => _runId;
+    public string? DocumentId => _document?.Id;
     public ReaderCursor? LastFullyPlayedCursor => _lastFullyPlayedCursor;
     public bool IsActive => State == ReaderPlaybackState.Playing;
     public bool IsTransitioning => _transitionLock.CurrentCount == 0;
@@ -224,6 +225,11 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             ReaderPlaybackState.Stopped,
             restartFromBeginning: true,
             cancellationToken);
+
+    // Navigation/close is not the user's explicit Stop-and-rewind command.
+    public Task LeaveDocumentAsync(CancellationToken cancellationToken = default) =>
+        InterruptAsync(ReaderPlaybackState.Stopped, restartFromBeginning: false,
+            cancellationToken, releaseDocument: true);
 
     public async Task SeekAsync(
         ReaderDocument document,
@@ -551,7 +557,8 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
     private async Task InterruptAsync(
         ReaderPlaybackState requestedState,
         bool restartFromBeginning,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool releaseDocument = false)
     {
         Task? runTask;
         IReaderStreamSession? session;
@@ -576,6 +583,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                         cancellationToken).ConfigureAwait(false);
                 }
                 SetState(requestedState, idlePositionMessage);
+                if (releaseDocument) ClearPlaybackDocument();
                 return;
             }
 
@@ -597,24 +605,28 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             }
             AcknowledgePlayedAudio();
             await _audioOutput.StopAsync(cancellationToken).ConfigureAwait(false);
+            // Keep another Play/Stop from taking ownership before the old run's
+            // final position has been saved and its document has been detached.
+            try { await runTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* The requested transition. */ }
+            var positionMessage = await PersistInterruptedPositionAsync(
+                restartFromBeginning, cancellationToken).ConfigureAwait(false);
+            SetState(requestedState, positionMessage);
+            if (releaseDocument) ClearPlaybackDocument();
         }
-        finally
-        {
-            _transitionLock.Release();
-        }
+        finally { _transitionLock.Release(); }
+    }
 
-        try
-        {
-            await runTask.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // The cancellation is the requested transition.
-        }
-        var positionMessage = await PersistInterruptedPositionAsync(
-            restartFromBeginning,
-            cancellationToken).ConfigureAwait(false);
-        SetState(requestedState, positionMessage);
+    private void ClearPlaybackDocument()
+    {
+        _document = null;
+        _lastFullyPlayedCursor = null;
+        _positionRowVersion = null;
+        _positionCompleted = false;
+        _runTask = null;
+        _runCancellation?.Dispose();
+        _runCancellation = null;
+        ClearPendingAudioProgress();
     }
 
     private async Task<string?> PersistInterruptedPositionAsync(

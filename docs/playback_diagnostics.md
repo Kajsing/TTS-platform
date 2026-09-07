@@ -82,6 +82,24 @@ metadata and should be treated as private when shared.
 
 ## When a playback problem happens
 
+### Document navigation and deletion (2026-09-07)
+
+`document_operation_completed` and `document_operation_failed` identify bounded
+`load_document` / `delete_document` outcomes using document ID, exception category
+and HTTP status only. No article title/text or server exception message is logged.
+
+Navigation, Reader close, service lifecycle preparation and privacy-session end
+preserve the last heard cursor and detach the old playback document. The explicit
+Stop button/hotkey still rewinds. A `DocumentLoad` command labelled `Stop` is now
+followed by `playback_interrupt_requested` with `restart_from_beginning: false`.
+
+After a failed load the previous complete editor remains intact and its matching
+library selection is restored (or unselected when outside the current filter).
+Late/superseded loads cannot publish their content. A confirmed deletion is removed
+locally even if the following library refresh fails, including late list responses.
+
+### Reporting a new incident
+
 Note the local time and briefly record what happened and which control you used.
 The Reader can keep running. When the problem is ready for investigation, keep
 both JSONL files and share them together with the approximate time. Playback
