@@ -79,6 +79,12 @@ fails safely without an unrequested automatic restart.
 
 ## Remaining field check
 
+Publication initially met a non-fast-forward push: another installation had
+added three documentation-only commits (`7f32c42`, `43124ea`, `748b2d1`). Merged
+both sets of status notes, explicitly distinguishing the work-PC configuration
+from this checkout. No source or published binary changed during that merge;
+the user's installed-voice manifest remains uncommitted and untouched.
+
 Use the root shortcut normally. Test manual pause, automatic call/alarm pause,
 and completion while partway/down the end of an article; the visible mark and
 viewport should stay put. Then try the ordinary pause -> sleep -> wake -> Play

@@ -5,7 +5,8 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-08
-- Completed user-approved pause/sleep reliability run. Pause (including the
+- Completed user-approved pause/sleep reliability run on `C:\project\TTS-platform`.
+  Pause (including the
   automatic interruption path), completion and faults retain the audible marker
   and viewport. Playing no longer moves the editing caret/selection; Stop clears
   the marker without scrolling, and edits/document replacement invalidate it.
@@ -28,6 +29,46 @@ This file is the live status log and shared memory for future Codex loops.
   driver failure was not observed. Service Center's separate 429 is not fixed
   here. Chapters remain planning-only for the next separate run; U8 stays parked.
   See `.logs/2026-09-08-reader-pause-sleep.md`. No new app goal was requested.
+- Work-PC playback-rate follow-up (`C:\home\TTS-platform`): diagnosed the shared 30/minute loopback budget
+  against up to one position save/second plus status and handoff polling.
+  Changed only that installation's `config/config.toml` to 120/minute. Isolated
+  HTTP/Reader-stream comparison reproduces rejection at 30 and passes 80 calls
+  plus streamed PCM at 120; the new cap remains enforced. Five focused API
+  security tests pass. Service Center restart/user confirmation are pending.
+  See `.logs/2026-09-08-reader-local-rate-budget.md`; shared defaults and
+  application source are unchanged.
+- Follow-up to the work-PC installation: the initial checks ran elevated and
+  did not prove ordinary Explorer-launched use. A normal-user probe could read
+  the service token but could not see the settings file created in the elevated
+  session. The normal service launcher then failed with WinError 5 because the
+  installed Kokoro package had a protected owner/SYSTEM/Administrators DACL and
+  an Administrators owner. Created the Reader connection in the ordinary user
+  context and added an inheritable Modify grant for that user only on the
+  installed Kokoro package. Ordinary-user service startup, ownership, HTTP/job/
+  stream synthesis and a non-silent 3.10-second WAV now pass. The user reopened
+  Reader and confirmed Ready. Service and Reader remain in the ordinary session;
+  application source and company security policy were not changed. The initial
+  50-ms job-poll smoke hit the existing 30/minute rate limit; after its window
+  expired, `--poll-interval-ms 1000` passed without changing that limit. Details
+  and evidence are appended to `.logs/2026-09-08-local-tray-install.md`.
+- Completed local build/install request on `C:\home\TTS-platform`: published a
+  self-contained Windows x64 Reader to `dist/windows/TTSPlatform.Reader` and
+  created root `TTS Platform Tray.lnk` with `--background`. The shortcut was
+  launched twice and verified to retain one process without a main window.
+  Provisioned `.venv` with the real runtime and the user's selected Kokoro
+  `af_heart`, configured Reader's token-file connection, and started the loopback
+  service through its existing ownership-aware desktop controller. Both service
+  and tray are left running. Current readiness, authenticated ownership, HTTP,
+  job and streaming synthesis passed; a 4.59-second non-silent WAV was generated.
+  Build/publish, 285 .NET tests, 625 Python tests (3 optional skips), Ruff,
+  isolated live Reader/portable WPF checks and exact-target tray lifecycle passed.
+  Local FastAPI is pinned to 0.136.3; the base Python tests use a separate
+  environment without the real runtime. The publisher replaced the Kokoro
+  archive today, so installation used an ignored local catalog with the fresh
+  publisher SHA-256 and size, retaining checksum enforcement. Model files,
+  installed MANIFEST changes, config, settings, shortcut and binaries are local;
+  no application source, Windows autostart or remote-access settings changed.
+  See `.logs/2026-09-08-local-tray-install.md` for commands and limitations.
 - Completed Sep 7 reliability slice: article switching/deletion during
   playback. The field trace proves DocumentLoad issued a rewinding Stop at
   17:54:15 local time; the deletion itself succeeded at 17:54:20 while the UI
