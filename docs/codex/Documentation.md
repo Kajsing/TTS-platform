@@ -5,6 +5,14 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-08
+- Local playback-rate follow-up: diagnosed the shared 30/minute loopback budget
+  against up to one position save/second plus status and handoff polling.
+  Changed only this machine's `config/config.toml` to 120/minute. Isolated
+  HTTP/Reader-stream comparison reproduces rejection at 30 and passes 80 calls
+  plus streamed PCM at 120; the new cap remains enforced. Five focused API
+  security tests pass. Service Center restart/user confirmation are pending.
+  See `.logs/2026-09-08-reader-local-rate-budget.md`; shared defaults and
+  application source are unchanged.
 - Follow-up to the work-PC installation: the initial checks ran elevated and
   did not prove ordinary Explorer-launched use. A normal-user probe could read
   the service token but could not see the settings file created in the elevated
