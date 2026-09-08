@@ -4,7 +4,25 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-07
+- Date: 2026-09-08
+- Completed local build/install request on `C:\home\TTS-platform`: published a
+  self-contained Windows x64 Reader to `dist/windows/TTSPlatform.Reader` and
+  created root `TTS Platform Tray.lnk` with `--background`. The shortcut was
+  launched twice and verified to retain one process without a main window.
+  Provisioned `.venv` with the real runtime and the user's selected Kokoro
+  `af_heart`, configured Reader's token-file connection, and started the loopback
+  service through its existing ownership-aware desktop controller. Both service
+  and tray are left running. Current readiness, authenticated ownership, HTTP,
+  job and streaming synthesis passed; a 4.59-second non-silent WAV was generated.
+  Build/publish, 285 .NET tests, 625 Python tests (3 optional skips), Ruff,
+  isolated live Reader/portable WPF checks and exact-target tray lifecycle passed.
+  Local FastAPI is pinned to 0.136.3; the base Python tests use a separate
+  environment without the real runtime. The publisher replaced the Kokoro
+  archive today, so installation used an ignored local catalog with the fresh
+  publisher SHA-256 and size, retaining checksum enforcement. Model files,
+  installed MANIFEST changes, config, settings, shortcut and binaries are local;
+  no application source, Windows autostart or remote-access settings changed.
+  See `.logs/2026-09-08-local-tray-install.md` for commands and limitations.
 - Current user-requested reliability slice: article switching/deletion during
   playback. The field trace proves DocumentLoad issued a rewinding Stop at
   17:54:15 local time; the deletion itself succeeded at 17:54:20 while the UI
