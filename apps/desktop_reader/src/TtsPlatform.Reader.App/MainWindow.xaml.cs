@@ -1753,12 +1753,13 @@ public partial class MainWindow : Window
                 InvalidDataException or
                 ArgumentOutOfRangeException or
                 InvalidOperationException or
-                NotSupportedException)
+                NotSupportedException or AudioOutputException)
         {
             SetEphemeralState($"Clipboard playback failed: {exception.Message}", playing: false);
         }
         finally
         {
+            await audio.StopAsync();
             if (ReferenceEquals(_ephemeralCancellation, cancellation))
             {
                 _ephemeralPlaying = false;
@@ -3358,6 +3359,8 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(async () =>
         {
+            if (sender is ReaderPlaybackCoordinator source &&
+                (!ReferenceEquals(source, _playback) || source.State != change.State)) return;
             if (change.DocumentId is not null && change.DocumentId != _editor?.Document?.Id) return;
             PlaybackStatusText.Text = change.Message is null
                 ? change.State.ToString()
@@ -3365,11 +3368,7 @@ public partial class MainWindow : Window
             FooterText.Text = change.Message ?? $"Playback {change.State.ToString().ToLowerInvariant()}";
             _trayIcon?.SetStatus(change.State.ToString());
             UpdatePlaybackControls();
-            if (change.State is not ReaderPlaybackState.Playing)
-            {
-                _continuousHighlightAdorner?.Clear();
-                RestorePausedEditorViewport(change.Cursor);
-            }
+            ApplyPlaybackPresentation(change.State);
             UpdateEditorButtons();
             UpdateCompactController();
             if (change.State == ReaderPlaybackState.Completed &&
@@ -3383,7 +3382,12 @@ public partial class MainWindow : Window
 
     private void Playback_HighlightChanged(object? sender, PlaybackHighlight highlight)
     {
-        Dispatcher.BeginInvoke(new Action(async () => await ShowHighlightAsync(highlight)));
+        var runId = _playback?.DiagnosticRunId;
+        Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            if (!ReferenceEquals(sender, _playback) || runId != _playback?.DiagnosticRunId) return;
+            await ShowHighlightAsync(highlight);
+        }));
     }
 
     private void Playback_RuleWarning(object? sender, ReaderStreamWarning warning)
@@ -3737,6 +3741,7 @@ public partial class MainWindow : Window
         if (_documentReloadInProgress || _documentMutationInProgress ||
             _editor?.Document is not ReaderDocument document ||
             !string.Equals(document.Id, highlight.DocumentId, StringComparison.Ordinal) ||
+            highlight.CursorStart.ContentRevision != document.ContentRevision ||
             highlight.SourceSpans.Count == 0 ||
             _playback?.IsActive != true)
         {
@@ -3827,11 +3832,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        _updatingEditor = true;
-        EditorTextBox.Select(start, 0);
-        _updatingEditor = false;
+        // The audible marker is not the editing selection/caret. Moving the
+        // caret here also schedules WPF scroll requests that can run on pause.
         _continuousHighlightAdorner?.Show(start, Math.Max(0, end - start));
-        BringContinuousHighlightIntoView(start);
+        if (FollowReadingCheckBox.IsChecked == true) BringContinuousHighlightIntoView(start);
     }
 
     private void BringContinuousHighlightIntoView(int characterOffset)
@@ -3871,27 +3875,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RestorePausedEditorViewport(ReaderCursor? cursor)
+    private void ApplyPlaybackPresentation(ReaderPlaybackState state)
     {
-        if (cursor is null ||
-            _continuousDocument is null ||
-            _editor?.Document is not ReaderDocument document ||
-            !string.Equals(document.Id, cursor.DocumentId, StringComparison.Ordinal) ||
-            !_continuousDocument.TryGetCharacterOffset(cursor, out var characterOffset))
+        // Pause (including automatic interruption), completion and faults keep
+        // the last audible mark exactly where it was. Never move the user's
+        // viewport or Start-at-cursor intent during a state transition.
+        if (state == ReaderPlaybackState.Stopped)
         {
-            return;
-        }
-
-        _updatingEditor = true;
-        EditorTextBox.CaretIndex = Math.Clamp(characterOffset, 0, EditorTextBox.Text.Length);
-        EditorTextBox.SelectionLength = 0;
-        _updatingEditor = false;
-        _textCursor = cursor;
-        EditorTextBox.UpdateLayout();
-        var line = EditorTextBox.GetLineIndexFromCharacterIndex(EditorTextBox.CaretIndex);
-        if (line >= 0)
-        {
-            EditorTextBox.ScrollToLine(Math.Max(0, line - 2));
+            _continuousHighlightAdorner?.Clear();
+            foreach (var block in _readingBlocks)
+            {
+                block.HighlightStart = -1;
+                block.HighlightLength = 0;
+            }
         }
     }
 

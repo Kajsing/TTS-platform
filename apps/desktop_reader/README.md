@@ -25,6 +25,15 @@ The Milestone 9 Reader beta provides:
   source-span highlighting with no font-weight changes, durable Pause resume
   from the last fully played UTF-16 cursor, Stop-to-beginning behavior, and a
   separate explicit `Start at cursor` action;
+- pause/completion keep the audible underline/highlight and current viewport;
+  playback never repurposes the editing caret/selection. Editing clears stale
+  marks, Stop clears the reading marker, and Follow reading off respects manual
+  scrolling in the continuous editor;
+- fresh Windows audio output after pause/stop/completion, avoiding stale idle
+  device reuse across sleep. A three-second no-consumption watchdog and device
+  failure events produce a safe retryable error instead of an indefinite silent
+  buffer wait. Press Play to reopen the endpoint and resume from confirmed
+  progress; queued, unheard audio is not marked as read;
 - active-stream content leases, next-window continuation, and a consistent
   SQLite preview-snapshot command;
 - explicit Read Clipboard without monitoring or document persistence;

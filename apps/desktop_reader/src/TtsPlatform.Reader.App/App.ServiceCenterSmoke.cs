@@ -86,6 +86,7 @@ public partial class App
             Require(first.IsVisible && ReaderTrayIcon.LiveInstances == 1, "Reader created another icon.");
             await first.VerifyPlaybackDiagnosticsAsync(root);
             await first.VerifyDocumentSwitchAsync();
+            await first.VerifyPlaybackViewportAsync(root);
             first.Close();
             await Idle();
             Require(_serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,
@@ -197,6 +198,7 @@ public partial class App
                 voice_preview_preserved_edits = true,
                 voice_preview_activity_guards = true,
                 playback_input_diagnostics = true,
+                playback_pause_viewport = true,
                 document_switch_safety = true,
             }));
             Shutdown();

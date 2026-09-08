@@ -4,15 +4,39 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-07
-- Current user-requested reliability slice: article switching/deletion during
+- Date: 2026-09-08
+- Completed user-approved pause/sleep reliability run. Pause (including the
+  automatic interruption path), completion and faults retain the audible marker
+  and viewport. Playing no longer moves the editing caret/selection; Stop clears
+  the marker without scrolling, and edits/document replacement invalidate it.
+  Continuous Follow reading off now respects manual scrolling. Windows output
+  is released on pause/stop/completion and recreated on the next Play. A
+  three-second no-consumption watchdog covers writes and final drain; driver
+  failures become sanitized, retryable audio errors with confirmed progress
+  preserved. Diagnostic fault entries include a bounded failure code, buffered
+  duration and heard cursor, never article/device details. Clipboard playback
+  and voice preview handle the same safe audio error.
+  Evidence: 296 .NET tests, 626 Python tests (2 optional skips), Ruff, scoped
+  format, zero-warning build/publish, isolated live-HTTP/portable WPF and real
+  Windows silent-output reopen checks passed. The exact root-shortcut win-x64
+  binary passed `playback_pause_viewport`, `document_switch_safety` and lifecycle
+  checks after the user closed Reader/tray. Its paused render was inspected.
+  No live library, installed-voice manifest, service limits, networking or
+  production service was changed. Reader remains closed for normal relaunch.
+  Physical sleep/wake under real listening still needs a field check; the
+  original Sep 8 trace strongly implicated output consumption, but the precise
+  driver failure was not observed. Service Center's separate 429 is not fixed
+  here. Chapters remain planning-only for the next separate run; U8 stays parked.
+  See `.logs/2026-09-08-reader-pause-sleep.md`. No new app goal was requested.
+- Completed Sep 7 reliability slice: article switching/deletion during
   playback. The field trace proves DocumentLoad issued a rewinding Stop at
   17:54:15 local time; the deletion itself succeeded at 17:54:20 while the UI
   later showed a stale selection/editor and a revision-conflict footer. A
   consistent offline SQLite backup passed integrity validation before cleanup.
   The user closed Reader/tray/service and authorized removing both articles;
   one was already soft-deleted, and the remaining article was soft-deleted via
-  the existing repository operation. Active article count is zero, integrity OK.
+  the existing repository operation. At that cleanup, active article count was
+  zero, integrity OK; the user subsequently created new articles.
   This is an empty library, not a destructive reset of historical rows, folders,
   grants, rules, model state or settings. Backup is under the per-user Reader
   `backups/2026-09-07-before-article-cleanup.db`; the original trace is copied to

@@ -504,15 +504,21 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             exception is ReaderApiException or
                 ReaderServiceUnavailableException or
                 ReaderStreamProtocolException or
-                WebSocketException)
+                WebSocketException or AudioOutputException)
         {
             var apiException = exception as ReaderApiException;
+            AcknowledgePlayedAudio();
             RecordPerformance(new PlaybackPerformanceEvent(
                 "playback_run_faulted",
                 DocumentId: _document?.Id,
+                BlockOrdinal: _lastFullyPlayedCursor?.BlockOrdinal,
+                CharacterOffset: _lastFullyPlayedCursor?.CharacterOffset,
+                BufferAfterMs: AudioSnapshot()?.BufferedDurationMs,
                 ElapsedMs: runTimer.ElapsedMilliseconds,
                 ErrorCategory: exception.GetType().Name,
-                ErrorCode: apiException is null
+                ErrorCode: exception is AudioOutputException audioException
+                    ? $"audio_output_{audioException.Failure.ToString().ToLowerInvariant()}"
+                    : apiException is null
                     ? NormalizeDiagnosticCode(exception.GetType().Name)
                     : NormalizeDiagnosticCode(apiException.ErrorType),
                 StatusCode: apiException?.StatusCode,
@@ -526,6 +532,8 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             {
                 // Preserve the original playback failure as the actionable state.
             }
+            if (exception is AudioOutputException)
+                await PersistInterruptedPositionAsync(false, CancellationToken.None).ConfigureAwait(false);
             _desiredState = ReaderPlaybackState.Faulted;
             SetState(ReaderPlaybackState.Faulted, exception.Message);
         }
@@ -540,6 +548,8 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
             {
                 // Playback owns the monitor lifetime.
             }
+            if (_desiredState == ReaderPlaybackState.Completed)
+                await _audioOutput.StopAsync(CancellationToken.None).ConfigureAwait(false);
             _activeSession = null;
             if (_desiredState == ReaderPlaybackState.Playing)
             {

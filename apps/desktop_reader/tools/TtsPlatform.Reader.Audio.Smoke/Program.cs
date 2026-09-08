@@ -12,9 +12,20 @@ try
     await using var output = new WasapiAudioOutput();
     await output.PlayAsync(pcm, format);
     await output.DrainAsync();
+    if (output.PlayedCheckpoint != output.SubmittedCheckpoint)
+        throw new InvalidOperationException("Silent audio did not drain to its checkpoint.");
+    var generation = output.SubmittedCheckpoint.Generation;
+    await output.StopAsync();
+    if (output.Snapshot.IsPlaying || output.Snapshot.BufferedDurationMs != 0)
+        throw new InvalidOperationException("Stopped audio retained its device/buffer.");
+    await output.PlayAsync(pcm, format);
+    await output.DrainAsync();
+    if (output.SubmittedCheckpoint.Generation <= generation || output.PlayedCheckpoint != output.SubmittedCheckpoint)
+        throw new InvalidOperationException("Audio did not reopen and drain after Stop.");
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         windows_audio = true,
+        output_reopened = true,
         sample_rate_hz = sampleRate,
         channels = 1,
         duration_ms = durationMilliseconds,

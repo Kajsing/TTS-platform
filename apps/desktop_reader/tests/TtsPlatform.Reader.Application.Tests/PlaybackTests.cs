@@ -8,6 +8,29 @@ namespace TtsPlatform.Reader.Application.Tests;
 
 public sealed class PlaybackTests
 {
+    [Fact]
+    public async Task Audio_failure_faults_safely_and_retry_resumes_from_heard_not_queued_text()
+    {
+        var service = new PlaybackService();
+        var streams = new FakeStreamClient(request => SessionWithPackets(request, includeSecondPacket: true),
+            request => CompletedSession(request));
+        var diagnostics = new FakePerformanceSink();
+        await using var playback = new ReaderPlaybackCoordinator(service, streams,
+            new FakeAudioOutput(failCall: 2), diagnostics);
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => playback.State == ReaderPlaybackState.Faulted);
+        Assert.Equal(3, playback.LastFullyPlayedCursor?.CharacterOffset);
+        Assert.Equal(3, service.SavedPositions.Last().Cursor.CharacterOffset);
+        var failure = Assert.Single(diagnostics.Events, entry => entry.Name == "playback_run_faulted");
+        Assert.Equal("audio_output_stalled", failure.ErrorCode);
+        Assert.Equal(3, failure.CharacterOffset);
+        Assert.Equal(125, failure.BufferAfterMs);
+        Assert.DoesNotContain("PRIVATE", JsonSerializer.Serialize(diagnostics.Events));
+        await playback.PlayAsync(Document());
+        await WaitUntilAsync(() => streams.Requests.Count == 2);
+        Assert.Equal(3, streams.Requests[1].Cursor.CharacterOffset);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -547,7 +570,8 @@ public sealed class PlaybackTests
     private sealed class FakeAudioOutput(
         int? blockCall = null,
         bool autoAdvance = true,
-        bool blockDrain = false) : IAudioOutput, IAudioOutputDiagnostics
+        bool blockDrain = false,
+        int? failCall = null) : IAudioOutput, IAudioOutputDiagnostics
     {
         private readonly TaskCompletionSource _stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<int> _calls = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -612,6 +636,9 @@ public sealed class PlaybackTests
             MaxConcurrentCalls = Math.Max(MaxConcurrentCalls, _activeCalls);
             try
             {
+                if (failCall == CallCount)
+                    throw new AudioOutputException(AudioOutputFailure.Stalled,
+                        new InvalidOperationException("PRIVATE driver detail"));
                 if (blockCall == CallCount)
                 {
                     await _stop.Task.WaitAsync(cancellationToken);

@@ -54,7 +54,7 @@ internal sealed partial class DesktopServiceCenterHost
         {
             _previewMessage = "Preview audio stopped or timed out. A native synthesis already running may finish before the service becomes free.";
         }
-        catch (Exception error) when (LocalServiceCoordinator.IsExpected(error) || error is VoiceLibraryException or COMException)
+        catch (Exception error) when (LocalServiceCoordinator.IsExpected(error) || error is VoiceLibraryException or COMException or AudioOutputException)
         {
             _previewMessage = error is VoiceLibraryException ? error.Message :
                 "Preview was unavailable. Check local service readiness, activity, installed voice compatibility and the audio device. Nothing was restarted.";
