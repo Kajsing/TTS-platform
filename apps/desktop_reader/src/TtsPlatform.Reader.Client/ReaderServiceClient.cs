@@ -646,6 +646,11 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
             request,
             cancellationToken);
 
+    public Task<MutationResponse> EditChapterAsync(
+        string documentId, EditChapterRequest request, CancellationToken cancellationToken = default) =>
+        SendAsync<MutationResponse>(HttpMethod.Post,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}/chapters", true, request, cancellationToken);
+
     public Task<MutationResponse> UndoAsync(
         string documentId,
         ExpectedVersionRequest request,

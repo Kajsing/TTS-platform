@@ -275,6 +275,22 @@
             </DockPanel>
             <TextBlock x:Name="EditorHintText" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"
                        Text="Choose an article from the library." TextWrapping="Wrap" />
+            <WrapPanel x:Name="ChapterToolbar" Margin="0,8,0,0" Visibility="Collapsed">
+              <TextBlock Text="Chapter" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Button Content="‹" Click="PreviousChapter_Click" ToolTip="Previous chapter (navigation only)" />
+              <ComboBox x:Name="ChapterComboBox" MinWidth="190" MaxWidth="340"
+                        SelectionChanged="ChapterSelection_Changed" AutomationProperties.Name="Article chapter" />
+              <Button Content="›" Click="NextChapter_Click" ToolTip="Next chapter (navigation only)" />
+              <CheckBox x:Name="SingleChapterCheckBox" Content="One chapter at a time"
+                        Checked="ChapterView_Changed" Unchecked="ChapterView_Changed" Margin="10,0,0,0" VerticalAlignment="Center" />
+              <Menu Background="Transparent" VerticalAlignment="Center" Margin="10,0,0,0">
+                <MenuItem Header="Chapter tools">
+                  <MenuItem x:Name="AddChapterMenuItem" Header="Start chapter at cursor…" Click="AddChapter_Click" />
+                  <MenuItem x:Name="RenameChapterMenuItem" Header="Rename chapter…" Click="RenameChapter_Click" />
+                  <MenuItem x:Name="MergeChapterMenuItem" Header="Merge with previous chapter…" Click="MergeChapter_Click" />
+                </MenuItem>
+              </Menu>
+            </WrapPanel>
           </StackPanel>
 
           <Border Grid.Row="1" x:Name="FindPanel" Visibility="Collapsed"
@@ -313,6 +329,8 @@
                 <CheckBox x:Name="FindRegexCheckBox" Content="Regex"
                           Checked="FindOption_Changed" Unchecked="FindOption_Changed"
                           Margin="3,0,10,0" />
+                <CheckBox x:Name="FindCurrentChapterCheckBox" Content="Current chapter only"
+                          Checked="FindOption_Changed" Unchecked="FindOption_Changed" Margin="3,0,10,0" />
                 <TextBlock x:Name="FindStatusText" Foreground="{StaticResource TextMutedBrush}"
                            VerticalAlignment="Center" Margin="6,0,0,0"
                            AutomationProperties.LiveSetting="Polite" />

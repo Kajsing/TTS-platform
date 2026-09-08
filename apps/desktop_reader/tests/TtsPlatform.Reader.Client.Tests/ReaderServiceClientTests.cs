@@ -7,6 +7,23 @@ namespace TtsPlatform.Reader.Client.Tests;
 public sealed class ReaderServiceClientTests
 {
     [Fact]
+    public async Task Chapter_mutation_uses_authenticated_body_and_utf16_cursor()
+    {
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK, $"{{\"document\":{DocumentJson},\"edit\":null}}"));
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        var response = await client.EditChapterAsync("doc", new EditChapterRequest(7, "add", Title: "Second", BlockId: "block", CharacterOffset: 3));
+        Assert.NotNull(response.Document);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/v1/reader/documents/doc/chapters", request.Uri.AbsolutePath);
+        Assert.Equal("Bearer owner", request.Authorization);
+        using var body = System.Text.Json.JsonDocument.Parse(request.Body!);
+        Assert.Equal(7, body.RootElement.GetProperty("expected_row_version").GetInt32());
+        Assert.Equal(3, body.RootElement.GetProperty("character_offset").GetInt32());
+        Assert.Equal("Second", body.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task Voice_preview_sends_only_selected_voice_and_body_only_reservation()
     {
         var handler = new RecordingHandler(request =>

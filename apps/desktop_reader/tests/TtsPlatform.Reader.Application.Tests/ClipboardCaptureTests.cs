@@ -22,6 +22,16 @@ public sealed class ClipboardCaptureTests
 
         Assert.Equal(["First selection", "Second selection", "Third selection"], client.AppendedText);
         Assert.Equal([1, 2, 3], client.AppendRowVersions);
+        Assert.All(client.NewChapters, Assert.True);
+    }
+
+    [Fact]
+    public async Task Append_can_explicitly_continue_the_current_chapter()
+    {
+        var client = new CaptureClient();
+        var result = await new ClipboardDocumentCapture(client).AppendAsync("More text", Document(1), newChapter: false);
+        Assert.True(result.Succeeded);
+        Assert.False(Assert.Single(client.NewChapters));
     }
 
     [Fact]
@@ -168,6 +178,7 @@ public sealed class ClipboardCaptureTests
         public string? DuplicateDocumentId { get; init; }
         public List<string> AppendedText { get; } = [];
         public List<int> AppendRowVersions { get; } = [];
+        public List<bool> NewChapters { get; } = [];
         public List<CreateDocumentRequest> Created { get; } = [];
         public List<string> OpenedDocumentIds { get; } = [];
 
@@ -211,6 +222,7 @@ public sealed class ClipboardCaptureTests
             }
             AppendedText.Add(request.Text);
             AppendRowVersions.Add(request.ExpectedRowVersion);
+            NewChapters.Add(request.NewChapter);
             return Task.FromResult(new MutationResponse(
                 Document(request.ExpectedRowVersion + 1),
                 null));

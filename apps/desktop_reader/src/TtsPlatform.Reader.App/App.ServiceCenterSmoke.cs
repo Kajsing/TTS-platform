@@ -87,6 +87,7 @@ public partial class App
             await first.VerifyPlaybackDiagnosticsAsync(root);
             await first.VerifyDocumentSwitchAsync();
             await first.VerifyPlaybackViewportAsync(root);
+            await first.VerifyChapterViewsAsync(root);
             first.Close();
             await Idle();
             Require(_serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,
@@ -199,6 +200,7 @@ public partial class App
                 voice_preview_activity_guards = true,
                 playback_input_diagnostics = true,
                 playback_pause_viewport = true,
+                chapter_views = true,
                 document_switch_safety = true,
             }));
             Shutdown();

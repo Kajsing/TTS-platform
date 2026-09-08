@@ -368,6 +368,8 @@ class SqliteReaderAgentRepository:
                 document_id,
                 delivery.text,
                 expected_row_version=expected_row_version,
+                new_chapter=True,
+                chapter_title=delivery.title[:300] if delivery.title else None,
             )
             receipt = ChapterReceipt(
                 id=str(uuid.uuid4()),

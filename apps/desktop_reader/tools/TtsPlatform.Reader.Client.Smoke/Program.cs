@@ -148,11 +148,11 @@ foreach (var selection in selections)
 {
     var appended = await client.AppendContentAsync(
         clipboardDocument.Id,
-        new AppendContentRequest(clipboardDocument.RowVersion, selection));
+        new AppendContentRequest(clipboardDocument.RowVersion, selection, NewChapter: true));
     clipboardDocument = appended.Document;
 }
 var appendedBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
-if (appendedBlocks.Blocks.Count != 4 ||
+if (appendedBlocks.Blocks.Count != 4 || clipboardDocument.Metadata.GetProperty("chapter_markers_v1").GetArrayLength() != 4 ||
     !appendedBlocks.Blocks.Skip(1).Select(item => item.Text).SequenceEqual(selections) ||
     appendedBlocks.Blocks.Skip(1).Any(item => item.Kind != "paragraph"))
 {
@@ -164,7 +164,7 @@ var undone = await client.UndoAsync(
     clipboardDocument.Id,
     new ExpectedVersionRequest(clipboardDocument.RowVersion));
 var undoneBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
-if (undoneBlocks.Blocks.Count != 3 ||
+if (undoneBlocks.Blocks.Count != 3 || undone.Document.Metadata.GetProperty("chapter_markers_v1").GetArrayLength() != 3 ||
     undoneBlocks.Blocks.Any(item => item.Text == selections[^1]) ||
     !undoneBlocks.Blocks.Skip(1).Select(item => item.Text).SequenceEqual(selections[..^1]) ||
     undone.Document.RowVersion <= clipboardDocument.RowVersion)
@@ -194,6 +194,7 @@ var rangeRestored = await client.UndoAsync(
     new ExpectedVersionRequest(rangeDeleted.Document.RowVersion));
 var rangeRestoredBlocks = await client.GetBlocksAsync(clipboardDocument.Id);
 if (rangeRestoredBlocks.Blocks.Count != 3 ||
+    rangeRestored.Document.Metadata.GetProperty("chapter_markers_v1").GetArrayLength() != 3 ||
     !rangeRestoredBlocks.Blocks.Select(item => item.Text).SequenceEqual(
         new[] { "Initial paragraph", selections[0], selections[1] }) ||
     rangeRestored.Document.RowVersion <= rangeDeleted.Document.RowVersion)
@@ -201,6 +202,20 @@ if (rangeRestoredBlocks.Blocks.Count != 3 ||
     Console.Error.WriteLine("One Undo did not restore the cross-paragraph deletion.");
     return 13;
 }
+
+var chapterAdded = await client.EditChapterAsync(clipboardDocument.Id, new EditChapterRequest(
+    rangeRestored.Document.RowVersion, "add", Title: "Mid-paragraph chapter",
+    BlockId: rangeRestoredBlocks.Blocks[0].Id, CharacterOffset: 8));
+var chapterMarkers = chapterAdded.Document.Metadata.GetProperty("chapter_markers_v1");
+if (chapterMarkers.GetArrayLength() != 4 || chapterMarkers[1].GetProperty("codepoint_offset").GetInt32() != 8)
+    throw new InvalidOperationException("Live chapter mutation lost its source anchor.");
+var chapterMerged = await client.EditChapterAsync(clipboardDocument.Id, new EditChapterRequest(
+    chapterAdded.Document.RowVersion, "merge", ChapterId: chapterMarkers[1].GetProperty("id").GetString()));
+var chapterRestored = await client.UndoAsync(clipboardDocument.Id, new ExpectedVersionRequest(chapterMerged.Document.RowVersion));
+if (chapterRestored.Document.Metadata.GetProperty("chapter_markers_v1").GetRawText() != chapterMarkers.GetRawText() ||
+    !(await client.GetBlocksAsync(clipboardDocument.Id)).Blocks.Select(block => block.Text)
+        .SequenceEqual(rangeRestoredBlocks.Blocks.Select(block => block.Text)))
+    throw new InvalidOperationException("Chapter merge/Undo changed text or failed to restore markers.");
 
 Console.WriteLine(JsonSerializer.Serialize(new
 {
@@ -215,6 +230,7 @@ Console.WriteLine(JsonSerializer.Serialize(new
     live_clipboard_no_persist = true,
     live_clipboard_append_undo = true,
     live_cross_block_delete_undo = true,
+    live_chapters = true,
     pcm_frames = pcmFrames,
     pcm_bytes = pcmBytes,
     source_spans = sourceSpans,

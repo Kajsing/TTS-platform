@@ -14,6 +14,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
+from ..chapters import (
+    CHAPTER_KEY,
+    MAX_CHAPTERS,
+    ChapterMarker,
+    map_replacement,
+    marker_data,
+    normalize_markers,
+    read_markers,
+)
 from ..cursors import remap_cursor_for_edit
 from ..errors import (
     ReaderConflictError,
@@ -118,9 +127,7 @@ def _appended_block_specs(edit: DocumentEdit) -> tuple[_AppendedBlockSpec, ...]:
                 id=edit.block_id,
                 ordinal=ordinal,
                 section_id=(
-                    str(metadata["section_id"])
-                    if metadata.get("section_id") is not None
-                    else None
+                    str(metadata["section_id"]) if metadata.get("section_id") is not None else None
                 ),
                 kind=kind,
                 text=edit.replacement_text,
@@ -149,9 +156,7 @@ def _appended_block_specs(edit: DocumentEdit) -> tuple[_AppendedBlockSpec, ...]:
                     id=block_id,
                     ordinal=ordinal,
                     section_id=(
-                        str(raw["section_id"])
-                        if raw.get("section_id") is not None
-                        else None
+                        str(raw["section_id"]) if raw.get("section_id") is not None else None
                     ),
                     kind=kind,
                     text=text,
@@ -199,9 +204,9 @@ def _range_delete_metadata(
 
 
 def _is_range_delete(edit: DocumentEdit) -> bool:
-    return edit.operation_type is EditOperation.REPLACE and edit.metadata.get(
-        "range_delete"
-    ) is True
+    return (
+        edit.operation_type is EditOperation.REPLACE and edit.metadata.get("range_delete") is True
+    )
 
 
 def _range_delete_end_offset(edit: DocumentEdit) -> int:
@@ -240,9 +245,7 @@ def _range_delete_snapshots(edit: DocumentEdit) -> tuple[_RangeBlockSnapshot, ..
                     id=str(raw["id"]),
                     ordinal=int(raw["ordinal"]),
                     section_id=(
-                        str(raw["section_id"])
-                        if raw.get("section_id") is not None
-                        else None
+                        str(raw["section_id"]) if raw.get("section_id") is not None else None
                     ),
                     kind=BlockKind(str(raw["kind"])).value,
                     text=text,
@@ -260,8 +263,7 @@ def _range_delete_snapshots(edit: DocumentEdit) -> tuple[_RangeBlockSnapshot, ..
         or edit.metadata.get("end_block_id") != result[-1].id
         or len({snapshot.id for snapshot in result}) != len(result)
         or any(
-            snapshot.ordinal != result[0].ordinal + index
-            for index, snapshot in enumerate(result)
+            snapshot.ordinal != result[0].ordinal + index for index, snapshot in enumerate(result)
         )
         or any(snapshot.section_id != result[0].section_id for snapshot in result)
         or "\n\n".join(snapshot.text for snapshot in result) != edit.original_text
@@ -300,9 +302,7 @@ def _remap_cursor_for_range_delete(
                 cursor,
                 block_id=first.id,
                 block_ordinal=first.ordinal,
-                character_offset=(
-                    edit.start_offset + cursor.character_offset - range_end_offset
-                ),
+                character_offset=(edit.start_offset + cursor.character_offset - range_end_offset),
             )
         elif cursor.block_id in snapshot_ids:
             mapped = replace(
@@ -318,9 +318,7 @@ def _remap_cursor_for_range_delete(
             cursor,
             block_id=last.id,
             block_ordinal=last.ordinal,
-            character_offset=(
-                range_end_offset + cursor.character_offset - edit.start_offset
-            ),
+            character_offset=(range_end_offset + cursor.character_offset - edit.start_offset),
         )
     else:
         mapped = cursor
@@ -559,9 +557,7 @@ class SqliteReaderRepository:
         with self._connection() as connection:
             for row in connection.execute(
                 "SELECT state, COUNT(*) AS total FROM reader_documents "
-                "WHERE deleted_at IS NULL AND "
-                + privacy_clause
-                + " GROUP BY state",
+                "WHERE deleted_at IS NULL AND " + privacy_clause + " GROUP BY state",
                 parameters,
             ):
                 counts[DocumentState(row["state"])] = int(row["total"])
@@ -742,8 +738,7 @@ class SqliteReaderRepository:
                     (folder_id, now, document.id),
                 )
             return tuple(
-                self._require_document(connection, document.id)
-                for document in current_documents
+                self._require_document(connection, document.id) for document in current_documents
             )
 
     def delete_folder(
@@ -1097,6 +1092,8 @@ class SqliteReaderRepository:
         text: str,
         *,
         expected_row_version: int,
+        new_chapter: bool = False,
+        chapter_title: str | None = None,
     ) -> tuple[ReaderDocument, DocumentEdit]:
         try:
             paragraphs = split_plain_text_paragraphs(text)
@@ -1149,6 +1146,8 @@ class SqliteReaderRepository:
                     "ordinal": first_ordinal,
                     "kind": BlockKind.PARAGRAPH.value,
                     "blocks": _appended_block_metadata(block_specs),
+                    "new_chapter": new_chapter,
+                    "chapter_title": chapter_title,
                 },
             )
             connection.executemany(
@@ -1184,6 +1183,91 @@ class SqliteReaderRepository:
             self._insert_edit(connection, edit)
             self._trim_history(connection, document_id)
             return self._require_document(connection, document_id), edit
+
+    def edit_chapter(
+        self,
+        document_id: str,
+        *,
+        expected_row_version: int,
+        action: str,
+        chapter_id: str | None = None,
+        title: str | None = None,
+        block_id: str | None = None,
+        codepoint_offset: int = 0,
+    ) -> ReaderDocument:
+        with self._write() as connection:
+            document = self._require_editable_document(connection, document_id)
+            _check_version(document, expected_row_version)
+            markers, blocks = self._chapter_state(connection, document_id)
+            if title is not None:
+                title = title.strip()
+                if not 1 <= len(title) <= 300:
+                    raise ReaderValidationError("chapter title must contain 1 to 300 characters")
+            if action == "add":
+                location = next((item for item in blocks if item[0] == block_id), None)
+                if location is None or not 0 <= codepoint_offset <= location[2]:
+                    raise ReaderValidationError("chapter boundary is outside the document")
+                if any(
+                    m.block_id == block_id and m.codepoint_offset == codepoint_offset
+                    for m in markers
+                ):
+                    raise ReaderValidationError("a chapter already starts at this position")
+                if len(markers) >= MAX_CHAPTERS:
+                    raise ReaderValidationError("an article may contain at most 1024 chapters")
+                marker = ChapterMarker(
+                    str(uuid.uuid4()),
+                    title or f"Chapter {len(markers) + 1}",
+                    block_id,
+                    codepoint_offset,
+                )
+                updated = normalize_markers([*markers, marker], blocks)
+                if marker not in updated:
+                    raise ReaderValidationError("a chapter must contain text after its boundary")
+            elif action in {"rename", "merge"}:
+                target = next((m for m in markers if m.id == chapter_id), None)
+                if target is None:
+                    raise ReaderNotFoundError("Reader chapter was not found")
+                if action == "merge" and target.id == markers[0].id:
+                    raise ReaderValidationError("the first chapter has no preceding chapter")
+                if action == "rename" and title is None:
+                    raise ReaderValidationError("a chapter title is required")
+                updated = (
+                    [replace(m, title=title) if m.id == chapter_id else m for m in markers]
+                    if action == "rename"
+                    else [m for m in markers if m.id != chapter_id]
+                )
+            else:
+                raise ReaderValidationError("unknown chapter operation")
+            now = utc_now()
+            revision = document.content_revision + 1
+            edit = DocumentEdit(
+                id=str(uuid.uuid4()),
+                document_id=document_id,
+                sequence=self._next_edit_sequence(connection, document_id),
+                base_content_revision=document.content_revision,
+                result_content_revision=revision,
+                block_id=blocks[0][0],
+                start_offset=0,
+                end_offset=0,
+                original_text="",
+                replacement_text="",
+                operation_type=EditOperation.REPLACE,
+                created_at=now,
+                metadata={"chapter_operation": action, "chapters_after": marker_data(updated)},
+            )
+            self._discard_redo(connection, document_id)
+            self._update_document_content(
+                connection,
+                document,
+                new_revision=revision,
+                block_delta=0,
+                character_delta=0,
+                now=now,
+            )
+            self._advance_saved_cursor_revisions(connection, document_id, revision)
+            self._insert_edit(connection, edit)
+            self._trim_history(connection, document_id)
+            return self._require_document(connection, document_id)
 
     def undo(self, document_id: str, *, expected_row_version: int) -> ReaderDocument:
         with self._write() as connection:
@@ -1233,6 +1317,7 @@ class SqliteReaderRepository:
                 "UPDATE reader_document_edits SET applied = 0, undone_at = ? WHERE id = ?",
                 (_time_dump(now), edit.id),
             )
+            self._restore_chapter_history(connection, edit, forward=False)
             return self._require_document(connection, document_id)
 
     def redo(self, document_id: str, *, expected_row_version: int) -> ReaderDocument:
@@ -1280,6 +1365,7 @@ class SqliteReaderRepository:
                 "UPDATE reader_document_edits SET applied = 1, undone_at = NULL WHERE id = ?",
                 (edit.id,),
             )
+            self._restore_chapter_history(connection, edit, forward=True)
             return self._require_document(connection, document_id)
 
     def clear_edit_history(self, document_id: str) -> None:
@@ -1741,9 +1827,7 @@ class SqliteReaderRepository:
                 (request_id,),
             ).rowcount
             if deleted == 0:
-                raise ReaderNotFoundError(
-                    f"Reader desktop open request not found: {request_id}"
-                )
+                raise ReaderNotFoundError(f"Reader desktop open request not found: {request_id}")
 
     def create_export_job(self, job: ReaderExportJob) -> ReaderExportJob:
         with self._write() as connection:
@@ -1950,9 +2034,7 @@ class SqliteReaderRepository:
         with self._write() as connection:
             current = _require_export_job(connection, job_id)
             if current.status in {ExportStatus.QUEUED, ExportStatus.RUNNING}:
-                raise ReaderValidationError(
-                    "active exports must be cancelled before deletion"
-                )
+                raise ReaderValidationError("active exports must be cancelled before deletion")
             connection.execute(
                 "DELETE FROM reader_export_jobs WHERE id = ?",
                 (job_id,),
@@ -2285,9 +2367,7 @@ class SqliteReaderRepository:
                     expected=expected_row_version,
                     actual=actual_version,
                 )
-            connection.execute(
-                "DELETE FROM reader_highlighter_terms WHERE config_id = 'global'"
-            )
+            connection.execute("DELETE FROM reader_highlighter_terms WHERE config_id = 'global'")
             connection.executemany(
                 """
                 INSERT INTO reader_highlighter_terms(
@@ -2537,6 +2617,7 @@ class SqliteReaderRepository:
         )
 
     def _insert_edit(self, connection: sqlite3.Connection, edit: DocumentEdit) -> None:
+        edit = self._record_chapter_history(connection, edit)
         connection.execute(
             """
             INSERT INTO reader_document_edits(
@@ -2569,6 +2650,110 @@ class SqliteReaderRepository:
         connection.execute(
             "DELETE FROM reader_document_edits WHERE document_id = ? AND applied = 0",
             (document_id,),
+        )
+
+    def _chapter_state(self, connection: sqlite3.Connection, document_id: str):
+        document = self._require_document(connection, document_id)
+        blocks = [
+            (str(row["id"]), int(row["ordinal"]), int(row["character_count"]))
+            for row in connection.execute(
+                "SELECT id, ordinal, character_count FROM reader_blocks "
+                "WHERE document_id = ? ORDER BY ordinal",
+                (document_id,),
+            )
+        ]
+        if not blocks:
+            raise ReaderValidationError("chapter markers require document blocks")
+        return read_markers(document.metadata, blocks[0][0]), blocks
+
+    def _write_chapter_markers(self, connection: sqlite3.Connection, document_id: str, markers):
+        document = self._require_document(connection, document_id)
+        metadata = dict(document.metadata)
+        metadata[CHAPTER_KEY] = marker_data(markers)
+        connection.execute(
+            "UPDATE reader_documents SET metadata_json = ? WHERE id = ?",
+            (_json_dump(metadata), document_id),
+        )
+
+    def _record_chapter_history(
+        self, connection: sqlite3.Connection, edit: DocumentEdit
+    ) -> DocumentEdit:
+        before, blocks = self._chapter_state(connection, edit.document_id)
+        after = list(before)
+        if "chapter_operation" in edit.metadata:
+            after = read_markers({CHAPTER_KEY: edit.metadata["chapters_after"]}, blocks[0][0])
+        elif _is_range_delete(edit):
+            snapshots = _range_delete_snapshots(edit)
+            removed_ids = {item.id for item in snapshots}
+            end_offset = _range_delete_end_offset(edit)
+            after = [
+                replace(
+                    m,
+                    block_id=edit.block_id,
+                    codepoint_offset=(
+                        edit.start_offset + max(0, m.codepoint_offset - end_offset)
+                        if m.block_id == snapshots[-1].id
+                        else min(m.codepoint_offset, edit.start_offset)
+                        if m.block_id == edit.block_id
+                        else edit.start_offset
+                    ),
+                )
+                if m.block_id in removed_ids
+                else m
+                for m in before
+            ]
+        elif edit.operation_type is EditOperation.REPLACE:
+            # Desktop saves may replace a whole paragraph. Preserve anchors in
+            # its unchanged prefix/suffix, not just those outside the wire range.
+            original, replacement = edit.original_text, edit.replacement_text
+            prefix = 0
+            while (
+                prefix < min(len(original), len(replacement))
+                and original[prefix] == replacement[prefix]
+            ):
+                prefix += 1
+            suffix = 0
+            while (
+                suffix < min(len(original), len(replacement)) - prefix
+                and original[-suffix - 1] == replacement[-suffix - 1]
+            ):
+                suffix += 1
+            after = [
+                map_replacement(
+                    m,
+                    edit.block_id,
+                    edit.start_offset + prefix,
+                    edit.end_offset - suffix,
+                    len(replacement) - prefix - suffix,
+                )
+                for m in before
+            ]
+        elif edit.metadata.get("new_chapter"):
+            title = edit.metadata.get("chapter_title") or f"Chapter {len(before) + 1}"
+            if not isinstance(title, str) or not 1 <= len(title.strip()) <= 300:
+                raise ReaderValidationError("chapter title must contain 1 to 300 characters")
+            after.append(ChapterMarker(str(uuid.uuid4()), title.strip(), edit.block_id, 0))
+        after = normalize_markers(after, blocks)
+        self._write_chapter_markers(connection, edit.document_id, after)
+        return replace(
+            edit,
+            metadata={
+                **edit.metadata,
+                "chapters_before": marker_data(before),
+                "chapters_after": marker_data(after),
+            },
+        )
+
+    def _restore_chapter_history(
+        self, connection: sqlite3.Connection, edit: DocumentEdit, *, forward: bool
+    ):
+        key = "chapters_after" if forward else "chapters_before"
+        if key not in edit.metadata:
+            return  # History predating chapter support has no explicit boundaries.
+        _, blocks = self._chapter_state(connection, edit.document_id)
+        markers = read_markers({CHAPTER_KEY: edit.metadata[key]}, blocks[0][0])
+        self._write_chapter_markers(
+            connection, edit.document_id, normalize_markers(markers, blocks)
         )
 
     def _next_edit_sequence(self, connection: sqlite3.Connection, document_id: str) -> int:
@@ -2604,7 +2789,8 @@ class SqliteReaderRepository:
             connection.execute(
                 """
                 SELECT id, length(CAST(original_text AS BLOB))
-                    + length(CAST(replacement_text AS BLOB)) AS text_bytes
+                    + length(CAST(replacement_text AS BLOB))
+                    + length(CAST(metadata_json AS BLOB)) AS text_bytes
                 FROM reader_document_edits WHERE document_id = ? ORDER BY sequence DESC
                 """,
                 (document_id,),
@@ -2613,12 +2799,17 @@ class SqliteReaderRepository:
         retained = 0
         retained_bytes = 0
         delete_ids: list[str] = []
+        exhausted = False
         for row in rows:
             size = int(row["text_bytes"] or 0)
             if (
-                retained >= self.max_edit_history_operations
+                exhausted
+                or retained >= self.max_edit_history_operations
                 or retained_bytes + size > self.max_edit_history_bytes
             ):
+                # Undo needs a contiguous suffix, never older operations across
+                # a missing oversized operation (including chapter snapshots).
+                exhausted = True
                 delete_ids.append(str(row["id"]))
             else:
                 retained += 1
@@ -2867,10 +3058,13 @@ class SqliteReaderRepository:
         if row is None or str(row["text"]) != edit.replacement_text:
             raise ReaderStaleCursorError("range-delete result no longer matches undo history")
         for snapshot in snapshots[1:]:
-            if connection.execute(
-                "SELECT 1 FROM reader_blocks WHERE id = ? AND document_id = ?",
-                (snapshot.id, edit.document_id),
-            ).fetchone() is not None:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM reader_blocks WHERE id = ? AND document_id = ?",
+                    (snapshot.id, edit.document_id),
+                ).fetchone()
+                is not None
+            ):
                 raise ReaderStaleCursorError("range-delete blocks already exist during undo")
 
         restored_count = len(snapshots) - 1
@@ -3439,9 +3633,7 @@ def _cursor_load(value: str | None) -> ReaderCursor | None:
             character_offset=int(payload["character_offset"]),
             content_revision=int(payload["content_revision"]),
             segment_index=(
-                int(payload["segment_index"])
-                if payload.get("segment_index") is not None
-                else None
+                int(payload["segment_index"]) if payload.get("segment_index") is not None else None
             ),
         )
     except (KeyError, TypeError, ValueError) as exc:
@@ -3471,9 +3663,7 @@ def _export_from_row(row: sqlite3.Row) -> ReaderExportJob:
         cancel_requested=bool(row["cancel_requested"]),
         created_at=_time_load(row["created_at"]),
         updated_at=_time_load(row["updated_at"]),
-        completed_at=(
-            _time_load(row["completed_at"]) if row["completed_at"] is not None else None
-        ),
+        completed_at=(_time_load(row["completed_at"]) if row["completed_at"] is not None else None),
         row_version=int(row["row_version"]),
     )
 
@@ -3507,9 +3697,7 @@ def _export_values(job: ReaderExportJob) -> tuple[Any, ...]:
 
 
 def _require_export_job(connection: sqlite3.Connection, job_id: str) -> ReaderExportJob:
-    row = connection.execute(
-        "SELECT * FROM reader_export_jobs WHERE id = ?", (job_id,)
-    ).fetchone()
+    row = connection.execute("SELECT * FROM reader_export_jobs WHERE id = ?", (job_id,)).fetchone()
     if row is None:
         raise ReaderNotFoundError(f"Reader export job not found: {job_id}")
     return _export_from_row(row)
@@ -3751,10 +3939,13 @@ def _fts_query(value: str) -> str | None:
 
 def _initialize_search_index(connection: sqlite3.Connection) -> bool:
     try:
-        existed = connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            ("reader_document_search",),
-        ).fetchone() is not None
+        existed = (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                ("reader_document_search",),
+            ).fetchone()
+            is not None
+        )
         connection.execute(
             """
             CREATE VIRTUAL TABLE IF NOT EXISTS reader_document_search USING fts5(

@@ -54,6 +54,7 @@ from .reader_schemas import (
     CreateReaderFolderRequest,
     CreateReaderRuleRequest,
     CreateReaderRuleSetRequest,
+    EditReaderChapterRequest,
     ExpectedReaderVersionRequest,
     MoveReaderDocumentsRequest,
     ReaderBlockPageResponse,
@@ -334,9 +335,7 @@ def build_reader_router() -> APIRouter:
     ) -> ReaderMoveDocumentsResponse:
         service = _service(request)
         tokens = _privacy_tokens(request)
-        _run_reader(
-            lambda: service.privacy.require_folder_access(payload.target_folder_id, tokens)
-        )
+        _run_reader(lambda: service.privacy.require_folder_access(payload.target_folder_id, tokens))
         for item in payload.documents:
             _run_reader(
                 lambda item=item: service.privacy.require_document_access(
@@ -577,9 +576,7 @@ def build_reader_router() -> APIRouter:
         return ReaderBrowserCaptureResponse(
             document=ReaderDocumentResponse.from_domain(document),
             queue_item=(
-                ReaderQueueItemResponse.from_domain(queue_item)
-                if queue_item is not None
-                else None
+                ReaderQueueItemResponse.from_domain(queue_item) if queue_item is not None else None
             ),
             desktop_open_request=(
                 ReaderDesktopOpenRequestResponse.from_domain(open_request)
@@ -774,7 +771,9 @@ def build_reader_router() -> APIRouter:
                 document_id,
                 payload.text,
                 expected_row_version=payload.expected_row_version,
-            )
+                new_chapter=payload.new_chapter,
+                chapter_title=payload.chapter_title,
+            ),
         )
         service.log_mutation(
             "append_content",
@@ -786,6 +785,42 @@ def build_reader_router() -> APIRouter:
             document=ReaderDocumentResponse.from_domain(document),
             edit=ReaderEditResponse.from_domain(edit),
         )
+
+    @router.post("/documents/{document_id}/chapters", response_model=ReaderMutationResponse)
+    async def edit_chapter(request: Request, document_id: str, payload: EditReaderChapterRequest):
+        service = _service(request)
+        _require_document_access(request, document_id)
+        offset = 0
+        if payload.action == "add":
+            bundle = _run_reader(lambda: service.get_document_bundle(document_id))
+            block = next((b for b in bundle.blocks if b.id == payload.block_id), None)
+            if block is None:
+                raise reader_api_error(
+                    "reader_block_not_found", status_code=404, message="Reader block was not found."
+                )
+            try:
+                offset = utf16_offset_to_python(block.text, payload.character_offset)
+            except ReaderOffsetError as error:
+                raise reader_api_error(
+                    "reader_invalid_offset",
+                    status_code=400,
+                    message="Chapter boundaries must be valid UTF-16 boundaries.",
+                ) from error
+        document = _run_content_mutation(
+            service,
+            document_id,
+            lambda: service.repository.edit_chapter(
+                document_id,
+                expected_row_version=payload.expected_row_version,
+                action=payload.action,
+                chapter_id=payload.chapter_id,
+                title=payload.title,
+                block_id=payload.block_id,
+                codepoint_offset=offset,
+            ),
+        )
+        service.log_mutation("edit_chapter", document)
+        return ReaderMutationResponse(document=ReaderDocumentResponse.from_domain(document))
 
     @router.post("/documents/{document_id}/undo", response_model=ReaderMutationResponse)
     async def undo_content(
@@ -801,7 +836,7 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.undo(
                 document_id,
                 expected_row_version=payload.expected_row_version,
-            )
+            ),
         )
         service.log_mutation("undo_content", document)
         return ReaderMutationResponse(document=ReaderDocumentResponse.from_domain(document))
@@ -820,7 +855,7 @@ def build_reader_router() -> APIRouter:
             lambda: service.repository.redo(
                 document_id,
                 expected_row_version=payload.expected_row_version,
-            )
+            ),
         )
         service.log_mutation("redo_content", document)
         return ReaderMutationResponse(document=ReaderDocumentResponse.from_domain(document))
@@ -866,9 +901,7 @@ def build_reader_router() -> APIRouter:
         position = _run_reader(lambda: service.repository.get_position(document_id))
         return ReaderPositionEnvelope(
             position=(
-                _run_reader(lambda: _position_response(service, position))
-                if position
-                else None
+                _run_reader(lambda: _position_response(service, position)) if position else None
             )
         )
 
@@ -1260,8 +1293,7 @@ def build_reader_router() -> APIRouter:
                 "reader_export_format_unavailable",
                 status_code=503,
                 message=(
-                    f"{payload.audio_format.value.upper()} export is not available on "
-                    "this service."
+                    f"{payload.audio_format.value.upper()} export is not available on this service."
                 ),
                 param="audio_format",
                 details={"available_formats": list(manager.available_formats)},
@@ -1520,9 +1552,7 @@ def build_reader_router() -> APIRouter:
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.get(
-        "/rule-sets/{rule_set_id}/rules", response_model=ReaderRuleListResponse
-    )
+    @router.get("/rule-sets/{rule_set_id}/rules", response_model=ReaderRuleListResponse)
     async def list_rules(request: Request, rule_set_id: str) -> ReaderRuleListResponse:
         service = _service(request)
         _run_reader(
@@ -1674,15 +1704,11 @@ def build_reader_router() -> APIRouter:
     @router.get("/rule-sets/{rule_set_id}/export")
     async def export_rules(request: Request, rule_set_id: str) -> Response:
         service = _service(request)
-        content = _run_rule(
-            lambda: service.export_rules(rule_set_id), missing_entity="rule set"
-        )
+        content = _run_rule(lambda: service.export_rules(rule_set_id), missing_entity="rule set")
         return Response(
             content=content,
             media_type="application/json",
-            headers={
-                "Content-Disposition": f'attachment; filename="rule-set-{rule_set_id}.json"'
-            },
+            headers={"Content-Disposition": f'attachment; filename="rule-set-{rule_set_id}.json"'},
         )
 
     return router
@@ -1848,9 +1874,7 @@ def _privacy_lock_response(
 
 
 async def _run_privacy_async(operation: Callable[[], T]) -> T:
-    return await run_in_threadpool(
-        lambda: _run_reader(operation, missing_entity="folder")
-    )
+    return await run_in_threadpool(lambda: _run_reader(operation, missing_entity="folder"))
 
 
 def _run_rule(
@@ -1878,9 +1902,7 @@ def _validate_and_update_rule(
     expected_row_version: int,
 ) -> SpeechRule:
     service.rule_engine().validate_rule(candidate)
-    return service.repository.update_rule(
-        candidate, expected_row_version=expected_row_version
-    )
+    return service.repository.update_rule(candidate, expected_row_version=expected_row_version)
 
 
 async def _run_import_async(operation: Callable[[Event], T]) -> T:

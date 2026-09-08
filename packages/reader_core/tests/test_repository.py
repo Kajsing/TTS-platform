@@ -660,7 +660,7 @@ def test_edit_history_is_bounded_and_can_be_cleared(tmp_path: Path) -> None:
     repository = SqliteReaderRepository(
         tmp_path / "reader.db",
         max_edit_history_operations=2,
-        max_edit_history_bytes=100,
+        max_edit_history_bytes=4096,
     )
     document = ReaderLibrary(repository).create_plain_text_document(title="Test", text="abc")
     block = repository.list_blocks(document.id)[0]

@@ -5,6 +5,35 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-08
+- Completed user-approved chapter run: independent, bounded markers over
+  canonical article text (not import sections), chapter/all views, exact-caret
+  boundaries, rename/merge-with-previous, atomic marker/text Undo and Redo,
+  clipboard new-chapter/continue choice, scoped Find and audible chapter following.
+  MCP `deliver_chapter` adds a marker without changing receipt retry semantics.
+  Whole-paragraph saves preserve markers in unchanged text; metadata counts
+  toward the contiguous edit-history budget. Existing auth, folder privacy,
+  content leases and revision guards also protect chapter mutations. No schema
+  migration, text duplication or inferred boundaries for old articles.
+  Validation passed: 643 Python tests (2 optional skips), 301 .NET tests, Ruff,
+  scoped format, build and self-contained win-x64 publication. Isolated live HTTP
+  client/service tests verify chapter append/add/merge/Undo/readback; the portable
+  package and the exact root-shortcut EXE pass `chapter_views`,
+  `playback_pause_viewport`, `document_switch_safety` and tray lifecycle checks.
+  WPF covers hidden-text-safe editing, dirty guards, chapter continuation,
+  Word Highlighter full-source offsets and current/whole-article Find; its render
+  was inspected. Real Windows silent-audio reopen passed; global clipboard and
+  hotkey integration was deliberately skipped to avoid disturbing user state.
+  The root `TTS Platform Reader.lnk` still targets the validated
+  `apps/desktop_reader/src/TtsPlatform.Reader.App/bin/Release/net10.0-windows/win-x64/`
+  executable. Reader/tray and the local service were already closed; no production
+  DB, clipboard, installed-voice manifest, autostart, limits or networking settings
+  were changed. Start service normally after relaunch to use the updated backend.
+  Existing bounds remain: chapter UI uses the continuous editable-text path
+  (1,000,000 characters / 20,000 blocks); larger/structured articles retain their
+  existing reader. View mode is session-local. Real listening is the next user
+  field check. No app goal was requested; U8 remains parked. Usage, wire contract
+  and deferred scope: `docs/reader_chapters_plan.md`;
+  log: `.logs/2026-09-08-reader-chapters.md`.
 - Completed user-approved pause/sleep reliability run on `C:\project\TTS-platform`.
   Pause (including the
   automatic interruption path), completion and faults retain the audible marker
@@ -27,7 +56,8 @@ This file is the live status log and shared memory for future Codex loops.
   Physical sleep/wake under real listening still needs a field check; the
   original Sep 8 trace strongly implicated output consumption, but the precise
   driver failure was not observed. Service Center's separate 429 is not fixed
-  here. Chapters remain planning-only for the next separate run; U8 stays parked.
+  here. Chapters were planning-only at the end of that run; the completed chapter
+  run is recorded above. U8 stays parked.
   See `.logs/2026-09-08-reader-pause-sleep.md`. No new app goal was requested.
 - Work-PC playback-rate follow-up (`C:\home\TTS-platform`): diagnosed the shared 30/minute loopback budget
   against up to one position save/second plus status and handoff polling.

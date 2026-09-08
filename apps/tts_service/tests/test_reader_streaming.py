@@ -144,6 +144,53 @@ def test_window_normalizes_start_cursor_after_an_exhausted_block(tmp_path: Path)
     assert window.start_cursor.character_offset == 0
 
 
+def test_chapter_boundary_splits_audible_fragments_not_the_continuation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    text = "Before the boundary and after the boundary."
+    document = ReaderLibrary(service.repository).create_plain_text_document(
+        title="Chapter boundary",
+        text=text + "\n\nThe next block.",
+    )
+    block = service.list_blocks(document.id, after_ordinal=-1, limit=1)[0]
+    boundary = text.index("and")
+    document = service.repository.edit_chapter(
+        document.id,
+        expected_row_version=document.row_version,
+        action="add",
+        block_id=block.id,
+        codepoint_offset=boundary,
+        title="Second",
+    )
+    window = _builder(service).build(
+        document.id,
+        block_ordinal=0,
+        character_offset_utf16=0,
+        block_id=block.id,
+        content_revision=document.content_revision,
+        max_blocks=1,
+        max_source_characters=1000,
+    )
+    assert len(window.blocks) == 1
+    assert window.source_character_count == len(text)
+    assert window.next_cursor.block_ordinal == 1
+    assert window.document_complete is False
+    assert len(window.fragments) == 2
+    assert window.fragments[0].cursor_end.character_offset <= boundary
+    assert window.fragments[1].cursor_start.character_offset == boundary
+    assert window.fragments[1].cursor_end.character_offset == len(text)
+    resumed = _builder(service).build(
+        document.id,
+        block_ordinal=0,
+        character_offset_utf16=boundary,
+        block_id=block.id,
+        content_revision=document.content_revision,
+        max_blocks=2,
+        max_source_characters=1000,
+    )
+    assert resumed.document_complete
+    assert resumed.fragments[0].spoken_text == window.fragments[1].spoken_text
+
+
 def test_window_clips_inside_a_block_at_the_source_character_limit(tmp_path: Path) -> None:
     service = _service(tmp_path)
     document = ReaderLibrary(service.repository).create_plain_text_document(

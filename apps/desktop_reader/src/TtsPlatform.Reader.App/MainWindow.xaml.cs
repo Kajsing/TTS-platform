@@ -1314,7 +1314,8 @@ public partial class MainWindow : Window
             await HandleClipboardActionAsync(
                 dialog.SelectedAction,
                 text,
-                change.SourceExecutable);
+                change.SourceExecutable,
+                dialog.StartNewChapter);
         }
         catch (Exception exception) when (
             exception is ReaderApiException or
@@ -1332,7 +1333,8 @@ public partial class MainWindow : Window
     private async Task HandleClipboardActionAsync(
         ClipboardCaptureAction action,
         string text,
-        string? sourceExecutable)
+        string? sourceExecutable,
+        bool newChapter = true)
     {
         switch (action)
         {
@@ -1346,7 +1348,7 @@ public partial class MainWindow : Window
                     return;
                 }
                 await ApplyClipboardCaptureResultAsync(
-                    await _clipboardCapture.AppendAsync(text, _editor?.Document));
+                    await _clipboardCapture.AppendAsync(text, _editor?.Document, newChapter: newChapter));
                 return;
             case ClipboardCaptureAction.CreateNewDocument:
             case ClipboardCaptureAction.SaveToInbox:
@@ -2433,7 +2435,7 @@ public partial class MainWindow : Window
             _textCursor = null;
             _updatingEditor = true;
             DocumentTitleText.Text = document.Title;
-            EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+            RenderChapterEditor();
             EditorTextBox.IsReadOnly = _continuousDocument is null;
             ReadingRangeText.Text = $"{document.TotalCharacters:N0} characters · {document.TotalBlocks:N0} block(s)";
             EditorHintText.Text = document.IsEditable
@@ -2710,6 +2712,8 @@ public partial class MainWindow : Window
         ClearWordHighlights();
         _editor?.Clear();
         _continuousDocument = null;
+        RebuildChapterCatalog();
+        _chapterAudibleMark = null;
         _readingWindow = _client is null ? null : new ReadingWindowPager(_client);
         _continuousHighlightAdorner?.Clear();
         _textCursor = null;
@@ -2784,7 +2788,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (string.Equals(EditorTextBox.Text, _continuousDocument.Text, StringComparison.Ordinal))
+        var fullWorkingText = ExpandChapterEditor();
+        _chapterAudibleMark = null;
+        if (string.Equals(fullWorkingText, _continuousDocument.Text, StringComparison.Ordinal))
         {
             _editor.RevertLocalChanges();
             UpdateTextCursorFromContinuousEditor();
@@ -2793,7 +2799,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_continuousDocument.TryMapSingleBlockEdit(EditorTextBox.Text, out var edit) &&
+        if (_continuousDocument.TryMapSingleBlockEdit(fullWorkingText, out var edit) &&
             edit is not null)
         {
             if (_editor.HasUnsavedChanges &&
@@ -2819,7 +2825,7 @@ public partial class MainWindow : Window
         }
 
         if (_continuousDocument.TryMapCrossBlockDeletion(
-                EditorTextBox.Text,
+                fullWorkingText,
                 out var rangeDeletion) &&
             rangeDeletion is not null)
         {
@@ -2859,7 +2865,7 @@ public partial class MainWindow : Window
     private void RestoreContinuousWorkingText(string message)
     {
         var caret = EditorTextBox.CaretIndex;
-        var text = CurrentContinuousDocument()?.Text ?? string.Empty;
+        var text = ProjectWorkingChapter(CurrentContinuousDocument()?.Text ?? string.Empty);
         _updatingEditor = true;
         EditorTextBox.Text = text;
         EditorTextBox.CaretIndex = Math.Clamp(caret, 0, text.Length);
@@ -2904,7 +2910,7 @@ public partial class MainWindow : Window
         _textCursor = continuousDocument.CursorAt(
             document.Id,
             document.ContentRevision,
-            EditorTextBox.CaretIndex);
+            EditorTextBox.CaretIndex + VisibleChapterSlice.Start);
         UpdatePlaybackControls();
     }
 
@@ -2931,7 +2937,7 @@ public partial class MainWindow : Window
                 _continuousDocument = result.AppliedRangeDeletion is { } rangeDeletion
                     ? _continuousDocument.ApplyRangeDeletion(rangeDeletion)
                     : _continuousDocument.ReplaceBlock(savedBlock);
-                EditorTextBox.Text = _continuousDocument.Text;
+                RenderChapterEditor();
                 EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
                 _updatingEditor = false;
                 if (_readingWindow is not null && _editor.Document is ReaderDocument document)
@@ -2968,7 +2974,7 @@ public partial class MainWindow : Window
         _editor.RevertLocalChanges();
         var caret = EditorTextBox.CaretIndex;
         _updatingEditor = true;
-        EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+        RenderChapterEditor();
         EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
         _updatingEditor = false;
         await RefreshWordHighlightsAsync();
@@ -3010,7 +3016,7 @@ public partial class MainWindow : Window
                 }
             }
             _updatingEditor = true;
-            EditorTextBox.Text = _continuousDocument?.Text ?? string.Empty;
+            RenderChapterEditor();
             EditorTextBox.CaretIndex = Math.Clamp(caret, 0, EditorTextBox.Text.Length);
             _updatingEditor = false;
             await RefreshWordHighlightsAsync();
@@ -3488,7 +3494,7 @@ public partial class MainWindow : Window
             string text;
             if (_continuousDocument is not null)
             {
-                text = EditorTextBox.Text;
+                text = ExpandChapterEditor();
             }
             else
             {
@@ -3550,11 +3556,13 @@ public partial class MainWindow : Window
         {
             _continuousHighlightAdorner?.ShowWords(
                 _wordHighlightResult.Matches
-                    .Select(match => new ReaderTextHighlight(
-                        match.Start,
-                        match.Length,
-                        match.Color,
-                        match.TermId))
+                    .Select(match => (Match: match, Range: DisplayedChapterSlice.Clip(match.Start, match.Length)))
+                    .Where(item => item.Range.Length > 0)
+                    .Select(item => new ReaderTextHighlight(
+                        item.Range.Start,
+                        item.Range.Length,
+                        item.Match.Color,
+                        item.Match.TermId))
                     .ToArray());
             foreach (var block in _readingBlocks)
             {
@@ -3834,12 +3842,16 @@ public partial class MainWindow : Window
 
         // The audible marker is not the editing selection/caret. Moving the
         // caret here also schedules WPF scroll requests that can run on pause.
-        _continuousHighlightAdorner?.Show(start, Math.Max(0, end - start));
+        _chapterAudibleMark = (start, Math.Max(0, end - start));
+        if (FollowReadingCheckBox.IsChecked == true) EnsureChapterForOffset(start);
+        RestoreChapterAudibleMark();
         if (FollowReadingCheckBox.IsChecked == true) BringContinuousHighlightIntoView(start);
     }
 
     private void BringContinuousHighlightIntoView(int characterOffset)
     {
+        EnsureChapterForOffset(characterOffset);
+        characterOffset = Math.Clamp(characterOffset - VisibleChapterSlice.Start, 0, EditorTextBox.Text.Length);
         var line = EditorTextBox.GetLineIndexFromCharacterIndex(characterOffset);
         if (line < 0)
         {
@@ -3882,6 +3894,7 @@ public partial class MainWindow : Window
         // viewport or Start-at-cursor intent during a state transition.
         if (state == ReaderPlaybackState.Stopped)
         {
+            _chapterAudibleMark = null;
             _continuousHighlightAdorner?.Clear();
             foreach (var block in _readingBlocks)
             {
@@ -4042,11 +4055,26 @@ public partial class MainWindow : Window
             UseRegex: FindRegexCheckBox.IsChecked == true);
         ArticleFindDocument? findDocument = null;
         string searchText;
+        var searchBase = 0;
         try
         {
             if (_continuousDocument is not null)
             {
-                searchText = EditorTextBox.Text;
+                searchText = ExpandChapterEditor();
+                if (FindCurrentChapterCheckBox.IsChecked == true && _chapters.Count > 0)
+                {
+                    if (_editor.HasUnsavedChanges)
+                    {
+                        FindStatusText.Text = "Save or revert changes before searching the current chapter.";
+                        _findResult = ArticleFindResult.Empty;
+                        ClearFindHighlights();
+                        return;
+                    }
+                    var chapter = _chapters.First(item => item.Id == _selectedChapterId);
+                    searchBase = chapter.Start;
+                    var end = chapter.End + (_singleChapter ? searchText.Length - _continuousDocument.Text.Length : 0);
+                    searchText = searchText[chapter.Start..Math.Clamp(end, chapter.Start, searchText.Length)];
+                }
             }
             else
             {
@@ -4062,6 +4090,8 @@ public partial class MainWindow : Window
             var result = await Task.Run(
                 () => ArticleFindEngine.Search(searchText, query, options),
                 cancellationToken);
+            if (searchBase != 0)
+                result = result with { Matches = result.Matches.Select(match => match with { Start = match.Start + searchBase }).ToArray() };
             cancellationToken.ThrowIfCancellationRequested();
             if (generation != _findGeneration ||
                 _editor?.Document is not ReaderDocument current ||
@@ -4143,7 +4173,7 @@ public partial class MainWindow : Window
         var match = _findResult.Matches[_findMatchIndex];
         if (_continuousDocument is not null)
         {
-            if (match.End > EditorTextBox.Text.Length)
+            if (match.End > (CurrentContinuousDocument()?.Text.Length ?? 0))
             {
                 ScheduleFindRefresh();
                 return;
@@ -4153,7 +4183,15 @@ public partial class MainWindow : Window
                 block.FindStart = -1;
                 block.FindLength = 0;
             }
-            _continuousHighlightAdorner?.ShowFind(match.Start, match.Length);
+            EnsureChapterForOffset(match.Start);
+            var findRange = DisplayedChapterSlice.Clip(match.Start, match.Length);
+            if (findRange.Length == 0)
+            {
+                FindStatusText.Text = "Save or revert changes to view this match in another chapter.";
+                ClearFindHighlights();
+                return;
+            }
+            _continuousHighlightAdorner?.ShowFind(findRange.Start, findRange.Length);
             BringContinuousHighlightIntoView(match.Start);
             return;
         }
@@ -4298,6 +4336,7 @@ public partial class MainWindow : Window
         PlayPauseIcon.Data = (Geometry)FindResource(
             pauseVisible ? "PauseGeometry" : "PlayGeometry");
         var documentBusy = _documentReloadInProgress || _documentMutationInProgress;
+        UpdateChapterControls(documentBusy, documentActive);
         PlayPauseButton.IsEnabled = !documentBusy && (hasDocument || _ephemeralPlaying || ephemeralPaused);
         PlayFromCursorButton.IsEnabled = continuousEditableDocument &&
             !documentBusy &&

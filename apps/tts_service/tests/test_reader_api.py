@@ -904,6 +904,11 @@ def test_folder_privacy_lock_conceals_content_and_supports_recovery(tmp_path: Pa
     blocked = client.get(f"/v1/reader/documents/{document['id']}", headers=headers)
     assert blocked.status_code == 423
     assert blocked.json()["error"]["type"] == "reader_privacy_locked"
+    assert client.post(
+        f"/v1/reader/documents/{document['id']}/chapters", headers=headers,
+        json={"expected_row_version": document["row_version"], "action": "rename",
+              "chapter_id": "root", "title": "Must remain private"},
+    ).status_code == 423
     assert client.get(
         "/v1/reader/documents",
         headers=headers,

@@ -25,7 +25,8 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
     public async Task<ClipboardCaptureResult> AppendAsync(
         string text,
         ReaderDocument? openDocument,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool newChapter = true)
     {
         ValidateText(text);
         if (openDocument is null || !openDocument.IsEditable)
@@ -39,7 +40,7 @@ public sealed class ClipboardDocumentCapture(IReaderServiceClient client)
         {
             var mutation = await client.AppendContentAsync(
                 openDocument.Id,
-                new AppendContentRequest(openDocument.RowVersion, text),
+                new AppendContentRequest(openDocument.RowVersion, text, NewChapter: newChapter),
                 cancellationToken).ConfigureAwait(false);
             return new ClipboardCaptureResult(
                 true,

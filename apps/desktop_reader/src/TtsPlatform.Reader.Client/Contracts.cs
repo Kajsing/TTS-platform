@@ -181,6 +181,9 @@ public interface IReaderServiceClient
         string documentId,
         ExpectedVersionRequest request,
         CancellationToken cancellationToken = default);
+    Task<MutationResponse> EditChapterAsync(
+        string documentId, EditChapterRequest request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Chapter editing is unavailable in this client.");
     Task<MutationResponse> RedoAsync(
         string documentId,
         ExpectedVersionRequest request,
@@ -604,7 +607,17 @@ public sealed record ReplaceContentRequest(
 
 public sealed record AppendContentRequest(
     [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion,
-    string Text);
+    string Text,
+    [property: JsonPropertyName("new_chapter")] bool NewChapter = false,
+    [property: JsonPropertyName("chapter_title")] string? ChapterTitle = null);
+
+public sealed record EditChapterRequest(
+    [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion,
+    string Action,
+    [property: JsonPropertyName("chapter_id")] string? ChapterId = null,
+    string? Title = null,
+    [property: JsonPropertyName("block_id")] string? BlockId = null,
+    [property: JsonPropertyName("character_offset")] int CharacterOffset = 0);
 
 public sealed record ExpectedVersionRequest(
     [property: JsonPropertyName("expected_row_version")] int ExpectedRowVersion);

@@ -570,6 +570,7 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         payload.get("live_clipboard_no_persist") is not True
         or payload.get("live_clipboard_append_undo") is not True
         or payload.get("live_cross_block_delete_undo") is not True
+        or payload.get("live_chapters") is not True
     ):
         raise DesktopReaderCheckError(
             "The .NET client did not confirm private immediate speech and clipboard append/undo."
@@ -926,6 +927,7 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "voice_preview_activity_guards",
         "playback_input_diagnostics",
         "playback_pause_viewport",
+        "chapter_views",
         "document_switch_safety",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):

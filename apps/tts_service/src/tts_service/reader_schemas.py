@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
@@ -169,9 +169,7 @@ class ReaderFolderResponse(BaseModel):
             article_count=0 if concealed else folder.article_count,
             privacy_locked=folder.privacy_locked,
             privacy_unlocked=(
-                not folder.privacy_locked
-                if privacy_unlocked is None
-                else privacy_unlocked
+                not folder.privacy_locked if privacy_unlocked is None else privacy_unlocked
             ),
         )
 
@@ -331,6 +329,16 @@ class ReplaceReaderContentRequest(ExpectedReaderVersionRequest):
 
 class AppendReaderContentRequest(ExpectedReaderVersionRequest):
     text: str = Field(min_length=1, max_length=10_000_000)
+    new_chapter: bool = False
+    chapter_title: str | None = Field(default=None, min_length=1, max_length=300)
+
+
+class EditReaderChapterRequest(ExpectedReaderVersionRequest):
+    action: Literal["add", "rename", "merge"]
+    chapter_id: str | None = Field(default=None, max_length=100)
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    block_id: str | None = Field(default=None, max_length=100)
+    character_offset: int = Field(default=0, ge=0)
 
 
 class ReaderBlockResponse(BaseModel):
@@ -735,17 +743,12 @@ class ReaderHighlighterResponse(BaseModel):
     terms: list[ReaderHighlighterTermResponse]
 
     @classmethod
-    def from_domain(
-        cls, configuration: HighlighterConfiguration
-    ) -> "ReaderHighlighterResponse":
+    def from_domain(cls, configuration: HighlighterConfiguration) -> "ReaderHighlighterResponse":
         return cls(
             id=configuration.id,
             row_version=configuration.row_version,
             updated_at=configuration.updated_at,
-            terms=[
-                ReaderHighlighterTermResponse.from_domain(term)
-                for term in configuration.terms
-            ],
+            terms=[ReaderHighlighterTermResponse.from_domain(term) for term in configuration.terms],
         )
 
 

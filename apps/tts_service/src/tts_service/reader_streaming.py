@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from reader_core import ReaderBlock, ReaderStaleCursorError, ReaderValidationError, SpeechRule
+from reader_core.chapters import read_markers
 from speech_rules import RuleContext, RuleWarning, SpeechRuleEngine
 from tts_core.text import ChunkPlanner, SentenceSegmenter, TextNormalizer
 
@@ -276,14 +277,12 @@ class ReaderSpeechCompiler:
             if chunk_text[chunk_index].isspace():
                 while chunk_index < len(chunk_text) and chunk_text[chunk_index].isspace():
                     chunk_index += 1
-                while source_index < len(normalized_text) and normalized_text[
-                    source_index
-                ].isspace():
+                while (
+                    source_index < len(normalized_text) and normalized_text[source_index].isspace()
+                ):
                     source_index += 1
                 continue
-            while source_index < len(normalized_text) and normalized_text[
-                source_index
-            ].isspace():
+            while source_index < len(normalized_text) and normalized_text[source_index].isspace():
                 source_index += 1
             if (
                 source_index >= len(normalized_text)
@@ -356,6 +355,9 @@ class ReaderStreamWindowBuilder:
         first = window_candidates[0]
 
         remaining_characters = max_source_characters
+        chapter_starts: dict[str, list[int]] = {}
+        for marker in read_markers(document.metadata, first.id):
+            chapter_starts.setdefault(marker.block_id, []).append(marker.codepoint_offset)
         slices: list[ReaderBlockSlice] = []
         next_cursor: ReaderStreamCursor | None = None
         generated_cursor = ReaderStreamCursor(
@@ -405,8 +407,27 @@ class ReaderStreamWindowBuilder:
         block_slices = tuple(slices)
         if not block_slices:
             raise ReaderValidationError("stream window contains no readable blocks")
+        # Split only the compiler input. The window's source blocks, limits and
+        # continuation cursor keep their original meaning.
+        chapter_slices: list[ReaderBlockSlice] = []
+        for source in block_slices:
+            boundaries = sorted(
+                {
+                    source.start_offset,
+                    source.end_offset,
+                    *(
+                        offset
+                        for offset in chapter_starts.get(source.block.id, [])
+                        if source.start_offset < offset < source.end_offset
+                    ),
+                }
+            )
+            chapter_slices.extend(
+                ReaderBlockSlice(source.block, left, right)
+                for left, right in zip(boundaries, boundaries[1:], strict=False)
+            )
         fragments, rule_warnings = self._compiler.compile_slices_with_warnings(
-            block_slices,
+            tuple(chapter_slices),
             content_revision=document.content_revision,
             language_hint=language_hint or document.language_hint,
         )
@@ -427,8 +448,7 @@ class ReaderStreamWindowBuilder:
             next_cursor=next_cursor,
             document_complete=next_cursor is None,
             source_character_count=sum(
-                block_slice.end_offset - block_slice.start_offset
-                for block_slice in block_slices
+                block_slice.end_offset - block_slice.start_offset for block_slice in block_slices
             ),
             rule_warnings=rule_warnings,
             rules_version=rules_version,

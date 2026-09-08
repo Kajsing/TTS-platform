@@ -11,7 +11,7 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <TextBlock Text="Document title" FontSize="20" FontWeight="SemiBold" />
+    <TextBlock x:Name="TitleLabel" Text="Document title" FontSize="20" FontWeight="SemiBold" />
     <TextBox Grid.Row="1" x:Name="TitleTextBox" Margin="0,10,0,0" MaxLength="500"
              AutomationProperties.Name="New document title" />
     <TextBlock Grid.Row="2" x:Name="ValidationText" Foreground="#9A1B1B" Margin="0,6,0,0" />

@@ -52,7 +52,7 @@ _ALLOWED_REMOTE_ROUTES = (
         "POST",
         re.compile(
             rf"^/v1/reader/documents/{_RESOURCE_ID}/"
-            r"(?:duplicate-as-editable|restore|append|undo|redo)$"
+            r"(?:duplicate-as-editable|restore|append|chapters|undo|redo)$"
         ),
     ),
     ("PATCH", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/content$")),

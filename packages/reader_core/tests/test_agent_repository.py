@@ -212,6 +212,9 @@ def test_restart_lost_response_new_retry_alias_and_payload_conflicts(repository,
     for attempt in (delivery(), delivery(retry_key="attempt:2"), delivery(retry_key="attempt:2")):
         retry = reopened.deliver_chapter(secret, article.id, attempt, expected_row_version=1)
         assert retry == replace(original, outcome="already_imported")
+    markers = repository.get_document(article.id).metadata["chapter_markers_v1"]
+    assert len(markers) == 2  # Seed article plus exactly one delivered chapter.
+    assert markers[1]["title"] == delivery().title
     for changed in (
         delivery(text="Changed!"),
         delivery(source_url="https://example.com/elsewhere"),

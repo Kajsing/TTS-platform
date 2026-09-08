@@ -21,6 +21,7 @@ public partial class ClipboardCaptureDialog : Window
     }
 
     public ClipboardCaptureAction SelectedAction { get; private set; } = ClipboardCaptureAction.Ignore;
+    public bool StartNewChapter => NewChapterCheckBox.IsChecked == true;
 
     private void ReadNow_Click(object sender, RoutedEventArgs e) =>
         Complete(ClipboardCaptureAction.ReadNow);
