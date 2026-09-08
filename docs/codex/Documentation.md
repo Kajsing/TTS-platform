@@ -5,6 +5,20 @@ This file is the live status log and shared memory for future Codex loops.
 ## Current Status
 
 - Date: 2026-09-08
+- Follow-up to the work-PC installation: the initial checks ran elevated and
+  did not prove ordinary Explorer-launched use. A normal-user probe could read
+  the service token but could not see the settings file created in the elevated
+  session. The normal service launcher then failed with WinError 5 because the
+  installed Kokoro package had a protected owner/SYSTEM/Administrators DACL and
+  an Administrators owner. Created the Reader connection in the ordinary user
+  context and added an inheritable Modify grant for that user only on the
+  installed Kokoro package. Ordinary-user service startup, ownership, HTTP/job/
+  stream synthesis and a non-silent 3.10-second WAV now pass. The user reopened
+  Reader and confirmed Ready. Service and Reader remain in the ordinary session;
+  application source and company security policy were not changed. The initial
+  50-ms job-poll smoke hit the existing 30/minute rate limit; after its window
+  expired, `--poll-interval-ms 1000` passed without changing that limit. Details
+  and evidence are appended to `.logs/2026-09-08-local-tray-install.md`.
 - Completed local build/install request on `C:\home\TTS-platform`: published a
   self-contained Windows x64 Reader to `dist/windows/TTSPlatform.Reader` and
   created root `TTS Platform Tray.lnk` with `--background`. The shortcut was
