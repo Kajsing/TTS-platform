@@ -7,6 +7,41 @@ namespace TtsPlatform.Reader.Client.Tests;
 public sealed class ReaderServiceClientTests
 {
     [Fact]
+    public async Task Capture_request_preserves_identity_body_and_authentication()
+    {
+        var id = Guid.NewGuid().ToString();
+        var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK,
+            $"{{\"operation_id\":\"{id}\",\"document_id\":\"doc\",\"outcome\":\"delivered\"}}"));
+        var client = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"));
+        Assert.Equal(id, (await client.DeliverCaptureAsync(id, new("append", "Saved text.", TargetOperationId: "parent"))).OperationId);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/v1/reader/captures/" + id, request.Uri.AbsolutePath);
+        Assert.Equal("Bearer owner", request.Authorization);
+        using var body = System.Text.Json.JsonDocument.Parse(request.Body!);
+        Assert.Equal("parent", body.RootElement.GetProperty("target_operation_id").GetString());
+        Assert.True(body.RootElement.GetProperty("new_chapter").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Shared_cooldown_blocks_background_calls_without_sending_another_request()
+    {
+        var handler = new RecordingHandler(_ =>
+        {
+            var response = Json(HttpStatusCode.TooManyRequests, "{\"error\":{\"type\":\"rate_limited\",\"message\":\"Wait\"}}");
+            response.Headers.RetryAfter = new(TimeSpan.FromSeconds(42));
+            return response;
+        });
+        var cooldown = new ReaderRequestCooldown();
+        var first = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"), cooldown: cooldown);
+        var second = new ReaderServiceClient(new HttpClient(handler), "http://localhost:7777/", new StaticTokenProvider("owner"), cooldown: cooldown);
+        var error = await Assert.ThrowsAsync<ReaderApiException>(() => first.GetCapabilitiesAsync());
+        Assert.Equal(429, error.StatusCode);
+        Assert.InRange(cooldown.RemainingSeconds, 40, 42);
+        await Assert.ThrowsAsync<ReaderApiException>(() => second.GetCapabilitiesAsync());
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
     public async Task Chapter_mutation_uses_authenticated_body_and_utf16_cursor()
     {
         var handler = new RecordingHandler(_ => Json(HttpStatusCode.OK, $"{{\"document\":{DocumentJson},\"edit\":null}}"));

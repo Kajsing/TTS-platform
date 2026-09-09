@@ -47,6 +47,7 @@ _ALLOWED_REMOTE_ROUTES = (
     ("POST", re.compile(rf"^/v1/reader/imports/{_RESOURCE_ID}/commit$")),
     ("DELETE", re.compile(rf"^/v1/reader/imports/{_RESOURCE_ID}$")),
     ("GET|POST", re.compile(r"^/v1/reader/documents$")),
+    ("POST", re.compile(rf"^/v1/reader/captures/{_RESOURCE_ID}$")),
     ("GET|PATCH|DELETE", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}$")),
     (
         "POST",

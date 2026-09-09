@@ -88,6 +88,7 @@ public partial class App
             await first.VerifyDocumentSwitchAsync();
             await first.VerifyPlaybackViewportAsync(root);
             await first.VerifyChapterViewsAsync(root);
+            await first.VerifyCaptureOutboxAsync(root);
             first.Close();
             await Idle();
             Require(_serviceCenter.Reader is null && ReaderTrayIcon.LiveInstances == 1,

@@ -133,6 +133,35 @@ class ReaderDocumentPageResponse(BaseModel):
     next_cursor: str | None
 
 
+class ReaderCaptureRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    action: Literal["create", "append"]
+    text: str = Field(min_length=1, max_length=1_000_000)
+    title: str = Field(default="Clipboard article", min_length=1, max_length=500)
+    document_id: str | None = Field(default=None, max_length=100)
+    target_operation_id: str | None = Field(default=None, max_length=100)
+    folder_id: str | None = Field(default=None, max_length=100)
+    new_chapter: bool = True
+    allow_duplicate: bool = False
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if not self.text.strip():
+            raise ValueError("Capture text cannot be empty")
+        targets = bool(self.document_id) + bool(self.target_operation_id)
+        if (self.action == "append" and targets != 1) or (self.action == "create" and targets):
+            raise ValueError(
+                "Append requires exactly one target; create cannot have an article target"
+            )
+        return self
+
+
+class ReaderCaptureResponse(BaseModel):
+    operation_id: str
+    document_id: str
+    outcome: Literal["delivered", "already_delivered"]
+
+
 class CreateReaderDocumentRequest(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     source_type: SourceType = SourceType.PLAIN_TEXT

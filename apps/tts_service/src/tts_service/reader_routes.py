@@ -25,10 +25,12 @@ from reader_core import (
     ReaderValidationError,
     SpeechRule,
 )
+from reader_core.sqlite.capture_repository import CaptureRepository
 from speech_rules import RuleContext, SpeechRuleError
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import FileResponse
 
+from .errors import APIError
 from .reader_errors import (
     reader_api_error,
     reader_database_unavailable,
@@ -64,6 +66,8 @@ from .reader_schemas import (
     ReaderBrowserCaptureCapability,
     ReaderBrowserCaptureResponse,
     ReaderCapabilitiesResponse,
+    ReaderCaptureRequest,
+    ReaderCaptureResponse,
     ReaderCursorPayload,
     ReaderDatabaseCapability,
     ReaderDesktopOpenRequestResponse,
@@ -124,6 +128,7 @@ from .reader_schemas import (
 from .reader_service import (
     BrowserCaptureContentBlock,
     ReaderApplicationService,
+    ReaderDuplicateDocumentError,
     ReaderImportPreview,
     ReaderImportPreviewCapacityError,
     ReaderImportPreviewNotFoundError,
@@ -134,6 +139,46 @@ T = TypeVar("T")
 
 def build_reader_router() -> APIRouter:
     router = APIRouter(prefix="/v1/reader", tags=["reader"])
+
+    @router.post("/captures/{operation_id}", response_model=ReaderCaptureResponse)
+    async def deliver_capture(
+        request: Request, operation_id: uuid.UUID, payload: ReaderCaptureRequest
+    ) -> ReaderCaptureResponse:
+        service = _service(request)
+        captures = CaptureRepository(service.repository)
+        body = payload.model_dump()
+
+        def commit():
+            target = _run_reader(lambda: captures.target(body))
+
+            def operation():
+                try:
+                    return captures.deliver(
+                        str(operation_id),
+                        body,
+                        authorize_folder=lambda folder: _require_folder_access(request, folder),
+                        duplicate_error=ReaderDuplicateDocumentError,
+                    )
+                except APIError as error:
+                    # Database rollback is complete. Carry the frozen API error
+                    # past the lease context, which otherwise mutates traceback.
+                    return error
+
+            result = (
+                _run_content_mutation(service, target, operation)
+                if target
+                else _run_reader(operation)
+            )
+            if isinstance(result, APIError):
+                raise result
+            service.observability.log_reader_operation(
+                operation="capture_delivery", document_id=result["document_id"]
+            )
+            return result
+
+        # Large capture parsing/database work must not starve playback/status.
+        result = await run_in_threadpool(commit)
+        return ReaderCaptureResponse(**result)
 
     @router.get("/capabilities", response_model=ReaderCapabilitiesResponse)
     async def capabilities(request: Request) -> ReaderCapabilitiesResponse:

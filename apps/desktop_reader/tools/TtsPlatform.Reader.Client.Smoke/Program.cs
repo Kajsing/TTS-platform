@@ -217,6 +217,22 @@ if (chapterRestored.Document.Metadata.GetProperty("chapter_markers_v1").GetRawTe
         .SequenceEqual(rangeRestoredBlocks.Blocks.Select(block => block.Text)))
     throw new InvalidOperationException("Chapter merge/Undo changed text or failed to restore markers.");
 
+var captureId = Guid.NewGuid().ToString();
+var capturedText = string.Concat(Enumerable.Repeat("Synthetic outbox paragraph. ", 6000)).Trim();
+var captureRequest = new CaptureRequest("create", capturedText, "Synthetic outbox article");
+var captureReceipt = await client.DeliverCaptureAsync(captureId, captureRequest);
+var captureReplay = await client.DeliverCaptureAsync(captureId, captureRequest);
+var appendCaptureId = Guid.NewGuid().ToString();
+var appendCapture = new CaptureRequest("append", "Synthetic second chapter.", TargetOperationId: captureId);
+await client.DeliverCaptureAsync(appendCaptureId, appendCapture);
+var appendReplay = await client.DeliverCaptureAsync(appendCaptureId, appendCapture);
+var capturedDocument = await client.GetDocumentAsync(captureReceipt.DocumentId);
+var capturedBlocks = await client.GetBlocksAsync(captureReceipt.DocumentId);
+if (captureReplay.Outcome != "already_delivered" || appendReplay.Outcome != "already_delivered" ||
+    capturedDocument.ContentRevision != 2 || capturedDocument.Metadata.GetProperty("chapter_markers_v1").GetArrayLength() != 2 ||
+    !capturedBlocks.Blocks.Select(block => block.Text).SequenceEqual(new[] { capturedText, appendCapture.Text }))
+    throw new InvalidOperationException("Live large capture delivery duplicated or lost source text/chapters.");
+
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     live_reader_paging = true,
@@ -231,6 +247,7 @@ Console.WriteLine(JsonSerializer.Serialize(new
     live_clipboard_append_undo = true,
     live_cross_block_delete_undo = true,
     live_chapters = true,
+    live_capture_receipts = true,
     pcm_frames = pcmFrames,
     pcm_bytes = pcmBytes,
     source_spans = sourceSpans,

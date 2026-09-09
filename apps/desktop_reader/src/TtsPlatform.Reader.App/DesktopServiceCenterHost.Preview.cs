@@ -40,7 +40,8 @@ internal sealed partial class DesktopServiceCenterHost
                 await EnsureCoordinatorAsync();
                 http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
                 { Timeout = TimeSpan.FromSeconds(95) };
-                var client = new ReaderServiceClient(http, _localEndpoint, new FileTokenProvider(_tokenPath!));
+                var client = new ReaderServiceClient(http, _localEndpoint, new FileTokenProvider(_tokenPath!),
+                    cooldown: ReaderRequestCooldown.ForService(_localEndpoint));
                 runner = new VoicePreviewRunner(client, () => new VoicePreviewAudio());
             }
             await runner.RunAsync(voiceId, message =>

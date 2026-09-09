@@ -4,7 +4,21 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Date: 2026-09-08
+- Date: 2026-09-09
+- Completed: user-approved durable capture outbox and rate-limit recovery;
+  contract, limits, recovery UI and validation are in `docs/reader_capture_outbox_plan.md`.
+  Explicitly accepted captures are DPAPI-protected locally and delivered FIFO with
+  transactional receipts (schema 11), independent refresh retry and a shared 429
+  cooldown. 654 Python tests (2 optional skips), 313 .NET tests, lint/format,
+  live isolated HTTP, portable/WPF and Windows audio probes pass. Root-shortcut
+  binary published and its outbox probe/render verified. User closed Reader/tray;
+  SQLite backup passed, verified-owner service restart reports schema 11/25 voices,
+  and articles/blocks/positions match the backup. No live articles were changed.
+  This is capture delivery, not full offline library synchronization. Keep Reader
+  open for delivery; pending files survive closing/restart. Playback faults remain
+  a separate evidence-driven follow-up; U8 stays parked.
+  Optional local SAPI fallback reader is recorded there as a much-later side quest,
+  not an implementation target and not a revival of TextAloud integration.
 - Completed user-approved chapter run: independent, bounded markers over
   canonical article text (not import sections), chapter/all views, exact-caret
   boundaries, rename/merge-with-previous, atomic marker/text Undo and Redo,

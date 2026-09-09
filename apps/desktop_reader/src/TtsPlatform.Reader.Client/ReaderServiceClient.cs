@@ -16,13 +16,15 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
     private readonly ITokenProvider _tokenProvider;
     private readonly ReaderPrivacySessionStore? _privacySessions;
     private readonly bool _authenticateHealth;
+    private readonly ReaderRequestCooldown _cooldown;
 
     public ReaderServiceClient(
         HttpClient httpClient,
         string serviceBaseUrl,
         ITokenProvider tokenProvider,
         ReaderPrivacySessionStore? privacySessions = null,
-        bool allowRemote = false)
+        bool allowRemote = false,
+        ReaderRequestCooldown? cooldown = null)
     {
         _httpClient = httpClient;
         _httpClient.BaseAddress = allowRemote
@@ -31,10 +33,14 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         _tokenProvider = tokenProvider;
         _privacySessions = privacySessions;
         _authenticateHealth = allowRemote;
+        _cooldown = cooldown ?? new ReaderRequestCooldown();
     }
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
         SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken);
+
+    public Task<CaptureReceipt> DeliverCaptureAsync(string operationId, CaptureRequest request, CancellationToken cancellationToken = default) =>
+        SendAsync<CaptureReceipt>(HttpMethod.Post, $"v1/reader/captures/{Uri.EscapeDataString(operationId)}", true, request, cancellationToken);
 
     public Task<LocalServiceStatus> GetLocalStatusAsync(CancellationToken cancellationToken = default) =>
         SendAsync<LocalServiceStatus>(HttpMethod.Get, "v1/service/status", true, null, cancellationToken);
@@ -1197,6 +1203,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        _cooldown.Check();
         var token = (await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false))?.Trim();
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -1214,10 +1221,11 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         }
     }
 
-    private static async Task ThrowApiExceptionAsync(
+    private async Task ThrowApiExceptionAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
+        _cooldown.Observe(response);
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -1230,6 +1238,8 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
                 ? requestIdElement.GetString()
                 : null;
             var details = new Dictionary<string, object?>();
+            if ((int)response.StatusCode == 429)
+                details["retry_after_seconds"] = Math.Max(1, _cooldown.RemainingSeconds);
             if (error.TryGetProperty("details", out var detailsElement))
             {
                 foreach (var item in detailsElement.EnumerateObject())

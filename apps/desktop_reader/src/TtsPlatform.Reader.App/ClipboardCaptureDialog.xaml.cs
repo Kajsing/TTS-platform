@@ -8,7 +8,8 @@ public partial class ClipboardCaptureDialog : Window
     public ClipboardCaptureDialog(
         string text,
         string? sourceExecutable,
-        bool privacyMode)
+        bool privacyMode,
+        string? appendTarget = null)
     {
         InitializeComponent();
         SourceText.Text = sourceExecutable is null
@@ -18,6 +19,7 @@ public partial class ClipboardCaptureDialog : Window
             ? "Preview hidden by privacy mode. Choose an action or Ignore."
             : text.Length <= 500 ? text : $"{text[..500]}…";
         AlwaysIgnoreButton.IsEnabled = !string.IsNullOrWhiteSpace(sourceExecutable);
+        if (appendTarget is not null) AppendTargetText.Text = "Add target: " + appendTarget;
     }
 
     public ClipboardCaptureAction SelectedAction { get; private set; } = ClipboardCaptureAction.Ignore;

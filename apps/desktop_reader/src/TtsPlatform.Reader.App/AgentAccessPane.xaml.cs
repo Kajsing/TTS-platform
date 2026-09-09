@@ -48,7 +48,8 @@ public partial class AgentAccessPane : UserControl, IDisposable
             return;
         }
         _client = new ReaderServiceClient(_http, settings.ServiceBaseUrl,
-            new FileTokenProvider(settings.EffectiveTokenSource.Path));
+            new FileTokenProvider(settings.EffectiveTokenSource.Path),
+            cooldown: files is not null ? null : ReaderRequestCooldown.ForService(settings.ServiceBaseUrl));
     }
 
     private async Task RefreshAsync()

@@ -120,6 +120,9 @@ public class DocumentSwitchSmokeClient : DispatchProxy
     public bool FailBlocks { get; set; }
     public bool FailLibrary { get; set; }
     public int DeleteCalls { get; private set; }
+    public TaskCompletionSource<CaptureReceipt>? CaptureGate { get; set; }
+    public ReaderApiException? CaptureFailure { get; set; }
+    public int CaptureCalls { get; private set; }
     private static ReaderDocument Document(string id) => new(id, $"Synthetic {id}", "clipboard",
         null, null, null, null, "inbox", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
         DateTimeOffset.UnixEpoch, null, 1, 1, 1, 1, 20, Metadata);
@@ -131,6 +134,10 @@ public class DocumentSwitchSmokeClient : DispatchProxy
         var id = args?.FirstOrDefault() as string;
         switch (method?.Name)
         {
+            case nameof(IReaderServiceClient.DeliverCaptureAsync):
+                CaptureCalls++;
+                if (CaptureFailure is not null) return Task.FromException<CaptureReceipt>(CaptureFailure);
+                return CaptureGate?.Task ?? Task.FromResult(new CaptureReceipt(id!, "first", "delivered"));
             case nameof(IReaderServiceClient.GetDocumentAsync):
                 return Task.FromResult(Documents.Single(item => item.Id == id));
             case nameof(IReaderServiceClient.GetBlocksAsync):

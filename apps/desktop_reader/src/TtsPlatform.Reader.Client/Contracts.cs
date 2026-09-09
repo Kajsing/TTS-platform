@@ -10,6 +10,8 @@ public interface ITokenProvider
 
 public interface IReaderServiceClient
 {
+    Task<CaptureReceipt> DeliverCaptureAsync(string operationId, CaptureRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Capture delivery requires an updated Reader service.");
     Task<ReaderAgentGrantPage> GetAgentGrantsAsync(
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<ReaderAgentProvisionResult> ProvisionAgentAsync(

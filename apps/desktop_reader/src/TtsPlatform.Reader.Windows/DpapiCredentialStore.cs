@@ -103,7 +103,12 @@ public sealed class DpapiCredentialStore(string? directory = null)
         var temporaryPath = path + $".{Guid.NewGuid():N}.tmp";
         try
         {
-            File.WriteAllBytes(temporaryPath, encrypted);
+            using (var file = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write,
+                       FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                file.Write(encrypted);
+                file.Flush(flushToDisk: true);
+            }
             File.Move(temporaryPath, path, true);
         }
         finally

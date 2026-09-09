@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import defaultdict, deque
@@ -52,6 +53,9 @@ class RateLimiter:
                     details={
                         "requests_per_minute": self.requests_per_minute,
                         "client": client_key,
+                        "retry_after_seconds": max(
+                            1, math.ceil(events[0] + self.window_seconds - now)
+                        ),
                     }
                 )
             events.append(now)

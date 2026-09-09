@@ -107,6 +107,11 @@
             </StackPanel>
           </StackPanel>
         </DockPanel>
+        <DockPanel x:Name="CaptureStatusPanel" Margin="0,7,0,0" Visibility="Collapsed">
+          <Button DockPanel.Dock="Right" Content="Capture queue…" Click="CaptureQueue_Click" />
+          <TextBlock x:Name="CaptureStatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+                     AutomationProperties.LiveSetting="Polite" />
+        </DockPanel>
         <Expander Header="Connection, voice, and diagnostics" Margin="0,7,0,0">
           <StackPanel Margin="0,5,0,0">
             <DockPanel Margin="0,0,0,7">

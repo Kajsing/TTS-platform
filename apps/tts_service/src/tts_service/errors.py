@@ -117,6 +117,7 @@ def rate_limited(
 ) -> APIError:
     return APIError(
         status_code=429,
+        headers={"Retry-After": str((details or {}).get("retry_after_seconds", 60))},
         error=ErrorBody(
             type="rate_limited",
             message=message,

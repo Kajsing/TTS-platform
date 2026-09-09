@@ -46,7 +46,8 @@ internal sealed partial class DesktopServiceCenterHost
         _serviceHttp?.Dispose();
         _serviceHttp = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
         { Timeout = TimeSpan.FromSeconds(4) };
-        var client = new ReaderServiceClient(_serviceHttp, endpoint.AbsoluteUri, new FileTokenProvider(tokenPath));
+        var client = new ReaderServiceClient(_serviceHttp, endpoint.AbsoluteUri, new FileTokenProvider(tokenPath),
+            cooldown: ReaderRequestCooldown.ForService(endpoint.AbsoluteUri));
         _coordinator = new LocalServiceCoordinator(client, new LocalServiceProcessControl(endpoint));
         _coordinator.Changed += CoordinatorChanged;
         _localEndpoint = endpoint.AbsoluteUri;

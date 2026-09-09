@@ -5,6 +5,10 @@ class ReaderError(Exception):
     """Base error for the Reader domain and persistence layer."""
 
 
+class CapturePayloadConflictError(ReaderError):
+    """An immutable capture delivery identity was reused with different content."""
+
+
 class ReaderValidationError(ReaderError):
     """Raised when Reader input violates a domain invariant."""
 

@@ -145,6 +145,7 @@ public partial class MainWindow : Window
         }
         if (!_smokeTest)
         {
+            await InitializeCaptureOutboxAsync();
             await RefreshConnectionAsync();
         }
     }
@@ -525,6 +526,8 @@ public partial class MainWindow : Window
         _findCancellation?.Dispose();
         _desktopOpenTimer.Stop();
         _clipboardSnoozeTimer.Stop();
+        _captureTimer.Stop();
+        _captureCancellation.Cancel();
         _autoAdvanceLock.Dispose();
         _audioInterruptionLock.Dispose();
         _httpClient?.Dispose();
@@ -813,19 +816,23 @@ public partial class MainWindow : Window
                 connection.CredentialId);
         }
         _privacySessions = new ReaderPrivacySessionStore();
+        _captureTokenProvider = tokenProvider;
+        _captureServiceUrl = connection.ServiceBaseUrl;
         _privacySessions.SessionsChanged += PrivacySessions_SessionsChanged;
         _client = new ReaderServiceClient(
             _httpClient,
             connection.ServiceBaseUrl,
             tokenProvider,
             _privacySessions,
-            allowRemote: !connection.IsLocal);
+            allowRemote: !connection.IsLocal,
+            cooldown: _smokeTest ? null : ReaderRequestCooldown.ForService(connection.ServiceBaseUrl));
         _synthesisClient = new ReaderServiceClient(
             _synthesisHttpClient,
             connection.ServiceBaseUrl,
             tokenProvider,
             _privacySessions,
-            allowRemote: !connection.IsLocal);
+            allowRemote: !connection.IsLocal,
+            cooldown: _smokeTest ? null : ReaderRequestCooldown.ForService(connection.ServiceBaseUrl));
         _library = new LibraryPager(_client);
         _library.SetClosedFolders(FolderVisibility.ClosedFolderIds(_settings));
         _readingWindow = new ReadingWindowPager(_client);
@@ -1272,7 +1279,6 @@ public partial class MainWindow : Window
     {
         if (!_settings.ClipboardMonitoringEnabled ||
             _copySelectionInProgress ||
-            _clipboardPromptOpen ||
             _clipboardPromptPolicy.IsSnoozed(_settings.ClipboardPromptSnoozedUntilUtc) ||
             IsBlockedApplication(change.SourceExecutable))
         {
@@ -1300,13 +1306,30 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_clipboardPromptOpen)
+        {
+            if (_deferredClipboardPrompts.Count >= CaptureOutbox.MaxItems ||
+                _deferredClipboardPrompts.Sum(item => item.Text.Length) + text.Length > CaptureOutbox.MaxCharacters)
+            {
+                FooterText.Text = "Clipboard prompt buffer is full. This copy was NOT saved; finish the open prompt before copying more.";
+                return;
+            }
+            _deferredClipboardPrompts.Enqueue((text, change));
+            return;
+        }
+        await ShowCapturedClipboardPromptAsync(text, change);
+    }
+
+    private async Task ShowCapturedClipboardPromptAsync(string text, ClipboardChangedEventArgs change)
+    {
         _clipboardPromptOpen = true;
         try
         {
             var dialog = new ClipboardCaptureDialog(
                 text,
                 change.SourceExecutable,
-                _settings.PrivacyMode)
+                _settings.PrivacyMode,
+                PendingAppendTarget is not null ? "queued new article (" + _pendingCaptureTitle + ")" : _editor?.Document?.Title)
             {
                 Owner = IsActive ? this : null,
             };
@@ -1327,6 +1350,19 @@ public partial class MainWindow : Window
         finally
         {
             _clipboardPromptOpen = false;
+            if (_closed || _clipboardPromptPolicy.IsSnoozed(_settings.ClipboardPromptSnoozedUntilUtc))
+            {
+                _deferredClipboardPrompts.Clear();
+            }
+            else
+            {
+                while (_deferredClipboardPrompts.TryDequeue(out var next))
+                {
+                    if (IsBlockedApplication(next.Change.SourceExecutable)) continue;
+                    await ShowCapturedClipboardPromptAsync(next.Text, next.Change);
+                    break;
+                }
+            }
         }
     }
 
@@ -1342,31 +1378,12 @@ public partial class MainWindow : Window
                 await StartEphemeralPlaybackAsync(text);
                 return;
             case ClipboardCaptureAction.AppendToOpenDocument:
-                if (_clipboardCapture is null)
-                {
-                    FooterText.Text = "Connect to the local Reader before appending.";
-                    return;
-                }
-                await ApplyClipboardCaptureResultAsync(
-                    await _clipboardCapture.AppendAsync(text, _editor?.Document, newChapter: newChapter));
+                await QueueCaptureAsync(text, create: false, openDocument: true, newChapter);
                 return;
             case ClipboardCaptureAction.CreateNewDocument:
             case ClipboardCaptureAction.SaveToInbox:
-                if (_clipboardCapture is null)
-                {
-                    FooterText.Text = "Connect to the local Reader before saving.";
-                    return;
-                }
-                var openDocument = action == ClipboardCaptureAction.CreateNewDocument;
-                var result = await _clipboardCapture.CreateAsync(text, openDocument);
-                if (result.DuplicateDocumentId is not null)
-                {
-                    result = await ResolveClipboardDuplicateAsync(
-                        result.DuplicateDocumentId,
-                        text,
-                        openDocument);
-                }
-                await ApplyClipboardCaptureResultAsync(result);
+                await QueueCaptureAsync(text, create: true,
+                    openDocument: action == ClipboardCaptureAction.CreateNewDocument, newChapter);
                 return;
             case ClipboardCaptureAction.AlwaysIgnoreApplication:
                 if (!string.IsNullOrWhiteSpace(sourceExecutable))
@@ -2120,7 +2137,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private async Task RefreshLibraryAsync()
+    private async Task RefreshLibraryAsync(bool throwOnFailure = false)
     {
         if (_library is null)
         {
@@ -2143,6 +2160,7 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
         {
             FooterText.Text = $"Library: {exception.Message}";
+            if (throwOnFailure) throw;
         }
     }
 

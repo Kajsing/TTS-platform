@@ -16,6 +16,7 @@ from reader_core import (
     ReaderStaleCursorError,
     ReaderValidationError,
 )
+from reader_core.errors import CapturePayloadConflictError
 from speech_rules import SpeechRuleError, SpeechRuleInterchangeError
 
 from .errors import APIError, ErrorBody
@@ -73,6 +74,12 @@ def translate_reader_error(
     missing_entity: str = "document",
     cursor_input: bool = False,
 ) -> APIError:
+    if isinstance(error, CapturePayloadConflictError):
+        return reader_api_error(
+            "reader_capture_conflict",
+            status_code=409,
+            message="This capture identity was already used for different content.",
+        )
     if isinstance(error, ReaderPrivacyLockedError):
         return reader_api_error(
             "reader_privacy_locked",
