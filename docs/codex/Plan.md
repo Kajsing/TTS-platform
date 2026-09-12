@@ -696,3 +696,15 @@ service; no U8 networking, cloud dependency or unrelated model changes.
   Preserve revision checks, leases, transactional receipts and retry safety.
   This is import/append performance, not evidence of a playback regression.
 - Parked only: no implementation, benchmark, active goal or service restart now.
+
+## Audiobook production - parked epic
+
+User request on 2026-09-13: retain a plan for finished, offline-produced audiobooks
+with character voices and later optional sound design. The staged AB0-AB7 plan
+and acceptance gates are in `docs/reader_audiobook_production_plan.md`.
+
+- [ ] PARKED: source contract, manuscript format/validator/skill, voice audition,
+  resumable production, finished pilot, then optional effects/music and book scale.
+- Preserve normal Reader playback; live dramatization is not a requirement.
+- Resume only after explicit user reactivation when current Reader work is
+  satisfactory. Do not register a goal or automatically start this epic.

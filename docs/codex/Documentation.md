@@ -4,8 +4,15 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Parked epic (2026-09-13): `docs/reader_audiobook_production_plan.md` records
+  finished offline audiobook production, source-faithful manuscript contracts,
+  bounded agent review, auditions, resumable rendering and optional later sound
+  design. AB0-AB7 remain unstarted. User explicitly wants this held until current
+  Reader work is satisfactory and they reactivate it; no goal, new skill, model
+  installation, runtime change or service action was performed. Documentation-only
+  validation checks the diff and local plan references.
 - Backlog update (2026-09-13): user requested a deferred measurement pass for
-  large-article append performance; scope is recorded at the end of `Plan.md`.
+  large-article append performance; scope is recorded in `Plan.md`.
   Slowdown during a large import was qualitative, with no measured per-call
   latency or established cause. This documentation-only update does not start
   performance work, change playback, or alter any running service.
