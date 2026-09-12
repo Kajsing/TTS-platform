@@ -4,6 +4,11 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Backlog update (2026-09-13): user requested a deferred measurement pass for
+  large-article append performance; scope is recorded at the end of `Plan.md`.
+  Slowdown during a large import was qualitative, with no measured per-call
+  latency or established cause. This documentation-only update does not start
+  performance work, change playback, or alter any running service.
 - Date: 2026-09-09
 - Completed: user-approved durable capture outbox and rate-limit recovery;
   contract, limits, recovery UI and validation are in `docs/reader_capture_outbox_plan.md`.

@@ -681,3 +681,18 @@ to register this as the next goal. Scope and acceptance criteria are in
 
 Complete and validate T1 before T2. Preserve the working local Reader and
 service; no U8 networking, cloud dependency or unrelated model changes.
+
+## Deferred: large-article append performance measurement
+
+- [ ] User-requested backlog item (2026-09-13): measure chapter append latency
+  as an article grows. A large MCP import appeared to slow down on later
+  appends, but individual calls were not timed; no cause is confirmed.
+- Use synthetic text and an isolated test workspace. Compare the same appended
+  payload against small, medium and near-limit articles. Record per-call latency
+  and privacy-safe service phase timings to distinguish transport, processing,
+  history/chapter maintenance and persistence costs; check whether existing
+  content is repeatedly processed. Do not log article text or credentials.
+- Report measured scaling and the bottleneck before proposing an optimization.
+  Preserve revision checks, leases, transactional receipts and retry safety.
+  This is import/append performance, not evidence of a playback regression.
+- Parked only: no implementation, benchmark, active goal or service restart now.
