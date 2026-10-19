@@ -4,12 +4,26 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Import-default decision (2026-10-19): future agent imports default to at most
+  900,000 characters per part, split only between complete source chapters.
+  `docs/reader_agent_import_guide.md` and the local `reader-chapter-import` skill
+  now require preflight counts including intro/headings/separators, both code
+  points and UTF-16 units, plus separate block/write/metadata checks and per-part
+  full readback. No chapter truncation, retroactive repartition or cleanup is
+  implied. This supersedes the earlier "no cap chosen" planning status below;
+  no service-side setting or product feature was added. Another user-reported
+  playback rate-limit failure makes budget isolation/recovery high priority
+  within the next-version backlog; implementation is still deferred. Validation:
+  skill validation, documentation diff/references and the six previously verified
+  split bundles checked against the recorded bounds. Running Reader/service,
+  configuration and library were unchanged by this instruction/document update.
 - Next-version backlog (2026-10-19, documentation only): `Plan.md` now records
   bounded large-document work, separate enforced service request budgets for
   playback and background traffic, and budget-specific queue/backoff behavior.
   It also records evaluation of a character cap per imported part, chapter
   navigation in the page-based reader, and preflight/error handling for the
-  separate 64 KiB chapter/edit-metadata constraint. No cap is chosen and no
+  separate 64 KiB chapter/edit-metadata constraint. Initially no cap was chosen;
+  the subsequent import-default decision is recorded above. No
   feature implementation, existing-article repartition, live limit/config change
   or Reader/service restart is authorized by this update. Current source confirms
   chapter UI requires continuous text (1,000,000 characters / 20,000 blocks);

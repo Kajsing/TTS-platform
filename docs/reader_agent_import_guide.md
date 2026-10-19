@@ -61,6 +61,39 @@ chapter heading; remove a clearly bounded closing note; keep a character saying
 "I found the author's note" in dialogue; retain a mixed note/story paragraph when
 its boundary cannot be established. Do not paraphrase prose to make it fit.
 
+## Part default: 900,000 characters, whole chapters
+
+On 2026-10-19 the owner selected **at most 900,000 characters per part, split only
+between complete chapters**, as the default for future agent imports. An explicit
+user override takes precedence. This is an import-workflow default, not a new
+service setting or automatic repartitioning of existing articles.
+
+- Plan consecutive parts before any article creation. Start a new part before
+  adding the next complete chapter would exceed the bound. Preserve requested
+  organization when it fits; do not silently exceed the cap to keep one article.
+- Count the final Reader-normalized text, including introduction, attribution,
+  chapter headings and double-newline paragraph separators. Require both Unicode
+  code-point count and UTF-16 code-unit count to be at most 900,000. Check the
+  current desktop block bound as well (currently 20,000). The existing chapter
+  selector requires the continuous editor, currently limited to 1,000,000 document
+  characters and 20,000 blocks; larger articles use the page-based reader without
+  that selector. Recheck these implementation bounds when they change.
+- Independently check each chapter's service write bound and chapter/edit-history
+  metadata constraints. The current JSON metadata bound is 64 KiB and includes
+  chapter snapshots and appended-block metadata; a character cap alone does not
+  guarantee an append fits. Smaller parts may be necessary. If one chapter cannot
+  fit a part or write bound, explain the limitation and resolve an explicit
+  strategy before delivery; never truncate prose or silently split a chapter.
+- Freeze part membership and payloads before writing. Use clear part numbers and
+  actual source-chapter ranges. Keep source chapter keys/URLs and global order
+  stable, with bundle `number` starting at 1 in each part. Check that the union of
+  parts has no missing, repeated or reordered chapters and preserves their text.
+- Run the offline checker and full MCP readback comparison for every part. The
+  checker does not enforce the 900,000-character ceiling or desktop block bound:
+  separately record normalized character/code-unit counts and block counts.
+  Report each part's range and size. Repartitioning or cleanup of existing
+  articles still requires its own authorization.
+
 ## Preferred workflow
 
 1. Confirm the requested story and observed chapter count/order. Confirm or reuse
@@ -76,7 +109,8 @@ its boundary cannot be established. Do not paraphrase prose to make it fit.
    share state. If necessary, use a temporary loopback-only staging form, with a
    random route, exact Host/Origin checks, bounded body/file destination and
    lifetime, no Reader credentials, no CORS relaxation and verified shutdown.
-4. Validate the staged package below before **any** article creation. Compare it
+4. Apply the part default above and validate every staged part below before
+   **any** article creation. Compare it
    to independently observed page identities, lengths and boundaries. A valid
    hash of the wrong text is still wrong. Investigate short/repeated chapters
    without imposing a universal minimum length on legitimate short chapters.
@@ -90,7 +124,7 @@ its boundary cannot be established. Do not paraphrase prose to make it fit.
    the library/checkpoint before retrying. Only chapter delivery has durable
    retry identities. After `already_imported`, fetch the current article version
    instead of assuming an old receipt's version is current.
-7. Read all receipts and **all text pages** through MCP, fixing
+7. For every part, read all receipts and **all text pages** through MCP, fixing
    `expected_row_version` to the first page's `article.row_version`. Verify
    chapter IDs, order, source URLs and count, then compare the concatenated text
    exactly with the normalized package. A matching snippet or first page is

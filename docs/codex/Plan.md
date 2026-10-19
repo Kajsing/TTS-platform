@@ -690,6 +690,14 @@ do not activate this track, change live limits, repartition existing articles or
 restart Reader/service without a subsequent implementation request. Existing
 active-track priorities and parked U8/audiobook work remain unchanged.
 
+**Priority: high for the next version.** The owner's follow-up on 2026-10-19
+reports another visible playback rate-limit failure after bounded parts were
+introduced. Prioritize playback/background budget isolation and recovery in this
+track; smaller imported parts alone have not resolved the observed failure.
+Implementation remains deferred. The same follow-up selects a 900,000-character,
+whole-chapter default for future agent imports, now maintained in
+`docs/reader_agent_import_guide.md` and the local import skill.
+
 - [ ] Bound service work per request and desktop load/read operation. Plan
   incremental, revision-consistent pages/windows with bounded concurrency,
   cancellation and coalescing of redundant status, document and position calls.
@@ -707,13 +715,15 @@ active-track priorities and parked U8/audiobook work remain unchanged.
   and retain authentication, origin checks, folder scope, leases, optimistic
   revisions, transactional receipts and source-cursor correctness. This is not
   permission to disable limits or merely raise a shared cap.
-- [ ] Evaluate a configurable maximum character count per imported part, with
-  a preview before delivery. Count the final normalized text, including title,
+- [ ] Add product-side configurable part limits and a preview before delivery,
+  using the approved 900,000-character, whole-chapter agent default as the
+  starting policy. Count the final normalized text, including title,
   introduction and chapter headings; account for the desktop character/block
   limits with headroom. Prefer complete chapter boundaries, stable source IDs
   and explicit part/chapter ranges. A chapter exceeding a part bound needs an
   explicit policy; never truncate prose or silently repartition the live library.
-  No default cap is selected by this planning update.
+  The agent-workflow default is already selected; product-side controls and
+  automatic enforcement remain unimplemented.
 - [ ] Include chapter navigation in the bounded page-based reader. Currently
   the chapter toolbar requires the continuous editor (at most 1,000,000 document
   characters and 20,000 blocks), so a chaptered large article can have no visible
