@@ -4,6 +4,20 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Next-version backlog (2026-10-19, documentation only): `Plan.md` now records
+  bounded large-document work, separate enforced service request budgets for
+  playback and background traffic, and budget-specific queue/backoff behavior.
+  It also records evaluation of a character cap per imported part, chapter
+  navigation in the page-based reader, and preflight/error handling for the
+  separate 64 KiB chapter/edit-metadata constraint. No cap is chosen and no
+  feature implementation, existing-article repartition, live limit/config change
+  or Reader/service restart is authorized by this update. Current source confirms
+  chapter UI requires continuous text (1,000,000 characters / 20,000 blocks);
+  larger articles use bounded pages and hide that toolbar. Scoped MCP chapter
+  delivery adds chapter markers, so missing large-article navigation does not
+  itself imply a flat or failed import. Validation: documentation diff/whitespace
+  and local references checked against the current loader, chapter toolbar,
+  delivery and metadata-bound implementations; no runtime changes or live smoke.
 - Parked epic (2026-09-13): `docs/reader_audiobook_production_plan.md` records
   finished offline audiobook production, source-faithful manuscript contracts,
   bounded agent review, auditions, resumable rendering and optional later sound

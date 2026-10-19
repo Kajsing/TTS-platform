@@ -682,6 +682,60 @@ to register this as the next goal. Scope and acceptance criteria are in
 Complete and validate T1 before T2. Preserve the working local Reader and
 service; no U8 networking, cloud dependency or unrelated model changes.
 
+## Next version: large-document work and separate request budgets - deferred
+
+User request on 2026-10-19: record bounded work for large articles and separate
+service request budgets for playback and background work. This is planning only;
+do not activate this track, change live limits, repartition existing articles or
+restart Reader/service without a subsequent implementation request. Existing
+active-track priorities and parked U8/audiobook work remain unchanged.
+
+- [ ] Bound service work per request and desktop load/read operation. Plan
+  incremental, revision-consistent pages/windows with bounded concurrency,
+  cancellation and coalescing of redundant status, document and position calls.
+  Measure request bursts and work/latency separately: a character count alone
+  does not identify the cause of rate-budget exhaustion.
+- [ ] Give playback and background work separate, enforced service request
+  budgets. Classify routes/operations explicitly, including playback admission,
+  continuation and position persistence versus library/status polling, import
+  and other maintenance. Background saturation must not consume playback's
+  allowance or impose an unrelated global playback cooldown. Preserve the
+  existing separate folder-scoped agent budget and define how it fits the
+  classes; do not assume playback/background isolation already exists.
+- [ ] Add bounded queues and coordinated, budget-specific backoff that honors
+  `Retry-After`; avoid retry storms and starvation. Keep every class rate-limited
+  and retain authentication, origin checks, folder scope, leases, optimistic
+  revisions, transactional receipts and source-cursor correctness. This is not
+  permission to disable limits or merely raise a shared cap.
+- [ ] Evaluate a configurable maximum character count per imported part, with
+  a preview before delivery. Count the final normalized text, including title,
+  introduction and chapter headings; account for the desktop character/block
+  limits with headroom. Prefer complete chapter boundaries, stable source IDs
+  and explicit part/chapter ranges. A chapter exceeding a part bound needs an
+  explicit policy; never truncate prose or silently repartition the live library.
+  No default cap is selected by this planning update.
+- [ ] Include chapter navigation in the bounded page-based reader. Currently
+  the chapter toolbar requires the continuous editor (at most 1,000,000 document
+  characters and 20,000 blocks), so a chaptered large article can have no visible
+  selector. Preserve heard position, continuation, chapter anchors and revision
+  guards without loading the entire article or simply raising the editor cap.
+- [ ] Review the independent chapter/edit-metadata size constraint. Chapter
+  marker snapshots and appended-block metadata share an existing 64 KiB JSON
+  bound; a synthetic reconstruction of one failed delivery exceeded it despite
+  a valid per-call text size and fewer than 1,024 chapters. A part character cap
+  alone does not prove that a delivery fits. Design preflight/error reporting
+  around all relevant bounds, with atomic failure and unchanged retry identities.
+
+Acceptance for a later implementation: use synthetic multi-million-character
+chaptered articles in an isolated workspace; record request counts, latency and
+bounded work/memory. Saturate background traffic and verify usable playback
+admission/continuation, independent enforced budgets, correct backoff and no
+starvation. Verify exact split/recombined source text, preserved chapter
+navigation and position, and safe boundary/oversized-chapter/metadata-limit
+failures. Reuse the deferred append-scaling measurement below; do not treat an
+observed 429 or import slowdown as a proven single bottleneck. Tests and Windows
+smoke must cover the relevant service/client contracts before release.
+
 ## Deferred: large-article append performance measurement
 
 - [ ] User-requested backlog item (2026-09-13): measure chapter append latency
