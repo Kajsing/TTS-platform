@@ -772,3 +772,16 @@ and acceptance gates are in `docs/reader_audiobook_production_plan.md`.
 - Preserve normal Reader playback; live dramatization is not a requirement.
 - Resume only after explicit user reactivation when current Reader work is
   satisfactory. Do not register a goal or automatically start this epic.
+
+## Proposed PWA Reader and EU KVM hosting - not active
+
+The owner requested a standalone, cross-device web Reader/PWA and reusable
+EU-hosted KVM option on 2026-10-30. The proposed P0-P7 milestones, security
+boundaries, CPU sizing benchmarks, validation gates and acceptance criteria are
+in [the PWA cloud roadmap](../pwa_cloud_roadmap.md).
+
+**Status: proposed only.** This does not alter the active execution order,
+activate a Codex goal, approve public exposure or authorize purchase/deployment.
+Current localhost/Windows U8 private-network security assumptions remain intact;
+offline audiobook generation is still parked. On explicit activation, promote
+only P0 into the active plan and preserve existing validation requirements.
