@@ -61,7 +61,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         await AttachBearerAsync(request, cancellationToken).ConfigureAwait(false);
         request.Content = JsonContent.Create(new { Reservation = reservation, VoiceId = voiceId }, options: JsonOptions);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/wav"));
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        using var response = await SendHttpAsync(request, cancellationToken, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode) await ThrowApiExceptionAsync(response, cancellationToken).ConfigureAwait(false);
         const int limit = 2 * 1024 * 1024;
         if (response.Content.Headers.ContentType?.MediaType != "audio/wav" || response.Content.Headers.ContentLength > limit)
@@ -932,10 +932,10 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(
+            response = await SendHttpAsync(
                 request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         }
         catch (HttpRequestException exception)
         {
@@ -977,10 +977,10 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(
+            response = await SendHttpAsync(
                 message,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         }
         catch (HttpRequestException exception)
         {
@@ -1040,7 +1040,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await SendHttpAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (HttpRequestException exception)
         {
@@ -1157,11 +1157,15 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
 
     private async Task<HttpResponseMessage> SendHttpAsync(
         HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead)
     {
+        using var admission = await _cooldown.AcquireAsync(request, cancellationToken).ConfigureAwait(false);
         try
         {
-            return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await _httpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
+            _cooldown.Observe(response); // Observe before queued callers acquire the released slot.
+            return response;
         }
         catch (HttpRequestException exception)
         {
@@ -1203,7 +1207,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        _cooldown.Check();
+        _cooldown.Check(request);
         var token = (await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false))?.Trim();
         if (string.IsNullOrWhiteSpace(token))
         {

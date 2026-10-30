@@ -667,7 +667,7 @@ successfully registered as active. M1 is now complete. The user subsequently
 selected the Service Center track below; U8 remains parked. Confirm its intended
 WireGuard environment before any future network configuration work.
 
-## Reader Service Center - active
+## Reader Service Center - complete
 
 On 2026-09-05 the user approved the persistent service tray/status panel and
 compatible-voice library, added optional Windows autostart, and explicitly asked
@@ -676,25 +676,27 @@ to register this as the next goal. Scope and acceptance criteria are in
 
 - [x] T1: Persistent single tray owner, truthful local-service dashboard, safe
   lifecycle controls and reversible per-user Windows autostart.
-- [ ] T2: Compatible-voice library with metadata, checked installation/progress,
+- [x] T2: Compatible-voice library with metadata, checked installation/progress,
   preview and safe default-voice selection, reusing existing infrastructure.
 
-Complete and validate T1 before T2. Preserve the working local Reader and
+T1/T2 completion is recorded in the Sep 6 Service Center plan and delivery log;
+this corrects the stale T2 marker. Preserve the working local Reader and
 service; no U8 networking, cloud dependency or unrelated model changes.
 
-## Next version: large-document work and separate request budgets - deferred
+## Next version: large-document work and separate request budgets - partially complete
 
-User request on 2026-10-19: record bounded work for large articles and separate
-service request budgets for playback and background work. This is planning only;
-do not activate this track, change live limits, repartition existing articles or
-restart Reader/service without a subsequent implementation request. Existing
-active-track priorities and parked U8/audiobook work remain unchanged.
+User request on 2026-10-19 recorded bounded work for large articles and separate
+service request budgets. On 2026-10-30 the user activated the rate-limit slice
+after stopping Reader/service. Independent enforced budgets and desktop request
+queues/cooldowns are complete; see `docs/reader_request_budgets.md`.
+Remaining unchecked work below is deferred. PWA, U8 and audiobook priorities
+are not activated by this slice; no live article repartition is authorized.
 
 **Priority: high for the next version.** The owner's follow-up on 2026-10-19
 reports another visible playback rate-limit failure after bounded parts were
 introduced. Prioritize playback/background budget isolation and recovery in this
 track; smaller imported parts alone have not resolved the observed failure.
-Implementation remains deferred. The same follow-up selects a 900,000-character,
+The completed budget slice is recorded below. The same follow-up selects a 900,000-character,
 whole-chapter default for future agent imports, now maintained in
 `docs/reader_agent_import_guide.md` and the local import skill.
 
@@ -703,14 +705,14 @@ whole-chapter default for future agent imports, now maintained in
   cancellation and coalescing of redundant status, document and position calls.
   Measure request bursts and work/latency separately: a character count alone
   does not identify the cause of rate-budget exhaustion.
-- [ ] Give playback and background work separate, enforced service request
+- [x] Give playback and background work separate, enforced service request
   budgets. Classify routes/operations explicitly, including playback admission,
   continuation and position persistence versus library/status polling, import
   and other maintenance. Background saturation must not consume playback's
   allowance or impose an unrelated global playback cooldown. Preserve the
   existing separate folder-scoped agent budget and define how it fits the
   classes; do not assume playback/background isolation already exists.
-- [ ] Add bounded queues and coordinated, budget-specific backoff that honors
+- [x] Add bounded queues and coordinated, budget-specific backoff that honors
   `Retry-After`; avoid retry storms and starvation. Keep every class rate-limited
   and retain authentication, origin checks, folder scope, leases, optimistic
   revisions, transactional receipts and source-cursor correctness. This is not

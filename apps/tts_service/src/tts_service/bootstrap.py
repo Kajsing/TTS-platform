@@ -37,6 +37,7 @@ class ApplicationState:
     auth: AuthState
     origin_policy: OriginPolicy
     rate_limiter: RateLimiter
+    playback_rate_limiter: RateLimiter
     job_manager: InMemoryJobManager
     streaming_metrics: StreamingMetrics
     observability: ObservabilityState
@@ -90,7 +91,12 @@ def build_application_state(
     )
     chunk_planner = ChunkPlanner()
     origin_policy = OriginPolicy(allowed_origins=config.security.allowed_origins)
-    rate_limiter = RateLimiter(requests_per_minute=config.limits.requests_per_minute)
+    rate_limiter = RateLimiter(
+        requests_per_minute=config.limits.requests_per_minute, budget="background"
+    )
+    playback_rate_limiter = RateLimiter(
+        requests_per_minute=config.limits.playback_requests_per_minute, budget="playback"
+    )
     observability = ObservabilityState(
         enabled=config.metrics.enabled,
         logger=configure_structured_logging(config.server.log_level),
@@ -154,6 +160,7 @@ def build_application_state(
         auth=auth_state,
         origin_policy=origin_policy,
         rate_limiter=rate_limiter,
+        playback_rate_limiter=playback_rate_limiter,
         job_manager=job_manager,
         streaming_metrics=streaming_metrics,
         observability=observability,

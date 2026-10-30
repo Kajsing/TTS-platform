@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\TtsPlatform.Reader.Client\TtsPlatform.Reader.Client.csproj" />
+    <None Include="..\..\..\..\contracts\reader\request_budget_cases.json" Link="request_budget_cases.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

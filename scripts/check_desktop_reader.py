@@ -456,7 +456,9 @@ def _free_port() -> int:
 
 
 @contextmanager
-def _live_reader_service(repo_root: Path, temporary: Path) -> Iterator[tuple[str, Path]]:
+def _live_reader_service(
+    repo_root: Path, temporary: Path, *, limits: dict[str, int] | None = None
+) -> Iterator[tuple[str, Path]]:
     for source_root in (
         repo_root / "apps" / "tts_service" / "src",
         repo_root / "packages" / "tts_core" / "src",
@@ -477,7 +479,7 @@ def _live_reader_service(repo_root: Path, temporary: Path) -> Iterator[tuple[str
             "auth": {"enabled": True, "token_file": str(token_path)},
             "backend": {"mode": "stub"},
             "tts": {"warmup_on_start": False},
-            "limits": {"requests_per_minute": 1000},
+            "limits": limits or {"requests_per_minute": 1000},
             "reader": {"enabled": True, "home_path": str(reader_home)},
         }
     )
@@ -577,6 +579,41 @@ def _check_live_paging(repo_root: Path, dotnet: Path, temporary: Path) -> dict[s
         )
     payload["live_structured_import"] = structured_import
     payload["live_speech_rules"] = speech_rules
+    return payload
+
+
+def _check_live_request_budgets(
+    repo_root: Path, dotnet: Path, temporary: Path
+) -> dict[str, object]:
+    smoke_dll = (
+        repo_root
+        / "apps/desktop_reader/tools/TtsPlatform.Reader.Client.Smoke"
+        / "bin/Release/net10.0/TtsPlatform.Reader.Client.Smoke.dll"
+    )
+    with _live_reader_service(
+        repo_root,
+        temporary / "request-budgets",
+        limits={"requests_per_minute": 8, "playback_requests_per_minute": 20},
+    ) as (base_url, token_path):
+        environment = os.environ.copy()
+        environment["TTS_PLATFORM_REQUEST_BUDGET_SMOKE"] = "1"
+        output = _run(
+            [str(dotnet), str(smoke_dll), base_url, str(token_path)],
+            cwd=repo_root,
+            env=environment,
+            timeout=45,
+        )
+    payload = json.loads(output)
+    if not all(
+        payload.get(key) is True
+        for key in (
+            "independent_request_budgets",
+            "background_saturation",
+            "playback_still_limited",
+            "live_position_resume",
+        )
+    ):
+        raise DesktopReaderCheckError("The .NET client did not confirm isolated request budgets.")
     return payload
 
 
@@ -966,6 +1003,7 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="tts-reader-check-") as temporary_value:
             temporary = Path(temporary_value)
             live_paging = _check_live_paging(repo_root, dotnet, temporary)
+            request_budgets = _check_live_request_budgets(repo_root, dotnet, temporary)
             preview_snapshot = _check_preview_snapshot(repo_root, temporary)
             windows_audio = _check_windows_audio(
                 repo_root,
@@ -985,6 +1023,7 @@ def main() -> int:
                     "source": source,
                     "dotnet": str(dotnet),
                     "live_paging": live_paging,
+                    "request_budgets": request_budgets,
                     "preview_snapshot": preview_snapshot,
                     "windows_audio": windows_audio,
                     "windows_integration": windows_integration,

@@ -591,6 +591,7 @@ def test_rate_limiter_rejects_repeated_write_requests(tmp_path: Path) -> None:
         config_data={
             "limits": {
                 "requests_per_minute": 1,
+                "playback_requests_per_minute": 1,
             }
         },
     )

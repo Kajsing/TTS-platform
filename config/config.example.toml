@@ -28,6 +28,8 @@ allowed_origins = []
 max_concurrent_jobs = 2
 max_job_seconds = 300
 requests_per_minute = 30
+# Independent budget for live speech, document windows and heard-position saves.
+playback_requests_per_minute = 120
 completed_job_ttl_seconds = 300
 max_stored_jobs = 128
 

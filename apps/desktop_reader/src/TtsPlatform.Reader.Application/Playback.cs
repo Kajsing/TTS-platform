@@ -159,7 +159,10 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
         {
             if (_runTask is { IsCompleted: false })
             {
-                return;
+                if (State is not (ReaderPlaybackState.Completed or ReaderPlaybackState.Faulted)) return;
+                // Terminal state is visible before async session/audio cleanup has finished.
+                // Finish that run before accepting a new Play or its cleanup can affect new audio.
+                await _runTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
             _document = document;
@@ -204,6 +207,7 @@ public sealed class ReaderPlaybackCoordinator : IAsyncDisposable
                 BlockOrdinal: _lastFullyPlayedCursor?.BlockOrdinal,
                 CharacterOffset: _lastFullyPlayedCursor?.CharacterOffset,
                 StartMode: startMode));
+            _runCancellation?.Dispose();
             _runCancellation = new CancellationTokenSource();
             SetState(ReaderPlaybackState.Playing);
             _runTask = RunAsync(_runCancellation.Token);

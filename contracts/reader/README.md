@@ -8,6 +8,11 @@ Run `py -3 scripts\check_reader_contracts.py` on Windows to validate every
 fixture against the service schemas. Contract changes must remain additive or
 increment `contract_version` deliberately.
 
+`request_budget_cases.json` is a route/method classification matrix, validated
+by the Python request-budget tests and the .NET client tests. The additive
+429/stream error metadata and compatibility policy are documented in
+`docs/reader_request_budgets.md`.
+
 All `/v1/reader/*` routes require the service's existing bearer-token and origin
 checks. `/v1/health` remains public and exposes only sanitized Reader readiness.
 

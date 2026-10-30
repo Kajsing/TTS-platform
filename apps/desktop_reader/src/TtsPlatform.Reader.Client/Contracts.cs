@@ -808,4 +808,6 @@ public sealed record ReaderStreamWarning(
 public sealed record ReaderStreamError(
     string StreamId,
     string ErrorType,
-    string Message) : ReaderStreamEvent(StreamId);
+    string Message,
+    int? RetryAfterSeconds = null,
+    string? RequestBudget = null) : ReaderStreamEvent(StreamId);

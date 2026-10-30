@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -12,6 +13,22 @@ from starlette.datastructures import Headers
 
 from .auth import AuthState
 from .errors import forbidden_origin, rate_limited, unauthorized
+
+REQUEST_BUDGET_HEADER = "X-TTS-Request-Budget"
+_DOCUMENT_READ = re.compile(r"^/v1/reader/documents/[^/]+(?:/blocks|/position)?$")
+_POSITION_WRITE = re.compile(r"^/v1/reader/documents/[^/]+/position$")
+_QUEUE_PLAYBACK = re.compile(r"^/v1/reader/queue/(?:advance/[^/]+|items/[^/]+/activate)$")
+
+
+def request_budget(method: str, path: str) -> str:
+    """Classify bounded playback operations by route, never by caller headers."""
+    if method == "GET" and _DOCUMENT_READ.fullmatch(path):
+        return "playback"
+    if method == "PUT" and _POSITION_WRITE.fullmatch(path):
+        return "playback"
+    if method == "POST" and (path == "/v1/tts" or _QUEUE_PLAYBACK.fullmatch(path)):
+        return "playback"
+    return "background"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +53,7 @@ class OriginPolicy:
 class RateLimiter:
     requests_per_minute: int
     window_seconds: int = 60
+    budget: str | None = None
     _events: dict[str, deque[float]] = field(
         default_factory=lambda: defaultdict(deque),
     )
@@ -49,15 +67,17 @@ class RateLimiter:
             while events and events[0] <= cutoff:
                 events.popleft()
             if len(events) >= self.requests_per_minute:
-                raise rate_limited(
-                    details={
-                        "requests_per_minute": self.requests_per_minute,
-                        "client": client_key,
-                        "retry_after_seconds": max(
-                            1, math.ceil(events[0] + self.window_seconds - now)
-                        ),
-                    }
-                )
+                details: dict[str, object] = {
+                    "requests_per_minute": self.requests_per_minute,
+                    "client": client_key,
+                    "retry_after_seconds": max(1, math.ceil(events[0] + self.window_seconds - now)),
+                }
+                if self.budget is not None:
+                    details["request_budget"] = self.budget
+                error = rate_limited(details=details)
+                if self.budget is not None:
+                    error.headers[REQUEST_BUDGET_HEADER] = self.budget
+                raise error
             events.append(now)
 
 

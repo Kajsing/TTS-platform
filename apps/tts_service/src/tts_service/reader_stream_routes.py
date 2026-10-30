@@ -79,7 +79,7 @@ def build_reader_stream_router() -> APIRouter:
                 ),
                 auth_state=container.auth,
                 origin_policy=container.origin_policy,
-                rate_limiter=container.rate_limiter,
+                rate_limiter=container.playback_rate_limiter,
                 require_auth=False,
             )
             initial = await _receive_start_message(websocket)

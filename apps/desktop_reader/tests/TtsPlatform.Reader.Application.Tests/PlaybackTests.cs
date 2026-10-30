@@ -348,6 +348,30 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public async Task Play_after_completion_waits_for_previous_session_cleanup()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = CompletedSession(new ReaderStreamStartRequest("doc", new ReaderCursor("doc", "block-0", 0, 0, 1)));
+        first.DisposeWait = release.Task;
+        var streams = new FakeStreamClient(_ => first, request => CompletedSession(request));
+        await using var playback = new ReaderPlaybackCoordinator(new PlaybackService(), streams, new FakeAudioOutput());
+        await playback.PlayAsync(Document());
+        await first.Disposing.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        try
+        {
+            Assert.Equal(ReaderPlaybackState.Completed, playback.State);
+            var restart = playback.PlayAsync(Document());
+            Assert.False(restart.IsCompleted);
+            Assert.Single(streams.Requests);
+            release.TrySetResult();
+            await restart.WaitAsync(TimeSpan.FromSeconds(3));
+            await WaitUntilAsync(() => streams.Requests.Count == 2);
+            Assert.Equal(0, streams.Requests[1].Cursor.CharacterOffset);
+        }
+        finally { release.TrySetResult(); }
+    }
+
+    [Fact]
     public async Task Persisted_completed_position_restarts_from_first_cursor()
     {
         var completedCursor = new ReaderCursor("doc", "block-0", 0, 6, 1);
@@ -545,6 +569,8 @@ public sealed class PlaybackTests
     private sealed class FakeStreamSession(IReadOnlyList<ReaderStreamEvent> events) : IReaderStreamSession
     {
         public int CancelCalls { get; private set; }
+        public Task? DisposeWait { get; set; }
+        public TaskCompletionSource Disposing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public async IAsyncEnumerable<ReaderStreamEvent> ReadEventsAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -564,7 +590,11 @@ public sealed class PlaybackTests
         }
 
         public Task ReleaseAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public async ValueTask DisposeAsync()
+        {
+            Disposing.TrySetResult();
+            if (DisposeWait is not null) await DisposeWait;
+        }
     }
 
     private sealed class FakeAudioOutput(

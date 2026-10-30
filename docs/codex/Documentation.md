@@ -4,6 +4,34 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Completed budget slice (2026-10-30): user activated today's existing-Reader
+  reliability work after closing Reader/tray/service. Independent service
+  playback/background/agent budgets and budget-tagged 429/WS errors are now
+  enforced. Existing `requests_per_minute` controls background; new positive
+  `playback_requests_per_minute` defaults to 120. Desktop clients share scoped
+  Retry-After deadlines and bounded per-class request queues; older untagged
+  services/gateways retain shared backoff. HTTP and Reader WebSocket playback
+  coordinate their cooldown. No write auto-retry, auth bypass or raised shared
+  cap. Full policy/route matrix: `docs/reader_request_budgets.md`.
+  Validation: 689 Python passes / 2 optional skips, 350 .NET passes, Ruff,
+  zero-warning solution build, 20 payload contracts and Chrome JS checks.
+  Isolated multi-million-character saturation/position/two-window tests and
+  compiled .NET/live HTTP/WS acceptance pass, including enforced playback limits.
+  Portable packaging and WPF lifecycle smoke pass; audible/global clipboard and
+  hotkey tests were skipped. An existing replay test failed during validation;
+  a deterministic delayed-session-disposal test reproduced the real race. Play
+  after terminal state now awaits previous cleanup rather than silently ignoring
+  the action; cancellation and active-run protection remain. The regression and
+  full .NET suite pass after that supporting fix. Preserve the installed-voice
+  MANIFEST. Remaining large-document workload/coalescing, navigation, part
+  controls, metadata sizing and append measurements remain unchecked. PWA/U8/
+  audiobook work stays parked. Log: `.logs/2026-10-30-reader-request-budgets.md`.
+  Published the exact root-shortcut win-x64 executable after all code fixes;
+  its isolated folder/edit-preservation and tray/lifecycle probes pass. Scoped
+  .NET whitespace verification, security-default and v1 completion checks pass.
+  Production Reader/service remain stopped for the user's normal relaunch; no
+  local config, articles or installed-voice manifest was changed. The old Oct 19
+  deferred entries below are historical and superseded only for these two items.
 - Import-default decision (2026-10-19): future agent imports default to at most
   900,000 characters per part, split only between complete source chapters.
   `docs/reader_agent_import_guide.md` and the local `reader-chapter-import` skill
@@ -2203,6 +2231,10 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
+- Current priority after the 2026-10-30 budget slice: the unchecked bounded
+  document-load/coalescing and large-document tasks in Plan.md. The older
+  Milestone-9 resume pointer below is historical; do not automatically start PDF,
+  PWA or U8 work. Budget policy and compatibility are in reader_request_budgets.md.
 - Stop at the completed Reader Workstation Milestone 9 boundary. If the user
   explicitly continues, start Milestone 10 from
   `design_doc/reader_workstation_design_v1.md`: add bounded, layout-aware PDF
@@ -3027,6 +3059,10 @@ is ready for the user. Revisit U8's intended machine/WireGuard setup with the
 user before selecting further remote work.
 
 ## Resume Instructions For The Next Codex Loop
+
+The 2026-10-30 status at the top supersedes the older execution pointers below:
+budget isolation is complete; the remaining large-document work is the next
+reliability follow-up. Service Center T1/T2 is complete. PWA remains proposed.
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.
 2. Read `design_doc/reader_workstation_design_v1.md`, then check this file for

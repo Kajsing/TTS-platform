@@ -185,7 +185,9 @@ public sealed class ReaderStreamProtocolParser
         return new ReaderStreamError(
             _streamId ?? string.Empty,
             wire.Error?.Type ?? "reader_stream_error",
-            wire.Error?.Message ?? "The Reader stream failed.");
+            wire.Error?.Message ?? "The Reader stream failed.",
+            wire.Error?.Details?.RetryAfterSeconds,
+            wire.Error?.Details?.RequestBudget);
     }
 
     private ReaderStreamWarning ParseWarning(string json)
@@ -347,7 +349,8 @@ public sealed class ReaderStreamProtocolParser
     private sealed record WireCancelled(string? StreamId, WireCursor? GeneratedCursor);
     private sealed record WireWarning(string? Type, string? Message, string? RuleId);
     private sealed record WireWarningEnvelope(string? StreamId, WireWarning? Warning);
-    private sealed record WireError(string? Type, string? Message);
+    private sealed record WireErrorDetails(int? RetryAfterSeconds, string? RequestBudget);
+    private sealed record WireError(string? Type, string? Message, WireErrorDetails? Details);
     private sealed record WireErrorEnvelope(WireError? Error);
 }
 

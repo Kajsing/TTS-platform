@@ -19,12 +19,14 @@ public sealed class ReaderStreamClient : IReaderStreamClient
     private readonly ITokenProvider _tokenProvider;
     private readonly ReaderPrivacySessionStore? _privacySessions;
     private readonly PinnedServerCertificateValidator? _certificateValidator;
+    private readonly ReaderRequestCooldown _cooldown;
 
     public ReaderStreamClient(
         string serviceBaseUrl,
         ITokenProvider tokenProvider,
         ReaderPrivacySessionStore? privacySessions = null,
-        PinnedServerCertificateValidator? certificateValidator = null)
+        PinnedServerCertificateValidator? certificateValidator = null,
+        ReaderRequestCooldown? cooldown = null)
     {
         _serviceBaseUri = certificateValidator is null
             ? ServiceBaseUrl.Parse(serviceBaseUrl)
@@ -32,6 +34,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
         _tokenProvider = tokenProvider;
         _privacySessions = privacySessions;
         _certificateValidator = certificateValidator;
+        _cooldown = cooldown ?? ReaderRequestCooldown.ForService(serviceBaseUrl);
     }
 
     public async Task<IReaderStreamSession> OpenAsync(
@@ -45,6 +48,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
             throw new ArgumentException("The stream cursor must belong to the requested document.", nameof(request));
         }
 
+        _cooldown.Check(ReaderRequestBudget.Playback);
         var token = (await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false))?.Trim();
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -94,7 +98,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
             var bytes = JsonSerializer.SerializeToUtf8Bytes(start, JsonOptions);
             await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken)
                 .ConfigureAwait(false);
-            return new ReaderStreamSession(socket);
+            return new ReaderStreamSession(socket, _cooldown);
         }
         catch
         {
@@ -103,7 +107,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
         }
     }
 
-    private sealed class ReaderStreamSession(ClientWebSocket socket) : IReaderStreamSession
+    private sealed class ReaderStreamSession(ClientWebSocket socket, ReaderRequestCooldown cooldown) : IReaderStreamSession
     {
         private const int ReceiveChunkBytes = 16 * 1024;
         private const int MaxTextMessageBytes = 64 * 1024;
@@ -166,6 +170,7 @@ public sealed class ReaderStreamClient : IReaderStreamClient
                     {
                         _streamId = started.StreamId;
                     }
+                    if (parsed is ReaderStreamError error) cooldown.Observe(error);
                     yield return parsed;
                     if (parsed is ReaderStreamDone or ReaderStreamCancelled or ReaderStreamError)
                     {

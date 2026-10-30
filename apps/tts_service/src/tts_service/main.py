@@ -38,6 +38,7 @@ from .security import (
     enforce_headers_access,
     enforce_write_access,
     extract_bearer_token_from_headers,
+    request_budget,
     validate_auth_token,
 )
 from .service_control import ServiceActivityMiddleware, build_service_control_router
@@ -305,7 +306,7 @@ def _register_routes(app: FastAPI) -> None:
                 client_host=websocket.client.host if websocket.client is not None else "unknown",
                 auth_state=container.auth,
                 origin_policy=container.origin_policy,
-                rate_limiter=container.rate_limiter,
+                rate_limiter=container.playback_rate_limiter,
                 require_auth=False,
             )
         except APIError as exc:
@@ -496,7 +497,11 @@ def _enforce_protected_request(container: object, request: Request) -> None:
         request,
         auth_state=container.auth,
         origin_policy=container.origin_policy,
-        rate_limiter=container.rate_limiter,
+        rate_limiter=(
+            container.playback_rate_limiter
+            if request_budget(request.method, request.url.path) == "playback"
+            else container.rate_limiter
+        ),
     )
 
 

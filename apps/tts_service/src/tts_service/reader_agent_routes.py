@@ -294,4 +294,4 @@ def build_reader_agent_admin_router() -> APIRouter:
 
 def agent_rate_limiter() -> RateLimiter:
     # Avoid agent polling exhausting the desktop Reader's connection budget.
-    return RateLimiter(requests_per_minute=120)
+    return RateLimiter(requests_per_minute=120, budget="agent")

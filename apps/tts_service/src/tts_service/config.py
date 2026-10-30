@@ -29,6 +29,7 @@ DEFAULT_MAX_CONCURRENT_JOBS = 2
 DEFAULT_MAX_JOB_SECONDS = 300
 DEFAULT_ALLOWED_ORIGINS: tuple[str, ...] = ()
 DEFAULT_REQUESTS_PER_MINUTE = 30
+DEFAULT_PLAYBACK_REQUESTS_PER_MINUTE = 120
 DEFAULT_COMPLETED_JOB_TTL_SECONDS = 300
 DEFAULT_MAX_STORED_JOBS = 128
 DEFAULT_BACKEND_MODE = "auto"
@@ -183,6 +184,7 @@ class LimitsConfig:
     max_concurrent_jobs: int = DEFAULT_MAX_CONCURRENT_JOBS
     max_job_seconds: int = DEFAULT_MAX_JOB_SECONDS
     requests_per_minute: int = DEFAULT_REQUESTS_PER_MINUTE
+    playback_requests_per_minute: int = DEFAULT_PLAYBACK_REQUESTS_PER_MINUTE
     completed_job_ttl_seconds: int = DEFAULT_COMPLETED_JOB_TTL_SECONDS
     max_stored_jobs: int = DEFAULT_MAX_STORED_JOBS
 
@@ -192,6 +194,9 @@ class LimitsConfig:
             max_concurrent_jobs=int(data.get("max_concurrent_jobs", DEFAULT_MAX_CONCURRENT_JOBS)),
             max_job_seconds=int(data.get("max_job_seconds", DEFAULT_MAX_JOB_SECONDS)),
             requests_per_minute=int(data.get("requests_per_minute", DEFAULT_REQUESTS_PER_MINUTE)),
+            playback_requests_per_minute=int(
+                data.get("playback_requests_per_minute", DEFAULT_PLAYBACK_REQUESTS_PER_MINUTE)
+            ),
             completed_job_ttl_seconds=int(
                 data.get("completed_job_ttl_seconds", DEFAULT_COMPLETED_JOB_TTL_SECONDS)
             ),
@@ -203,6 +208,8 @@ class LimitsConfig:
             raise ValueError("limits.max_job_seconds must be positive")
         if config.requests_per_minute <= 0:
             raise ValueError("limits.requests_per_minute must be positive")
+        if config.playback_requests_per_minute <= 0:
+            raise ValueError("limits.playback_requests_per_minute must be positive")
         if config.completed_job_ttl_seconds <= 0:
             raise ValueError("limits.completed_job_ttl_seconds must be positive")
         if config.max_stored_jobs <= 0:
