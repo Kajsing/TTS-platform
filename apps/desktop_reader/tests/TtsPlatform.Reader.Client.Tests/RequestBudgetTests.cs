@@ -86,12 +86,12 @@ public sealed class RequestBudgetTests
         var first = Client(handler, cooldown);
         var second = Client(handler, cooldown);
         using var cancel = new CancellationTokenSource();
-        var firstRequests = new[] { first.GetCapabilitiesAsync(), second.GetCapabilitiesAsync() };
+        var firstRequests = new[] { first.GetLocalStatusAsync(), second.GetLocalStatusAsync() };
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var cancelled = second.GetCapabilitiesAsync(cancel.Token);
+        var cancelled = second.GetLocalStatusAsync(cancel.Token);
         var queued = Enumerable.Range(0, ReaderRequestCooldown.MaxPendingRequestsPerBudget - 3)
-            .Select(_ => first.GetCapabilitiesAsync()).ToArray();
-        var full = await Assert.ThrowsAsync<ReaderApiException>(() => second.GetCapabilitiesAsync());
+            .Select(_ => first.GetLocalStatusAsync()).ToArray();
+        var full = await Assert.ThrowsAsync<ReaderApiException>(() => second.GetLocalStatusAsync());
         Assert.Equal("reader_request_queue_full", full.ErrorType);
         Assert.Equal(2, backgroundCalls);
         await second.GetPositionAsync("doc").WaitAsync(TimeSpan.FromSeconds(5));
@@ -106,7 +106,7 @@ public sealed class RequestBudgetTests
         Assert.Equal(2, backgroundCalls); // Queued writes/reads never hit a throttled server.
         time.Advance(TimeSpan.FromSeconds(42));
         deny = false;
-        await first.GetCapabilitiesAsync();
+        await first.GetLocalStatusAsync();
         Assert.Equal(3, backgroundCalls);
     }
 

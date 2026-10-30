@@ -231,6 +231,10 @@ public sealed class ArticleFindDocument
 
 public sealed class ArticleFindDocumentLoader(IReaderServiceClient client, int pageSize = 500)
 {
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
+    private readonly object _cacheSync = new();
+    private int _generation;
+    private string? _loadingDocumentId;
     private string? _cachedDocumentId;
     private int _cachedContentRevision;
     private ArticleFindDocument? _cachedDocument;
@@ -244,54 +248,84 @@ public sealed class ArticleFindDocumentLoader(IReaderServiceClient client, int p
         {
             throw new ArgumentOutOfRangeException(nameof(pageSize));
         }
-        if (string.Equals(_cachedDocumentId, document.Id, StringComparison.Ordinal) &&
-            _cachedContentRevision == document.ContentRevision &&
-            _cachedDocument is not null)
+        await _loadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return _cachedDocument;
-        }
+            int generation;
+            lock (_cacheSync)
+            {
+                generation = _generation;
+                if (string.Equals(_cachedDocumentId, document.Id, StringComparison.Ordinal) &&
+                    _cachedContentRevision == document.ContentRevision &&
+                    _cachedDocument is not null)
+                {
+                    return _cachedDocument;
+                }
+                _loadingDocumentId = document.Id;
+            }
 
-        var blocks = new List<ReaderBlock>(Math.Max(0, document.TotalBlocks));
-        var afterOrdinal = -1;
-        while (true)
+            var blocks = new List<ReaderBlock>(Math.Clamp(document.TotalBlocks, 0, pageSize));
+            var afterOrdinal = -1;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var page = await client.GetBlocksAsync(
+                    document.Id,
+                    afterOrdinal,
+                    pageSize,
+                    cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                blocks.AddRange(page.Blocks);
+                if (page.NextAfterOrdinal is not int nextAfterOrdinal)
+                {
+                    break;
+                }
+                if (nextAfterOrdinal <= afterOrdinal)
+                {
+                    throw new ReaderApiException(
+                        "reader_invalid_page",
+                        "The service returned a non-advancing document page.",
+                        502);
+                }
+                afterOrdinal = nextAfterOrdinal;
+            }
+
+            var current = await client.GetDocumentFreshAsync(document.Id, cancellationToken).ConfigureAwait(false);
+            if (!ReaderDocumentVersions.AreSame(document, current) || current.DeletedAt is not null)
+                throw new ReaderApiException("reader_revision_conflict", "The article changed while searching. Open its latest revision and try again.", 409);
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = new ArticleFindDocument(document, blocks);
+            lock (_cacheSync)
+            {
+                if (generation != _generation) throw new OperationCanceledException("The article search was invalidated.");
+                _cachedDocumentId = document.Id;
+                _cachedContentRevision = document.ContentRevision;
+                _cachedDocument = loaded;
+            }
+            return loaded;
+        }
+        finally
         {
-            var page = await client.GetBlocksAsync(
-                document.Id,
-                afterOrdinal,
-                pageSize,
-                cancellationToken).ConfigureAwait(false);
-            blocks.AddRange(page.Blocks);
-            if (page.NextAfterOrdinal is not int nextAfterOrdinal)
-            {
-                break;
-            }
-            if (nextAfterOrdinal <= afterOrdinal)
-            {
-                throw new ReaderApiException(
-                    "reader_invalid_page",
-                    "The service returned a non-advancing document page.",
-                    502);
-            }
-            afterOrdinal = nextAfterOrdinal;
+            lock (_cacheSync) _loadingDocumentId = null;
+            _loadLock.Release();
         }
-
-        var loaded = new ArticleFindDocument(document, blocks);
-        _cachedDocumentId = document.Id;
-        _cachedContentRevision = document.ContentRevision;
-        _cachedDocument = loaded;
-        return loaded;
     }
 
     public void Invalidate(string? documentId = null)
     {
-        if (documentId is not null &&
-            !string.Equals(documentId, _cachedDocumentId, StringComparison.Ordinal))
+        lock (_cacheSync)
         {
-            return;
+            if (documentId is not null &&
+                !string.Equals(documentId, _cachedDocumentId, StringComparison.Ordinal) &&
+                !string.Equals(documentId, _loadingDocumentId, StringComparison.Ordinal))
+            {
+                return;
+            }
+            _cachedDocumentId = null;
+            Interlocked.Increment(ref _generation);
+            _cachedContentRevision = 0;
+            _cachedDocument = null;
         }
-        _cachedDocumentId = null;
-        _cachedContentRevision = 0;
-        _cachedDocument = null;
     }
 }
 

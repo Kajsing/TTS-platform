@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -17,6 +18,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
     private readonly ReaderPrivacySessionStore? _privacySessions;
     private readonly bool _authenticateHealth;
     private readonly ReaderRequestCooldown _cooldown;
+    private readonly ReaderReadCoalescer _reads = new();
 
     public ReaderServiceClient(
         HttpClient httpClient,
@@ -37,7 +39,7 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
     }
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
-        SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken);
+        SendAsync<HealthResponse>(HttpMethod.Get, "v1/health", _authenticateHealth, null, cancellationToken, coalesce: true);
 
     public Task<CaptureReceipt> DeliverCaptureAsync(string operationId, CaptureRequest request, CancellationToken cancellationToken = default) =>
         SendAsync<CaptureReceipt>(HttpMethod.Post, $"v1/reader/captures/{Uri.EscapeDataString(operationId)}", true, request, cancellationToken);
@@ -96,10 +98,10 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
     }
 
     public Task<ReaderCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
-        SendAsync<ReaderCapabilities>(HttpMethod.Get, "v1/reader/capabilities", true, null, cancellationToken);
+        SendAsync<ReaderCapabilities>(HttpMethod.Get, "v1/reader/capabilities", true, null, cancellationToken, coalesce: true);
 
     public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) =>
-        SendAsync<VoicePage>(HttpMethod.Get, "v1/voices", true, null, cancellationToken);
+        SendAsync<VoicePage>(HttpMethod.Get, "v1/voices", true, null, cancellationToken, coalesce: true);
 
     public Task<ReaderHighlighterConfiguration> GetHighlighterAsync(
         CancellationToken cancellationToken = default) =>
@@ -575,7 +577,16 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
             $"v1/reader/documents/{Uri.EscapeDataString(documentId)}",
             true,
             null,
-            cancellationToken);
+            cancellationToken,
+            coalesce: true);
+    }
+
+    public Task<ReaderDocument> GetDocumentFreshAsync(
+        string documentId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        return SendAsync<ReaderDocument>(HttpMethod.Get,
+            $"v1/reader/documents/{Uri.EscapeDataString(documentId)}", true, null, cancellationToken);
     }
 
     public Task<ReaderDocument> UpdateDocumentAsync(
@@ -1023,7 +1034,8 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         string relativeUrl,
         bool authenticated,
         object? body,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool coalesce = false)
     {
         using var request = new HttpRequestMessage(method, relativeUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -1037,6 +1049,30 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
             request.Content = JsonContent.Create(body, options: JsonOptions);
         }
 
+        if (coalesce)
+        {
+            // Snapshot identity before this caller can cancel/dispose its message.
+            var uri = new Uri(_httpClient.BaseAddress!, relativeUrl);
+            var headers = request.Headers.Concat(_httpClient.DefaultRequestHeaders
+                .Where(header => !request.Headers.Contains(header.Key)))
+                .Select(header => (header.Key, Values: header.Value.ToArray())).ToArray();
+            var identity = typeof(T).FullName + "\n" + uri.AbsoluteUri + "\n" + string.Join("\n",
+                headers.OrderBy(header => header.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(header => header.Key + ":" + string.Join(',', header.Values)));
+            var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+            return await _reads.ReadAsync(key, async sharedCancellation =>
+            {
+                using var shared = new HttpRequestMessage(HttpMethod.Get, uri);
+                foreach (var header in headers) shared.Headers.TryAddWithoutValidation(header.Key, header.Values);
+                return await ReadJsonAsync<T>(shared, sharedCancellation).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await ReadJsonAsync<T>(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<T> ReadJsonAsync<T>(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
         HttpResponseMessage response;
         try
         {
@@ -1161,6 +1197,8 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
         HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead)
     {
         using var admission = await _cooldown.AcquireAsync(request, cancellationToken).ConfigureAwait(false);
+        var mutating = request.Method != HttpMethod.Get && request.Method != HttpMethod.Head;
+        if (mutating) _reads.Invalidate();
         try
         {
             var response = await _httpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
@@ -1178,6 +1216,10 @@ public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePrevi
             throw new ReaderServiceUnavailableException(
                 "The local TTS service did not respond in time. Check the service and try again.",
                 exception);
+        }
+        finally
+        {
+            if (mutating) _reads.Invalidate();
         }
     }
 

@@ -184,6 +184,27 @@ public sealed class ApplicationTests
         Assert.Equal(["folder-id", "folder-id"], client.ReceivedFolderIds);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancelled_library_read_cannot_replace_or_extend_the_visible_page(bool loadMore)
+    {
+        var first = Document("first", 1);
+        var client = new StubClient { DocumentPages = new Queue<DocumentPage>([new([first], "next")]) };
+        var pager = new LibraryPager(client);
+        await pager.RefreshAsync();
+        var response = new TaskCompletionSource<DocumentPage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.PendingDocumentPage = response.Task;
+        using var cancelled = new CancellationTokenSource();
+        var pending = loadMore ? pager.LoadMoreAsync(cancelled.Token) : pager.RefreshAsync(cancellationToken: cancelled.Token);
+        cancelled.Cancel();
+        response.SetResult(new([Document("late", 1)], null));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Same(first, Assert.Single(pager.Documents));
+        Assert.True(pager.HasMore);
+        Assert.False(pager.IsLoading);
+    }
+
     [Fact]
     public void Library_updates_observable_collection_on_calling_synchronization_context()
     {
@@ -340,13 +361,13 @@ public sealed class ApplicationTests
                 Id = $"block-{index}",
             })
             .ToArray();
-        var client = new StubClient { PaginatedBlocks = blocks };
         var document = Document("doc", 3, "html") with
         {
             ContentRevision = 8,
             TotalBlocks = blocks.Length,
             TotalCharacters = blocks.Sum(block => block.Text.Length),
         };
+        var client = new StubClient { PaginatedBlocks = blocks, CurrentDocument = document };
         var loader = new ArticleFindDocumentLoader(client, pageSize: 2);
 
         var loaded = await loader.LoadAsync(document);
@@ -635,10 +656,11 @@ public sealed class ApplicationTests
             "voice");
         public Exception? CapabilitiesException { get; init; }
         public Queue<DocumentPage> DocumentPages { get; init; } = new();
-        public Task<DocumentPage>? PendingDocumentPage { get; init; }
+        public Task<DocumentPage>? PendingDocumentPage { get; set; }
         public BlockPage Blocks { get; init; } = new([], null);
         public Queue<BlockPage> BlockPages { get; init; } = new();
         public IReadOnlyList<ReaderBlock>? PaginatedBlocks { get; init; }
+        public ReaderDocument? CurrentDocument { get; init; }
         public ReaderApiException? ReplaceException { get; init; }
         public ReplaceContentRequest? LastReplaceRequest { get; private set; }
         public UpdateDocumentRequest? LastUpdateRequest { get; private set; }
@@ -660,6 +682,9 @@ public sealed class ApplicationTests
 
         public Task<VoicePage> GetVoicesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(Voices);
+
+        public Task<ReaderDocument> GetDocumentAsync(string documentId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(CurrentDocument ?? throw new InvalidOperationException("No document metadata was configured."));
 
         public Task<ReaderDocument> CreateDocumentAsync(
             CreateDocumentRequest request,

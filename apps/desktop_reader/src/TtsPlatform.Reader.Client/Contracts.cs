@@ -158,6 +158,9 @@ public interface IReaderServiceClient
     Task<ReaderDocument> GetDocumentAsync(
         string documentId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderDocument> GetDocumentFreshAsync(
+        string documentId,
+        CancellationToken cancellationToken = default) => GetDocumentAsync(documentId, cancellationToken);
     Task<ReaderDocument> UpdateDocumentAsync(
         string documentId,
         UpdateDocumentRequest request,

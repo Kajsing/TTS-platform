@@ -32,7 +32,7 @@ public sealed class ReaderDocumentLoaderTests
         };
         var result = await new ReaderDocumentLoader(client).LoadAsync("article");
         Assert.Equal(2, result.Document.ContentRevision);
-        Assert.Equal(4, fake.DocumentReads);
+        Assert.Equal(3, fake.DocumentReads);
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public sealed class ReaderDocumentLoaderTests
         };
         var error = await Assert.ThrowsAsync<ReaderApiException>(() => new ReaderDocumentLoader(client).LoadAsync("article"));
         Assert.Equal(409, error.StatusCode);
-        Assert.Equal(4, fake.DocumentReads);
+        Assert.Equal(3, fake.DocumentReads);
     }
 
     [Theory]
@@ -123,6 +123,7 @@ public sealed class ReaderDocumentLoaderTests
             switch (method?.Name)
             {
                 case nameof(IReaderServiceClient.GetDocumentAsync):
+                case nameof(IReaderServiceClient.GetDocumentFreshAsync):
                     DocumentReads++;
                     return Task.FromResult(Current);
                 case nameof(IReaderServiceClient.GetBlocksAsync):

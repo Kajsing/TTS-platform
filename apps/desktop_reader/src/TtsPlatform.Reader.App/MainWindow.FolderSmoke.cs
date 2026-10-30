@@ -127,6 +127,7 @@ public partial class MainWindow
         }
         Require(fake.Documents.Count == 2 && !folder.PrivacyLocked,
             "Visibility changed source data or Privacy lock state.");
+        await RunLibraryRefreshLifetimeSmokeAsync(document);
         var options = new OptionsDialog(_settings) { Owner = this };
         options.Show();
         options.UpdateLayout();
@@ -144,6 +145,7 @@ public partial class MainWindow
             unsaved_edit_preserved = true,
             save_failure_reverted = true,
             service_reads_only = true,
+            library_refresh_lifetime = true,
         }));
     }
 }
@@ -152,12 +154,26 @@ public class FolderVisibilitySmokeClient : DispatchProxy
 {
     public IReadOnlyList<ReaderFolder> Folders { get; set; } = [];
     public IReadOnlyList<ReaderDocument> Documents { get; set; } = [];
+    public Task<ReaderFolderPage>? PendingFolders { get; set; }
+    public Task<DocumentPage>? PendingDocuments { get; set; }
+    public int FolderReads { get; private set; }
+    public int DocumentReads { get; private set; }
+    public CancellationToken LastFolderCancellation { get; private set; }
 
-    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => targetMethod?.Name switch
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        nameof(IReaderServiceClient.GetFoldersAsync) => Task.FromResult(new ReaderFolderPage(Folders)),
-        nameof(IReaderServiceClient.GetDocumentsByFolderAsync) => Task.FromResult(new DocumentPage(
-            Documents.Where(item => args?[4] is not string folderId || item.FolderId == folderId).ToArray(), null)),
-        _ => throw new InvalidOperationException($"Unexpected API in folder visibility smoke: {targetMethod?.Name}"),
-    };
+        if (targetMethod?.Name == nameof(IReaderServiceClient.GetFoldersAsync))
+        {
+            FolderReads++;
+            LastFolderCancellation = (CancellationToken)args![0]!;
+            return PendingFolders ?? Task.FromResult(new ReaderFolderPage(Folders));
+        }
+        if (targetMethod?.Name == nameof(IReaderServiceClient.GetDocumentsByFolderAsync))
+        {
+            DocumentReads++;
+            return PendingDocuments ?? Task.FromResult(new DocumentPage(
+                Documents.Where(item => args?[4] is not string folderId || item.FolderId == folderId).ToArray(), null));
+        }
+        throw new InvalidOperationException($"Unexpected API in folder visibility smoke: {targetMethod?.Name}");
+    }
 }

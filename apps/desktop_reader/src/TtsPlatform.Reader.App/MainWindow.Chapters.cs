@@ -193,16 +193,25 @@ public partial class MainWindow
             var response = await GetClient().EditChapterAsync(document.Id, new EditChapterRequest(
                 document.RowVersion, action, selected.Id, title, cursor.BlockId, cursor.CharacterOffset));
             _chapterAudibleMark = null;
-            await _documentLoadLock.WaitAsync();
+            CancelDocumentLoad();
+            using var cancellation = new CancellationTokenSource();
+            _documentLoadCancellation = cancellation;
+            var acquired = false;
             try
             {
+                await _documentLoadLock.WaitAsync(cancellation.Token);
+                acquired = true;
                 _documentReloadInProgress = true;
-                await LoadDocumentCoreAsync(response.Document, ++_documentLoadGeneration);
+                await LoadDocumentCoreAsync(response.Document, _documentLoadGeneration, GetClient(), cancellation.Token);
             }
             finally
             {
-                _documentReloadInProgress = false;
-                _documentLoadLock.Release();
+                if (acquired)
+                {
+                    _documentReloadInProgress = false;
+                    _documentLoadLock.Release();
+                }
+                if (ReferenceEquals(_documentLoadCancellation, cancellation)) _documentLoadCancellation = null;
             }
             if (_chapters.Count > 0) SelectChapter(ReaderChapters.At(_chapters, offset), false);
             var updating = _updatingEditor;
@@ -212,6 +221,7 @@ public partial class MainWindow
             UpdateTextCursorFromContinuousEditor();
             FooterText.Text = "Chapter change saved. Text is unchanged; Undo is available.";
         }
+        catch (OperationCanceledException) { }
         catch (Exception error) when (error is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException or NotSupportedException)
         { FooterText.Text = $"Chapter change: {error.Message}"; }
         finally { _documentMutationInProgress = false; UpdatePlaybackControls(); UpdateEditorButtons(); }

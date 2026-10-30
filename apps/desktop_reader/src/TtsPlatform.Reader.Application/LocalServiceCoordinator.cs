@@ -27,6 +27,7 @@ public sealed class LocalServiceCoordinator(
     public bool IsOperating { get; private set; }
     public DateTimeOffset? LastCheckedAt { get; private set; }
     public bool IsRateLimited => _time.GetUtcNow() < _retryAfter;
+    public int RetryAfterSeconds => (int)Math.Ceiling(Math.Clamp((_retryAfter - _time.GetUtcNow()).TotalSeconds, 0, 3600));
     public event EventHandler? Changed;
 
     private void Show(ServiceDashboard dashboard)
@@ -68,8 +69,7 @@ public sealed class LocalServiceCoordinator(
                     message = "No local service is listening at this address.";
                 }
             }
-            if (exception is ReaderApiException { StatusCode: 429 })
-                _retryAfter = _time.GetUtcNow().AddSeconds(65);
+            if (exception is ReaderApiException { StatusCode: 429 } limited) ObserveRateLimit(limited);
             Show(new(state, message));
         }
     }
@@ -83,7 +83,7 @@ public sealed class LocalServiceCoordinator(
         Changed?.Invoke(this, EventArgs.Empty);
         try
         {
-            if (IsRateLimited) return new(false, "The service asked us to wait. Try again after one minute.");
+            if (IsRateLimited) return new(false, $"The service asked us to wait. Try again in {RetryAfterSeconds} seconds.");
             await ReadAsync(cancellationToken);
             if (command == LocalServiceCommand.Start)
                 return await StartAndWaitAsync(cancellationToken);
@@ -131,7 +131,7 @@ public sealed class LocalServiceCoordinator(
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            if (exception is ReaderApiException { StatusCode: 429 }) _retryAfter = _time.GetUtcNow().AddSeconds(65);
+            if (exception is ReaderApiException { StatusCode: 429 } limited) ObserveRateLimit(limited);
             Show(new(LocalServiceState.Unreachable, ErrorMessage(exception)));
             return new(false, ErrorMessage(exception));
         }
@@ -167,11 +167,17 @@ public sealed class LocalServiceCoordinator(
         ReaderTokenUnavailableException or ReaderServiceUnavailableException or HttpRequestException or
         IOException or UnauthorizedAccessException or JsonException or ReaderClientConfigurationException or OperationCanceledException;
 
+    private void ObserveRateLimit(ReaderApiException exception)
+    {
+        var until = _time.GetUtcNow() + ReaderRetryDelay.ForError(exception, TimeSpan.FromSeconds(65));
+        if (until > _retryAfter) _retryAfter = until;
+    }
+
     private static string ErrorMessage(Exception exception) => exception switch
     {
         ReaderTokenUnavailableException or ReaderApiException { StatusCode: 401 or 403 } =>
             "Local owner authentication is unavailable. Check the local token file in Reader connection settings.",
-        ReaderApiException { StatusCode: 429 } => "Too many requests. Status checks will resume after one minute.",
+        ReaderApiException { StatusCode: 429 } => "Too many requests. Status checks will resume after the requested wait.",
         ReaderApiException { StatusCode: 404 } => "This service does not support Service Center yet. Update the local service before managing it.",
         ReaderApiException { ErrorType: "service_busy" } => "The service became busy. Finish or cancel active work before stopping it.",
         ReaderApiException { ErrorType: "service_instance_changed" } => "The service restarted during this operation. Refresh status and try again.",

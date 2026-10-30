@@ -76,7 +76,9 @@ internal sealed partial class DesktopServiceCenterHost
     {
         if (_disposed || _monitorTimer is null) return;
         var failed = _monitorFailure is not null || _coordinator is null || _coordinator.Dashboard.State is LocalServiceState.Unreachable or LocalServiceState.AuthenticationRequired;
-        _monitorTimer.Interval = ServiceDashboard.PollInterval(DashboardWindow?.IsVisible == true, failed, _coordinator?.IsRateLimited == true);
+        _monitorTimer.Interval = _coordinator?.IsRateLimited == true
+            ? TimeSpan.FromSeconds(Math.Max(1, _coordinator.RetryAfterSeconds))
+            : ServiceDashboard.PollInterval(DashboardWindow?.IsVisible == true, failed, false);
         _monitorTimer.Start();
     }
 

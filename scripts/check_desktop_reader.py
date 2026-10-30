@@ -356,7 +356,7 @@ def _check_source_shape(repo_root: Path) -> dict[str, object]:
         "Continuous document text",
         "InvisibleReadingBlockContainerStyle",
         "UseLoadedDocument",
-        "Reader will retry automatically in one minute",
+        "Reader will retry in",
         "PlayFromCursorButton",
         "startCursor: cursor",
         "After Stop, starts at the beginning",
@@ -457,7 +457,11 @@ def _free_port() -> int:
 
 @contextmanager
 def _live_reader_service(
-    repo_root: Path, temporary: Path, *, limits: dict[str, int] | None = None
+    repo_root: Path,
+    temporary: Path,
+    *,
+    limits: dict[str, int] | None = None,
+    seed_large_document: bool = False,
 ) -> Iterator[tuple[str, Path]]:
     for source_root in (
         repo_root / "apps" / "tts_service" / "src",
@@ -519,6 +523,16 @@ def _live_reader_service(
             with urllib.request.urlopen(request, timeout=5) as response:
                 if response.status != 201:
                     raise DesktopReaderCheckError("A live smoke document could not be created.")
+        if seed_large_document:
+            from reader_core import ReaderLibrary
+
+            text = "Short opening.\n\n" + "\n\n".join(
+                "Synthetic paragraph. " * 65 for _ in range(1600)
+            )
+            ReaderLibrary(app.state.container.reader.service.repository).create_plain_text_document(
+                title="Bounded document fixture",
+                text=text,
+            )
         yield base_url, token_path
     finally:
         server.should_exit = True
@@ -614,6 +628,31 @@ def _check_live_request_budgets(
         )
     ):
         raise DesktopReaderCheckError("The .NET client did not confirm isolated request budgets.")
+    return payload
+
+
+def _check_live_document_calls(repo_root: Path, dotnet: Path, temporary: Path) -> dict[str, object]:
+    smoke_dll = (
+        repo_root
+        / "apps/desktop_reader/tools/TtsPlatform.Reader.Client.Smoke"
+        / "bin/Release/net10.0/TtsPlatform.Reader.Client.Smoke.dll"
+    )
+    with _live_reader_service(
+        repo_root,
+        temporary / "document-calls",
+        seed_large_document=True,
+    ) as (base_url, token_path):
+        environment = os.environ.copy()
+        environment["TTS_PLATFORM_DOCUMENT_CALLS_SMOKE"] = "1"
+        output = _run(
+            [str(dotnet), str(smoke_dll), base_url, str(token_path)],
+            cwd=repo_root,
+            env=environment,
+            timeout=45,
+        )
+    payload = json.loads(output)
+    if payload.get("bounded_document_calls") is not True:
+        raise DesktopReaderCheckError("The .NET client did not confirm bounded document calls.")
     return payload
 
 
@@ -906,6 +945,7 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
     if payload.get("rendered") is not True:
         raise DesktopReaderCheckError("The WPF render marker is invalid.")
     folder_checks = (
+        "library_refresh_lifetime",
         "options_rendered",
         "folder_toggle",
         "hidden_after_refresh",
@@ -1004,6 +1044,7 @@ def main() -> int:
             temporary = Path(temporary_value)
             live_paging = _check_live_paging(repo_root, dotnet, temporary)
             request_budgets = _check_live_request_budgets(repo_root, dotnet, temporary)
+            document_calls = _check_live_document_calls(repo_root, dotnet, temporary)
             preview_snapshot = _check_preview_snapshot(repo_root, temporary)
             windows_audio = _check_windows_audio(
                 repo_root,
@@ -1024,6 +1065,7 @@ def main() -> int:
                     "dotnet": str(dotnet),
                     "live_paging": live_paging,
                     "request_budgets": request_budgets,
+                    "document_calls": document_calls,
                     "preview_snapshot": preview_snapshot,
                     "windows_audio": windows_audio,
                     "windows_integration": windows_integration,

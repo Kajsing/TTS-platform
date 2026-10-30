@@ -14,17 +14,30 @@ public sealed record ReadingWindowPage(
 public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize = 64)
 {
     private const int SectionSearchPageSize = 256;
+    private readonly object _sync = new();
     private string? _loadedDocumentId;
     private IReadOnlyList<ReaderBlock>? _loadedBlocks;
+    private ReadingWindowPage _current = new([], 0, null);
+    private PendingPage? _pending;
+    private int _generation;
 
-    public ReadingWindowPage Current { get; private set; } = new([], 0, null);
+    public ReadingWindowPage Current { get { lock (_sync) return _current; } }
+
+    public void CancelPendingLoads()
+    {
+        lock (_sync) InvalidatePending();
+    }
 
     public ReadingWindowPage UsePage(ReadingWindowPage page)
     {
-        _loadedDocumentId = null;
-        _loadedBlocks = null;
-        Current = page;
-        return Current;
+        lock (_sync)
+        {
+            InvalidatePending();
+            _loadedDocumentId = null;
+            _loadedBlocks = null;
+            _current = page;
+            return _current;
+        }
     }
 
     public ReadingWindowPage UseLoadedDocument(
@@ -34,10 +47,14 @@ public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
         ArgumentNullException.ThrowIfNull(blocks);
-        _loadedDocumentId = documentId;
-        _loadedBlocks = blocks.ToArray();
-        Current = CreateLoadedPage(startOrdinal);
-        return Current;
+        lock (_sync)
+        {
+            InvalidatePending();
+            _loadedDocumentId = documentId;
+            _loadedBlocks = blocks.ToArray();
+            _current = CreateLoadedPage(startOrdinal);
+            return _current;
+        }
     }
 
     public async Task<ReadingWindowPage> LoadAsync(
@@ -51,20 +68,41 @@ public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize
             throw new ArgumentOutOfRangeException(nameof(startOrdinal));
         }
 
-        if (string.Equals(documentId, _loadedDocumentId, StringComparison.Ordinal) &&
-            _loadedBlocks is not null)
+        cancellationToken.ThrowIfCancellationRequested();
+        PendingPage pending;
+        lock (_sync)
         {
-            Current = CreateLoadedPage(startOrdinal);
+            if (string.Equals(documentId, _loadedDocumentId, StringComparison.Ordinal) &&
+                _loadedBlocks is not null)
+            {
+                InvalidatePending();
+                _current = CreateLoadedPage(startOrdinal);
+                return _current;
+            }
+            if (_pending is { Cancelled: false } existing && existing.DocumentId == documentId && existing.StartOrdinal == startOrdinal)
+                pending = existing;
+            else
+            {
+                InvalidatePending();
+                pending = new PendingPage(documentId, startOrdinal, _generation);
+                _pending = pending;
+                pending.Task = LoadPageAsync(pending);
+            }
+            pending.Waiters++;
+        }
+        try { return await pending.Task.WaitAsync(cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && pending.Cancelled)
+        {
             return Current;
         }
-
-        var page = await client.GetBlocksAsync(
-            documentId,
-            afterOrdinal: startOrdinal - 1,
-            limit: pageSize,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        Current = new ReadingWindowPage(page.Blocks, startOrdinal, page.NextAfterOrdinal);
-        return Current;
+        finally
+        {
+            lock (_sync)
+            {
+                pending.Waiters--;
+                if (pending.Waiters == 0 && !pending.Task.IsCompleted) pending.Cancel();
+            }
+        }
     }
 
     public Task<ReadingWindowPage> LoadNextAsync(
@@ -239,24 +277,81 @@ public sealed class ReadingWindowPager(IReaderServiceClient client, int pageSize
             throw new ArgumentOutOfRangeException(nameof(prefetchThreshold));
         }
 
-        var blockIndex = -1;
-        for (var index = 0; index < Current.Blocks.Count; index++)
+        ReadingWindowPage current;
+        lock (_sync)
         {
-            if (Current.Blocks[index].Ordinal == blockOrdinal)
+            current = _current;
+            if (_pending is { Cancelled: false } pending && pending.DocumentId == documentId &&
+                blockOrdinal >= pending.StartOrdinal && blockOrdinal < (long)pending.StartOrdinal + pageSize)
+                return LoadAsync(documentId, pending.StartOrdinal, cancellationToken);
+        }
+        var blockIndex = -1;
+        for (var index = 0; index < current.Blocks.Count; index++)
+        {
+            if (current.Blocks[index].Ordinal == blockOrdinal)
             {
                 blockIndex = index;
                 break;
             }
         }
         var needsAnotherWindow = blockIndex < 0 ||
-            (Current.HasNext && blockIndex >= Current.Blocks.Count - prefetchThreshold);
+            (current.HasNext && blockIndex >= current.Blocks.Count - prefetchThreshold);
         var startOrdinal = Math.Max(0, blockOrdinal - contextBlocks);
-        if (!needsAnotherWindow || startOrdinal == Current.StartOrdinal)
+        if (!needsAnotherWindow || startOrdinal == current.StartOrdinal)
         {
-            return Task.FromResult(Current);
+            return Task.FromResult(current);
         }
 
         return LoadAsync(documentId, startOrdinal, cancellationToken);
+    }
+
+    private async Task<ReadingWindowPage> LoadPageAsync(PendingPage pending)
+    {
+        try
+        {
+            var page = await client.GetBlocksAsync(pending.DocumentId, pending.StartOrdinal - 1, pageSize,
+                pending.Cancellation.Token).ConfigureAwait(false);
+            pending.Cancellation.Token.ThrowIfCancellationRequested();
+            lock (_sync)
+            {
+                if (pending.Generation != _generation)
+                    throw new OperationCanceledException("The reading window was superseded.");
+                _current = new ReadingWindowPage(page.Blocks, pending.StartOrdinal, page.NextAfterOrdinal);
+                return _current;
+            }
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_pending, pending)) _pending = null;
+                pending.Cancellation.Dispose();
+            }
+        }
+    }
+
+    private void InvalidatePending()
+    {
+        _generation++;
+        _pending?.Cancel();
+        _pending = null;
+    }
+
+    private sealed class PendingPage(string documentId, int startOrdinal, int generation)
+    {
+        public string DocumentId { get; } = documentId;
+        public int StartOrdinal { get; } = startOrdinal;
+        public int Generation { get; } = generation;
+        public CancellationTokenSource Cancellation { get; } = new();
+        public Task<ReadingWindowPage> Task { get; set; } = null!;
+        public int Waiters { get; set; }
+        public bool Cancelled { get; private set; }
+        public void Cancel()
+        {
+            Cancelled = true;
+            try { Cancellation.Cancel(); }
+            catch (ObjectDisposedException) { }
+        }
     }
 
     private ReadingWindowPage CreateLoadedPage(int startOrdinal)

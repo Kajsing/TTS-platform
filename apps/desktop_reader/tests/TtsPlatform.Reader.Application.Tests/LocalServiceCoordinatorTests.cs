@@ -181,6 +181,58 @@ public sealed class LocalServiceCoordinatorTests
     }
 
     [Fact]
+    public async Task Rate_limit_honors_service_retry_deadline_instead_of_fixed_minute()
+    {
+        var clock = new Clock();
+        var client = new Client
+        {
+            Error = new ReaderApiException("rate_limited", "Wait", 429,
+                details: new Dictionary<string, object?> { ["retry_after_seconds"] = 4L }),
+        };
+        var processes = new Processes();
+        var coordinator = new LocalServiceCoordinator(client, processes, clock);
+        await coordinator.RefreshAsync();
+        Assert.Equal(4, coordinator.RetryAfterSeconds);
+        clock.Seconds = 3;
+        await coordinator.RefreshAsync();
+        Assert.Equal(1, client.Reads);
+        Assert.Equal(1, coordinator.RetryAfterSeconds);
+        clock.Seconds = 4;
+        client.Error = null;
+        await coordinator.RefreshAsync();
+        Assert.Equal(2, client.Reads);
+        Assert.False(coordinator.IsRateLimited);
+    }
+
+    [Fact]
+    public async Task Maintenance_always_rechecks_activity_after_an_earlier_idle_status()
+    {
+        var client = new Client();
+        var processes = new Processes();
+        var coordinator = new LocalServiceCoordinator(client, processes);
+        await coordinator.RefreshAsync();
+        client.Status = client.Status with { Activity = new(0, 0, 0, 1, 0) };
+        Assert.False((await coordinator.ExecuteAsync(LocalServiceCommand.Stop, Confirm)).Succeeded);
+        Assert.Equal(2, client.Reads);
+        Assert.Equal(0, client.Reserves);
+        Assert.Equal(0, processes.Stops);
+    }
+
+    [Theory]
+    [InlineData(0.5, 1)]
+    [InlineData(4, 4)]
+    [InlineData(4000, 3600)]
+    [InlineData(0, 65)]
+    [InlineData(-1, 65)]
+    [InlineData(double.NaN, 65)]
+    public void Retry_delay_is_bounded_and_invalid_metadata_uses_legacy_fallback(double value, int seconds)
+    {
+        var error = new ReaderApiException("rate_limited", "Wait", 429,
+            details: new Dictionary<string, object?> { ["retry_after_seconds"] = value });
+        Assert.Equal(TimeSpan.FromSeconds(seconds), ReaderRetryDelay.ForError(error, TimeSpan.FromSeconds(65)));
+    }
+
+    [Fact]
     public async Task Overlapping_commands_and_poll_do_not_run_during_confirmation()
     {
         var client = new Client(); var processes = new Processes();

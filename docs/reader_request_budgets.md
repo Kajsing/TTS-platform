@@ -74,7 +74,10 @@ outbox keeps its own receipt-based retry policy.
   saturated background traffic permits metadata/pages, PCM/source spans,
   persisted resume and immediate WAV speech; playback itself remains limited.
 
-This does not complete bounded document-load work, request coalescing,
+The subsequent 2026-10-30 desktop call-coordination slice is documented in
+`reader_document_calls.md`: metadata/read-window coordination and cancellation
+are complete there, while broader service-byte/full-source bounds remain open.
+The budget slice itself does not complete bounded document-load work, request coalescing,
 page-based chapter navigation, configurable import parts, metadata preflight,
 or append-scaling measurement. There is no new memory/latency benchmark or claim
 that all historical audio faults are fixed. Real listening remains a field test.

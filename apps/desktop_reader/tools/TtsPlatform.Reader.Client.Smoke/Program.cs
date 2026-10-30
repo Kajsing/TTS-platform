@@ -11,6 +11,8 @@ using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 var tokenProvider = new SmokeTokenProvider(args[1]);
 if (Environment.GetEnvironmentVariable("TTS_PLATFORM_REQUEST_BUDGET_SMOKE") == "1")
     return await RequestBudgetSmoke.RunAsync(args[0], tokenProvider);
+if (Environment.GetEnvironmentVariable("TTS_PLATFORM_DOCUMENT_CALLS_SMOKE") == "1")
+    return await DocumentCallsSmoke.RunAsync(args[0], tokenProvider);
 var client = new ReaderServiceClient(httpClient, args[0], tokenProvider);
 var serviceCenterSmoke = Environment.GetEnvironmentVariable("TTS_PLATFORM_SERVICE_CENTER_SMOKE") == "1";
 if (serviceCenterSmoke)

@@ -12,34 +12,63 @@ public sealed record LoadedReaderDocument(
 public sealed class ReaderDocumentLoader(
     IReaderServiceClient client, int maxCharacters = 1_000_000, int maxBlocks = 20_000)
 {
-    public async Task<LoadedReaderDocument> LoadAsync(
-        string documentId, CancellationToken cancellationToken = default)
+    public Task<LoadedReaderDocument> LoadAsync(
+        string documentId, CancellationToken cancellationToken = default) =>
+        LoadCoreAsync(documentId, null, cancellationToken);
+
+    public Task<LoadedReaderDocument> LoadAsync(
+        ReaderDocument initialDocument, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(initialDocument);
+        return LoadCoreAsync(initialDocument.Id, initialDocument, cancellationToken);
+    }
+
+    private async Task<LoadedReaderDocument> LoadCoreAsync(
+        string documentId, ReaderDocument? initialDocument, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var document = initialDocument ?? await client.GetDocumentAsync(documentId, cancellationToken).ConfigureAwait(false);
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var document = await client.GetDocumentAsync(documentId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             RequireAvailable(document);
             var continuous = document.IsEditable && document.TotalCharacters <= maxCharacters &&
                 document.TotalBlocks <= maxBlocks;
             var blocks = new List<ReaderBlock>();
+            long characters = 0;
+            var exceededEditorBounds = false;
             var after = -1;
             BlockPage page;
             do
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 page = await client.GetBlocksAsync(documentId, after, continuous ? 500 : 64, cancellationToken)
                     .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
                 blocks.AddRange(page.Blocks);
-                if (continuous && (blocks.Count > maxBlocks || blocks.Sum(block => (long)block.CharacterCount) > maxCharacters))
-                    throw new ReaderApiException("reader_revision_conflict", "The article grew while loading. Open it again.", 409);
+                characters += page.Blocks.Sum(block => (long)block.CharacterCount);
+                if (continuous && (blocks.Count > maxBlocks || characters > maxCharacters))
+                {
+                    exceededEditorBounds = true;
+                    break;
+                }
                 if (page.NextAfterOrdinal is not int next || !continuous) break;
                 if (next <= after)
                     throw new ReaderApiException("reader_invalid_page", "The service returned a non-advancing document page.", 502);
                 after = next;
             } while (true);
 
-            var current = await client.GetDocumentAsync(documentId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = await client.GetDocumentFreshAsync(documentId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             RequireAvailable(current);
-            if (!ReaderDocumentVersions.AreSame(document, current)) continue;
+            if (!ReaderDocumentVersions.AreSame(document, current))
+            {
+                document = current;
+                continue;
+            }
+            if (exceededEditorBounds)
+                throw new ReaderApiException("reader_revision_conflict", "The article grew while loading. Open it again.", 409);
             var pager = new ReadingWindowPager(client);
             var text = continuous ? new ContinuousDocumentText(blocks) : null;
             var readingPage = text is not null

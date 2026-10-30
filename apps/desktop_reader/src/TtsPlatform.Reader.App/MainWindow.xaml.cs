@@ -59,7 +59,8 @@ public partial class MainWindow : Window
         new(null, "All articles", false, true),
     ];
     private readonly SemaphoreSlim _autoAdvanceLock = new(1, 1);
-    private readonly SemaphoreSlim _desktopOpenLock = new(1, 1);
+    private DesktopHandoffCoordinator? _desktopHandoff;
+    private IReaderServiceClient? _desktopHandoffClient;
     private readonly SemaphoreSlim _documentLoadLock = new(1, 1);
     private readonly SemaphoreSlim _audioInterruptionLock = new(1, 1);
     private readonly DispatcherTimer _desktopOpenTimer = new()
@@ -83,6 +84,9 @@ public partial class MainWindow : Window
     private bool _shutdownInProgress;
     private bool _closed;
     private int _documentLoadGeneration;
+    private int _playbackHighlightGeneration;
+    private CancellationTokenSource? _documentLoadCancellation;
+    private CancellationTokenSource? _wordHighlightCancellation;
     private bool _suppressDocumentSelectionLoad;
     private ContinuousDocumentText? _continuousDocument;
     private ReaderCursor? _textCursor;
@@ -498,11 +502,13 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelDocumentLoad();
         if (_closed)
         {
             return;
         }
         _closed = true;
+        CancelDesktopOpenCheck();
         _windowSource?.RemoveHook(WindowMessageHook);
         _hotkeys?.Dispose();
         if (_audioInterruptionMonitor is not null)
@@ -721,43 +727,59 @@ public partial class MainWindow : Window
 
     private async Task CheckDesktopOpenRequestAsync()
     {
-        if (_closed || _localServiceOperation || !_desktopOpenLock.Wait(0))
+        if (_closed || _localServiceOperation || !_settings.ActiveConnection.IsLocal ||
+            _documentReloadInProgress || _documentMutationInProgress || _editor?.HasUnsavedChanges == true ||
+            _playback?.IsActive == true || _playback?.IsTransitioning == true) return;
+        var connection = _settings.ActiveConnection;
+        var tokenPath = _settings.EffectiveTokenSource.Path;
+        var client = GetClient();
+        if (!ReferenceEquals(_desktopHandoffClient, client))
         {
-            return;
+            CancelDesktopOpenCheck();
+            _desktopHandoffClient = client;
+            _desktopHandoff = new DesktopHandoffCoordinator(client);
         }
+        var handoff = _desktopHandoff!;
+        bool Current() => !_closed && !_localServiceOperation && ReferenceEquals(client, _client) &&
+            ReferenceEquals(handoff, _desktopHandoff) && _settings.ActiveConnection == connection &&
+            _settings.EffectiveTokenSource.Path == tokenPath;
+        bool CanOpen() => Current() && !_documentReloadInProgress && !_documentMutationInProgress &&
+            _editor?.HasUnsavedChanges != true && _playback?.IsActive != true && _playback?.IsTransitioning != true;
         try
         {
-            var openRequest = await GetClient().GetNextDesktopOpenRequestAsync();
-            _desktopOpenTimer.Interval = DesktopOpenPollInterval;
-            if (openRequest is null)
+            var result = await handoff.CheckAsync(CanOpen, async (document, cancellationToken) =>
             {
-                return;
-            }
-            if (_editor?.HasUnsavedChanges == true)
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!CanOpen()) return false;
+                await RefreshLibraryAsync(cancellationToken: cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!CanOpen()) return false;
+                await LoadDocumentAsync(document, cancellationToken: cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                return Current() && _editor?.Document?.Id == document.Id;
+            });
+            if (!Current()) return;
+            _desktopOpenTimer.Interval = DesktopOpenPollInterval;
+            if (result == DesktopHandoffResult.Deferred && _editor?.HasUnsavedChanges == true)
             {
                 FooterText.Text = "A browser document is waiting. Save or discard the current edit to open it.";
-                return;
             }
-            if (_playback?.IsActive == true)
+            else if (result == DesktopHandoffResult.Deferred && _playback?.IsActive == true)
             {
                 FooterText.Text = "A browser document is waiting and will open after playback stops.";
-                return;
             }
-
-            var document = await GetClient().GetDocumentAsync(openRequest.DocumentId);
-            await RefreshLibraryAsync();
-            await LoadDocumentAsync(document);
-            if (_editor?.Document?.Id != document.Id)
+            else if (result == DesktopHandoffResult.Opened)
             {
-                return;
+                OpenMainWindow();
+                FooterText.Text = "Opened a document saved from the browser.";
             }
-            await GetClient().AcknowledgeDesktopOpenRequestAsync(openRequest.Id);
-            OpenMainWindow();
-            FooterText.Text = "Opened a document saved from the browser.";
         }
+        catch (OperationCanceledException) when (!Current()) { }
+        catch (ObjectDisposedException) when (!Current()) { }
         catch (ReaderApiException exception) when (exception.ErrorType == "rate_limited")
         {
-            _desktopOpenTimer.Interval = DesktopOpenRateLimitBackoff;
+            if (!Current()) return;
+            _desktopOpenTimer.Interval = ReaderRetryDelay.ForError(exception, DesktopOpenRateLimitBackoff);
             FooterText.Text = "Browser handoff is waiting for the local service rate limit.";
         }
         catch (Exception exception) when (
@@ -765,16 +787,22 @@ public partial class MainWindow : Window
                 ReaderServiceUnavailableException or
                 ReaderTokenUnavailableException)
         {
+            if (!Current()) return;
             FooterText.Text = $"Browser handoff: {exception.Message}";
         }
-        finally
-        {
-            _desktopOpenLock.Release();
-        }
+    }
+
+    private void CancelDesktopOpenCheck()
+    {
+        _desktopHandoff?.Cancel();
+        _desktopHandoff = null;
+        _desktopHandoffClient = null;
     }
 
     private void RebuildClient()
     {
+        CancelDocumentLoad();
+        CancelDesktopOpenCheck();
         CancelFindWork(clearHighlights: true);
         StopEphemeralAsync(clearReplay: true).GetAwaiter().GetResult();
         _ephemeralAudio?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -1916,13 +1944,22 @@ public partial class MainWindow : Window
     private string? SelectedLibraryFolderId() =>
         (FolderFilterComboBox.SelectedItem as FolderFilterItem)?.Id;
 
-    private async Task RefreshFoldersAsync()
+    private async Task RefreshFoldersAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var client = GetClient();
+        var library = _library;
+        var connection = _settings.ActiveConnection;
+        var tokenPath = _settings.EffectiveTokenSource.Path;
+        bool Current() => !_closed && ReferenceEquals(client, _client) && ReferenceEquals(library, _library) &&
+            _settings.ActiveConnection == connection && _settings.EffectiveTokenSource.Path == tokenPath;
         var selectedId = SelectedLibraryFolderId();
         _refreshingFolders = true;
         try
         {
-            var page = await GetClient().GetFoldersAsync();
+            var page = await client.GetFoldersAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Current()) return;
             _folderFilters.Clear();
             _folderFilters.Add(new FolderFilterItem(null, "All articles", false, true));
             foreach (var folder in page.Folders.Where(folder => IsFolderOpen(folder.Id)))
@@ -2137,28 +2174,42 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private async Task RefreshLibraryAsync(bool throwOnFailure = false)
+    private async Task RefreshLibraryAsync(bool throwOnFailure = false, CancellationToken cancellationToken = default)
     {
-        if (_library is null)
+        cancellationToken.ThrowIfCancellationRequested();
+        var client = _client;
+        var library = _library;
+        if (client is null || library is null)
         {
             return;
         }
+        var connection = _settings.ActiveConnection;
+        var tokenPath = _settings.EffectiveTokenSource.Path;
+        bool Current() => !_closed && ReferenceEquals(client, _client) && ReferenceEquals(library, _library) &&
+            _settings.ActiveConnection == connection && _settings.EffectiveTokenSource.Path == tokenPath;
 
         try
         {
             if (_folderFilters.Count == 1)
             {
-                await RefreshFoldersAsync();
+                await RefreshFoldersAsync(cancellationToken);
             }
-            await _library.RefreshAsync(
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Current()) return;
+            await library.RefreshAsync(
                 SearchTextBox.Text.Trim(),
                 SelectedLibraryState(),
-                SelectedLibraryFolderId());
-            LoadMoreButton.IsEnabled = _library.HasMore;
-            FooterText.Text = $"{_library.Documents.Count} document(s) loaded";
+                SelectedLibraryFolderId(),
+                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Current()) return;
+            LoadMoreButton.IsEnabled = library.HasMore;
+            FooterText.Text = $"{library.Documents.Count} document(s) loaded";
         }
         catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Current()) return;
             FooterText.Text = $"Library: {exception.Message}";
             if (throwOnFailure) throw;
         }
@@ -2322,7 +2373,17 @@ public partial class MainWindow : Window
         finally { _suppressDocumentSelectionLoad = suppressed; }
     }
 
-    private async Task LoadDocumentAsync(ReaderDocument document, ReaderDocument? expectedDisplayedDocument = null)
+    private void CancelDocumentLoad()
+    {
+        ++_documentLoadGeneration;
+        _documentLoadCancellation?.Cancel();
+        _wordHighlightCancellation?.Cancel();
+        _findCancellation?.Cancel();
+        _readingWindow?.CancelPendingLoads();
+    }
+
+    private async Task LoadDocumentAsync(ReaderDocument document, ReaderDocument? expectedDisplayedDocument = null,
+        CancellationToken cancellationToken = default)
     {
         if (_documentMutationInProgress)
         {
@@ -2339,78 +2400,97 @@ public partial class MainWindow : Window
         {
             return;
         }
-        var loadGeneration = ++_documentLoadGeneration;
-        for (var attempt = 0; attempt < 2; attempt++)
+        CancelDocumentLoad();
+        var loadGeneration = _documentLoadGeneration;
+        var client = GetClient();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _documentLoadCancellation = cancellation;
+        var token = cancellation.Token;
+        try
         {
-            var retryRateLimit = false;
-            await _documentLoadLock.WaitAsync();
-            try
+            for (var attempt = 0; attempt < 2; attempt++)
             {
-                if (_closed || loadGeneration != _documentLoadGeneration || !IsFolderOpen(document.FolderId))
+                var retryRateLimit = false;
+                var retryDelay = DocumentRateLimitRetryDelay;
+                await _documentLoadLock.WaitAsync(token);
+                try
                 {
-                    return;
-                }
-                if (expectedDisplayedDocument is not null && !ReaderDocumentVersions.CanApplyPlaybackRefresh(
-                    _editor.Document, expectedDisplayedDocument, _editor.HasUnsavedChanges))
-                {
-                    FooterText.Text = "The local article changed while refreshing. Your edit has been kept.";
-                    return;
-                }
-                _documentReloadInProgress = true;
-                UpdateEditorButtons();
-                UpdatePlaybackControls();
-                await LoadDocumentCoreAsync(document, loadGeneration);
-                return;
-            }
-            catch (ReaderApiException exception) when (
-                exception.ErrorType == "rate_limited" && attempt == 0)
-            {
-                retryRateLimit = true;
-            }
-            catch (Exception exception) when (
-                exception is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
-            {
-                if (loadGeneration == _documentLoadGeneration)
-                {
-                    if (exception is ReaderApiException { StatusCode: 404 })
+                    if (_closed || loadGeneration != _documentLoadGeneration || !IsFolderOpen(document.FolderId))
                     {
-                        if (_editor.Document?.Id == document.Id && !_editor.HasUnsavedChanges)
-                            ClearDocumentDisplay();
-                        _library?.RemoveDocument(document.Id);
+                        return;
                     }
+                    if (expectedDisplayedDocument is not null && !ReaderDocumentVersions.CanApplyPlaybackRefresh(
+                        _editor.Document, expectedDisplayedDocument, _editor.HasUnsavedChanges))
+                    {
+                        FooterText.Text = "The local article changed while refreshing. Your edit has been kept.";
+                        return;
+                    }
+                    _documentReloadInProgress = true;
+                    UpdateEditorButtons();
+                    UpdatePlaybackControls();
+                    await LoadDocumentCoreAsync(document, loadGeneration, client, token);
+                    return;
+                }
+                catch (ReaderApiException exception) when (
+                    exception.ErrorType == "rate_limited" && attempt == 0)
+                {
+                    retryRateLimit = true;
+                    retryDelay = ReaderRetryDelay.ForError(exception, DocumentRateLimitRetryDelay);
+                }
+                catch (Exception exception) when (
+                    exception is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
+                {
+                    if (loadGeneration == _documentLoadGeneration)
+                    {
+                        if (exception is ReaderApiException { StatusCode: 404 })
+                        {
+                            if (_editor.Document?.Id == document.Id && !_editor.HasUnsavedChanges)
+                                ClearDocumentDisplay();
+                            _library?.RemoveDocument(document.Id);
+                        }
+                        RestoreDisplayedDocumentSelection();
+                        FooterText.Text = $"Document: {exception.Message}";
+                        RecordDocumentOperation("load_document", document.Id, exception);
+                    }
+                    return;
+                }
+                finally
+                {
+                    _documentReloadInProgress = false;
+                    _documentLoadLock.Release();
+                    UpdateEditorButtons();
+                    UpdatePlaybackControls();
+                }
+                if (retryRateLimit)
+                {
                     RestoreDisplayedDocumentSelection();
-                    FooterText.Text = $"Document: {exception.Message}";
-                    RecordDocumentOperation("load_document", document.Id, exception);
-                }
-                return;
-            }
-            finally
-            {
-                _documentReloadInProgress = false;
-                _documentLoadLock.Release();
-                UpdateEditorButtons();
-                UpdatePlaybackControls();
-            }
-            if (retryRateLimit)
-            {
-                RestoreDisplayedDocumentSelection();
-                FooterText.Text =
-                    "The local service is temporarily busy. The document is not locked; Reader will retry automatically in one minute.";
-                await Task.Delay(DocumentRateLimitRetryDelay);
-                if (_closed || loadGeneration != _documentLoadGeneration)
-                {
-                    return;
-                }
-                if (_editor.HasUnsavedChanges)
-                {
-                    FooterText.Text = "Automatic reload cancelled to preserve your edit. Select the article again when ready.";
-                    return;
+                    FooterText.Text =
+                        $"The local service is temporarily busy. Reader will retry in {Math.Ceiling(retryDelay.TotalSeconds):N0} seconds.";
+                    await Task.Delay(retryDelay, token);
+                    if (_closed || loadGeneration != _documentLoadGeneration)
+                    {
+                        return;
+                    }
+                    if (_editor.HasUnsavedChanges)
+                    {
+                        FooterText.Text = "Automatic reload cancelled to preserve your edit. Select the article again when ready.";
+                        return;
+                    }
                 }
             }
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            if (!_closed && loadGeneration == _documentLoadGeneration) RestoreDisplayedDocumentSelection();
+        }
+        finally
+        {
+            if (ReferenceEquals(_documentLoadCancellation, cancellation)) _documentLoadCancellation = null;
+        }
     }
 
-    private async Task LoadDocumentCoreAsync(ReaderDocument document, int loadGeneration)
+    private async Task LoadDocumentCoreAsync(ReaderDocument document, int loadGeneration,
+        IReaderServiceClient client, CancellationToken cancellationToken)
     {
         if (_editor is null)
         {
@@ -2422,11 +2502,13 @@ public partial class MainWindow : Window
             if (_playback?.DocumentId is not null)
             {
                 TracePlaybackCommand(PlaybackUiCommand.Stop, PlaybackCommandSource.DocumentLoad);
-                await _playback.LeaveDocumentAsync();
+                await _playback.LeaveDocumentAsync(cancellationToken);
             }
 
-            var loaded = await new ReaderDocumentLoader(GetClient(),
-                ContinuousEditorMaxCharacters, ContinuousEditorMaxBlocks).LoadAsync(document.Id);
+            cancellationToken.ThrowIfCancellationRequested();
+            var loaded = await new ReaderDocumentLoader(client,
+                ContinuousEditorMaxCharacters, ContinuousEditorMaxBlocks).LoadAsync(document, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (_closed || loadGeneration != _documentLoadGeneration || !IsFolderOpen(loaded.Document.FolderId))
             {
                 if (!_closed && loadGeneration == _documentLoadGeneration) RestoreDisplayedDocumentSelection();
@@ -2509,7 +2591,7 @@ public partial class MainWindow : Window
             }
             afterOrdinal = nextAfterOrdinal;
         }
-        var current = await GetClient().GetDocumentAsync(document.Id);
+        var current = await GetClient().GetDocumentFreshAsync(document.Id);
         if (!ReaderDocumentVersions.AreSame(document, current))
         {
             throw new ReaderApiException("reader_revision_conflict",
@@ -2634,7 +2716,7 @@ public partial class MainWindow : Window
         // another selection/delete from racing this versioned mutation.
         if (!CanDeleteDisplayedDocument(document)) return;
         _documentMutationInProgress = true;
-        ++_documentLoadGeneration;
+        CancelDocumentLoad();
         UpdateEditorButtons();
         UpdatePlaybackControls();
         var deleted = false;
@@ -2724,7 +2806,7 @@ public partial class MainWindow : Window
 
     private void ClearDocumentDisplay()
     {
-        ++_documentLoadGeneration;
+        CancelDocumentLoad();
         CancelFindWork(clearHighlights: true);
         _findDocument = null;
         ClearWordHighlights();
@@ -3255,7 +3337,7 @@ public partial class MainWindow : Window
     private async Task<(ReaderDocument? Document, bool Reloaded)>
         RefreshDocumentForPlaybackAsync(ReaderDocument displayedDocument)
     {
-        var latestDocument = await GetClient().GetDocumentAsync(displayedDocument.Id);
+        var latestDocument = await GetClient().GetDocumentFreshAsync(displayedDocument.Id);
         if (!IsFolderOpen(latestDocument.FolderId))
         {
             FooterText.Text = "This folder is closed. Check Open in Article folders before playback.";
@@ -3354,6 +3436,9 @@ public partial class MainWindow : Window
 
     private Task ShowReadingPageAsync(ReadingWindowPage page)
     {
+        if (_closed || !ReferenceEquals(_readingWindow?.Current, page) ||
+            page.Blocks.Any(block => block.DocumentId != _editor?.Document?.Id))
+            return Task.CompletedTask;
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
@@ -3498,14 +3583,20 @@ public partial class MainWindow : Window
 
     private async Task RefreshWordHighlightsAsync()
     {
+        _wordHighlightCancellation?.Cancel();
         var generation = ++_wordHighlightGeneration;
         if (_editor?.Document is not ReaderDocument document ||
-            _highlighterConfiguration is not ReaderHighlighterConfiguration configuration)
+            _highlighterConfiguration is not ReaderHighlighterConfiguration configuration ||
+            !configuration.Terms.Any(term => term.Active && !string.IsNullOrWhiteSpace(term.Term)))
         {
             ClearWordHighlights();
             return;
         }
 
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            _documentLoadCancellation?.Token ?? CancellationToken.None);
+        _wordHighlightCancellation = cancellation;
+        var token = cancellation.Token;
         try
         {
             ArticleFindDocument? highlightDocument = null;
@@ -3520,17 +3611,17 @@ public partial class MainWindow : Window
                 {
                     return;
                 }
-                highlightDocument = await _findLoader.LoadAsync(document);
+                highlightDocument = await _findLoader.LoadAsync(document, token);
                 text = highlightDocument.Text;
             }
 
             var result = await Task.Run(() =>
-                WordHighlighterEngine.Search(text, configuration.Terms));
+                WordHighlighterEngine.Search(text, configuration.Terms), token);
             var structuredHighlights = highlightDocument is null
                 ? new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>()
                 : await Task.Run(() => BuildStructuredWordHighlights(
                     highlightDocument,
-                    result.Matches));
+                    result.Matches), token);
             if (generation != _wordHighlightGeneration ||
                 _editor?.Document is not ReaderDocument current ||
                 !string.Equals(current.Id, document.Id, StringComparison.Ordinal) ||
@@ -3555,6 +3646,7 @@ public partial class MainWindow : Window
                     $"Word Highlighter display is limited to {WordHighlighterEngine.MaxMatches:N0} matches for this article.";
             }
         }
+        catch (OperationCanceledException) { }
         catch (Exception exception) when (
             exception is ReaderApiException or
                 ReaderServiceUnavailableException or
@@ -3565,6 +3657,10 @@ public partial class MainWindow : Window
                 ClearWordHighlights();
                 FooterText.Text = $"Word Highlighter: {exception.Message}";
             }
+        }
+        finally
+        {
+            if (ReferenceEquals(_wordHighlightCancellation, cancellation)) _wordHighlightCancellation = null;
         }
     }
 
@@ -3729,6 +3825,7 @@ public partial class MainWindow : Window
 
     private void ClearWordHighlights()
     {
+        _wordHighlightCancellation?.Cancel();
         ++_wordHighlightGeneration;
         _wordHighlightDocument = null;
         _wordHighlightResult = WordHighlightResult.Empty;
@@ -3774,6 +3871,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        var playback = _playback;
+        var pager = _readingWindow;
+        var loadGeneration = _documentLoadGeneration;
+        var runId = playback.DiagnosticRunId;
+        var highlightGeneration = ++_playbackHighlightGeneration;
         if (document.IsEditable && _continuousDocument is not null)
         {
             ShowContinuousEditorHighlight(document, highlight.SourceSpans);
@@ -3781,13 +3883,17 @@ public partial class MainWindow : Window
         }
 
         var firstSpan = highlight.SourceSpans[0];
-        if (FollowReadingCheckBox.IsChecked == true && _readingWindow is not null)
+        if (FollowReadingCheckBox.IsChecked == true && pager is not null)
         {
-            var priorStartOrdinal = _readingWindow.Current.StartOrdinal;
-            var page = await _readingWindow.FollowPlaybackAsync(
+            var priorStartOrdinal = pager.Current.StartOrdinal;
+            var page = await pager.FollowPlaybackAsync(
                 document.Id,
                 firstSpan.BlockOrdinal);
-            if (_documentReloadInProgress || _documentMutationInProgress || _editor?.Document?.Id != document.Id)
+            if (_closed || _documentReloadInProgress || _documentMutationInProgress ||
+                loadGeneration != _documentLoadGeneration || highlightGeneration != _playbackHighlightGeneration ||
+                !ReferenceEquals(playback, _playback) || runId != playback.DiagnosticRunId || !playback.IsActive ||
+                !ReferenceEquals(pager, _readingWindow) || _editor?.Document?.Id != document.Id ||
+                _editor.Document.ContentRevision != document.ContentRevision)
                 return;
             if (page.StartOrdinal != priorStartOrdinal || _readingBlocks.Count == 0)
             {

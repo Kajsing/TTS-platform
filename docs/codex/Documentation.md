@@ -4,6 +4,36 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Completed call-coordination follow-up (2026-10-30): user selected fewer/better
+  document/status calls. Superseded loads and stale UI continuations are cancelled
+  and generation-guarded; supplied metadata avoids an initial duplicate GET,
+  while final revision/maintenance/position reads remain fresh. Safe overlapping
+  metadata GETs share bounded work without a completed HTTP response cache.
+  Block pages stay outside this sharing because an old delayed page could cross
+  an external writer's revision. Pager-owned follow requests share only their
+  current load generation. Empty/inactive highlighter terms skip full-source
+  loading; explicit Find/active highlighting retain verified whole-source counts.
+  Handoff skips six polls/minute during steady busy reading/editing and stays
+  bound to the captured workspace. Library/folder refreshes reject late replies.
+  Service Center honors the real Retry-After deadline and keeps fresh maintenance
+  checks. Policy and evidence: `docs/reader_document_calls.md`.
+  Validation: 689 Python passes / 2 optional skips, 386 .NET passes; Ruff and
+  zero-warning solution build; live compiled HTTP/WS, schema-11 preview integrity,
+  portable packaging and WPF folder/lifecycle probes pass. Live 2,182,414-character
+  fixture: two initial GETs, 64 retained blocks/85,946 source characters, one HTTP
+  call for eight overlapping capability reads and one for eight follow events;
+  observed 31.74 ms / 499,160 allocated bytes (not peak RSS or a general bound).
+  Separate WPF 2,002,000-character fixture proves inactive highlighting reads
+  only one page, active highlighting four full-source pages, and Find reuses it.
+  Reviewer-found abandoned-pager, final-cancellation and late-highlight races
+  received explicit guards/regressions. Preserve the local voice MANIFEST.
+  Broader response-byte/full-source bounds remain unchecked; PWA/U8/audiobook
+  stay inactive. Log: `.logs/2026-10-30-reader-document-calls.md`.
+  Published the exact root-shortcut win-x64 runtime after validation. Its folder/
+  library-lifetime, document-switch/large-source, pause-viewport and tray lifecycle
+  probes pass. Scoped .NET whitespace, 20 payload-contract and security-default
+  checks pass. Reader/service remain stopped for normal relaunch; local config,
+  library and MANIFEST were not changed.
 - Completed budget slice (2026-10-30): user activated today's existing-Reader
   reliability work after closing Reader/tray/service. Independent service
   playback/background/agent budgets and budget-tagged 429/WS errors are now
@@ -2231,8 +2261,9 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## What Is Next
 
-- Current priority after the 2026-10-30 budget slice: the unchecked bounded
-  document-load/coalescing and large-document tasks in Plan.md. The older
+- Current priority after the 2026-10-30 budget and desktop call-coordination
+  slices: the remaining service-byte/full-source bounds and large-document tasks
+  in Plan.md. Desktop metadata/window coalescing is complete. The older
   Milestone-9 resume pointer below is historical; do not automatically start PDF,
   PWA or U8 work. Budget policy and compatibility are in reader_request_budgets.md.
 - Stop at the completed Reader Workstation Milestone 9 boundary. If the user
@@ -3061,7 +3092,8 @@ user before selecting further remote work.
 ## Resume Instructions For The Next Codex Loop
 
 The 2026-10-30 status at the top supersedes the older execution pointers below:
-budget isolation is complete; the remaining large-document work is the next
+budget isolation and desktop call coordination are complete; remaining service
+response/full-source bounds and large-document work are the next
 reliability follow-up. Service Center T1/T2 is complete. PWA remains proposed.
 
 1. Open `docs/codex/Prompt.md`, `docs/codex/Plan.md`, and `docs/codex/Implement.md`.

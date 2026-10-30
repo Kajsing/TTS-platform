@@ -700,7 +700,17 @@ The completed budget slice is recorded below. The same follow-up selects a 900,0
 whole-chapter default for future agent imports, now maintained in
 `docs/reader_agent_import_guide.md` and the local import skill.
 
-- [ ] Bound service work per request and desktop load/read operation. Plan
+- [x] Coordinate desktop document/status work (2026-10-30): cancel superseded
+  loads, reuse supplied metadata with a fresh final revision fence, merge safe
+  overlapping metadata reads and follow windows, skip unnecessary full-source
+  highlighting and handoff polling, and honor exact status retry deadlines.
+  Measured HTTP counts, retained source and fixture allocations are recorded in
+  `docs/reader_document_calls.md`. Fresh maintenance checks and position-save
+  semantics remain intact.
+- [ ] Finish service work/response bounds and incremental full-source operations.
+  The desktop coordination above is complete, but it does not establish byte
+  quotas for pages containing very large blocks or incremental active Find/
+  highlighter execution. Preserve the original broader requirement: plan
   incremental, revision-consistent pages/windows with bounded concurrency,
   cancellation and coalescing of redundant status, document and position calls.
   Measure request bursts and work/latency separately: a character count alone

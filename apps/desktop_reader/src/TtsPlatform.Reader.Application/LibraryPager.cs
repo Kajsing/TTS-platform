@@ -50,6 +50,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
             cancellationToken.ThrowIfCancellationRequested();
             var page = await client.GetDocumentsByFolderAsync(
                 pageSize, cursor, query, state, folderId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var visible = page.Documents.Where(IsVisible).ToArray();
             if (visible.Length > 0 || page.NextCursor is null || attempt == 4)
             {
@@ -106,6 +107,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
                 state,
                 folderId,
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             Documents.Clear();
             foreach (var document in page.Documents.Where(IsVisible))
             {
@@ -145,6 +147,7 @@ public sealed class LibraryPager(IReaderServiceClient client, int pageSize = 50)
                 _state,
                 _folderId,
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var document in page.Documents.Where(IsVisible))
             {
                 Documents.Add(document);
