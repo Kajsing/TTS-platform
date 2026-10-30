@@ -72,6 +72,19 @@ enabled. See [Windows MCP setup and validation](docs/reader_agent_mcp.md) and
 [the service contract](docs/reader_agent_api.md). Website monitoring and cloud
 agent connections are separate future work; the normal local Reader is retained.
 
+## Proposed PWA Reader and EU KVM hosting
+
+A future, **not-yet-active** track would add an installable browser Reader for
+Windows, Android phones/tablets, and other supported PWA browsers, with an
+optional single-owner EU KVM deployment and measured CPU-only speech synthesis.
+It preserves the existing local Windows Reader and its security defaults.
+Qwen3/offline audiobook production remains separate.
+
+See the [PWA and EU KVM roadmap](docs/pwa_cloud_roadmap.md) for milestones,
+security gates, VPS sizing criteria, and Codex activation instructions.
+Planning this track does **not** authorize hosting purchases, public network
+exposure, service migration, or implementation.
+
 ## Repository Layout
 
 ```text
