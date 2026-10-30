@@ -67,6 +67,7 @@ _ALLOWED_REMOTE_ROUTES = (
     ),
     ("PATCH", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/content$")),
     ("GET", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/blocks$")),
+    ("GET", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/chapters$")),
     ("POST", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/(?:search|highlights)$")),
     (
         "POST",

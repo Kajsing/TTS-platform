@@ -4,6 +4,39 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Completed paged-chapter slice (2026-10-30): existing chapter selector and
+  Previous/Next now work in large paged articles. A protected, revision-pinned
+  GET returns at most 1,024 scalar chapter anchors, capped at 1 MiB; source
+  columns are never read to build the index. Bounded primary-key lookups avoid
+  document-wide scans. One exact-anchor destination page resolves saved code
+  points to canonical UTF-16 between two fresh metadata fences, using private
+  staging before publication. Original text, playback/resume position and caret
+  intent remain unchanged. Existing continuous chapter editing/drafts retain
+  their semantics; single-chapter editing/tools/current-chapter Find are disabled
+  in paged mode. No editor-limit increase, dependency, migration, source rewrite
+  or networking change. Whole-block size errors remain explicit and actionable.
+  Ownership guards reject late chapter/index/page/Find/term replies, revision/
+  folder changes and closed workspaces. Audible following updates the selector
+  at exact mid-block boundaries; Pause preserves its marker/view.
+  Validation: 842 Python passes / 2 optional skips, 449 .NET passes, Ruff,
+  zero-warning Release build, scoped .NET whitespace and 21 payload fixtures.
+  Full desktop checker passes compiled HTTP/WS, request-budget saturation and
+  enforcement, schema-11 preview integrity, portable package and WPF folder/
+  lifecycle, including `paged_chapter_navigation`. Corrected a test-release-order
+  timeout; its failed evidence is retained. Review found/fixed closed-folder,
+  repeated-offset-scan and competing-navigation/fallthrough races, with tests.
+  Real-service 2,182,414-character fixture: 537-byte index / zero block GETs;
+  four chapter jumps each use one bounded page + two fresh metadata GETs, retain
+  at most 64 blocks / 87,296 UTF-16 units, and make zero position/playback/write
+  calls. Final observed index/jump latencies 9.45 / 13.79 ms maximum; fixture
+  observations, not universal latency/memory guarantees. Exact root-shortcut
+  win-x64 runtime published; its isolated folder and full lifecycle probes pass.
+  Reader/service stay stopped, local config/library/MANIFEST untouched. Optional
+  audible/global clipboard/hotkey checks were skipped. Policy/contracts:
+  `docs/reader_paged_chapters.md`; log: `.logs/2026-10-30-reader-paged-chapters.md`.
+  Remaining basis: product import-part limits/preview, chapter/edit metadata
+  preflight and append-scaling measurements. Safe to continue that backlog;
+  PWA/U8/audiobook remain inactive.
 - Completed source-bounds/search slice (2026-10-30): public block pages now fit
   an exact 2 MiB UTF-8 JSON budget, including metadata/escaping, and at most
   1,000,000 code points per block. Whole-block continuations preserve source;

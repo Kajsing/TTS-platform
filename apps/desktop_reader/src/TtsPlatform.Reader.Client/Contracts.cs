@@ -10,6 +10,9 @@ public interface ITokenProvider
 
 public interface IReaderServiceClient
 {
+    Task<ReaderChapterIndex> GetChapterIndexAsync(string documentId, int expectedContentRevision,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Chapter navigation requires an updated Reader service.");
     Task<ReaderSearchSummary> CreateSearchAsync(string documentId, ReaderSearchRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Service-side article search requires an updated Reader service.");
     Task<ReaderSearchSummary> CreateHighlightSearchAsync(string documentId, ReaderHighlightSearchRequest request, CancellationToken cancellationToken = default)

@@ -103,6 +103,18 @@ public sealed class SourceHighlightTextBlock : TextBlock
     public bool BringWordTextIntoView(int start) =>
         BringRunIntoView(_wordRunsByStart.GetValueOrDefault(start));
 
+    public bool BringSourceOffsetIntoView(int offset)
+    {
+        if (offset < 0) return false;
+        foreach (var run in Inlines.OfType<Run>())
+        {
+            if (offset <= run.Text.Length)
+                return BringPointerIntoView(run.ContentStart.GetPositionAtOffset(offset, LogicalDirection.Forward));
+            offset -= run.Text.Length;
+        }
+        return false;
+    }
+
     private bool BringRunIntoView(Run? run)
     {
         if (run is null)
@@ -110,8 +122,13 @@ public sealed class SourceHighlightTextBlock : TextBlock
             return false;
         }
 
-        var characterRect = run.ContentStart.GetCharacterRect(
-            LogicalDirection.Forward);
+        return BringPointerIntoView(run.ContentStart);
+    }
+
+    private bool BringPointerIntoView(TextPointer? pointer)
+    {
+        if (pointer is null) return false;
+        var characterRect = pointer.GetCharacterRect(LogicalDirection.Forward);
         if (characterRect.IsEmpty)
         {
             return false;

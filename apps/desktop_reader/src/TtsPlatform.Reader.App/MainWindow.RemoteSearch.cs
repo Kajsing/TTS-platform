@@ -7,6 +7,8 @@ public partial class MainWindow
 {
     private async Task ChangeReadingPageAsync(bool next)
     {
+        CancelPagedChapterNavigation();
+        var chapterGeneration = _pagedChapterNavigationGeneration;
         if (_readingWindow is not { } pager || _editor?.Document is not { } document) return;
         if (_editor.HasUnsavedChanges)
         {
@@ -21,13 +23,15 @@ public partial class MainWindow
             var destination = next
                 ? await pager.LoadNextAsync(document.Id, cancellation)
                 : await pager.LoadPreviousAsync(document.Id, cancellation);
-            if (!_closed && generation == _documentLoadGeneration && ReferenceEquals(pager, _readingWindow))
+            if (!_closed && chapterGeneration == _pagedChapterNavigationGeneration &&
+                generation == _documentLoadGeneration && ReferenceEquals(pager, _readingWindow))
                 await ShowReadingPageAsync(destination);
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
         {
-            if (!_closed && generation == _documentLoadGeneration && ReferenceEquals(pager, _readingWindow) &&
+            if (!_closed && chapterGeneration == _pagedChapterNavigationGeneration &&
+                generation == _documentLoadGeneration && ReferenceEquals(pager, _readingWindow) &&
                 ReferenceEquals(page, pager.Current))
                 FooterText.Text = $"Reading page unavailable: {DescribeReadingNavigationFailure(exception)}";
         }

@@ -110,6 +110,65 @@ internal static class DocumentCallsSmoke
             navigationPage.Blocks.Any(block => block.Id == nextHit.StartCursor.BlockId) &&
             navigationPage.Blocks.Sum(block => block.Text.Length) < 100_000,
             "one bounded page for the remote navigation cursor");
+
+        var chapterTimer = Stopwatch.StartNew();
+        var chapterIndexBlocksBefore = counter.BlockGets;
+        var chapterIndexReadsBefore = counter.ChapterIndexGets;
+        var chapterIndex = await client.GetChapterIndexAsync(document.Id, document.ContentRevision, timeout.Token);
+        PagedChapterNavigation.ValidateIndex(document, chapterIndex);
+        var chapterIndexMs = chapterTimer.Elapsed.TotalMilliseconds;
+        var chapterIndexBlockGets = counter.BlockGets - chapterIndexBlocksBefore;
+        Require(chapterIndexBlockGets == 0 && counter.ChapterIndexGets - chapterIndexReadsBefore == 1 &&
+            chapterIndex.Chapters.Count == 3 &&
+            chapterIndex.Chapters.Select(chapter => chapter.BlockOrdinal).SequenceEqual([0, 800, 1600]) &&
+            chapterIndex.Chapters.Select(chapter => chapter.CodepointOffset).SequenceEqual([0, 10, 10]),
+            "bounded chapter index without source block reads");
+        Require(counter.ChapterIndexResponseBytes is > 0 and <= 64 * 1024, "bounded chapter index response");
+
+        var chapterBlocksBefore = counter.BlockGets;
+        var chapterMetadataBefore = counter.MetadataGets;
+        var chapterPositionBefore = counter.PositionCalls;
+        var chapterPlaybackBefore = counter.PlaybackCalls;
+        var chapterWritesBefore = counter.WriteCalls;
+        var chapterJumpBlockGets = 0;
+        var chapterJumpMetadataGets = 0;
+        var chapterRetainedBlocks = 0;
+        var chapterRetainedCharacters = 0;
+        var maxChapterJumpMs = 0d;
+        // Exercise next, previous, last and first destinations. Each jump is
+        // staged independently and commits only after both revision fences.
+        foreach (var chapter in new[] { chapterIndex.Chapters[1], chapterIndex.Chapters[0],
+            chapterIndex.Chapters[^1], chapterIndex.Chapters[0] })
+        {
+            var oldVisiblePage = loaded.ReadingWindow.Current;
+            var beforeJumpBlocks = counter.BlockGets;
+            var beforeJumpMetadata = counter.MetadataGets;
+            var beforeJumpCalls = counter.Count;
+            var jumpTimer = Stopwatch.StartNew();
+            var destination = await PagedChapterNavigation.StageNavigationAsync(client, document, chapterIndex, chapter, timeout.Token);
+            maxChapterJumpMs = Math.Max(maxChapterJumpMs, jumpTimer.Elapsed.TotalMilliseconds);
+            var jumpBlockGets = counter.BlockGets - beforeJumpBlocks;
+            var jumpMetadataGets = counter.MetadataGets - beforeJumpMetadata;
+            Require(ReferenceEquals(oldVisiblePage, loaded.ReadingWindow.Current) &&
+                jumpBlockGets == 1 && jumpMetadataGets == 2 && counter.Count - beforeJumpCalls == 3 &&
+                destination.Page.StartOrdinal == chapter.BlockOrdinal && destination.Cursor.BlockId == chapter.BlockId &&
+                destination.Cursor.CharacterOffset == chapter.CodepointOffset &&
+                PagedChapterNavigation.AtCursor(chapterIndex, destination.Cursor, destination.Page.Blocks)?.Id == chapter.Id,
+                "one staged chapter page with two metadata fences and unchanged visible page");
+            Require(destination.Page.Blocks.Count is > 0 and <= 64 &&
+                destination.Page.Blocks.Sum(block => block.Text.Length) < 100_000,
+                "bounded retained chapter destination source");
+            chapterJumpBlockGets = Math.Max(chapterJumpBlockGets, jumpBlockGets);
+            chapterJumpMetadataGets = Math.Max(chapterJumpMetadataGets, jumpMetadataGets);
+            chapterRetainedBlocks = Math.Max(chapterRetainedBlocks, destination.Page.Blocks.Count);
+            chapterRetainedCharacters = Math.Max(chapterRetainedCharacters, destination.Page.Blocks.Sum(block => block.Text.Length));
+            loaded.ReadingWindow.UsePage(destination.Page);
+            Require(ReferenceEquals(destination.Page, loaded.ReadingWindow.Current), "explicit staged chapter commit");
+        }
+        Require(counter.BlockGets - chapterBlocksBefore == 4 && counter.MetadataGets - chapterMetadataBefore == 8 &&
+            counter.PositionCalls == chapterPositionBefore && counter.PlaybackCalls == chapterPlaybackBefore &&
+            counter.WriteCalls == chapterWritesBefore, "chapter navigation reads no positions, starts no playback and writes no state");
+        var chapterNavigationMs = chapterTimer.Elapsed.TotalMilliseconds;
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             bounded_document_calls = true,
@@ -143,6 +202,23 @@ internal static class DocumentCallsSmoke
             find_ms = Math.Round(findMs, 2),
             highlight_scan_ms = Math.Round(highlightMs, 2),
             remote_search_ms = Math.Round(remoteSearchMs, 2),
+            paged_chapter_navigation = true,
+            chapter_count = chapterIndex.Chapters.Count,
+            chapter_index_block_gets = chapterIndexBlockGets,
+            chapter_index_response_bytes = counter.ChapterIndexResponseBytes,
+            chapter_jump_count = 4,
+            chapter_jump_block_gets = chapterJumpBlockGets,
+            chapter_jump_metadata_gets = chapterJumpMetadataGets,
+            chapter_total_jump_block_gets = counter.BlockGets - chapterBlocksBefore,
+            chapter_total_jump_metadata_gets = counter.MetadataGets - chapterMetadataBefore,
+            chapter_navigation_position_calls = counter.PositionCalls - chapterPositionBefore,
+            chapter_navigation_playback_calls = counter.PlaybackCalls - chapterPlaybackBefore,
+            chapter_navigation_write_calls = counter.WriteCalls - chapterWritesBefore,
+            chapter_retained_blocks = chapterRetainedBlocks,
+            chapter_retained_source_characters = chapterRetainedCharacters,
+            chapter_index_ms = Math.Round(chapterIndexMs, 2),
+            max_chapter_jump_ms = Math.Round(maxChapterJumpMs, 2),
+            chapter_navigation_ms = Math.Round(chapterNavigationMs, 2),
         }));
         return 0;
     }
@@ -163,20 +239,38 @@ internal static class DocumentCallsSmoke
         private int _blockGets;
         private int _searchResponses;
         private int _maxSearchResponseBytes;
+        private int _chapterIndexGets, _chapterIndexResponseBytes, _metadataGets, _positionCalls, _playbackCalls, _writeCalls;
         public int Count => Volatile.Read(ref _count);
         public int BlockGets => Volatile.Read(ref _blockGets);
         public int SearchResponses => Volatile.Read(ref _searchResponses);
         public int MaxSearchResponseBytes => Volatile.Read(ref _maxSearchResponseBytes);
+        public int ChapterIndexGets => Volatile.Read(ref _chapterIndexGets);
+        public int ChapterIndexResponseBytes => Volatile.Read(ref _chapterIndexResponseBytes);
+        public int MetadataGets => Volatile.Read(ref _metadataGets);
+        public int PositionCalls => Volatile.Read(ref _positionCalls);
+        public int PlaybackCalls => Volatile.Read(ref _playbackCalls);
+        public int WriteCalls => Volatile.Read(ref _writeCalls);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public CountingHandler() : base(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false }) { }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _count);
             var path = request.RequestUri?.AbsolutePath ?? "";
+            const string documentPrefix = "/v1/reader/documents/";
+            if (request.Method != HttpMethod.Get) Interlocked.Increment(ref _writeCalls);
+            if (request.Method == HttpMethod.Get && path.StartsWith(documentPrefix, StringComparison.Ordinal) &&
+                !path[documentPrefix.Length..].Contains('/')) Interlocked.Increment(ref _metadataGets);
+            if (request.Method == HttpMethod.Get && path.EndsWith("/chapters", StringComparison.Ordinal))
+                Interlocked.Increment(ref _chapterIndexGets);
+            if (path.EndsWith("/position", StringComparison.Ordinal)) Interlocked.Increment(ref _positionCalls);
+            if (path.Contains("/stream", StringComparison.Ordinal) || path.Contains("/synthesize", StringComparison.Ordinal))
+                Interlocked.Increment(ref _playbackCalls);
             if (request.Method == HttpMethod.Get && path.EndsWith("/blocks", StringComparison.Ordinal))
                 Interlocked.Increment(ref _blockGets);
             await Release.Task.WaitAsync(cancellationToken);
             var response = await base.SendAsync(request, cancellationToken);
+            if (path.EndsWith("/chapters", StringComparison.Ordinal))
+                Volatile.Write(ref _chapterIndexResponseBytes, (await response.Content.ReadAsByteArrayAsync(cancellationToken)).Length);
             if (path.EndsWith("/search", StringComparison.Ordinal) ||
                 path.EndsWith("/highlights", StringComparison.Ordinal) || path.Contains("/search/", StringComparison.Ordinal))
             {

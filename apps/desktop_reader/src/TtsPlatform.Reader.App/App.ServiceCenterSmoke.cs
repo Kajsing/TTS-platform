@@ -88,6 +88,7 @@ public partial class App
             await first.VerifyDocumentSwitchAsync();
             await first.VerifyPlaybackViewportAsync(root);
             await first.VerifyChapterViewsAsync(root);
+            await first.VerifyPagedChaptersAsync();
             await first.VerifyCaptureOutboxAsync(root);
             first.Close();
             await Idle();
@@ -202,6 +203,7 @@ public partial class App
                 playback_input_diagnostics = true,
                 playback_pause_viewport = true,
                 chapter_views = true,
+                paged_chapter_navigation = true,
                 document_switch_safety = true,
                 remote_paged_search = true,
                 remote_highlight_window = true,

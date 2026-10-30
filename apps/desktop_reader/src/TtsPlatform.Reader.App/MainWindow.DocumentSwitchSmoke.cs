@@ -274,6 +274,9 @@ public class DocumentSwitchSmokeClient : DispatchProxy
         var id = args?.FirstOrDefault() as string;
         switch (method?.Name)
         {
+            case nameof(IReaderServiceClient.GetChapterIndexAsync):
+                return Task.FromResult(new ReaderChapterIndex(id!, 1,
+                    [new ReaderChapterAnchor("root", "Chapter 1", id == "large" ? "large-0" : $"block-{id}", 0, 0)]));
             case nameof(IReaderServiceClient.CreateSearchAsync):
                 FindSearches++;
                 return Task.FromResult(new ReaderSearchSummary("find-session", id!, 1, "find", 2000,

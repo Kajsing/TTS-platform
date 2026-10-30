@@ -1014,6 +1014,20 @@ class ReaderBrowserCaptureCapability(BaseModel):
     desktop_handoff: bool
 
 
+class ReaderChapterAnchorResponse(BaseModel):
+    id: str
+    title: str
+    block_id: str
+    block_ordinal: int
+    codepoint_offset: int
+
+
+class ReaderChapterIndexResponse(BaseModel):
+    document_id: str
+    content_revision: int
+    chapters: list[ReaderChapterAnchorResponse]
+
+
 class ReaderBlockPageCapability(BaseModel):
     max_response_bytes: int
     max_block_characters: int

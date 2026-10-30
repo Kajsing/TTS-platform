@@ -2379,6 +2379,7 @@ public partial class MainWindow : Window
 
     private void CancelDocumentLoad()
     {
+        CancelPagedChapterNavigation();
         ++_documentLoadGeneration;
         _documentLoadCancellation?.Cancel();
         _wordHighlightCancellation?.Cancel();
@@ -2528,6 +2529,7 @@ public partial class MainWindow : Window
             _findDocument = null;
             ClearWordHighlights();
             _continuousHighlightAdorner?.Clear();
+            _pagedChapterIndex = null;
             _continuousDocument = loaded.ContinuousText;
             _readingWindow = loaded.ReadingWindow;
             _editor.LoadBlock(document, loaded.Page.Blocks.FirstOrDefault());
@@ -2557,6 +2559,8 @@ public partial class MainWindow : Window
             UpdatePlaybackControls();
             ScheduleFindRefresh();
             RecordDocumentOperation("load_document", document.Id);
+            await RefreshPagedChapterCatalogAsync(client, document, loadGeneration, cancellationToken);
+            if (_closed || loadGeneration != _documentLoadGeneration || cancellationToken.IsCancellationRequested) return;
             await RefreshWordHighlightsAsync();
         }
         finally
@@ -3420,11 +3424,12 @@ public partial class MainWindow : Window
         await ShowReadingPageAsync(page);
     }
 
-    private async Task ShowReadingPageAsync(ReadingWindowPage page)
+    private async Task ShowReadingPageAsync(ReadingWindowPage page, bool chapterNavigation = false)
     {
         if (_closed || !ReferenceEquals(_readingWindow?.Current, page) ||
             page.Blocks.Any(block => block.DocumentId != _editor?.Document?.Id))
             return;
+        if (!chapterNavigation) CancelPagedChapterNavigation();
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
@@ -3433,6 +3438,7 @@ public partial class MainWindow : Window
         ApplyWordHighlightsToReadingBlocks();
         ApplyCurrentFindToReadingBlocks();
         ReadingBlocksList.SelectedItem = _readingBlocks.FirstOrDefault();
+        SyncPagedChapterWithPage();
         PreviousReadingPageButton.IsEnabled = page.HasPrevious;
         NextReadingPageButton.IsEnabled = page.HasNext;
         var pageNumber = page.StartOrdinal / 64 + 1;
@@ -3752,6 +3758,7 @@ public partial class MainWindow : Window
         if (_continuousDocument is null && _remoteWordSearch is { } remote &&
             _editor?.Document is { } remoteDocument && _readingWindow is { } remotePager)
         {
+            CancelPagedChapterNavigation();
             _remoteWordNavigationCancellation?.Cancel();
             using var navigation = CancellationTokenSource.CreateLinkedTokenSource(
                 _documentLoadCancellation?.Token ?? CancellationToken.None);
@@ -3771,6 +3778,7 @@ public partial class MainWindow : Window
                 _wordHighlightMatchIndex = hit.Index;
                 if (!remotePager.Current.Blocks.Any(block => block.Ordinal == hit.StartCursor.BlockOrdinal))
                 {
+                    CancelPagedChapterNavigation();
                     var remotePage = await LoadSearchDestinationAsync(remotePager, remoteDocument.Id, hit.StartCursor.BlockOrdinal, navigation.Token);
                     if (!OwnsNavigation() || !ReferenceEquals(remotePage, remotePager.Current)) return;
                     await ShowReadingPageAsync(remotePage);
@@ -3789,10 +3797,15 @@ public partial class MainWindow : Window
                 }
                 return;
             }
+            catch (OperationCanceledException) when (navigation.IsCancellationRequested) { }
+            catch (Exception error) when (!OwnsNavigation() &&
+                error is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
+            { }
             finally
             {
                 if (ReferenceEquals(_remoteWordNavigationCancellation, navigation)) _remoteWordNavigationCancellation = null;
             }
+            return;
         }
         _wordHighlightMatchIndex = WordHighlighterNavigator.Move(
             _wordHighlightResult.Matches,
@@ -3939,6 +3952,7 @@ public partial class MainWindow : Window
         var firstSpan = highlight.SourceSpans[0];
         if (FollowReadingCheckBox.IsChecked == true && pager is not null)
         {
+            CancelPagedChapterNavigation();
             var priorStartOrdinal = pager.Current.StartOrdinal;
             var page = await pager.FollowPlaybackAsync(
                 document.Id,
@@ -3961,6 +3975,7 @@ public partial class MainWindow : Window
             }
         }
 
+        if (FollowReadingCheckBox.IsChecked == true) SyncPagedChapterWithCursor(highlight.CursorStart);
         foreach (var block in _readingBlocks)
         {
             block.HighlightStart = -1;
@@ -4399,6 +4414,7 @@ public partial class MainWindow : Window
         }
 
         var match = _findResult.Matches[_findMatchIndex];
+        if (_continuousDocument is null) CancelPagedChapterNavigation();
         if (_continuousDocument is not null)
         {
             if (match.End > (CurrentContinuousDocument()?.Text.Length ?? 0))
@@ -4453,6 +4469,7 @@ public partial class MainWindow : Window
             block.Ordinal == location.StartCursor.BlockOrdinal);
         if (!currentPageContainsMatch)
         {
+            CancelPagedChapterNavigation();
             var page = await LoadSearchDestinationAsync(pager,
                 document.Id, location.StartCursor.BlockOrdinal, _findCancellation?.Token ?? CancellationToken.None);
             if (!OwnsNavigation() || !ReferenceEquals(page, pager.Current)) return;

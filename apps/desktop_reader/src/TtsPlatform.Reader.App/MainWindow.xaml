@@ -282,10 +282,10 @@
                        Text="Choose an article from the library." TextWrapping="Wrap" />
             <WrapPanel x:Name="ChapterToolbar" Margin="0,8,0,0" Visibility="Collapsed">
               <TextBlock Text="Chapter" VerticalAlignment="Center" Margin="0,0,8,0" />
-              <Button Content="‹" Click="PreviousChapter_Click" ToolTip="Previous chapter (navigation only)" />
+              <Button x:Name="PreviousChapterButton" Content="‹" Click="PreviousChapter_Click" ToolTip="Previous chapter (navigation only)" />
               <ComboBox x:Name="ChapterComboBox" MinWidth="190" MaxWidth="340"
                         SelectionChanged="ChapterSelection_Changed" AutomationProperties.Name="Article chapter" />
-              <Button Content="›" Click="NextChapter_Click" ToolTip="Next chapter (navigation only)" />
+              <Button x:Name="NextChapterButton" Content="›" Click="NextChapter_Click" ToolTip="Next chapter (navigation only)" />
               <CheckBox x:Name="SingleChapterCheckBox" Content="One chapter at a time"
                         Checked="ChapterView_Changed" Unchecked="ChapterView_Changed" Margin="10,0,0,0" VerticalAlignment="Center" />
               <Menu Background="Transparent" VerticalAlignment="Center" Margin="10,0,0,0">

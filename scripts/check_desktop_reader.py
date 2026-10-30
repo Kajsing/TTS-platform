@@ -529,10 +529,23 @@ def _live_reader_service(
             text = "Short opening.\n\n" + "\n\n".join(
                 "Synthetic paragraph. " * 65 for _ in range(1600)
             )
-            ReaderLibrary(app.state.container.reader.service.repository).create_plain_text_document(
+            repository = app.state.container.reader.service.repository
+            document = ReaderLibrary(repository).create_plain_text_document(
                 title="Bounded document fixture",
                 text=text,
             )
+            # Add chapter metadata without changing source text or the existing
+            # Find/highlighter fixture counts. The repository supplies root.
+            for ordinal, title in ((800, "Middle chapter"), (1600, "Final chapter")):
+                block = repository.list_blocks(document.id, after_ordinal=ordinal - 1, limit=1)[0]
+                document = repository.edit_chapter(
+                    document.id,
+                    expected_row_version=document.row_version,
+                    action="add",
+                    title=title,
+                    block_id=block.id,
+                    codepoint_offset=10,
+                )
         yield base_url, token_path
     finally:
         server.should_exit = True
@@ -661,10 +674,12 @@ def _check_live_document_calls(repo_root: Path, dotnet: Path, temporary: Path) -
             "remote_highlight_navigation",
             "find_truncated",
             "highlight_window_truncated",
+            "paged_chapter_navigation",
         )
     ):
         raise DesktopReaderCheckError(
-            "The .NET client did not confirm bounded document calls and service-side search."
+            "The .NET client did not confirm bounded document calls, "
+            "service-side search, and chapter navigation."
         )
     expected = {
         "remote_search_block_gets": 0,
@@ -676,6 +691,16 @@ def _check_live_document_calls(repo_root: Path, dotnet: Path, temporary: Path) -
         "highlight_window_hits": 2000,
         "navigation_hit_index": 103_999,
         "navigation_block_page_gets": 1,
+        "chapter_count": 3,
+        "chapter_index_block_gets": 0,
+        "chapter_jump_count": 4,
+        "chapter_jump_block_gets": 1,
+        "chapter_jump_metadata_gets": 2,
+        "chapter_total_jump_block_gets": 4,
+        "chapter_total_jump_metadata_gets": 8,
+        "chapter_navigation_position_calls": 0,
+        "chapter_navigation_playback_calls": 0,
+        "chapter_navigation_write_calls": 0,
     }
     if any(payload.get(key) != value for key, value in expected.items()):
         raise DesktopReaderCheckError("The live service-side search proof returned invalid counts.")
@@ -683,6 +708,9 @@ def _check_live_document_calls(repo_root: Path, dotnet: Path, temporary: Path) -
         not 0 < payload.get("max_search_response_bytes", 0) <= 1024 * 1024
         or not 0 < payload.get("navigation_retained_blocks", 0) <= 64
         or payload.get("search_response_count") != 7
+        or not 0 < payload.get("chapter_index_response_bytes", 0) <= 64 * 1024
+        or not 0 < payload.get("chapter_retained_blocks", 0) <= 64
+        or not 0 < payload.get("chapter_retained_source_characters", 0) < 100_000
     ):
         raise DesktopReaderCheckError("The live service-side search responses were not bounded.")
     return payload
@@ -1040,6 +1068,7 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "document_switch_safety",
         "remote_paged_search",
         "remote_highlight_window",
+        "paged_chapter_navigation",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):
         raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")

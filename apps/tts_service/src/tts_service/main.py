@@ -30,6 +30,7 @@ from .reader_agent_routes import (
     enforce_agent_admin,
     enforce_agent_request,
 )
+from .reader_chapter_routes import build_reader_chapter_router
 from .reader_routes import build_reader_router
 from .reader_search_routes import bound_search_body, build_reader_search_router, is_search_request
 from .reader_stream_routes import build_reader_stream_router
@@ -71,6 +72,7 @@ def create_app(
     _register_exception_handlers(app)
     _register_routes(app)
     app.include_router(build_reader_router())
+    app.include_router(build_reader_chapter_router())
     app.include_router(build_reader_stream_router())
     app.include_router(build_reader_search_router())
     app.include_router(build_remote_admin_router())

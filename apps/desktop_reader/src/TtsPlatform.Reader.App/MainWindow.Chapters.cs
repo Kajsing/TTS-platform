@@ -10,6 +10,7 @@ public partial class MainWindow
     private IReadOnlyList<ReaderChapter> _chapters = [];
     private ChapterSlice _chapterSlice;
     private string? _chapterDocumentId;
+    private int _chapterDocumentRevision;
     private string? _selectedChapterId;
     private bool _updatingChapters;
     private bool _singleChapter;
@@ -33,22 +34,38 @@ public partial class MainWindow
     private void RebuildChapterCatalog()
     {
         var document = _editor?.Document;
-        if (!string.Equals(_chapterDocumentId, document?.Id, StringComparison.Ordinal))
+        if (!string.Equals(_chapterDocumentId, document?.Id, StringComparison.Ordinal) ||
+            _chapterDocumentRevision != document?.ContentRevision)
         {
             _selectedChapterId = null;
             _chapterAudibleMark = null;
             _chapterDocumentId = document?.Id;
+            _chapterDocumentRevision = document?.ContentRevision ?? 0;
+            _pagedChapterIndex = null;
         }
         _chapters = document is not null && _continuousDocument is not null
             ? ReaderChapters.Build(document, _continuousDocument) : [];
         var selected = _chapters.FirstOrDefault(item => item.Id == _selectedChapterId) ?? _chapters.FirstOrDefault();
-        _selectedChapterId = selected?.Id;
+        if (_continuousDocument is not null) _selectedChapterId = selected?.Id;
         _chapterSlice = selected?.Slice ?? default;
         _updatingChapters = true;
-        ChapterComboBox.ItemsSource = _chapters;
-        ChapterComboBox.SelectedItem = selected;
+        SingleChapterCheckBox.IsChecked = _continuousDocument is not null && _singleChapter;
+        if (_continuousDocument is not null)
+        {
+            ChapterComboBox.ItemsSource = _chapters;
+            ChapterComboBox.SelectedItem = selected;
+        }
+        else
+        {
+            var paged = _pagedChapterIndex?.Chapters;
+            var anchor = paged?.FirstOrDefault(item => item.Id == _selectedChapterId) ?? paged?.FirstOrDefault();
+            _selectedChapterId = anchor?.Id;
+            ChapterComboBox.ItemsSource = paged;
+            ChapterComboBox.SelectedItem = anchor;
+        }
         _updatingChapters = false;
-        ChapterToolbar.Visibility = _chapters.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ChapterToolbar.Visibility = _chapters.Count > 0 || _pagedChapterIndex?.Chapters.Count > 0
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenderChapterEditor()
@@ -64,7 +81,7 @@ public partial class MainWindow
             FooterText.Text = "Save or revert changes before changing the chapter view.";
             return false;
         }
-        return _chapters.Count > 0;
+        return _chapters.Count > 0 || _pagedChapterIndex?.Chapters.Count > 0;
     }
 
     private void SelectChapter(ReaderChapter chapter, bool navigate, bool refreshFind = true)
@@ -108,9 +125,16 @@ public partial class MainWindow
         _continuousHighlightAdorner?.Show(clipped.Start, clipped.Length);
     }
 
-    private void ChapterSelection_Changed(object sender, SelectionChangedEventArgs e)
+    private async void ChapterSelection_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_updatingChapters || ChapterComboBox.SelectedItem is not ReaderChapter chapter) return;
+        if (_updatingChapters) return;
+        if (ChapterComboBox.SelectedItem is ReaderChapterAnchor anchor)
+        {
+            RestoreChapterSelection();
+            await NavigatePagedChapterAsync(anchor);
+            return;
+        }
+        if (ChapterComboBox.SelectedItem is not ReaderChapter chapter) return;
         if (CanChangeChapterView()) SelectChapter(chapter, true);
         else
         {
@@ -123,6 +147,13 @@ public partial class MainWindow
     private void ChapterView_Changed(object sender, RoutedEventArgs e)
     {
         if (_updatingChapters) return;
+        if (_continuousDocument is null)
+        {
+            _updatingChapters = true;
+            SingleChapterCheckBox.IsChecked = _singleChapter;
+            _updatingChapters = false;
+            return;
+        }
         if (!CanChangeChapterView())
         {
             _updatingChapters = true;
@@ -152,13 +183,19 @@ public partial class MainWindow
         ScheduleFindRefresh();
     }
 
-    private void PreviousChapter_Click(object sender, RoutedEventArgs e) => NavigateChapter(-1);
-    private void NextChapter_Click(object sender, RoutedEventArgs e) => NavigateChapter(1);
-    private void NavigateChapter(int delta)
+    private async void PreviousChapter_Click(object sender, RoutedEventArgs e) => await NavigateChapterAsync(-1);
+    private async void NextChapter_Click(object sender, RoutedEventArgs e) => await NavigateChapterAsync(1);
+    private async Task NavigateChapterAsync(int delta)
     {
         if (!CanChangeChapterView()) return;
-        var index = _chapters.ToList().FindIndex(item => item.Id == _selectedChapterId);
-        SelectChapter(_chapters[Math.Clamp(index + delta, 0, _chapters.Count - 1)], true);
+        if (_continuousDocument is null && _pagedChapterIndex is { } index)
+        {
+            var current = index.Chapters.ToList().FindIndex(item => item.Id == _selectedChapterId);
+            await NavigatePagedChapterAsync(index.Chapters[Math.Clamp(current + delta, 0, index.Chapters.Count - 1)]);
+            return;
+        }
+        var currentIndex = _chapters.ToList().FindIndex(item => item.Id == _selectedChapterId);
+        SelectChapter(_chapters[Math.Clamp(currentIndex + delta, 0, _chapters.Count - 1)], true);
     }
 
     private async void AddChapter_Click(object sender, RoutedEventArgs e) => await MutateChapterAsync("add");
@@ -236,6 +273,16 @@ public partial class MainWindow
         RenameChapterMenuItem.IsEnabled = editable;
         MergeChapterMenuItem.IsEnabled = editable && _selectedChapterId != _chapters.FirstOrDefault()?.Id;
         ChapterToolbar.IsEnabled = !documentBusy;
+        var count = _continuousDocument is not null ? _chapters.Count : _pagedChapterIndex?.Chapters.Count ?? 0;
+        var selected = _continuousDocument is not null
+            ? _chapters.ToList().FindIndex(item => item.Id == _selectedChapterId)
+            : _pagedChapterIndex?.Chapters.ToList().FindIndex(item => item.Id == _selectedChapterId) ?? -1;
+        PreviousChapterButton.IsEnabled = !documentBusy && selected > 0;
+        NextChapterButton.IsEnabled = !documentBusy && selected >= 0 && selected + 1 < count;
+        SingleChapterCheckBox.IsEnabled = _continuousDocument is not null && !documentBusy;
+        SingleChapterCheckBox.ToolTip = _continuousDocument is null
+            ? "Large articles use bounded pages. Select a chapter to open its starting page."
+            : "Show one editable chapter at a time.";
         FindCurrentChapterCheckBox.IsEnabled = _chapters.Count > 0;
     }
 }

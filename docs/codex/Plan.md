@@ -742,11 +742,15 @@ whole-chapter default for future agent imports, now maintained in
   explicit policy; never truncate prose or silently repartition the live library.
   The agent-workflow default is already selected; product-side controls and
   automatic enforcement remain unimplemented.
-- [ ] Include chapter navigation in the bounded page-based reader. Currently
-  the chapter toolbar requires the continuous editor (at most 1,000,000 document
-  characters and 20,000 blocks), so a chaptered large article can have no visible
-  selector. Preserve heard position, continuation, chapter anchors and revision
-  guards without loading the entire article or simply raising the editor cap.
+- [x] Include chapter navigation in the bounded page-based reader (2026-10-30).
+  A bounded scalar chapter index exposes the existing selector/Previous/Next;
+  each jump stages one exact-anchor source page between fresh metadata fences.
+  Code-point anchors resolve to UTF-16 from only the destination block. Preserve
+  heard position, continuation, caret intent, source identity and local draft
+  editing; stale, moved, oversized or superseded jumps keep the previous page.
+  No full-source download or editor-cap increase. Continuous-only chapter editing,
+  one-chapter view and chapter-scoped Find remain disabled in paged mode.
+  Contract and compiled HTTP/WPF evidence: `docs/reader_paged_chapters.md`.
 - [ ] Review the independent chapter/edit-metadata size constraint. Chapter
   marker snapshots and appended-block metadata share an existing 64 KiB JSON
   bound; a synthetic reconstruction of one failed delivery exceeded it despite
