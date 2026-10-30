@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
+from ..block_pages import MAX_BLOCK_PAGE_CHARACTERS, BoundedReaderBlockPage
 from ..chapters import (
     CHAPTER_KEY,
     MAX_CHAPTERS,
@@ -25,6 +26,7 @@ from ..chapters import (
 )
 from ..cursors import remap_cursor_for_edit
 from ..errors import (
+    ReaderBlockTooLargeError,
     ReaderConflictError,
     ReaderDatabaseError,
     ReaderEditHistoryError,
@@ -834,6 +836,74 @@ class SqliteReaderRepository:
                     """,
                     (document_id, after_ordinal, limit),
                 )
+            )
+
+    def list_blocks_bounded(
+        self,
+        document_id: str,
+        *,
+        after_ordinal: int = -1,
+        limit: int = 200,
+        max_bytes: int,
+        max_characters: int = MAX_BLOCK_PAGE_CHARACTERS,
+    ) -> BoundedReaderBlockPage:
+        if after_ordinal < -1 or limit <= 0 or max_bytes <= 0 or max_characters <= 0:
+            raise ReaderValidationError("bounded block pagination values are invalid")
+        with self._connection() as connection:
+            # Scalar preflight and hydration must observe the same revision even
+            # when a separate writer commits between the two statements.
+            connection.execute("BEGIN")
+            self._require_document(connection, document_id)
+            summaries = connection.execute(
+                """
+                SELECT id, ordinal, character_count FROM reader_blocks
+                WHERE document_id = ? AND ordinal > ? ORDER BY ordinal LIMIT ?
+                """,
+                (document_id, after_ordinal, limit + 1),
+            )
+            blocks: list[ReaderBlock] = []
+            used_bytes = 0
+            has_more = False
+            for summary in summaries:
+                if len(blocks) == limit:
+                    has_more = True
+                    break
+                ordinal = int(summary["ordinal"])
+                characters = int(summary["character_count"])
+                # This cheap persisted scalar precedes any text/BLOB-size work.
+                if characters > max_characters:
+                    if blocks:
+                        has_more = True
+                        break
+                    raise ReaderBlockTooLargeError(
+                        ordinal=ordinal, character_count=characters,
+                        max_characters=max_characters, max_bytes=max_bytes,
+                    )
+                sizes = connection.execute(
+                    """SELECT length(CAST(text AS BLOB)) AS text_bytes,
+                              length(CAST(metadata_json AS BLOB)) AS metadata_bytes
+                       FROM reader_blocks WHERE id = ? AND document_id = ?""",
+                    (summary["id"], document_id),
+                ).fetchone()
+                text_bytes, metadata_bytes = int(sizes["text_bytes"]), int(sizes["metadata_bytes"])
+                if used_bytes + text_bytes + metadata_bytes > max_bytes:
+                    if blocks:
+                        has_more = True
+                        break
+                    raise ReaderBlockTooLargeError(
+                        ordinal=ordinal, character_count=characters,
+                        max_characters=max_characters, max_bytes=max_bytes,
+                        text_bytes=text_bytes, metadata_bytes=metadata_bytes,
+                    )
+                row = connection.execute(
+                    "SELECT * FROM reader_blocks WHERE id = ? AND document_id = ?",
+                    (summary["id"], document_id),
+                ).fetchone()
+                blocks.append(_block_from_row(row))
+                used_bytes += text_bytes + metadata_bytes
+            return BoundedReaderBlockPage(
+                blocks=tuple(blocks),
+                next_after_ordinal=blocks[-1].ordinal if blocks and has_more else None,
             )
 
     def update_document(

@@ -12,6 +12,7 @@ from typing import Annotated, TypeVar
 from document_import import DocumentImportError, ImportOptions, ImportSource
 from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile, status
 from reader_core import (
+    MAX_BLOCK_PAGE_CHARACTERS,
     Bookmark,
     DocumentState,
     FolderDeleteMode,
@@ -31,6 +32,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import FileResponse
 
 from .errors import APIError
+from .reader_block_pages import bounded_block_page_response
 from .reader_errors import (
     reader_api_error,
     reader_database_unavailable,
@@ -59,8 +61,8 @@ from .reader_schemas import (
     EditReaderChapterRequest,
     ExpectedReaderVersionRequest,
     MoveReaderDocumentsRequest,
+    ReaderBlockPageCapability,
     ReaderBlockPageResponse,
-    ReaderBlockResponse,
     ReaderBookmarkListResponse,
     ReaderBookmarkResponse,
     ReaderBrowserCaptureCapability,
@@ -230,6 +232,24 @@ def build_reader_router() -> APIRouter:
                 max_characters=10_000_000,
                 desktop_handoff=True,
             ),
+            block_pages=ReaderBlockPageCapability(
+                max_response_bytes=config.max_block_page_bytes,
+                max_block_characters=MAX_BLOCK_PAGE_CHARACTERS,
+            ),
+            source_search={
+                "available": runtime.database_ready,
+                "positions_only": True,
+                "max_source_utf16": 32_000_000,
+                "max_source_blocks": 100_000,
+                "max_request_bytes": 16 * 1024,
+                "max_response_bytes": 1024 * 1024,
+                "max_find_matches": 10_000,
+                "max_highlighter_matches": 250_000,
+                "max_window_matches": 2000,
+                "max_sessions": 4,
+                "session_idle_seconds": 300,
+                "regex_provider": "regex-v0",
+            },
         )
 
     @router.get("/folders", response_model=ReaderFolderPageResponse)
@@ -911,7 +931,7 @@ def build_reader_router() -> APIRouter:
         document_id: str,
         after_ordinal: Annotated[int, Query(ge=-1)] = -1,
         limit: Annotated[int, Query(gt=0)] = 200,
-    ) -> ReaderBlockPageResponse:
+    ) -> Response:
         service = _service(request)
         _require_document_access(request, document_id)
         if limit > service.config.max_page_size:
@@ -922,19 +942,20 @@ def build_reader_router() -> APIRouter:
                 param="limit",
                 details={"max_page_size": service.config.max_page_size},
             )
-        fetched = _run_reader(
-            lambda: service.list_blocks(
-                document_id,
-                after_ordinal=after_ordinal,
-                limit=limit + 1,
+
+        def read_page() -> Response:
+            fetched = _run_reader(
+                lambda: service.list_blocks_bounded(
+                    document_id,
+                    after_ordinal=after_ordinal,
+                    limit=limit,
+                )
             )
-        )
-        has_more = len(fetched) > limit
-        blocks = fetched[:limit]
-        return ReaderBlockPageResponse(
-            blocks=[ReaderBlockResponse.from_domain(block) for block in blocks],
-            next_after_ordinal=blocks[-1].ordinal if has_more and blocks else None,
-        )
+            return bounded_block_page_response(fetched, service.config.max_block_page_bytes)
+
+        response = await run_in_threadpool(read_page)
+        _require_document_access(request, document_id)
+        return response
 
     @router.get(
         "/documents/{document_id}/position",

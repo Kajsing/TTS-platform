@@ -45,6 +45,7 @@ DEFAULT_READER_MANAGED_FILES_PATH = "library"
 DEFAULT_READER_COPY_IMPORTED_FILES = False
 DEFAULT_READER_PAGE_SIZE = 50
 DEFAULT_READER_MAX_PAGE_SIZE = 500
+DEFAULT_READER_MAX_BLOCK_PAGE_BYTES = 2 * 1024 * 1024
 DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW = 64
 DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW = 32000
 DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS = 1000
@@ -405,6 +406,7 @@ class ReaderConfig:
     copy_imported_files: bool = DEFAULT_READER_COPY_IMPORTED_FILES
     default_page_size: int = DEFAULT_READER_PAGE_SIZE
     max_page_size: int = DEFAULT_READER_MAX_PAGE_SIZE
+    max_block_page_bytes: int = DEFAULT_READER_MAX_BLOCK_PAGE_BYTES
     max_blocks_per_stream_window: int = DEFAULT_READER_MAX_BLOCKS_PER_STREAM_WINDOW
     max_source_chars_per_stream_window: int = DEFAULT_READER_MAX_SOURCE_CHARS_PER_STREAM_WINDOW
     max_edit_history_operations: int = DEFAULT_READER_MAX_EDIT_HISTORY_OPERATIONS
@@ -427,6 +429,9 @@ class ReaderConfig:
             ),
             default_page_size=int(data.get("default_page_size", DEFAULT_READER_PAGE_SIZE)),
             max_page_size=int(data.get("max_page_size", DEFAULT_READER_MAX_PAGE_SIZE)),
+            max_block_page_bytes=int(
+                data.get("max_block_page_bytes", DEFAULT_READER_MAX_BLOCK_PAGE_BYTES)
+            ),
             max_blocks_per_stream_window=int(
                 data.get(
                     "max_blocks_per_stream_window",
@@ -459,6 +464,7 @@ class ReaderConfig:
         positive_limits = {
             "default_page_size": config.default_page_size,
             "max_page_size": config.max_page_size,
+            "max_block_page_bytes": config.max_block_page_bytes,
             "max_blocks_per_stream_window": config.max_blocks_per_stream_window,
             "max_source_chars_per_stream_window": config.max_source_chars_per_stream_window,
             "max_edit_history_operations": config.max_edit_history_operations,

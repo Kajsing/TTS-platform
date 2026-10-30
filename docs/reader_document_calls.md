@@ -87,9 +87,17 @@ workspace replacement and late UI delivery without private data or real audio.
 
 ## Remaining work
 
-This does not add service response-byte quotas or incremental full-source
+The 2026-10-30 follow-up in [bounded pages and source search](reader_source_search.md)
+now adds exact response-byte quotas and positions-only service Find/highlighter
+for paged articles. The full-source download behavior and measurements above
+describe the earlier call-coordination slice; they are superseded for paged Find
+and active highlighting. Local continuous editing still uses its local text.
+
+That earlier slice did not add service response-byte quotas or incremental full-source
 Find/highlighter execution. A single large source block can still make a block
-page large; a block-count limit is not a byte limit. Existing position-save
+page large in that earlier implementation; a block-count limit is not a byte limit.
+The follow-up now returns explicit size errors for unrenderable whole blocks.
+Existing position-save
 throttling and immediate terminal flushes remain intact. Page-based chapter
 navigation, import-part controls, metadata sizing and append-scaling measurement
 remain separate unchecked tasks. PWA, U8 and audiobook production stay inactive.

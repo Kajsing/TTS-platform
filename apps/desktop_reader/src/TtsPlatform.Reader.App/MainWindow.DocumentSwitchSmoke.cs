@@ -139,11 +139,91 @@ public partial class MainWindow
                 [new("active", "needle", "needle", true, "#BFE8D5", 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
             var beforeFullSource = fake.BlockReads;
             await RefreshWordHighlightsAsync();
-            Require(fake.BlockReads - beforeFullSource == 4 && _wordHighlightDocument?.Blocks.Count == 2000,
-                "Active Word Highlighter lost full-source search behavior.");
+            Require(fake.BlockReads == beforeFullSource && _wordHighlightDocument is null &&
+                _remoteWordSearch?.TotalMatches == 2000 && _wordHighlightResult.Counts.GetValueOrDefault("active") == 2000 &&
+                fake.HighlightSearches == 1 && fake.SearchWindowReads == 1 && _readingBlocks.All(block => block.WordHighlights.Count == 1),
+                "Active Word Highlighter downloaded source or lost full-article counts/visible overlays.");
             beforeFullSource = fake.BlockReads;
-            Require(ReferenceEquals(await _findLoader.LoadAsync(large), _wordHighlightDocument) && fake.BlockReads == beforeFullSource,
-                "Find downloaded a second copy of the same highlighted revision.");
+            FindTextBox.Text = "needle";
+            await ExecuteFindAsync(++_findGeneration, CancellationToken.None);
+            Require(_remoteFind?.Hits.Count == 2000 && _findDocument is null && fake.BlockReads == beforeFullSource &&
+                fake.FindSearches == 1 && fake.SearchPageReads == 3 && _readingBlocks[0].FindStart == 991,
+                "Paged Find downloaded article source or lost source-mapped navigation.");
+
+            // Old failed replies must not clear a newer page/session, even when
+            // the transport ignored cancellation before returning the error.
+            fake.SearchWindowGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldWindowGate = fake.SearchWindowGate;
+            var oldWindow = RefreshRemoteWordWindowAsync();
+            fake.SearchWindowGate = null;
+            await RefreshRemoteWordWindowAsync();
+            FooterText.Text = "New window owns the UI";
+            oldWindowGate.SetException(new ReaderApiException("reader_search_expired", "Expired old window.", 410));
+            await oldWindow;
+            Require(_remoteWordSearch is not null && _readingBlocks.All(block => block.WordHighlights.Count == 1) &&
+                FooterText.Text == "New window owns the UI", "A cancelled highlighter failure cleared the newer window.");
+
+            fake.SearchResultGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldFindGate = fake.SearchResultGate;
+            var oldNavigation = ShowCurrentFindMatchAsync();
+            fake.SearchResultGate = null;
+            CancelFindWork(clearHighlights: true);
+            await ExecuteFindAsync(++_findGeneration, CancellationToken.None);
+            var newFind = _remoteFind;
+            var newFindStatus = FindStatusText.Text;
+            oldFindGate.SetException(new ReaderApiException("reader_search_expired", "Expired old Find.", 410));
+            await oldNavigation;
+            Require(ReferenceEquals(newFind, _remoteFind) && FindStatusText.Text == newFindStatus && _readingBlocks[0].FindStart == 991,
+                "A superseded Find failure cleared a newer search.");
+
+            fake.SearchResultFailure = new ReaderApiException("reader_search_expired", "Run Find again.", 410);
+            await ShowCurrentFindMatchAsync();
+            await ShowReadingPageAsync(_readingWindow!.Current);
+            Require(_remoteFind is null && _findResult.Matches.Count == 0 && _readingBlocks.All(block => block.FindLength == 0),
+                "Expired retained Find positions reappeared after rendering a page.");
+            fake.SearchResultFailure = null;
+            await ExecuteFindAsync(++_findGeneration, CancellationToken.None);
+
+            var correctDisplay = _readingBlocks[0];
+            _readingBlocks[0] = new ReaderBlockDisplay(_readingWindow.Current.Blocks[0] with { Id = "replacement-block" });
+            ApplyCurrentFindToReadingBlocks();
+            Require(_readingBlocks.All(block => block.FindLength == 0), "Find painted a replacement block at the same ordinal.");
+            _readingBlocks[0] = correctDisplay;
+            ApplyCurrentFindToReadingBlocks();
+
+            fake.SearchWindowGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldDestinationGate = fake.SearchWindowGate;
+            _findMatchIndex = 1999;
+            var oldDestination = ShowCurrentFindMatchAsync();
+            fake.SearchWindowGate = null;
+            CancelFindWork(clearHighlights: true);
+            await ExecuteFindAsync(++_findGeneration, CancellationToken.None);
+            oldDestinationGate.SetException(new ReaderApiException("reader_search_expired", "Old destination expired.", 410));
+            await oldDestination;
+            Require(_readingWindow.Current.StartOrdinal == 0 && ReadingBlocksList.SelectedItem is ReaderBlockDisplay { Ordinal: 0 },
+                "A superseded navigation selected a stale destination after awaiting page highlights.");
+
+            beforeFullSource = fake.BlockReads;
+            _wordHighlightMatchIndex = 1998;
+            await HandleWordHighlightJumpAsync("active");
+            Require(fake.SearchNextReads == 1 && fake.BlockReads == beforeFullSource + 1 &&
+                _readingWindow!.Current.Blocks.Any(block => block.Ordinal == 1999) && _wordHighlightMatchIndex == 1999,
+                "Remote highlighter navigation did not fetch only its destination window.");
+            fake.BoundSearchContext = true;
+            var beforeBoundedContext = fake.BlockReads;
+            var destination = await LoadSearchDestinationAsync(new ReadingWindowPager(client), "large", 1999, CancellationToken.None);
+            Require(fake.BlockReads == beforeBoundedContext + 2 && destination.Blocks.Any(block => block.Ordinal == 1999),
+                "A byte-bounded context page silently prevented navigation to the search destination.");
+            fake.BoundSearchContext = false;
+            var priorPage = _readingWindow.Current;
+            var priorDisplay = _readingBlocks[0];
+            fake.LargeBlockFailure = new ReaderApiException("reader_block_too_large", "Synthetic oversized source block.", 413);
+            var beforeOversized = fake.BlockReads;
+            await ChangeReadingPageAsync(next: false);
+            Require(fake.BlockReads == beforeOversized + 1 && ReferenceEquals(priorPage, _readingWindow.Current) &&
+                ReferenceEquals(priorDisplay, _readingBlocks[0]) && FooterText.Text.Contains("Split it into smaller blocks", StringComparison.Ordinal),
+                "Oversized page navigation did not retain the current page and show an actionable diagnostic.");
+            fake.LargeBlockFailure = null;
         }
         finally
         {
@@ -174,6 +254,15 @@ public class DocumentSwitchSmokeClient : DispatchProxy
     public int CaptureCalls { get; private set; }
     public int BlockReads { get; private set; }
     public List<CancellationToken> BlockCancellationTokens { get; } = [];
+    public int FindSearches, HighlightSearches, SearchPageReads, SearchWindowReads, SearchNextReads;
+    public bool BoundSearchContext;
+    public TaskCompletionSource<ReaderSearchPage>? SearchResultGate, SearchWindowGate;
+    public ReaderApiException? SearchResultFailure;
+    public ReaderApiException? LargeBlockFailure;
+    private static ReaderSearchHit SearchHit(int ordinal, bool highlight) => new(ordinal, ordinal * 1005 + 991, 6,
+        highlight ? "active" : null,
+        new ReaderCursor("large", $"large-{ordinal}", ordinal, 991, 1),
+        new ReaderCursor("large", $"large-{ordinal}", ordinal, 997, 1));
     private static ReaderDocument Document(string id) => new(id, $"Synthetic {id}", "clipboard",
         null, null, null, null, "inbox", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
         DateTimeOffset.UnixEpoch, null, 1, 1, 1, 1, 20, Metadata);
@@ -185,6 +274,34 @@ public class DocumentSwitchSmokeClient : DispatchProxy
         var id = args?.FirstOrDefault() as string;
         switch (method?.Name)
         {
+            case nameof(IReaderServiceClient.CreateSearchAsync):
+                FindSearches++;
+                return Task.FromResult(new ReaderSearchSummary("find-session", id!, 1, "find", 2000,
+                    new Dictionary<string, int>(), false, null, null, 300));
+            case nameof(IReaderServiceClient.CreateHighlightSearchAsync):
+                HighlightSearches++;
+                return Task.FromResult(new ReaderSearchSummary("highlight-session", id!, 1, "highlighter", 2000,
+                    new Dictionary<string, int> { ["active"] = 2000 }, false, null, "regex-v0", 300));
+            case nameof(IReaderServiceClient.GetSearchResultsAsync):
+                SearchPageReads++;
+                if (SearchResultGate is not null) return SearchResultGate.Task;
+                if (SearchResultFailure is not null) return Task.FromException<ReaderSearchPage>(SearchResultFailure);
+                var resultRequest = (ReaderSearchPageRequest)args![2]!;
+                var resultCount = Math.Min(resultRequest.Limit, 2000 - resultRequest.Offset);
+                return Task.FromResult(new ReaderSearchPage("large", 1,
+                    Enumerable.Range(resultRequest.Offset, resultCount).Select(ordinal => SearchHit(ordinal, false)).ToArray(),
+                    resultRequest.Offset + resultCount < 2000 ? resultRequest.Offset + resultCount : null, 2000, false));
+            case nameof(IReaderServiceClient.GetSearchWindowAsync):
+                SearchWindowReads++;
+                if (SearchWindowGate is not null) return SearchWindowGate.Task;
+                var windowRequest = (ReaderSearchWindowRequest)args![2]!;
+                return Task.FromResult(new ReaderSearchPage("large", 1,
+                    Enumerable.Range(windowRequest.StartOrdinal, windowRequest.EndOrdinal - windowRequest.StartOrdinal + 1)
+                        .Select(ordinal => SearchHit(ordinal, true)).ToArray(), null, 2000, false));
+            case nameof(IReaderServiceClient.GetNextSearchMatchAsync):
+                SearchNextReads++;
+                var nextRequest = (ReaderSearchNextRequest)args![2]!;
+                return Task.FromResult(new ReaderSearchNext(SearchHit((nextRequest.AfterIndex + 1) % 2000, true)));
             case nameof(IReaderServiceClient.DeliverCaptureAsync):
                 CaptureCalls++;
                 if (CaptureFailure is not null) return Task.FromException<CaptureReceipt>(CaptureFailure);
@@ -201,11 +318,13 @@ public class DocumentSwitchSmokeClient : DispatchProxy
                 if (FailBlocks) return Task.FromException<BlockPage>(new ReaderApiException("synthetic", "Synthetic load failed.", 503));
                 if (id == "large")
                 {
+                    if (LargeBlockFailure is not null) return Task.FromException<BlockPage>(LargeBlockFailure);
                     var after = (int)args[1]!;
                     var limit = (int)args[2]!;
                     var count = Math.Min(limit, 2000 - after - 1);
+                    if (BoundSearchContext && after == 1990) count = Math.Min(count, 3);
                     var blocks = Enumerable.Range(after + 1, count).Select(ordinal =>
-                        new ReaderBlock($"large-{ordinal}", "large", null, ordinal, "paragraph", new string('x', 1001), 1001, "hash", 1, Metadata)).ToArray();
+                        new ReaderBlock($"large-{ordinal}", "large", null, ordinal, "paragraph", new string('x', 990) + " needle end", 1001, "hash", 1, Metadata)).ToArray();
                     return Task.FromResult(new BlockPage(blocks, after + count < 1999 ? after + count : null));
                 }
                 return id == "second" && BlockGate is not null ? BlockGate.Task.WaitAsync(cancellation) :

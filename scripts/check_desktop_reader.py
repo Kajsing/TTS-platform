@@ -648,11 +648,43 @@ def _check_live_document_calls(repo_root: Path, dotnet: Path, temporary: Path) -
             [str(dotnet), str(smoke_dll), base_url, str(token_path)],
             cwd=repo_root,
             env=environment,
-            timeout=45,
+            timeout=120,
         )
     payload = json.loads(output)
-    if payload.get("bounded_document_calls") is not True:
-        raise DesktopReaderCheckError("The .NET client did not confirm bounded document calls.")
+    if not all(
+        payload.get(key) is True
+        for key in (
+            "bounded_document_calls",
+            "remote_paged_search",
+            "remote_cross_block_regex",
+            "remote_highlight_window",
+            "remote_highlight_navigation",
+            "find_truncated",
+            "highlight_window_truncated",
+        )
+    ):
+        raise DesktopReaderCheckError(
+            "The .NET client did not confirm bounded document calls and service-side search."
+        )
+    expected = {
+        "remote_search_block_gets": 0,
+        "find_hits": 50,
+        "cross_block_hits": 1,
+        "regex_dialect": "regex-v0",
+        "highlight_long_term_hits": 104_000,
+        "highlight_short_term_hits": 0,
+        "highlight_window_hits": 2000,
+        "navigation_hit_index": 103_999,
+        "navigation_block_page_gets": 1,
+    }
+    if any(payload.get(key) != value for key, value in expected.items()):
+        raise DesktopReaderCheckError("The live service-side search proof returned invalid counts.")
+    if (
+        not 0 < payload.get("max_search_response_bytes", 0) <= 1024 * 1024
+        or not 0 < payload.get("navigation_retained_blocks", 0) <= 64
+        or payload.get("search_response_count") != 7
+    ):
+        raise DesktopReaderCheckError("The live service-side search responses were not bounded.")
     return payload
 
 
@@ -1006,6 +1038,8 @@ def _check_wpf_render(archive: Path, temporary: Path) -> dict[str, object]:
         "playback_pause_viewport",
         "chapter_views",
         "document_switch_safety",
+        "remote_paged_search",
+        "remote_highlight_window",
     )
     if not all(lifecycle.get(check) is True for check in lifecycle_checks):
         raise DesktopReaderCheckError("The isolated Service Center lifecycle smoke failed.")

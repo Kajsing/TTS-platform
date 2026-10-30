@@ -203,6 +203,8 @@ public partial class App
                 playback_pause_viewport = true,
                 chapter_views = true,
                 document_switch_safety = true,
+                remote_paged_search = true,
+                remote_highlight_window = true,
             }));
             Shutdown();
         }

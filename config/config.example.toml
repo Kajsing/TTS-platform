@@ -49,6 +49,7 @@ managed_files_path = "library"
 copy_imported_files = false
 default_page_size = 50
 max_page_size = 500
+max_block_page_bytes = 2097152
 max_blocks_per_stream_window = 64
 max_source_chars_per_stream_window = 32000
 max_edit_history_operations = 1000

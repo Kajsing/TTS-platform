@@ -22,6 +22,7 @@ from document_import import (
 )
 from reader_core import (
     BlockKind,
+    BoundedReaderBlockPage,
     DocumentPage,
     DocumentState,
     FolderDeleteMode,
@@ -854,6 +855,14 @@ class ReaderApplicationService:
             document_id,
             after_ordinal=after_ordinal,
             limit=limit,
+        )
+
+    def list_blocks_bounded(
+        self, document_id: str, *, after_ordinal: int, limit: int,
+    ) -> BoundedReaderBlockPage:
+        return self.repository.list_blocks_bounded(
+            document_id, after_ordinal=after_ordinal, limit=limit,
+            max_bytes=self.config.max_block_page_bytes,
         )
 
     def log_mutation(

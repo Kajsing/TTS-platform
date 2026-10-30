@@ -20,6 +20,7 @@ from .config import AppConfig
 from .jobs import InMemoryJobManager
 from .observability import ObservabilityState, configure_structured_logging
 from .reader_exports import ReaderExportManager, resolve_export_directory
+from .reader_search import ReaderSearchManager
 from .reader_service import ReaderRuntimeState, initialize_reader_runtime
 from .remote_access import RemoteAccessManager
 from .security import OriginPolicy, RateLimiter
@@ -43,6 +44,7 @@ class ApplicationState:
     observability: ObservabilityState
     reader: ReaderRuntimeState
     reader_exports: ReaderExportManager | None
+    reader_search: ReaderSearchManager | None
     remote_access: RemoteAccessManager | None
     started_at: datetime
     backend_ready: bool
@@ -166,6 +168,7 @@ def build_application_state(
         observability=observability,
         reader=reader,
         reader_exports=reader_exports,
+        reader_search=ReaderSearchManager(reader.service) if reader.service is not None else None,
         remote_access=remote_access,
         started_at=datetime.now(timezone.utc),
         backend_ready=backend_ready,

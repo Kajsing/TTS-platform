@@ -20,6 +20,8 @@ public enum ArticleFindFailure
     DocumentTooLarge,
     InvalidRegex,
     RegexTimedOut,
+    UnsupportedRegex,
+    SearchTimedOut,
 }
 
 public sealed record ArticleFindMatch(int Start, int Length)

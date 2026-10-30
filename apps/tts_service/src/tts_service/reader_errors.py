@@ -8,6 +8,7 @@ from document_import import (
     ImportUnsupportedError,
 )
 from reader_core import (
+    ReaderBlockTooLargeError,
     ReaderConflictError,
     ReaderDatabaseError,
     ReaderEditHistoryError,
@@ -74,6 +75,27 @@ def translate_reader_error(
     missing_entity: str = "document",
     cursor_input: bool = False,
 ) -> APIError:
+    if isinstance(error, ReaderBlockTooLargeError):
+        details: dict[str, object] = {
+            "block_ordinal": error.ordinal,
+            "block_characters": error.character_count,
+            "max_block_characters": error.max_characters,
+            "max_block_page_bytes": error.max_bytes,
+        }
+        if error.text_bytes is not None:
+            details["block_text_bytes"] = error.text_bytes
+        if error.metadata_bytes is not None:
+            details["block_metadata_bytes"] = error.metadata_bytes
+        return reader_api_error(
+            "reader_block_too_large",
+            status_code=413,
+            message=(
+                "This source block exceeds the reading page size limits. "
+                "Its text has been kept unchanged. Split it into smaller blocks "
+                "in the source, then import it again."
+            ),
+            details=details,
+        )
     if isinstance(error, CapturePayloadConflictError):
         return reader_api_error(
             "reader_capture_conflict",

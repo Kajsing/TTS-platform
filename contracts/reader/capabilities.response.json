@@ -35,5 +35,24 @@
     "available": true,
     "max_characters": 10000000,
     "desktop_handoff": true
+  },
+  "block_pages": {
+    "max_response_bytes": 2097152,
+    "max_block_characters": 1000000,
+    "whole_blocks_only": true
+  },
+  "source_search": {
+    "available": true,
+    "positions_only": true,
+    "max_source_utf16": 32000000,
+    "max_source_blocks": 100000,
+    "max_request_bytes": 16384,
+    "max_response_bytes": 1048576,
+    "max_find_matches": 10000,
+    "max_highlighter_matches": 250000,
+    "max_window_matches": 2000,
+    "max_sessions": 4,
+    "session_idle_seconds": 300,
+    "regex_provider": "regex-v0"
   }
 }

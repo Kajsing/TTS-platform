@@ -1,0 +1,18 @@
+{
+  "dotnet_runtime": "10.0.11",
+  "regex_provider": "regex-v0",
+  "provenance": "Generated locally with StringComparison.OrdinalIgnoreCase and RegexOptions.IgnoreCase | CultureInvariant; regex-v0 measured on installed regex 2026.7.19.",
+  "cases": [
+    {"source":"Å","query":"å","ordinal":true,"dotnet_regex":true,"regex_v0":true},
+    {"source":"ß","query":"ss","ordinal":false,"dotnet_regex":false,"regex_v0":false},
+    {"source":"ß","query":"ẞ","ordinal":false,"dotnet_regex":true,"regex_v0":true},
+    {"source":"İ","query":"i","ordinal":false,"dotnet_regex":false,"regex_v0":true},
+    {"source":"ı","query":"i","ordinal":false,"dotnet_regex":false,"regex_v0":false},
+    {"source":"ſ","query":"s","ordinal":false,"dotnet_regex":false,"regex_v0":true},
+    {"source":"K","query":"k","ordinal":false,"dotnet_regex":true,"regex_v0":true},
+    {"source":"Σ","query":"ς","ordinal":true,"dotnet_regex":false,"regex_v0":true},
+    {"source":"Σ","query":"σ","ordinal":true,"dotnet_regex":true,"regex_v0":true},
+    {"source":"a","query":"á","ordinal":false,"dotnet_regex":false,"regex_v0":false},
+    {"source":"𐐀","query":"𐐨","ordinal":true,"dotnet_regex":false,"regex_v0":true}
+  ]
+}

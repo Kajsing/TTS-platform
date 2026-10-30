@@ -4,6 +4,41 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Completed source-bounds/search slice (2026-10-30): public block pages now fit
+  an exact 2 MiB UTF-8 JSON budget, including metadata/escaping, and at most
+  1,000,000 code points per block. Whole-block continuations preserve source;
+  oversized destinations fail explicitly with actionable 413. Scalar preflight
+  precedes hydration in one SQLite snapshot. Paged Find/Word Highlighter now
+  receive service positions/counts/windows instead of full-source downloads;
+  local continuous-editor drafts still search locally. Revision/privacy/config
+  fences, disconnect cancellation and bounded indexes/TTL protect sessions.
+  One service snapshot is limited to 32 million UTF-16 units / 100,000 blocks,
+  one scan and an 8-second preparation/scan/index deadline. Requests/responses
+  are capped at 16 KiB / 1 MiB; Find/highlighter indexes at 10,000 / 250,000;
+  visible overlays at 2,000. This is bounded full-snapshot execution, not streaming
+  regex. Service `regex-v0` differences from local .NET are explicit; literal
+  ordinal Unicode parity was checked against a local .NET oracle. No new
+  dependency, schema migration, live data/config or MANIFEST change.
+  Validation: 793 Python passes / 2 optional skips, 403 .NET passes; Ruff,
+  zero-warning solution build, scoped .NET whitespace, 20 payload fixtures,
+  security-default and v1 completion checks. Live compiled HTTP/WS, schema-11
+  preview integrity, portable packaging and WPF folder/lifecycle checks pass.
+  The 2,182,414-character fixture proves zero block GETs during remote search,
+  104,000 longest-term highlights, a 2,000-hit window, one bounded page for a
+  near-end jump and at most 906,085 bytes per observed search response. Final
+  full-check run: Find 59.27 ms, highlight 541.24 ms, remote checks 722.85 ms;
+  these are fixture observations, not peak-memory/universal timing guarantees.
+  Independent review found/fixed preflight, shutdown-publication, regex-compile,
+  oversized-term, stale UI failure and threaded block privacy races, all with
+  regressions. Exact root-shortcut win-x64 runtime published; its isolated
+  folder/edit-preservation and lifecycle/remote-search probes pass. Reader and
+  service remain stopped for normal relaunch. Audible/global clipboard/hotkey
+  checks were skipped. Policy/contracts: `docs/reader_source_search.md`; log:
+  `.logs/2026-10-30-reader-source-search.md`. Next existing basis items: paged
+  chapter navigation, product import-part limits/preview, chapter/edit metadata
+  preflight and append measurements. Oversized single-block fragments are not
+  implemented; PWA/U8/audiobook remain inactive. It is safe to continue with the
+  remaining approved reliability backlog; networking remains parked.
 - Completed call-coordination follow-up (2026-10-30): user selected fewer/better
   document/status calls. Superseded loads and stale UI continuations are cancelled
   and generation-guarded; supplied metadata avoids an initial duplicate GET,

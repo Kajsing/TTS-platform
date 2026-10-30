@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from .remote_access import RemoteAccessError, RemoteAccessManager, RemoteDevice
 
 MAX_REQUEST_BYTES = 96 * 1024 * 1024
+MAX_SEARCH_REQUEST_BYTES = 16 * 1024
 MAX_PAIRING_BYTES = 16 * 1024
 MAX_WEBSOCKET_TEXT_BYTES = 128 * 1024
 MAX_WEBSOCKET_BINARY_BYTES = 2 * 1024 * 1024
@@ -26,7 +27,17 @@ PREAUTH_FAILURES_PER_TEN_MINUTES = 5
 EXPORT_CREATIONS_PER_MINUTE = 6
 MAX_CONCURRENT_REMOTE_STREAMS = 4
 MAX_CONCURRENT_REMOTE_UPLOADS = 2
+
+
+class _RequestBodyTooLarge(RemoteAccessError):
+    pass
+
+
 _RESOURCE_ID = r"(?:[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}|\{[a-z_]+\})"
+_SEARCH_ROUTE = re.compile(
+    rf"^/v1/reader/documents/{_RESOURCE_ID}/"
+    rf"(?:search|highlights|search/{_RESOURCE_ID}/(?:results|window|next))$"
+)
 
 
 _ALLOWED_REMOTE_ROUTES = (
@@ -39,9 +50,7 @@ _ALLOWED_REMOTE_ROUTES = (
     ("POST", re.compile(r"^/v1/reader/folders/move-documents$")),
     (
         "POST",
-        re.compile(
-            rf"^/v1/reader/folders/{_RESOURCE_ID}/privacy-lock/(?:unlock|relock)$"
-        ),
+        re.compile(rf"^/v1/reader/folders/{_RESOURCE_ID}/privacy-lock/(?:unlock|relock)$"),
     ),
     ("POST", re.compile(r"^/v1/reader/imports(?:/preview)?$")),
     ("POST", re.compile(rf"^/v1/reader/imports/{_RESOURCE_ID}/commit$")),
@@ -58,6 +67,13 @@ _ALLOWED_REMOTE_ROUTES = (
     ),
     ("PATCH", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/content$")),
     ("GET", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/blocks$")),
+    ("POST", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/(?:search|highlights)$")),
+    (
+        "POST",
+        re.compile(
+            rf"^/v1/reader/documents/{_RESOURCE_ID}/search/{_RESOURCE_ID}/(?:results|window|next)$"
+        ),
+    ),
     ("GET|PUT", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/position$")),
     ("GET|POST", re.compile(rf"^/v1/reader/documents/{_RESOURCE_ID}/bookmarks$")),
     ("PATCH|DELETE", re.compile(rf"^/v1/reader/bookmarks/{_RESOURCE_ID}$")),
@@ -234,9 +250,7 @@ def create_remote_gateway_app(manager: RemoteAccessManager) -> FastAPI:
 
     @app.post("/v1/remote/device/rotation")
     async def begin_rotation(request: Request) -> JSONResponse:
-        authenticated = _authenticate_request(
-            manager, request, device_limiter, preauth_limiter
-        )
+        authenticated = _authenticate_request(manager, request, device_limiter, preauth_limiter)
         if isinstance(authenticated, JSONResponse):
             return authenticated
         rotation_id, credential = manager.store.begin_rotation(authenticated.id)
@@ -250,9 +264,7 @@ def create_remote_gateway_app(manager: RemoteAccessManager) -> FastAPI:
 
     @app.post("/v1/remote/device/rotation/confirm")
     async def confirm_rotation(request: Request) -> JSONResponse:
-        authenticated = _authenticate_request(
-            manager, request, device_limiter, preauth_limiter
-        )
+        authenticated = _authenticate_request(manager, request, device_limiter, preauth_limiter)
         if isinstance(authenticated, JSONResponse):
             return authenticated
         try:
@@ -273,9 +285,7 @@ def create_remote_gateway_app(manager: RemoteAccessManager) -> FastAPI:
 
     @app.websocket("/v1/reader/stream")
     async def reader_stream(websocket: WebSocket) -> None:
-        device = await _authenticate_websocket(
-            manager, websocket, device_limiter, preauth_limiter
-        )
+        device = await _authenticate_websocket(manager, websocket, device_limiter, preauth_limiter)
         if device is None:
             return
         if not stream_leases.try_acquire(device.id):
@@ -303,9 +313,7 @@ def create_remote_gateway_app(manager: RemoteAccessManager) -> FastAPI:
                 "remote_query_credential_denied",
                 "Credentials are not accepted in query strings.",
             )
-        device = _authenticate_request(
-            manager, request, device_limiter, preauth_limiter
-        )
+        device = _authenticate_request(manager, request, device_limiter, preauth_limiter)
         if isinstance(device, JSONResponse):
             return device
         is_upload = request.method == "POST" and full_path in {
@@ -332,8 +340,17 @@ def create_remote_gateway_app(manager: RemoteAccessManager) -> FastAPI:
                 headers={"Retry-After": "60"},
             )
         try:
-            body = await _bounded_body(request, MAX_REQUEST_BYTES)
+            body_limit = (
+                MAX_SEARCH_REQUEST_BYTES
+                if request.method == "POST" and _SEARCH_ROUTE.fullmatch(full_path)
+                else MAX_REQUEST_BYTES
+            )
+            body = await _bounded_body(request, body_limit)
             return await _proxy_http(manager, request, full_path, body)
+        except _RequestBodyTooLarge:
+            return _error(
+                413, "remote_request_too_large", "Remote request body exceeded the limit."
+            )
         except RemoteAccessError as exc:
             return _error(503, "remote_gateway_unavailable", str(exc))
         finally:
@@ -575,13 +592,13 @@ async def _bounded_body(request: Request, limit: int) -> bytes:
     if raw_length:
         try:
             if int(raw_length) > limit:
-                raise RemoteAccessError("Remote request body exceeded the limit.")
+                raise _RequestBodyTooLarge("Remote request body exceeded the limit.")
         except ValueError as exc:
             raise RemoteAccessError("Remote request Content-Length is invalid.") from exc
     body = bytearray()
     async for chunk in request.stream():
         if len(body) + len(chunk) > limit:
-            raise RemoteAccessError("Remote request body exceeded the limit.")
+            raise _RequestBodyTooLarge("Remote request body exceeded the limit.")
         body.extend(chunk)
     return bytes(body)
 

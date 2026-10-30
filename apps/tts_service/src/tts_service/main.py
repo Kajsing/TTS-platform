@@ -31,6 +31,7 @@ from .reader_agent_routes import (
     enforce_agent_request,
 )
 from .reader_routes import build_reader_router
+from .reader_search_routes import bound_search_body, build_reader_search_router, is_search_request
 from .reader_stream_routes import build_reader_stream_router
 from .remote_routes import build_remote_admin_router
 from .schemas import SynthesizeRequestPayload
@@ -71,6 +72,7 @@ def create_app(
     _register_routes(app)
     app.include_router(build_reader_router())
     app.include_router(build_reader_stream_router())
+    app.include_router(build_reader_search_router())
     app.include_router(build_remote_admin_router())
     app.include_router(build_reader_agent_router())
     app.include_router(build_reader_agent_admin_router())
@@ -97,6 +99,8 @@ async def _application_lifespan(app: FastAPI):
                 pass
         yield
     finally:
+        if app.state.container.reader_search is not None:
+            app.state.container.reader_search.close()
         if remote_access is not None:
             remote_access.stop()
         manager = app.state.container.reader_exports
@@ -166,6 +170,8 @@ def _register_middleware(app: FastAPI) -> None:
             elif _requires_protected_http_access(request):
                 _enforce_protected_request(container, request)
                 request.state.tts_write_access_enforced = True
+                if is_search_request(request.method, request.url.path):
+                    await bound_search_body(request)
                 if request.url.path.startswith(AGENT_ADMIN_PREFIX):
                     enforce_agent_admin(request)
                     await bound_agent_body(request)
@@ -189,6 +195,9 @@ def _register_middleware(app: FastAPI) -> None:
                 # if a client accidentally places either into a URL path.
                 route = request.scope.get("route")
                 endpoint = getattr(route, "path", "/v1/reader/agent/unknown")
+            elif is_search_request(request.method, endpoint):
+                route = request.scope.get("route")
+                endpoint = getattr(route, "path", "/v1/reader/search/unknown")
             container.observability.request_metrics.record(
                 endpoint=endpoint,
                 status_code=status_code,

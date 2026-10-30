@@ -419,10 +419,13 @@ def test_gateway_pairing_requires_no_local_token_but_all_data_routes_require_dev
     assert unauthenticated.status_code == 401
     assert paired.status_code == 201
     assert paired.json()["credential"].startswith("rd1.")
-    assert client.get(
-        "/v1/reader/remote/status",
-        headers={"Authorization": f"Bearer {paired.json()['credential']}"},
-    ).status_code == 404
+    assert (
+        client.get(
+            "/v1/reader/remote/status",
+            headers={"Authorization": f"Bearer {paired.json()['credential']}"},
+        ).status_code
+        == 404
+    )
 
 
 def test_pairing_payload_rejects_unexpected_invitation_fields_without_consuming_ticket(
@@ -474,15 +477,11 @@ def test_gateway_rejects_browser_origins_even_with_a_valid_device(tmp_path: Path
 
 def test_remote_route_policy_is_positive_and_keeps_admin_paths_denied() -> None:
     assert is_remote_route_allowed("GET", "/v1/reader/documents")
-    assert is_remote_route_allowed(
-        "PATCH", f"/v1/reader/documents/{TEST_RESOURCE_ID}/content"
-    )
+    assert is_remote_route_allowed("PATCH", f"/v1/reader/documents/{TEST_RESOURCE_ID}/content")
     assert is_remote_route_allowed(
         "POST", f"/v1/reader/folders/{TEST_RESOURCE_ID}/privacy-lock/unlock"
     )
-    assert not is_remote_route_allowed(
-        "PUT", f"/v1/reader/folders/{TEST_RESOURCE_ID}/privacy-lock"
-    )
+    assert not is_remote_route_allowed("PUT", f"/v1/reader/folders/{TEST_RESOURCE_ID}/privacy-lock")
     assert not is_remote_route_allowed("POST", "/v1/reader/browser-captures")
     assert not is_remote_route_allowed("GET", "/v1/reader/diagnostics")
     assert not is_remote_route_allowed("GET", "/v1/reader/remote/status")
@@ -508,9 +507,7 @@ def test_every_registered_service_route_has_an_explicit_remote_decision(tmp_path
         if not path.startswith("/v1"):
             continue
         methods = getattr(route, "methods", None) or {"WEBSOCKET"}
-        decisions.extend(
-            (method, path, classify_remote_route(method, path)) for method in methods
-        )
+        decisions.extend((method, path, classify_remote_route(method, path)) for method in methods)
 
     assert decisions
     assert [item for item in decisions if item[2] is None] == []
@@ -575,8 +572,7 @@ def test_failed_pairing_and_authentication_are_limited_by_client_ip(tmp_path: Pa
 
     client = TestClient(create_remote_gateway_app(_manager(tmp_path / "auth")))
     authentication = [
-        client.get("/v1/health", headers={"Authorization": "Bearer invalid"})
-        for _ in range(6)
+        client.get("/v1/health", headers={"Authorization": "Bearer invalid"}) for _ in range(6)
     ]
     assert [response.status_code for response in authentication[:5]] == [401] * 5
     assert authentication[5].status_code == 429
@@ -628,15 +624,47 @@ def test_export_creation_has_a_separate_per_device_limit(
     assert responses[6].json()["error"]["type"] == "remote_export_rate_limited"
 
 
+@pytest.mark.parametrize(
+    "suffix",
+    ["search", "highlights", "search/{id}/results", "search/{id}/window", "search/{id}/next"],
+)
+def test_gateway_bounds_search_before_proxying_without_restricting_imports(
+    tmp_path: Path, monkeypatch, suffix: str
+) -> None:
+    manager = _manager(tmp_path)
+    invitation = manager.store.create_invitation(_profile(tmp_path))
+    _, credential = manager.store.consume_invitation(
+        str(invitation["ticket_id"]), str(invitation["ticket_secret"]), "Laptop"
+    )
+    forwarded = []
+
+    async def fake_proxy(_manager, _request, path, body):
+        forwarded.append((path, len(body)))
+        return JSONResponse({"ok": True})
+
+    monkeypatch.setattr("tts_service.remote_gateway._proxy_http", fake_proxy)
+    client = TestClient(create_remote_gateway_app(manager))
+    headers = {"Authorization": f"Bearer {credential}"}
+    path = f"/v1/reader/documents/{TEST_RESOURCE_ID}/" + suffix.format(id=TEST_RESOURCE_ID)
+    accepted = client.post(path, headers=headers, content=b" " * 16_384)
+    rejected = client.post(path, headers=headers, content=b" " * 16_385)
+    # A streamed request without Content-Length must obey the same bound.
+    streamed = client.post(path, headers=headers, content=iter([b" " * 16_384, b" "]))
+    upload = client.post("/v1/reader/imports", headers=headers, content=b" " * 16_385)
+
+    assert accepted.status_code == upload.status_code == 200
+    assert rejected.status_code == streamed.status_code == 413
+    assert rejected.json()["error"]["type"] == "remote_request_too_large"
+    assert forwarded == [(path, 16_384), ("/v1/reader/imports", 16_385)]
+
+
 def test_local_admin_routes_require_the_existing_local_token(tmp_path: Path, monkeypatch) -> None:
     app = create_app(
         config=AppConfig.from_mapping(
             {
                 "tts": {"warmup_on_start": False},
                 "reader": {"home_path": str(tmp_path / "reader")},
-                "security": {
-                    "allowed_origins": ["chrome-extension://trusted-extension"]
-                },
+                "security": {"allowed_origins": ["chrome-extension://trusted-extension"]},
             }
         ),
         repo_root=tmp_path,
@@ -667,9 +695,7 @@ def test_remote_admin_routes_reject_browser_origins_and_non_loopback_clients(
             {
                 "tts": {"warmup_on_start": False},
                 "reader": {"home_path": str(tmp_path / "reader")},
-                "security": {
-                    "allowed_origins": ["chrome-extension://trusted-extension"]
-                },
+                "security": {"allowed_origins": ["chrome-extension://trusted-extension"]},
             }
         ),
         repo_root=tmp_path,

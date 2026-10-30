@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace TtsPlatform.Reader.Client;
 
-public sealed class ReaderServiceClient : IReaderServiceClient, ILocalVoicePreviewClient
+public sealed partial class ReaderServiceClient : IReaderServiceClient, ILocalVoicePreviewClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {

@@ -10,6 +10,16 @@ public interface ITokenProvider
 
 public interface IReaderServiceClient
 {
+    Task<ReaderSearchSummary> CreateSearchAsync(string documentId, ReaderSearchRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Service-side article search requires an updated Reader service.");
+    Task<ReaderSearchSummary> CreateHighlightSearchAsync(string documentId, ReaderHighlightSearchRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Service-side article highlighting requires an updated Reader service.");
+    Task<ReaderSearchPage> GetSearchResultsAsync(string documentId, string searchId, ReaderSearchPageRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    Task<ReaderSearchPage> GetSearchWindowAsync(string documentId, string searchId, ReaderSearchWindowRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
+    Task<ReaderSearchNext> GetNextSearchMatchAsync(string documentId, string searchId, ReaderSearchNextRequest request, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException();
     Task<CaptureReceipt> DeliverCaptureAsync(string operationId, CaptureRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Capture delivery requires an updated Reader service.");
     Task<ReaderAgentGrantPage> GetAgentGrantsAsync(

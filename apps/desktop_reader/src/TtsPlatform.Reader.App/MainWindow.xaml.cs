@@ -93,6 +93,7 @@ public partial class MainWindow : Window
     private PlaybackHighlightAdorner? _continuousHighlightAdorner;
     private ArticleFindDocumentLoader? _findLoader;
     private ArticleFindDocument? _findDocument;
+    private RemoteArticleFind? _remoteFind;
     private ArticleFindResult _findResult = ArticleFindResult.Empty;
     private CancellationTokenSource? _findCancellation;
     private int _findMatchIndex = -1;
@@ -100,6 +101,9 @@ public partial class MainWindow : Window
     private bool _findSearchPending;
     private ReaderHighlighterConfiguration? _highlighterConfiguration;
     private ArticleFindDocument? _wordHighlightDocument;
+    private ReaderSearchSummary? _remoteWordSearch;
+    private CancellationTokenSource? _remoteWordWindowCancellation;
+    private CancellationTokenSource? _remoteWordNavigationCancellation;
     private WordHighlightResult _wordHighlightResult = WordHighlightResult.Empty;
     private IReadOnlyDictionary<int, IReadOnlyList<ReaderTextHighlight>>
         _wordHighlightsByBlockOrdinal = new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>();
@@ -2378,6 +2382,8 @@ public partial class MainWindow : Window
         ++_documentLoadGeneration;
         _documentLoadCancellation?.Cancel();
         _wordHighlightCancellation?.Cancel();
+        _remoteWordWindowCancellation?.Cancel();
+        _remoteWordNavigationCancellation?.Cancel();
         _findCancellation?.Cancel();
         _readingWindow?.CancelPendingLoads();
     }
@@ -3174,30 +3180,10 @@ public partial class MainWindow : Window
     }
 
     private async void PreviousReadingPageButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
-        {
-            if (_editor.HasUnsavedChanges)
-            {
-                FooterText.Text = "Save or revert changes before changing page.";
-                return;
-            }
-            await ShowReadingPageAsync(await _readingWindow.LoadPreviousAsync(document.Id));
-        }
-    }
+        => await ChangeReadingPageAsync(next: false);
 
     private async void NextReadingPageButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_readingWindow is not null && _editor?.Document is ReaderDocument document)
-        {
-            if (_editor.HasUnsavedChanges)
-            {
-                FooterText.Text = "Save or revert changes before changing page.";
-                return;
-            }
-            await ShowReadingPageAsync(await _readingWindow.LoadNextAsync(document.Id));
-        }
-    }
+        => await ChangeReadingPageAsync(next: true);
 
     private void ReadingBlocksList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateEditorButtons();
@@ -3434,11 +3420,11 @@ public partial class MainWindow : Window
         await ShowReadingPageAsync(page);
     }
 
-    private Task ShowReadingPageAsync(ReadingWindowPage page)
+    private async Task ShowReadingPageAsync(ReadingWindowPage page)
     {
         if (_closed || !ReferenceEquals(_readingWindow?.Current, page) ||
             page.Blocks.Any(block => block.DocumentId != _editor?.Document?.Id))
-            return Task.CompletedTask;
+            return;
         _readingBlocks.Clear();
         foreach (var block in page.Blocks)
         {
@@ -3461,7 +3447,7 @@ public partial class MainWindow : Window
             : $"Showing document page {pageNumber:N0}.";
         UpdatePlaybackControls();
         UpdateEditorButtons();
-        return Task.CompletedTask;
+        await RefreshRemoteWordWindowAsync();
     }
 
     private void Playback_StateChanged(object? sender, PlaybackStateChanged change)
@@ -3599,21 +3585,31 @@ public partial class MainWindow : Window
         var token = cancellation.Token;
         try
         {
+            if (_continuousDocument is null)
+            {
+                var client = GetClient();
+                var summary = await RemoteArticleSearch.HighlightsAsync(client, document, configuration, token);
+                token.ThrowIfCancellationRequested();
+                if (generation != _wordHighlightGeneration || !ReferenceEquals(client, _client) ||
+                    _editor?.Document is not { } currentDocument || currentDocument.Id != document.Id ||
+                    currentDocument.ContentRevision != document.ContentRevision ||
+                    _highlighterConfiguration?.RowVersion != configuration.RowVersion) return;
+                _wordHighlightDocument = null;
+                _remoteWordSearch = summary;
+                _wordHighlightResult = new([], summary.Counts, summary.Truncated);
+                _wordHighlightsByBlockOrdinal = new Dictionary<int, IReadOnlyList<ReaderTextHighlight>>();
+                _wordHighlightMatchIndex = -1;
+                await RefreshRemoteWordWindowAsync(token);
+                return;
+            }
+            _remoteWordSearch = null;
             ArticleFindDocument? highlightDocument = null;
             string text;
             if (_continuousDocument is not null)
             {
                 text = ExpandChapterEditor();
             }
-            else
-            {
-                if (_findLoader is null)
-                {
-                    return;
-                }
-                highlightDocument = await _findLoader.LoadAsync(document, token);
-                text = highlightDocument.Text;
-            }
+            else return;
 
             var result = await Task.Run(() =>
                 WordHighlighterEngine.Search(text, configuration.Terms), token);
@@ -3753,6 +3749,51 @@ public partial class MainWindow : Window
 
     private async Task JumpToNextWordHighlightAsync(string termId)
     {
+        if (_continuousDocument is null && _remoteWordSearch is { } remote &&
+            _editor?.Document is { } remoteDocument && _readingWindow is { } remotePager)
+        {
+            _remoteWordNavigationCancellation?.Cancel();
+            using var navigation = CancellationTokenSource.CreateLinkedTokenSource(
+                _documentLoadCancellation?.Token ?? CancellationToken.None);
+            _remoteWordNavigationCancellation = navigation;
+            var client = GetClient();
+            var generation = _wordHighlightGeneration;
+            var documentGeneration = _documentLoadGeneration;
+            bool OwnsNavigation() => !_closed && !navigation.IsCancellationRequested &&
+                generation == _wordHighlightGeneration && documentGeneration == _documentLoadGeneration &&
+                ReferenceEquals(remote, _remoteWordSearch) && ReferenceEquals(client, _client) &&
+                ReferenceEquals(remotePager, _readingWindow) && ReferenceEquals(navigation, _remoteWordNavigationCancellation) &&
+                _editor?.Document?.Id == remoteDocument.Id && _editor.Document.ContentRevision == remoteDocument.ContentRevision;
+            try
+            {
+                var hit = await RemoteArticleSearch.NextAsync(client, remoteDocument, remote, termId, _wordHighlightMatchIndex, navigation.Token);
+                if (hit is null || !OwnsNavigation()) return;
+                _wordHighlightMatchIndex = hit.Index;
+                if (!remotePager.Current.Blocks.Any(block => block.Ordinal == hit.StartCursor.BlockOrdinal))
+                {
+                    var remotePage = await LoadSearchDestinationAsync(remotePager, remoteDocument.Id, hit.StartCursor.BlockOrdinal, navigation.Token);
+                    if (!OwnsNavigation() || !ReferenceEquals(remotePage, remotePager.Current)) return;
+                    await ShowReadingPageAsync(remotePage);
+                    if (!OwnsNavigation() || !ReferenceEquals(remotePage, remotePager.Current)) return;
+                }
+                if (!OwnsNavigation()) return;
+                var target = _readingBlocks.FirstOrDefault(block => block.Id == hit.StartCursor.BlockId);
+                if (target is not null)
+                {
+                    ReadingBlocksList.SelectedItem = target;
+                    ReadingBlocksList.ScrollIntoView(target);
+                    ReadingBlocksList.UpdateLayout();
+                    if (ReadingBlocksList.ItemContainerGenerator.ContainerFromItem(target) is DependencyObject remoteContainer &&
+                        FindVisualChild<SourceHighlightTextBlock>(remoteContainer) is { } remoteTextBlock)
+                        _ = remoteTextBlock.BringWordTextIntoView(hit.StartCursor.CharacterOffset);
+                }
+                return;
+            }
+            finally
+            {
+                if (ReferenceEquals(_remoteWordNavigationCancellation, navigation)) _remoteWordNavigationCancellation = null;
+            }
+        }
         _wordHighlightMatchIndex = WordHighlighterNavigator.Move(
             _wordHighlightResult.Matches,
             termId,
@@ -3806,16 +3847,26 @@ public partial class MainWindow : Window
             return;
         }
         _wordHighlightJumpInProgress = true;
+        var generation = _wordHighlightGeneration;
+        var documentGeneration = _documentLoadGeneration;
+        var client = _client;
+        var remote = _remoteWordSearch;
         try
         {
             await JumpToNextWordHighlightAsync(termId);
         }
+        catch (OperationCanceledException) { }
         catch (Exception exception) when (
             exception is ReaderApiException or
                 ReaderServiceUnavailableException or
                 ReaderTokenUnavailableException)
         {
-            FooterText.Text = $"Word Highlighter navigation: {exception.Message}";
+            if (generation == _wordHighlightGeneration && documentGeneration == _documentLoadGeneration &&
+                ReferenceEquals(client, _client) && ReferenceEquals(remote, _remoteWordSearch))
+            {
+                if (remote is not null) ClearWordHighlights();
+                FooterText.Text = $"Word Highlighter navigation: {DescribeReadingNavigationFailure(exception)}";
+            }
         }
         finally
         {
@@ -3826,6 +3877,9 @@ public partial class MainWindow : Window
     private void ClearWordHighlights()
     {
         _wordHighlightCancellation?.Cancel();
+        _remoteWordWindowCancellation?.Cancel();
+        _remoteWordNavigationCancellation?.Cancel();
+        _remoteWordSearch = null;
         ++_wordHighlightGeneration;
         _wordHighlightDocument = null;
         _wordHighlightResult = WordHighlightResult.Empty;
@@ -3898,6 +3952,12 @@ public partial class MainWindow : Window
             if (page.StartOrdinal != priorStartOrdinal || _readingBlocks.Count == 0)
             {
                 await ShowReadingPageAsync(page);
+                if (_closed || _documentReloadInProgress || _documentMutationInProgress ||
+                    loadGeneration != _documentLoadGeneration || highlightGeneration != _playbackHighlightGeneration ||
+                    !ReferenceEquals(playback, _playback) || runId != playback.DiagnosticRunId || !playback.IsActive ||
+                    !ReferenceEquals(pager, _readingWindow) || !ReferenceEquals(page, pager.Current) ||
+                    _editor?.Document?.Id != document.Id || _editor.Document.ContentRevision != document.ContentRevision)
+                    return;
             }
         }
 
@@ -4182,6 +4242,37 @@ public partial class MainWindow : Window
         var searchBase = 0;
         try
         {
+            if (_continuousDocument is null)
+            {
+                var client = GetClient();
+                var remote = await RemoteArticleSearch.FindAsync(client, document, query, options, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (generation != _findGeneration || !ReferenceEquals(client, _client) ||
+                    _editor?.Document is not { } currentDocument || currentDocument.Id != document.Id ||
+                    currentDocument.ContentRevision != document.ContentRevision) return;
+                _findDocument = null;
+                _remoteFind = remote;
+                _findResult = remote.Result;
+                _findMatchIndex = remote.Result.Matches.Count > 0 ? 0 : -1;
+                FindRegexCheckBox.ToolTip = "Service regex (regex-v0). Paged articles use this dialect; unsupported constructs return an explicit error.";
+                if (!remote.Result.Succeeded)
+                {
+                    FindStatusText.Text = DescribeFindFailure(remote.Result.Failure);
+                    ClearFindHighlights();
+                    return;
+                }
+                if (remote.Result.Matches.Count == 0)
+                {
+                    FindStatusText.Text = "No matches";
+                    ClearFindHighlights();
+                    return;
+                }
+                UpdateFindStatus();
+                await ShowCurrentFindMatchAsync();
+                return;
+            }
+            _remoteFind = null;
+            FindRegexCheckBox.ToolTip = "Use a regular expression to search the editable text.";
             if (_continuousDocument is not null)
             {
                 searchText = ExpandChapterEditor();
@@ -4200,16 +4291,7 @@ public partial class MainWindow : Window
                     searchText = searchText[chapter.Start..Math.Clamp(end, chapter.Start, searchText.Length)];
                 }
             }
-            else
-            {
-                if (_findLoader is null)
-                {
-                    FindStatusText.Text = "Connect to the Reader service to search this article.";
-                    return;
-                }
-                findDocument = await _findLoader.LoadAsync(document, cancellationToken);
-                searchText = findDocument.Text;
-            }
+            else return;
 
             var result = await Task.Run(
                 () => ArticleFindEngine.Search(searchText, query, options),
@@ -4251,7 +4333,7 @@ public partial class MainWindow : Window
         {
             if (generation == _findGeneration)
             {
-                FindStatusText.Text = $"Find unavailable: {exception.Message}";
+                FindStatusText.Text = $"Find unavailable: {DescribeReadingNavigationFailure(exception)}";
                 ClearFindHighlights();
             }
         }
@@ -4285,6 +4367,28 @@ public partial class MainWindow : Window
     }
 
     private async Task ShowCurrentFindMatchAsync()
+    {
+        var findGeneration = _findGeneration;
+        var documentGeneration = _documentLoadGeneration;
+        var remote = _remoteFind;
+        var result = _findResult;
+        var client = _client;
+        var matchIndex = _findMatchIndex;
+        try { await ShowCurrentFindMatchCoreAsync(); }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is ReaderApiException or ReaderServiceUnavailableException or ReaderTokenUnavailableException)
+        {
+            if (!_closed && findGeneration == _findGeneration && documentGeneration == _documentLoadGeneration &&
+                ReferenceEquals(remote, _remoteFind) && ReferenceEquals(result, _findResult) &&
+                ReferenceEquals(client, _client) && matchIndex == _findMatchIndex)
+            {
+                CancelFindWork(clearHighlights: true);
+                FindStatusText.Text = $"Find unavailable: {DescribeReadingNavigationFailure(exception)}";
+            }
+        }
+    }
+
+    private async Task ShowCurrentFindMatchCoreAsync()
     {
         if (_findMatchIndex < 0 ||
             _findMatchIndex >= _findResult.Matches.Count ||
@@ -4320,28 +4424,49 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_findDocument is null || _readingWindow is null)
+        if ((_findDocument is null && _remoteFind is null) || _readingWindow is null)
         {
             ClearFindHighlights();
             return;
         }
-        var location = _findDocument.Locate(match);
+        ArticleFindLocation location;
+        var pager = _readingWindow;
+        var findGeneration = _findGeneration;
+        var documentGeneration = _documentLoadGeneration;
+        var matchIndex = _findMatchIndex;
+        var currentRemoteFind = _remoteFind;
+        var currentClient = _client;
+        bool OwnsNavigation() => !_closed && findGeneration == _findGeneration && documentGeneration == _documentLoadGeneration &&
+            ReferenceEquals(pager, _readingWindow) && matchIndex == _findMatchIndex &&
+            ReferenceEquals(currentRemoteFind, _remoteFind) && ReferenceEquals(currentClient, _client) &&
+            _editor?.Document?.Id == document.Id && _editor.Document.ContentRevision == document.ContentRevision;
+        if (_remoteFind is { } remoteFind)
+        {
+            var client = GetClient();
+            var hit = await RemoteArticleSearch.FindHitAsync(client, document, remoteFind, matchIndex,
+                _findCancellation?.Token ?? CancellationToken.None);
+            if (!OwnsNavigation()) return;
+            location = RemoteArticleSearch.Locate(hit);
+        }
+        else location = _findDocument!.Locate(match);
         var currentPageContainsMatch = _readingWindow.Current.Blocks.Any(block =>
             block.Ordinal == location.StartCursor.BlockOrdinal);
         if (!currentPageContainsMatch)
         {
-            var page = await _readingWindow.LoadAsync(
-                document.Id,
-                Math.Max(0, location.StartCursor.BlockOrdinal - 8));
+            var page = await LoadSearchDestinationAsync(pager,
+                document.Id, location.StartCursor.BlockOrdinal, _findCancellation?.Token ?? CancellationToken.None);
+            if (!OwnsNavigation() || !ReferenceEquals(page, pager.Current)) return;
             await ShowReadingPageAsync(page);
+            if (!OwnsNavigation() || !ReferenceEquals(page, pager.Current)) return;
         }
         else
         {
             ApplyCurrentFindToReadingBlocks();
         }
 
+        if (!OwnsNavigation()) return;
         var firstBlock = _readingBlocks.FirstOrDefault(block =>
-            block.Ordinal == location.StartCursor.BlockOrdinal);
+            block.Id == location.StartCursor.BlockId);
         if (firstBlock is not null)
         {
             BringReadingFindIntoView(firstBlock);
@@ -4355,14 +4480,21 @@ public partial class MainWindow : Window
             block.FindStart = -1;
             block.FindLength = 0;
         }
-        if (_findDocument is null ||
+        if ((_findDocument is null && _remoteFind is null) ||
             _findMatchIndex < 0 ||
             _findMatchIndex >= _findResult.Matches.Count)
         {
             return;
         }
 
-        var location = _findDocument.Locate(_findResult.Matches[_findMatchIndex]);
+        var location = _remoteFind is { } remoteFind
+            ? RemoteArticleSearch.Locate(remoteFind.Hits[_findMatchIndex])
+            : _findDocument!.Locate(_findResult.Matches[_findMatchIndex]);
+        if (_remoteFind is { } remote &&
+            (_editor?.Document?.Id != remote.Summary.DocumentId || _editor.Document.ContentRevision != remote.Summary.ContentRevision ||
+             _readingBlocks.Any(block =>
+                 (block.Ordinal == location.StartCursor.BlockOrdinal && block.Id != location.StartCursor.BlockId) ||
+                 (block.Ordinal == location.EndCursor.BlockOrdinal && block.Id != location.EndCursor.BlockId)))) return;
         foreach (var block in _readingBlocks.Where(block =>
                      block.Ordinal >= location.StartCursor.BlockOrdinal &&
                      block.Ordinal <= location.EndCursor.BlockOrdinal))
@@ -4416,6 +4548,8 @@ public partial class MainWindow : Window
         _findCancellation = null;
         _findSearchPending = false;
         _findResult = ArticleFindResult.Empty;
+        _findDocument = null;
+        _remoteFind = null;
         _findMatchIndex = -1;
         if (clearHighlights)
         {
@@ -4435,6 +4569,8 @@ public partial class MainWindow : Window
 
     private static string DescribeFindFailure(ArticleFindFailure failure) => failure switch
     {
+        ArticleFindFailure.UnsupportedRegex => "The pattern uses a construct that is not supported by service regex (regex-v0).",
+        ArticleFindFailure.SearchTimedOut => "Search exceeded the service work limit and was stopped.",
         ArticleFindFailure.PatternTooLong =>
             $"Find text is limited to {ArticleFindEngine.MaxPatternCharacters:N0} characters.",
         ArticleFindFailure.DocumentTooLarge =>

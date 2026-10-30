@@ -1014,6 +1014,12 @@ class ReaderBrowserCaptureCapability(BaseModel):
     desktop_handoff: bool
 
 
+class ReaderBlockPageCapability(BaseModel):
+    max_response_bytes: int
+    max_block_characters: int
+    whole_blocks_only: bool = True
+
+
 class ReaderCapabilitiesResponse(BaseModel):
     contract_version: int
     enabled: bool
@@ -1023,6 +1029,8 @@ class ReaderCapabilitiesResponse(BaseModel):
     playback: ReaderPlaybackCapability
     exports: ReaderExportCapability
     browser_capture: ReaderBrowserCaptureCapability
+    block_pages: ReaderBlockPageCapability | None = None
+    source_search: dict[str, Any] | None = None
 
 
 class ReaderErrorBody(BaseModel):

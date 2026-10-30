@@ -13,6 +13,28 @@ class ReaderValidationError(ReaderError):
     """Raised when Reader input violates a domain invariant."""
 
 
+class ReaderBlockTooLargeError(ReaderError):
+    """A complete source block cannot fit the bounded public reading page."""
+
+    def __init__(
+        self,
+        *,
+        ordinal: int,
+        character_count: int,
+        max_characters: int,
+        max_bytes: int,
+        text_bytes: int | None = None,
+        metadata_bytes: int | None = None,
+    ) -> None:
+        self.ordinal = ordinal
+        self.character_count = character_count
+        self.max_characters = max_characters
+        self.max_bytes = max_bytes
+        self.text_bytes = text_bytes
+        self.metadata_bytes = metadata_bytes
+        super().__init__("The source block exceeds the public reading page limits.")
+
+
 class ReaderNotFoundError(ReaderError):
     """Raised when a requested Reader entity does not exist."""
 

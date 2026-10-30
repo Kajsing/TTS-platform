@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from .block_pages import MAX_BLOCK_PAGE_CHARACTERS, BoundedReaderBlockPage
 from .models import (
     Bookmark,
     DocumentEdit,
@@ -119,6 +120,16 @@ class ReaderRepository(Protocol):
         after_ordinal: int = -1,
         limit: int = 200,
     ) -> tuple[ReaderBlock, ...]: ...
+
+    def list_blocks_bounded(
+        self,
+        document_id: str,
+        *,
+        after_ordinal: int = -1,
+        limit: int = 200,
+        max_bytes: int,
+        max_characters: int = MAX_BLOCK_PAGE_CHARACTERS,
+    ) -> BoundedReaderBlockPage: ...
 
     def update_document(
         self,
@@ -309,9 +320,7 @@ class ReaderRepository(Protocol):
 
     def list_rules(self, rule_set_ids: tuple[str, ...] | None = None) -> tuple[SpeechRule, ...]: ...
 
-    def update_rule(
-        self, rule: SpeechRule, *, expected_row_version: int
-    ) -> SpeechRule: ...
+    def update_rule(self, rule: SpeechRule, *, expected_row_version: int) -> SpeechRule: ...
 
     def delete_rule(self, rule_id: str, *, expected_row_version: int) -> None: ...
 

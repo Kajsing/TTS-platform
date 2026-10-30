@@ -1,5 +1,7 @@
+from .block_pages import MAX_BLOCK_PAGE_CHARACTERS, BoundedReaderBlockPage
 from .cursors import remap_cursor_for_edit, remap_text_offset
 from .errors import (
+    ReaderBlockTooLargeError,
     ReaderConfigurationError,
     ReaderConflictError,
     ReaderDatabaseError,
@@ -52,6 +54,9 @@ from .services import ReaderLibrary
 from .sqlite import SqliteReaderRepository, initialize_reader_repository
 
 __all__ = [
+    "BoundedReaderBlockPage",
+    "MAX_BLOCK_PAGE_CHARACTERS",
+    "ReaderBlockTooLargeError",
     "BlockKind",
     "Bookmark",
     "DocumentEdit",

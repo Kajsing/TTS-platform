@@ -707,14 +707,20 @@ whole-chapter default for future agent imports, now maintained in
   Measured HTTP counts, retained source and fixture allocations are recorded in
   `docs/reader_document_calls.md`. Fresh maintenance checks and position-save
   semantics remain intact.
-- [ ] Finish service work/response bounds and incremental full-source operations.
-  The desktop coordination above is complete, but it does not establish byte
-  quotas for pages containing very large blocks or incremental active Find/
-  highlighter execution. Preserve the original broader requirement: plan
-  incremental, revision-consistent pages/windows with bounded concurrency,
-  cancellation and coalescing of redundant status, document and position calls.
-  Measure request bursts and work/latency separately: a character count alone
-  does not identify the cause of rate-budget exhaustion.
+- [x] Bound public block responses and move paged Find/highlighting to the service
+  (2026-10-30). Complete blocks fit an exact 2 MiB JSON budget and a 1,000,000-
+  code-point per-block bound, with safe continuations or explicit 413. Revision/
+  privacy/configuration-pinned search sessions return positions/counts only,
+  bounded result pages/overlays and server-side next-term navigation. The service
+  scans one bounded full snapshot (32 million UTF-16 units / 100,000 blocks),
+  with one scan, deadlines/cancellation and bounded session indexes; this is not
+  streaming regex or unbounded source support. Local editor drafts remain local.
+  Oversized source/block failures preserve original text; displayable fragments
+  of one oversized block are not implemented. Provider differences and measured
+  HTTP/Windows/negative evidence: `docs/reader_source_search.md`. Existing
+  position-save throttling/terminal flushes remain intact. This completes the
+  user-selected response/search slice without claiming every large-document
+  operation has been measured or changing import-part policy.
 - [x] Give playback and background work separate, enforced service request
   budgets. Classify routes/operations explicitly, including playback admission,
   continuation and position persistence versus library/status polling, import
