@@ -4,6 +4,24 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Reader Agent M2 runtime activated (2026-11-01): the owner explicitly requested
+  service restart and MCP reconnect. The existing LocalServiceCoordinator and
+  LocalServiceProcessControl verified idle activity/launcher ownership, reserved
+  maintenance, stopped the recorded process tree and started the normal hidden
+  launcher. New service instance is healthy: Reader schema 13, backend/default
+  voice ready. Fresh stdio MCP initialization against the existing Agent-import
+  grant lists all 16 tools and all six M2 capability flags. Read-only live probes
+  confirm seven Battlemage articles, 360 delivery receipts, 43 current structural
+  chapters in Part 07, chapter text and literal search. Article row versions are
+  unchanged; no test articles/import plans/grants were created. Reader PID 23952
+  remained open. Windows UI input failed with `coordinate input geometry is
+  unavailable`, so the same existing service-control classes were called from
+  a temporary headless runner, without replacing application binaries. No config,
+  network or MANIFEST changes. Activation evidence:
+  `.logs/2026-11-01-reader-agent-m2-activation.md`. The earlier pending-activation
+  boundary below is now satisfied; no further restart/deployment is required
+  for these Python service/MCP features.
+
 - Completed Reader Agent M2 source slice (2026-11-01): adapter 1.1.0 exposes
   16 tools with actionable sanitized busy reasons/timing, durable creation keys,
   service-enforced whole-chapter preview/delivery (default 900,000 normalized

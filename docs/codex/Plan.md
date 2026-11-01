@@ -13,8 +13,10 @@ This file is the source of truth for execution order.
 ## Reader Agent M2: source and isolated acceptance complete (2026-11-01)
 
 The owner selected the five MCP improvements reviewed in chat as today's goal.
-All five stages are implemented and validated; live runtime activation remains
-pending a normal service restart. No live library/service restart was performed.
+All five stages are implemented and validated. The owner subsequently authorized
+service restart/MCP reconnect; runtime activation passed on 2026-11-01 without
+closing Reader or changing live article content. See the activation entry in
+`Documentation.md`.
 Execute [Reader Agent M2](../reader_agent_m2_plan.md) in order: actionable busy
 responses; retry-safe creation and whole-chapter part preview/delivery (900,000
 characters by default); cross-part story status and duplicate protection;

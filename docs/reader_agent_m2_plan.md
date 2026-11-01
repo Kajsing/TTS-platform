@@ -2,9 +2,11 @@
 
 ## Target for 2026-11-01
 
-Implementation and isolated acceptance are complete. Runtime activation is
-pending a normal service restart; the live Reader/service were not stopped or
-deployed over. See [contracts and limits](reader_agent_m2.md) and
+Implementation and isolated acceptance are complete. The owner subsequently
+authorized runtime activation: service restart and fresh MCP connection passed
+on 2026-11-01 while Reader stayed open; see
+[activation evidence](../.logs/2026-11-01-reader-agent-m2-activation.md).
+See [contracts and limits](reader_agent_m2.md) and
 [implementation evidence](../.logs/2026-11-01-reader-agent-m2.md).
 
 The owner requested a short plan and an active goal for the five MCP improvements
