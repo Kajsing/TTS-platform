@@ -10,6 +10,19 @@ This file is the source of truth for execution order.
 - Stop-and-fix rule: if validation fails, fix it before moving on.
 - Do not treat partial progress inside a milestone as completion.
 
+## Active target: Reader Agent M2 (2026-11-01)
+
+The owner selected the five MCP improvements reviewed in chat as today's goal.
+Execute [Reader Agent M2](../reader_agent_m2_plan.md) in order: actionable busy
+responses; retry-safe creation and whole-chapter part preview/delivery (900,000
+characters by default); cross-part story status and duplicate protection;
+revision-pinned chapter text/search; isolated integration acceptance and publish.
+M1 and the implemented playback/background/agent budget isolation remain complete.
+Existing library content, live service state and unrelated parked tracks are
+outside this goal. The remaining large-document import-limit/metadata items below
+are inputs to this MCP slice, not claims of completion or activation of a broad
+desktop import redesign.
+
 ## Architecture Notes That Prevent Oscillation
 
 - Keep API schemas stable and backend-agnostic.

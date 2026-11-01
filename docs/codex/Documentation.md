@@ -4,6 +4,24 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Active target (2026-11-01): the owner requested a short plan and app goal for
+  the five reviewed MCP improvements. Execution/acceptance are recorded in
+  `docs/reader_agent_m2_plan.md` and ordered in `Plan.md`: precise busy responses,
+  retry-safe part creation and 900,000-character whole-chapter preview/delivery,
+  folder-scoped cross-part story status/duplicate protection, chapter reads/search,
+  and isolated integration validation/publication. Planning only in this slice;
+  no feature or migration is implemented yet. Existing request-budget isolation
+  is implemented and must be preserved. Assumption: all five suggestions are in
+  the goal, with import reliability first; safe creation is a prerequisite for
+  automatic rollover. No architecture/product/security change is selected.
+  No live library/config/service changes are authorized by this plan. Preserve
+  the pre-existing local `models/MANIFEST.json` edit. It is safe to start M2.1
+  autonomously using isolated tests; deployment remains a separate runtime step.
+  Planning validation: UTF-8 files and relative plan link pass; `git diff --check`
+  passes. No runtime tests are needed for this documentation-only slice. Origin
+  was fetched and main was aligned before editing. App implementation goal is
+  registered as active; no token/time cap was requested.
+
 - Completed paged-chapter slice (2026-10-30): existing chapter selector and
   Previous/Next now work in large paged articles. A protected, revision-pinned
   GET returns at most 1,024 scalar chapter anchors, capped at 1 MiB; source
