@@ -100,6 +100,7 @@ _ALLOWED_REMOTE_ROUTES = (
 )
 
 _DENIED_REMOTE_ROUTES = (
+    ("POST", re.compile(rf"^/v1/reader/imports/{_RESOURCE_ID}/parts-(?:preview|commit)$")),
     ("GET|POST", re.compile(r"^/v1/service/(?:status|maintenance(?:/release)?|voice-preview)$")),
     ("GET|POST|PATCH|DELETE", re.compile(r"^/v1/reader/agent(?:-access)?/.*$")),
     ("POST", re.compile(r"^/v1/auth/rotate$")),

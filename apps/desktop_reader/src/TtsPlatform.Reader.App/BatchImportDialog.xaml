@@ -1,7 +1,7 @@
 <Window x:Class="TtsPlatform.Reader.App.BatchImportDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Import several articles" Height="570" Width="860" MinHeight="480" MinWidth="720"
+        Title="Review and import article parts" Height="760" Width="1080" MinHeight="620" MinWidth="880"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <Grid Margin="16">
     <Grid.RowDefinitions>
@@ -9,44 +9,70 @@
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
     <StackPanel>
-      <TextBlock Text="Import several articles" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="Review article parts before importing" FontSize="22" FontWeight="SemiBold" />
       <TextBlock x:Name="SummaryText" Margin="0,4,0,12" Foreground="#555" />
     </StackPanel>
-    <Grid Grid.Row="1" Margin="0,0,0,10">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <TextBlock Text="Destination" VerticalAlignment="Center" Margin="0,0,8,0" />
-      <ComboBox Grid.Column="1" x:Name="DestinationComboBox" DisplayMemberPath="Name"
-                AutomationProperties.Name="Import destination folder" />
-      <CheckBox Grid.Column="2" x:Name="AllowDuplicateCheckBox"
-                Content="Allow duplicate content" Margin="14,0,0,0" VerticalAlignment="Center" />
-      <CheckBox Grid.Column="3" x:Name="KeepSourceCheckBox"
-                Content="Keep source copies" Margin="14,0,0,0" VerticalAlignment="Center" />
-    </Grid>
+    <StackPanel Grid.Row="1" Margin="0,0,0,10">
+      <DockPanel Margin="0,0,0,8">
+        <TextBlock Text="Destination" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <ComboBox x:Name="DestinationComboBox" DisplayMemberPath="Name"
+                  AutomationProperties.Name="Import destination folder" />
+      </DockPanel>
+      <WrapPanel>
+        <TextBlock Text="Maximum characters per part" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox x:Name="MaxCharactersTextBox" Text="900000" Width="100" VerticalContentAlignment="Center"
+                 AutomationProperties.Name="Maximum characters per part" />
+        <TextBlock Text="Chapter heading level" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <ComboBox x:Name="HeadingLevelComboBox" Width="60"
+                  AutomationProperties.Name="Chapter heading level" />
+        <CheckBox x:Name="AllowDuplicateCheckBox" Content="Allow duplicate content"
+                  Margin="14,0,0,0" VerticalAlignment="Center" />
+        <CheckBox x:Name="KeepSourceCheckBox" Content="Keep source copies"
+                  Margin="14,0,0,0" VerticalAlignment="Center" />
+      </WrapPanel>
+      <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#555"
+                 Text="Parts keep complete chapters. Choose the heading level used for chapter titles; files without chapter headings remain one chapter." />
+    </StackPanel>
     <DataGrid Grid.Row="2" x:Name="FileGrid" AutoGenerateColumns="False" IsReadOnly="True"
               EnableRowVirtualization="True" AutomationProperties.Name="Batch import files">
       <DataGrid.Columns>
         <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*" />
         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="130" />
-        <DataGridTextColumn Header="Warnings / result" Binding="{Binding Message}" Width="3*" />
+        <DataGridTemplateColumn Header="Warnings / result" Width="3*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Message}" TextWrapping="Wrap" ToolTip="{Binding Message}" Margin="4" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
-    <Border Grid.Row="3" Background="#FFF4D6" Padding="10" Margin="0,10,0,0">
-      <TextBlock x:Name="StatusText" Text="Ready to preview and import."
+    <TextBlock Grid.Row="3" Text="Reviewed parts for the selected file" FontWeight="SemiBold" Margin="0,10,0,6" />
+    <DataGrid Grid.Row="4" x:Name="PartsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+              EnableRowVirtualization="True" AutomationProperties.Name="Reviewed import parts">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Part" Binding="{Binding Number}" Width="55" />
+        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="2*" />
+        <DataGridTextColumn Header="Chapters" Binding="{Binding ChapterRange}" Width="2*" />
+        <DataGridTextColumn Header="Characters" Binding="{Binding Codepoints, StringFormat=N0}" Width="100" />
+      </DataGrid.Columns>
+    </DataGrid>
+    <Border Grid.Row="5" Background="#FFF4D6" Padding="10" Margin="0,10,0,0">
+      <TextBlock x:Name="StatusText" Text="Preview parts, review the results, then explicitly import. No articles have been saved."
                  TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
     </Border>
-    <DockPanel Grid.Row="4" Margin="0,12,0,0">
+    <DockPanel Grid.Row="6" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" x:Name="CloseButton" Content="Close" Click="CloseButton_Click"
               MinWidth="90" />
-      <Button DockPanel.Dock="Right" x:Name="StartButton" Content="Preview and import"
-              Click="StartButton_Click" MinWidth="140" />
+      <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Import reviewed parts"
+              Click="ImportButton_Click" MinWidth="160" IsEnabled="False" />
+      <Button DockPanel.Dock="Right" x:Name="StartButton" Content="Preview parts"
+              Click="StartButton_Click" MinWidth="120" />
       <Button DockPanel.Dock="Right" x:Name="CancelRemainingButton" Content="Cancel remaining"
               Click="CancelRemainingButton_Click" MinWidth="120" IsEnabled="False" />
       <ProgressBar x:Name="Progress" Height="10" Minimum="0" VerticalAlignment="Center" />

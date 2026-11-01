@@ -104,8 +104,9 @@ revision-checked replacement for corrections. Include a spoken chapter heading
 in `text` if desired; `title` is provenance metadata, not spoken automatically.
 
 **Do not blindly retry create, append or edits after a timeout.** They may have
-committed; inspect the current article/library first. Only chapter delivery has
-durable retry identities. Busy playback is a reason to try later, not to stop
+committed; inspect the current article/library first. Chapter delivery, explicit
+`reader_create_article_once` and M2 managed imports have durable retry identities;
+ordinary M1 create/append/edit calls do not. Busy playback is a reason to try later, not to stop
 the user's reading. No scheduler or background website monitoring is installed.
 
 See `reader_agent_api.md` for exact HTTP fields, conflict semantics, provenance,

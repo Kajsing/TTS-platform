@@ -7,10 +7,11 @@ incomplete; its resume conditions are preserved in `reader_upgrade_plan.md`.
 **M1 is complete (2026-09-05).** Service/API, MCP, Options, isolated Windows
 end-to-end acceptance and publication of the actual shortcut target are
 implemented and validated. After a temporary restart blocker, the user explicitly
-authorized service restart. The normal Windows launcher started the updated
-service: health/backend/default Kokoro voice and database integrity are OK;
-the protected grant route returns 200 with zero grants by default. No live
-articles were changed or agent permissions provisioned. The final audit is in
+authorized service restart. At that acceptance, the normal Windows launcher
+started the updated service: health/backend/default Kokoro voice and database
+integrity were OK; the protected grant route returned 200 with zero grants by
+default. No live articles were changed or agent permissions provisioned during
+that M1 acceptance. The final audit is in
 `docs/codex/Documentation.md` and setup is in `reader_agent_mcp.md`.
 Its implemented contract is in `reader_agent_api.md`. The user manually stopped
 the previous U8 app goal on 2026-09-05, after which M1 registration succeeded.
@@ -23,14 +24,21 @@ is an agent following selected fiction sites and delivering new chapters into
 the user's reading library. M1 provides the article tools and reliable chapter
 delivery contract; website monitoring and cloud connectivity are later work.
 
-## M1: Local MCP article workspace and chapter delivery
+## M2 status (2026-11-01)
 
-The owner's 2026-11-01 M2 follow-up is implemented and isolated-tested: durable
+The owner's 2026-11-01 M2 follow-up is implemented and validated: durable
 creation identities, bounded whole-chapter part preview/delivery, cross-part
 story status, current chapter text/literal search and actionable busy results.
 See [M2 plan](reader_agent_m2_plan.md) and [contracts](reader_agent_m2.md).
-Live service restart/deployment remains pending; M1 history and permissions are
-preserved. This does not activate U8 or background website monitoring.
+The owner subsequently authorized service restart and MCP reconnect. Runtime
+activation passed on 2026-11-01: schema 13, all 16 tools and six M2 capability
+flags were verified against the existing grant with read-only probes. Existing
+article row versions were unchanged. No further restart or desktop-binary
+deployment is pending for these Python service/MCP features. M1 history and
+permissions are preserved. This does not activate U8 or background website
+monitoring. Activation evidence is recorded in `docs/codex/Documentation.md`.
+
+## M1: Local MCP article workspace and chapter delivery
 
 ### Ownership and connection
 
@@ -143,24 +151,30 @@ M1 is complete only when:
   A running old binary is reported as pending deployment, not as completion.
 - Documentation is current and the validated slice is committed and pushed.
 
-Implement in this order: service authorization and storage, transactional chapter
-operations, MCP tools, Options setup, end-to-end validation and deployment. Keep
-each commit coherent and include the tests/docs for its behavior. This planning
-commit is documentation-only; it does not satisfy M1 implementation acceptance.
+The original M1 implementation order was service authorization and storage,
+transactional chapter operations, MCP tools, Options setup, end-to-end validation
+and deployment. Its original planning commit was documentation-only; subsequent
+implementation and acceptance are complete as recorded above. Preserve these
+acceptance criteria as regression requirements rather than reopening M1.
 
 ## Later work, deliberately outside M1
 
-- Choose fiction sources, polling cadence, login requirements, content extraction,
-  and whether each story appends to one article or creates one article per chapter.
+- Choose fiction sources, polling cadence, login requirements and content
+  extraction for any future monitoring workflow. Managed multi-part layout is
+  already implemented by M2; its whole-chapter policy does not add website fetching.
 - Run an external agent on a schedule and report new chapters or retrieval errors.
 - Verify ChatGPT Work/OpenClaw compatibility in the intended execution environment.
   Do not assume a cloud agent can use local stdio or join the owner's WireGuard
   network. A reachable authenticated MCP transport or an explicitly selected
   bridge needs a separate deployment/security decision.
-- After M1, bring U8 back to the user and confirm the intended WireGuard
-  environment before resuming its reversible elevated firewall acceptance test.
+- The historical request to revisit U8 after M1 remains a separate decision:
+  confirm the intended WireGuard environment before resuming its reversible
+  elevated firewall acceptance test. M1/M2 completion does not activate it.
 
-## Registered app goal scope
+## Historical M1 app goal scope (completed)
+
+The following was the registered M1 implementation goal, retained for scope and
+approval history. It is not the current execution target.
 
 Implement Reader Agent Access M1: optional local MCP access to one user-selected
 folder, service-enforced revocable permissions, article creation/reading/editing,
@@ -170,3 +184,13 @@ client configuration, tests, end-to-end Windows smoke, safe deployment to the
 actual Reader shortcut target, documentation, commit, and push. Keep U8, website
 monitoring, and cloud connectivity parked; require no paid dependency.
 After M1, revisit U8 with the user before making network configuration changes.
+
+## Current resume point (2026-11-01)
+
+M1 and M2 are complete, including M2 runtime activation. The owner has now
+selected append-scaling measurement, plan cleanup and desktop import-part
+preview as a new follow-up. Use [Plan](codex/Plan.md) for execution order and
+[Documentation](codex/Documentation.md) for current evidence and remaining work.
+Service Center T1/T2, chapter support and the capture outbox are completed
+baselines. U8, original Reader Milestones 10/11, PWA, audiobook work, website
+monitoring and cloud connectivity remain outside this follow-up.

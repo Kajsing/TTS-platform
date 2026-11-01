@@ -1777,6 +1777,9 @@ def build_reader_router() -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="rule-set-{rule_set_id}.json"'},
         )
 
+    from .reader_import_part_routes import build_reader_import_part_router
+
+    router.include_router(build_reader_import_part_router())
     return router
 
 

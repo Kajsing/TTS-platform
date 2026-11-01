@@ -1,10 +1,11 @@
 <Window x:Class="TtsPlatform.Reader.App.ImportPreviewDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Import document" Height="650" Width="900" MinHeight="520" MinWidth="720"
+        Title="Import document" Height="820" Width="1050" MinHeight="650" MinWidth="820"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <Grid Margin="16">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -23,42 +24,71 @@
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <TextBlock Text="Title" VerticalAlignment="Center" Margin="0,0,6,0" />
-        <TextBox Grid.Column="1" x:Name="TitleTextBox" MaxLength="500" />
+        <TextBox Grid.Column="1" x:Name="TitleTextBox" MaxLength="500" TextChanged="SourceOptionChanged" />
         <TextBlock Grid.Column="2" Text="Language" VerticalAlignment="Center" Margin="12,0,6,0" />
-        <TextBox Grid.Column="3" x:Name="LanguageTextBox" MaxLength="64"
+        <TextBox Grid.Column="3" x:Name="LanguageTextBox" MaxLength="64" TextChanged="SourceOptionChanged"
                  ToolTip="Optional language hint, for example da or en" />
       </Grid>
       <WrapPanel Margin="0,8,0,0">
-        <CheckBox x:Name="KeepSourceCheckBox" Content="Keep a managed copy of the original file" />
+        <CheckBox x:Name="KeepSourceCheckBox" Content="Keep a managed copy of the original file" Click="SourceOptionChanged" />
         <CheckBox x:Name="AllowDuplicateCheckBox" Content="Import identical content anyway"
                   Visibility="Collapsed" Margin="14,0,0,0"
                   Click="AllowDuplicateCheckBox_Click" />
       </WrapPanel>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#FFF4D6" Padding="10" Margin="0,12,0,10">
+    <StackPanel Grid.Row="1" Margin="0,12,0,0">
+      <WrapPanel>
+        <TextBlock Text="Maximum characters per part" VerticalAlignment="Center" />
+        <TextBox x:Name="MaxCharactersTextBox" Text="900000" Width="100" Margin="8,0,18,0"
+                 TextChanged="PartOptionChanged" AutomationProperties.Name="Maximum characters per import part" />
+        <TextBlock Text="Chapter heading level" VerticalAlignment="Center" />
+        <ComboBox x:Name="HeadingLevelComboBox" Width="60" Margin="8,0,18,0"
+                  SelectionChanged="PartOptionChanged" AutomationProperties.Name="Import chapter heading level" />
+        <Button x:Name="UpdatePartsButton" Content="Update parts" Click="UpdatePartsButton_Click" IsEnabled="False" />
+      </WrapPanel>
+      <TextBlock Margin="0,6,0,0" Foreground="#555" TextWrapping="Wrap"
+                 Text="Parts keep complete chapters. Select the heading level used for chapters; text without structured headings stays one chapter. Counts include headings and paragraph separators." />
+    </StackPanel>
+
+    <Border Grid.Row="2" Background="#FFF4D6" Padding="10" Margin="0,12,0,10">
       <TextBlock x:Name="StatusText" Text="Preparing preview..." TextWrapping="Wrap"
                  AutomationProperties.LiveSetting="Polite" />
     </Border>
 
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="3">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="180" />
+        <RowDefinition Height="8" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="2*" />
         <ColumnDefinition Width="8" />
         <ColumnDefinition Width="3*" />
       </Grid.ColumnDefinitions>
-      <GroupBox Header="Structure and warnings">
+      <DataGrid x:Name="PartsGrid" Grid.ColumnSpan="3" AutoGenerateColumns="False" IsReadOnly="True"
+                EnableRowVirtualization="True" AutomationProperties.Name="Proposed import parts">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Part" Binding="{Binding Number}" Width="55" />
+          <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+          <DataGridTextColumn Header="First chapter" Binding="{Binding FirstChapter}" Width="105" />
+          <DataGridTextColumn Header="Last chapter" Binding="{Binding LastChapter}" Width="105" />
+          <DataGridTextColumn Header="Characters" Binding="{Binding Codepoints, StringFormat=N0}" Width="110" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <GroupBox Grid.Row="2" Header="Structure and warnings">
         <ListBox x:Name="StructureList" VirtualizingPanel.IsVirtualizing="True"
                  VirtualizingPanel.VirtualizationMode="Recycling" />
       </GroupBox>
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
-      <GroupBox Grid.Column="2" Header="Text sample">
+      <GridSplitter Grid.Row="2" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" />
+      <GroupBox Grid.Row="2" Grid.Column="2" Header="Text sample">
         <ListBox x:Name="SampleList" VirtualizingPanel.IsVirtualizing="True"
                  VirtualizingPanel.VirtualizationMode="Recycling" />
       </GroupBox>
     </Grid>
 
-    <DockPanel Grid.Row="3" Margin="0,12,0,0">
+    <DockPanel Grid.Row="4" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" x:Name="ImportButton" Content="Import to Inbox"
               Click="ImportButton_Click" IsEnabled="False" MinWidth="120" />
       <Button DockPanel.Dock="Right" x:Name="CancelButton" Content="Cancel"

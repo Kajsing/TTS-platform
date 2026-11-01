@@ -4,6 +4,53 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
+- Completed follow-up (2026-11-01): all three owner-selected tasks are finished:
+  append scaling measurement, stale-plan cleanup and desktop single/batch part
+  preview. Reader downtime was explicitly allowed. `docs/reader_desktop_import_parts.md`
+  documents owner endpoints, explicit heading-level chapter boundaries, default
+  900,000 code points/UTF-16 units and review-before-save. Each file commits all
+  parts atomically with destination privacy, duplicate and plan-key checks;
+  shared originals roll back on failure. Changed source/policy invalidates review;
+  uncertain replies preserve acknowledged results and require library inspection.
+  No added dependency, schema migration, live article repartition or networking.
+  Existing transaction facade was moved to a generic persistence helper without
+  changing M1/M2 semantics. U8 explicitly denies the two new local import routes;
+  its legacy contracts remain unchanged. Cached original bytes now share a
+  bounded retention budget alongside existing text limits.
+  Validation: 1,062 full Python passes / 3 optional skips, 139 optional-agent/
+  part/benchmark passes, 479 .NET passes, Ruff, 21 shared payload fixtures,
+  scoped .NET whitespace and zero-warning isolated/live win-x64 publish.
+  Real WPF/HTTP smoke verifies default policy, single and batch previews without
+  saving, stale/oversized rejection, cleanup-operation ownership, nine committed
+  parts, exact complete source readback and normal chapter navigation. Real
+  stdio M2 regression retains all 16 tools, restart/retry/scope tests and exact
+  2.21-million-character fixture readback. Screenshots were visually inspected.
+  Independent review found/fixed preview cleanup races and malformed/duplicate
+  commit acknowledgement handling. First full-suite failure was missing explicit
+  remote route classification (already denied by default), now tested as deny.
+  Source-size/history benchmark passed 60/60 fixture readbacks: block-insert self
+  median grows about 1.6 ms to 15 ms over 50k to 880k at fixed chapter/block count.
+  Full-document FTS reconstruction per inserted block is confirmed in source;
+  its isolated causal timing is not established. No optimization was applied.
+  See `docs/reader_append_benchmark.md` and the dated implementation logs.
+  Deployment: Reader window closed normally without an unsaved dialog; its idle
+  tray host was verified/stopped, exact root-shortcut runtime published and all
+  four production assembly hashes match the isolated build. Production service
+  coordinator restarted the idle recorded launcher (PID 28800 ready); updated
+  Reader PID 32584 reports Connected/25 voices. Live OpenAPI exposes both routes,
+  fresh MCP confirms seven existing Battlemage articles/360 receipts with unchanged
+  versions. No synthetic live imports or MANIFEST changes. All selected work is
+  committed/pushed at completion; parked tracks require a new selection.
+
+- Activation checkpoint (2026-11-01, completed by the follow-up above): the owner selected all three proposed tasks:
+  isolated append/import scaling measurement, stale-plan cleanup, and desktop
+  single/batch whole-chapter part preview. Reader downtime is explicitly allowed.
+  Scope and acceptance: `docs/reader_desktop_import_parts.md`; default 900,000
+  code points and UTF-16 units, explicit structured heading level, preview before
+  save and atomic per-file creation. Existing MCP/owner paths remain compatible.
+  No performance optimization is selected before measurements, and no networking/
+  PWA/PDF/audiobook work is activated. Preserve local `models/MANIFEST.json`.
+
 - Reader Agent M2 runtime activated (2026-11-01): the owner explicitly requested
   service restart and MCP reconnect. The existing LocalServiceCoordinator and
   LocalServiceProcessControl verified idle activity/launcher ownership, reserved
@@ -49,13 +96,15 @@ This file is the live status log and shared memory for future Codex loops.
   The two early full-suite schema mismatches, Windows parameter-ID failures and
   locked publish attempt are retained/documented in
   `.logs/2026-11-01-reader-agent-m2.md`; final isolated runs pass.
-  Runtime activation remains pending a normal service restart/MCP reconnect.
+  At source completion, runtime activation was pending; the subsequent activation
+  entry above records its completion and fresh MCP verification.
   The root shortcut was not deployed; its existing Reader PID 23952 remained
   running. No live library/config/grant or MANIFEST mutation, service restart,
   audible test or network/U8/PWA/audiobook work. Generated evidence is ignored
   under `logs/reader-agent-m2/` and desktop artifacts. This completes the selected
   source/isolated acceptance goal; disruptive live deployment remains separate.
-  Desktop import controls and append-scaling measurement remain parked backlog.
+  Desktop import controls and append measurement were later selected and completed
+  in the follow-up recorded above.
 
 - Planning checkpoint (2026-11-01, superseded by completion above): the owner
   requested a short plan and app goal for

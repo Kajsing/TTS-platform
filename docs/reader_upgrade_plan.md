@@ -8,14 +8,24 @@ Track B (U4 through U6), and the U7 remote-security decision are complete. On
 WireGuard while preserving the existing local Reader as the default. That
 approval is not authorization to expose the current service remotely or begin
 U8 unless the user also asks to continue.
-This track is prioritized ahead of the still-incomplete Reader Milestones 10
-and 11. It does not mark PDF extraction or release-candidate work complete.
+The approved order placed this track ahead of the still-incomplete Reader
+Milestones 10 and 11. Those milestones remain deferred; this historical order
+does not make U8 the active target or mark PDF/release-candidate work complete.
 
 On 2026-09-05 the user reaffirmed parking U8 and selected Reader Agent Access
 M1 as the next project target. See `reader_agent_access_plan.md`; its local MCP
 integration is now complete. U8's pending acceptance is preserved below.
 The user manually stopped the U8 app goal, M1 registration succeeded, and the
-user asked to revisit U8 after M1. Confirm its intended network setup then.
+user asked to revisit U8 after M1. That request remains a resume condition:
+confirm its intended network setup before any further remote-access work.
+
+Status refreshed on 2026-11-01: Service Center T1/T2, chapter support and the
+durable capture outbox are complete. Reader Agent M2 is implemented, validated
+and runtime-activated. Today's newly approved follow-up covers append-scaling
+measurement, plan cleanup and desktop import-part preview. Current execution
+order is recorded in [Plan](codex/Plan.md) and live evidence in
+[Documentation](codex/Documentation.md); none of these follow-ups activates U8,
+PWA, audiobook work or the deferred original Reader Milestones 10/11.
 
 The existing v1 service, Reader library, Chrome integration, localhost security
 defaults, playback behavior, source mapping, and revisioned editing remain
@@ -218,7 +228,7 @@ Acceptance criteria:
 - Imported articles land in the selected folder.
 - Cancellation leaves committed documents intact and unstarted files absent.
 
-### U6: Folder privacy lock
+### U6: Folder privacy lock — complete
 
 **Purpose:** Hide selected folders inside Reader until the user supplies an
 access code.
@@ -336,29 +346,38 @@ synchronize SQLite files or maintain an offline replica in this milestone.
 
 Reader Milestone 10 (PDF text extraction) and Reader Milestone 11 (backup,
 packaging, accessibility, security, and release candidate) remain incomplete.
-They resume only after the user completes or deliberately pauses this upgrade
-track.
+They are not automatically activated by completion of another slice. Resume
+only when explicitly selected in the current execution plan by the owner.
 
-## Service Center - promoted to active goal
+## Service Center - completed T1/T2 (2026-09-06)
 
 On 2026-09-05 the user requested considering a tray icon for the local service,
 because Reader can be closed while the service remains running unnoticed.
 The user subsequently approved two stages: T1 persistent tray/status and safe
 service controls, then T2 compatible-voice installation/selection. They explicitly
 requested a goal and an optional Windows-autostart setting, off by default.
-`reader_service_center_plan.md` is now the active scope and acceptance plan.
+[The Service Center plan](reader_service_center_plan.md) preserves that approved
+scope and the completed T1/T2 acceptance. Persistent tray/dashboard, safe local
+service controls, optional Windows startup and compatible-voice installation,
+selection and fixed-text preview were completed and validated on 2026-09-06.
 Reader's existing minimize-to-tray option is not independent service presence.
 No autostart is enabled merely by recording this plan or testing the feature.
 
 ## Current resume point
 
-Reader Agent Access M1 is complete; see `reader_agent_access_plan.md` and
-`reader_agent_mcp.md`. Before more remote-access work, bring U8's remaining
-acceptance back to the user and confirm the intended WireGuard environment.
-Service Center T1.1 (persistent tray and single-instance Reader lifecycle) is
-implemented, tested and published. Next is T1.2 dashboard/activity-aware service
-controls, then T1.3 Windows startup and T2 voices. The full goal remains active;
-neither the dashboard nor autostart nor the voice library is complete yet.
+Reader Agent Access M1 and M2 are complete; M2 service/MCP activation passed on
+2026-11-01. See [Agent access](reader_agent_access_plan.md),
+[MCP setup](reader_agent_mcp.md) and [M2 contracts](reader_agent_m2.md).
+Service Center T1/T2, [chapter support](reader_chapters_plan.md) and the
+[durable capture outbox](reader_capture_outbox_plan.md) are implemented and
+validated; they are not pending execution stages. The later bounded paged chapter
+navigation is documented in [paged chapters](reader_paged_chapters.md).
+
+Continue only the owner-selected follow-up in [Plan](codex/Plan.md): the
+2026-11-01 append measurement, plan cleanup and desktop import-part preview.
+Before any further remote-access work, bring U8's remaining acceptance back to
+the user and confirm the intended WireGuard environment. Original Reader
+Milestones 10/11, PWA and audiobook work remain deferred.
 
 U1 through U7 are complete. U8 implementation and its isolated live gateway
 smoke are complete; final acceptance awaits a reversible elevated firewall

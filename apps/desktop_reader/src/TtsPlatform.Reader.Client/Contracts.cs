@@ -107,6 +107,13 @@ public interface IReaderServiceClient
     Task CancelImportAsync(
         string previewId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderImportPartsPreview> PreviewImportPartsAsync(
+        string previewId, int maxCharacters = 900000, int headingLevel = 1,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    Task<ReaderImportPartsResult> CommitImportPartsAsync(
+        string previewId, string planKey, int maxCharacters = 900000, int headingLevel = 1,
+        bool allowDuplicate = false, string? folderId = null,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
     Task<ReaderDocument> DuplicateAsEditableTextAsync(
         string documentId,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();

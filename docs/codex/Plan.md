@@ -17,7 +17,7 @@ All five stages are implemented and validated. The owner subsequently authorized
 service restart/MCP reconnect; runtime activation passed on 2026-11-01 without
 closing Reader or changing live article content. See the activation entry in
 `Documentation.md`.
-Execute [Reader Agent M2](../reader_agent_m2_plan.md) in order: actionable busy
+Completed [Reader Agent M2](../reader_agent_m2_plan.md): actionable busy
 responses; retry-safe creation and whole-chapter part preview/delivery (900,000
 characters by default); cross-part story status and duplicate protection;
 revision-pinned chapter text/search; isolated integration acceptance and publish.
@@ -26,6 +26,19 @@ Existing library content, live service state and unrelated parked tracks are
 outside this goal. The remaining large-document import-limit/metadata items below
 are inputs to this MCP slice, not claims of completion or activation of a broad
 desktop import redesign.
+
+## Completed follow-up: append measurement and desktop import preview (2026-11-01)
+
+The owner selected all three recommendations: measure append scaling with
+synthetic isolated data, reconcile stale plan status, and add desktop single/batch
+whole-chapter part preview. Reader downtime is allowed for validated deployment.
+Implemented [desktop import parts](../reader_desktop_import_parts.md) with explicit
+heading-level boundaries and the shared default 900,000-character policy. Preserve
+exact source, per-file atomic commit, privacy and truthful cancellation outcomes.
+Measurements and source-size/history controls are recorded in
+[append benchmark](../reader_append_benchmark.md). Single/batch Windows preview,
+atomic import and exact readback passed; the root-shortcut runtime and service
+were updated and verified. No append optimization or broad redesign was selected.
 
 ## Architecture Notes That Prevent Oscillation
 
@@ -750,16 +763,18 @@ whole-chapter default for future agent imports, now maintained in
   and retain authentication, origin checks, folder scope, leases, optimistic
   revisions, transactional receipts and source-cursor correctness. This is not
   permission to disable limits or merely raise a shared cap.
-- [ ] Add desktop product controls for configurable part limits and preview,
+- [x] Add desktop product controls for configurable part limits and preview,
   using the approved 900,000-character, whole-chapter agent default as the
   starting policy. Count the final normalized text, including title,
   introduction and chapter headings; account for the desktop character/block
   limits with headroom. Prefer complete chapter boundaries, stable source IDs
   and explicit part/chapter ranges. A chapter exceeding a part bound needs an
   explicit policy; never truncate prose or silently repartition the live library.
-  The agent-workflow default is selected; M2 now enforces configurable preview/
-  delivery bounds in the service/MCP (`docs/reader_agent_m2.md`). Desktop-wide
-  import controls remain outside that slice and unimplemented.
+  M2 enforces configurable preview/delivery bounds in the service/MCP
+  (`docs/reader_agent_m2.md`). Desktop single-file and explicit two-stage batch
+  controls completed 2026-11-01 (`docs/reader_desktop_import_parts.md`). Explicit
+  heading-level chapter boundaries preserve unstructured text as one chapter;
+  oversized whole chapters are rejected rather than silently divided.
 - [x] Include chapter navigation in the bounded page-based reader (2026-10-30).
   A bounded scalar chapter index exposes the existing selector/Previous/Next;
   each jump stages one exact-anchor source page between fresh metadata fences.
@@ -788,11 +803,15 @@ failures. Reuse the deferred append-scaling measurement below; do not treat an
 observed 429 or import slowdown as a proven single bottleneck. Tests and Windows
 smoke must cover the relevant service/client contracts before release.
 
-## Deferred: large-article append performance measurement
+## Large-article append performance measurement - complete 2026-11-01
 
-- [ ] User-requested backlog item (2026-09-13): measure chapter append latency
+- [x] User-requested backlog item (2026-09-13): measure chapter append latency
   as an article grows. A large MCP import appeared to slow down on later
-  appends, but individual calls were not timed; no cause is confirmed.
+  appends; controlled measurements and limitations are now recorded in
+  `docs/reader_append_benchmark.md`. Five measured samples plus one warmup across
+  ten M1/M2 cases all passed exact readback and receipt checks. Block insertion
+  is the clearest measured source-size-dependent component; its timer includes
+  full-document FTS trigger work but does not isolate that causal cost.
 - Use synthetic text and an isolated test workspace. Compare the same appended
   payload against small, medium and near-limit articles. Record per-call latency
   and privacy-safe service phase timings to distinguish transport, processing,
@@ -801,7 +820,10 @@ smoke must cover the relevant service/client contracts before release.
 - Report measured scaling and the bottleneck before proposing an optimization.
   Preserve revision checks, leases, transactional receipts and retry safety.
   This is import/append performance, not evidence of a playback regression.
-- Parked only: no implementation, benchmark, active goal or service restart now.
+- Activated by the owner's 2026-11-01 follow-up, using isolated synthetic data.
+  Reader downtime is allowed, but live library mutation is not part of measurement.
+  Measurement is complete; search-index optimization remains a proposed separate
+  follow-up, with no automatic activation or production change.
 
 ## Audiobook production - parked epic
 

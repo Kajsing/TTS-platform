@@ -2117,11 +2117,15 @@ public partial class MainWindow : Window
             filePath,
             SelectedLibraryFolderId())
         { Owner = this };
-        if (dialog.ShowDialog() == true && dialog.ImportedDocument is ReaderDocument imported)
+        var accepted = dialog.ShowDialog() == true;
+        if (dialog.NeedsLibraryRefresh)
         {
             await RefreshLibraryAsync();
+        }
+        if (accepted && dialog.ImportedDocument is ReaderDocument imported)
+        {
             DocumentsGrid.SelectedItem = _library?.Documents.FirstOrDefault(item => item.Id == imported.Id);
-            FooterText.Text = $"Imported {imported.TotalBlocks:N0} block(s) to Inbox.";
+            FooterText.Text = $"Imported {dialog.ImportedDocuments.Count:N0} reviewed part(s).";
         }
     }
 
@@ -2153,7 +2157,7 @@ public partial class MainWindow : Window
             }
         }
         catch (Exception exception) when (
-            exception is ReaderApiException or ReaderServiceUnavailableException)
+            exception is ReaderApiException or ReaderServiceUnavailableException or ArgumentException)
         {
             FooterText.Text = $"Batch import: {exception.Message}";
         }

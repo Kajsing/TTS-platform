@@ -103,6 +103,11 @@ public partial class MainWindow
             }
             result = new { library_visible = true, editor_complete = true, chapter_selector = true, chapter_selection = true, ordinary_reader_stream = true, packets, source_spans = sourceSpans, revoked = true };
         }
+        else if (scenario.Phase == "import-parts")
+        {
+            options.Hide();
+            result = await RunImportPartsSmokeAsync(scenario);
+        }
         else
         {
             throw new InvalidOperationException("Unknown isolated agent smoke phase.");

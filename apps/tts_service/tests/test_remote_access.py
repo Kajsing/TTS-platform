@@ -484,6 +484,10 @@ def test_remote_route_policy_is_positive_and_keeps_admin_paths_denied() -> None:
     assert not is_remote_route_allowed("PUT", f"/v1/reader/folders/{TEST_RESOURCE_ID}/privacy-lock")
     assert not is_remote_route_allowed("POST", "/v1/reader/browser-captures")
     assert not is_remote_route_allowed("GET", "/v1/reader/diagnostics")
+    for action in ("preview", "commit"):
+        path = f"/v1/reader/imports/{TEST_RESOURCE_ID}/parts-{action}"
+        assert classify_remote_route("POST", path) == "deny"
+        assert not is_remote_route_allowed("POST", path)
     assert not is_remote_route_allowed("GET", "/v1/reader/remote/status")
     assert not is_remote_route_allowed("POST", "/v1/auth/rotate")
     assert not is_remote_route_allowed("GET", "/v1/reader/new-future-admin-route")

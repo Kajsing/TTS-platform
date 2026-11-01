@@ -70,6 +70,7 @@ from speech_rules import (
 from .config import ReaderConfig
 from .observability import ObservabilityState
 from .reader_agent_service import ReaderAgentService
+from .reader_import_parts import ReaderImportPartsMixin
 from .reader_privacy import ReaderPrivacyService
 
 
@@ -183,7 +184,7 @@ class ReaderRuntimeState:
         }
 
 
-class ReaderApplicationService:
+class ReaderApplicationService(ReaderImportPartsMixin):
     _HIGHLIGHTER_COLORS = (
         "#F9DCC4",
         "#F7E3A1",
@@ -474,9 +475,15 @@ class ReaderApplicationService:
             retained_characters = sum(
                 item.imported.total_characters for item in self._import_previews.values()
             )
+            retained_source_bytes = sum(
+                len(item.source_data) for item in self._import_previews.values()
+                if item.source_data is not None
+            )
             if (
                 retained_characters + imported.total_characters
                 > self.config.imports.max_document_characters
+                or retained_source_bytes + len(preview.source_data or b"")
+                > self.config.imports.max_file_bytes
             ):
                 raise ReaderImportPreviewCapacityError()
             self._import_previews[preview.id] = preview
