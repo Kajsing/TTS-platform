@@ -10,9 +10,11 @@ This file is the source of truth for execution order.
 - Stop-and-fix rule: if validation fails, fix it before moving on.
 - Do not treat partial progress inside a milestone as completion.
 
-## Active target: Reader Agent M2 (2026-11-01)
+## Reader Agent M2: source and isolated acceptance complete (2026-11-01)
 
 The owner selected the five MCP improvements reviewed in chat as today's goal.
+All five stages are implemented and validated; live runtime activation remains
+pending a normal service restart. No live library/service restart was performed.
 Execute [Reader Agent M2](../reader_agent_m2_plan.md) in order: actionable busy
 responses; retry-safe creation and whole-chapter part preview/delivery (900,000
 characters by default); cross-part story status and duplicate protection;
@@ -746,15 +748,16 @@ whole-chapter default for future agent imports, now maintained in
   and retain authentication, origin checks, folder scope, leases, optimistic
   revisions, transactional receipts and source-cursor correctness. This is not
   permission to disable limits or merely raise a shared cap.
-- [ ] Add product-side configurable part limits and a preview before delivery,
+- [ ] Add desktop product controls for configurable part limits and preview,
   using the approved 900,000-character, whole-chapter agent default as the
   starting policy. Count the final normalized text, including title,
   introduction and chapter headings; account for the desktop character/block
   limits with headroom. Prefer complete chapter boundaries, stable source IDs
   and explicit part/chapter ranges. A chapter exceeding a part bound needs an
   explicit policy; never truncate prose or silently repartition the live library.
-  The agent-workflow default is already selected; product-side controls and
-  automatic enforcement remain unimplemented.
+  The agent-workflow default is selected; M2 now enforces configurable preview/
+  delivery bounds in the service/MCP (`docs/reader_agent_m2.md`). Desktop-wide
+  import controls remain outside that slice and unimplemented.
 - [x] Include chapter navigation in the bounded page-based reader (2026-10-30).
   A bounded scalar chapter index exposes the existing selector/Previous/Next;
   each jump stages one exact-anchor source page between fresh metadata fences.
@@ -770,6 +773,8 @@ whole-chapter default for future agent imports, now maintained in
   a valid per-call text size and fewer than 1,024 chapters. A part character cap
   alone does not prove that a delivery fits. Design preflight/error reporting
   around all relevant bounds, with atomic failure and unchanged retry identities.
+  M2 managed imports now have conservative metadata preflight and atomic actual
+  checks; this does not lift the legacy 64 KiB bound or redesign ordinary edits.
 
 Acceptance for a later implementation: use synthetic multi-million-character
 chaptered articles in an isolated workspace; record request counts, latency and

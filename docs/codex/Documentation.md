@@ -4,7 +4,43 @@ This file is the live status log and shared memory for future Codex loops.
 
 ## Current Status
 
-- Active target (2026-11-01): the owner requested a short plan and app goal for
+- Completed Reader Agent M2 source slice (2026-11-01): adapter 1.1.0 exposes
+  16 tools with actionable sanitized busy reasons/timing, durable creation keys,
+  service-enforced whole-chapter preview/delivery (default 900,000 normalized
+  code points and UTF-16 units), scoped cross-part story status/duplicate
+  protection, current chapter discovery/text and bounded literal search.
+  Migrations 012/013 are additive; schema-11 upgrade preserves legacy articles,
+  grants, receipts and original migration checksums. Managed creation/append/
+  receipt/assignment/progress are atomic and restart/retry-safe; row-version,
+  story-version and playback-lease target fences reject stale work. Independent
+  review fixed a reproducible public creation-key collision/lease bypass and
+  physical-purge resurrection paths, with regressions. No new dependency,
+  credential category, network exposure or permission expansion. Legacy M1
+  article/history behavior remains supported. Current contracts/limits:
+  `docs/reader_agent_m2.md`; completed plan: `docs/reader_agent_m2_plan.md`.
+  Validation: 1,021 full Python passes / 3 optional skips, 120 optional-agent +
+  import/upgrade passes, 449 .NET passes, Ruff, 21 Reader payload fixtures,
+  scoped .NET whitespace and zero-warning isolated win-x64 publish. Real stdio/
+  Windows smoke provisions DPAPI credentials, exercises all 16 tools and process
+  restart, verifies full source readback, WPF chapter selector/selection, 136
+  source-mapped stub packets and revocation. Large default-policy fixture:
+  2,210,000 source characters / 13 chapters, two bounded batches / three parts,
+  largest 850,027 characters; all 2,210,077 final normalized characters including
+  wrappers/separators read back exactly. Agent requests remain paced below its
+  unchanged 120/minute budget. An independent 240-case search oracle passed.
+  The two early full-suite schema mismatches, Windows parameter-ID failures and
+  locked publish attempt are retained/documented in
+  `.logs/2026-11-01-reader-agent-m2.md`; final isolated runs pass.
+  Runtime activation remains pending a normal service restart/MCP reconnect.
+  The root shortcut was not deployed; its existing Reader PID 23952 remained
+  running. No live library/config/grant or MANIFEST mutation, service restart,
+  audible test or network/U8/PWA/audiobook work. Generated evidence is ignored
+  under `logs/reader-agent-m2/` and desktop artifacts. This completes the selected
+  source/isolated acceptance goal; disruptive live deployment remains separate.
+  Desktop import controls and append-scaling measurement remain parked backlog.
+
+- Planning checkpoint (2026-11-01, superseded by completion above): the owner
+  requested a short plan and app goal for
   the five reviewed MCP improvements. Execution/acceptance are recorded in
   `docs/reader_agent_m2_plan.md` and ordered in `Plan.md`: precise busy responses,
   retry-safe part creation and 900,000-character whole-chapter preview/delivery,

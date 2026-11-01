@@ -15,6 +15,7 @@ from reader_core.agent_access import (
     AgentUnauthorizedError,
     ChapterDelivery,
 )
+from reader_core.agent_parts import PartPolicy
 from reader_core.errors import ReaderError
 from reader_core.models import ReaderDocument
 from starlette.concurrency import run_in_threadpool
@@ -41,6 +42,7 @@ class GrantRequest(AgentRequest):
 class CreateArticleRequest(AgentRequest):
     title: str = Field(min_length=1, max_length=500)
     text: str = Field(min_length=1, max_length=MAX_AGENT_TEXT)
+    retry_key: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class VersionRequest(AgentRequest):
@@ -60,7 +62,8 @@ class ReplaceArticleRequest(VersionRequest):
     new_text: str = Field(max_length=MAX_AGENT_TEXT)
 
 
-class DeliverChapterRequest(AppendArticleRequest):
+class ChapterPayload(AgentRequest):
+    text: str = Field(min_length=1, max_length=MAX_AGENT_TEXT)
     story_key: str = Field(min_length=1, max_length=200)
     chapter_key: str = Field(min_length=1, max_length=200)
     retry_key: str = Field(min_length=1, max_length=200)
@@ -68,6 +71,23 @@ class DeliverChapterRequest(AppendArticleRequest):
     title: str = Field(min_length=1, max_length=500)
     order_label: str | None = Field(default=None, min_length=1, max_length=200)
     order_index: int | None = Field(default=None, ge=-(2**53 - 1), le=2**53 - 1)
+
+
+class DeliverChapterRequest(ChapterPayload, VersionRequest):
+    pass
+
+
+class PreviewImportRequest(AgentRequest):
+    title: str = Field(min_length=1, max_length=470)
+    intro: str = Field(default="", max_length=MAX_AGENT_TEXT)
+    retry_key: str = Field(min_length=1, max_length=200)
+    chapters: list[ChapterPayload] = Field(min_length=1, max_length=100)
+    max_characters: int = Field(default=900_000, ge=1, le=1_000_000)
+    max_blocks: int = Field(default=20_000, ge=1, le=20_000)
+
+
+class ImportChapterRequest(AgentRequest):
+    chapter: ChapterPayload
 
 
 def _local_native(request: Request) -> None:
@@ -184,6 +204,11 @@ def build_reader_agent_router() -> APIRouter:
             "operations": grant.operations,
             "max_text_characters": MAX_AGENT_TEXT,
             "max_page_characters": MAX_AGENT_PAGE,
+            "features": ["retry_safe_creation", "managed_imports", "story_status", "chapter_text",
+                         "literal_search", "busy_details"],
+            "default_part_characters": 900_000,
+            "max_preview_chapters": 100,
+            "max_request_bytes": MAX_AGENT_REQUEST_BYTES,
         }
 
     @router.get("/articles")
@@ -199,6 +224,31 @@ def build_reader_agent_router() -> APIRouter:
     @router.post("/articles", status_code=201)
     def create(request: Request, payload: CreateArticleRequest):
         return _article(_call(request, "create", **payload.model_dump()))
+
+    @router.post("/import-plans")
+    def preview_import(request: Request, payload: PreviewImportRequest):
+        return _run(lambda: _call(
+            request, "preview_import", title=payload.title, intro=payload.intro,
+            retry_key=payload.retry_key,
+            chapters=tuple(ChapterDelivery(**item.model_dump()) for item in payload.chapters),
+            policy=PartPolicy(payload.max_characters, payload.max_blocks),
+        ))
+
+    @router.post("/import-plans/{plan_id}/chapters")
+    def import_chapter(request: Request, plan_id: str, payload: ImportChapterRequest):
+        return _run(lambda: _call(
+            request, "import_chapter", plan_id=plan_id,
+            delivery=ChapterDelivery(**payload.chapter.model_dump()),
+        ))
+
+    @router.get("/stories/status")
+    def story_status(
+        request: Request,
+        story_key: Annotated[str, Query(min_length=1, max_length=200)],
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ):
+        return _call(request, "story_status", story_key=story_key, offset=offset, limit=limit)
 
     @router.get("/articles/{document_id}")
     def read(
@@ -227,6 +277,47 @@ def build_reader_agent_router() -> APIRouter:
     @router.patch("/articles/{document_id}")
     def rename(request: Request, document_id: str, payload: RenameArticleRequest):
         return _article(_call(request, "rename", document_id=document_id, **payload.model_dump()))
+
+    @router.get("/articles/{document_id}/content-chapters")
+    def content_chapters(
+        request: Request,
+        document_id: str,
+        expected_row_version: Annotated[int, Query(ge=1)],
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ):
+        return _call(
+            request, "content_chapters", document_id=document_id,
+            expected_row_version=expected_row_version, offset=offset, limit=limit,
+        )
+
+    @router.get("/articles/{document_id}/chapter-text")
+    def chapter_text(
+        request: Request,
+        document_id: str,
+        chapter_id: Annotated[str, Query(min_length=1, max_length=100)],
+        expected_row_version: Annotated[int, Query(ge=1)],
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=MAX_AGENT_PAGE)] = MAX_AGENT_PAGE,
+    ):
+        return _call(
+            request, "chapter_text", document_id=document_id, chapter_id=chapter_id,
+            expected_row_version=expected_row_version, offset=offset, limit=limit,
+        )
+
+    @router.get("/articles/{document_id}/search")
+    def search(
+        request: Request,
+        document_id: str,
+        query: Annotated[str, Query(min_length=1, max_length=200)],
+        expected_row_version: Annotated[int, Query(ge=1)],
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ):
+        return _call(
+            request, "search", document_id=document_id, query=query,
+            expected_row_version=expected_row_version, offset=offset, limit=limit,
+        )
 
     @router.post("/articles/{document_id}/append")
     def append(request: Request, document_id: str, payload: AppendArticleRequest):

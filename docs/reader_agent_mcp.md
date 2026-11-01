@@ -77,6 +77,17 @@ by this local milestone; select/review its intended transport in later work.
 | `reader_replace_text` | Replace a unique passage within one paragraph |
 | `reader_list_chapters` | Durable delivery identities and provenance |
 | `reader_deliver_chapter` | Retry-safe atomic chapter append and receipt |
+| `reader_create_article_once` | Durable folder-scoped article creation identity |
+| `reader_preview_import` | Bounded whole-chapter part preview and durable preparation |
+| `reader_deliver_import_chapter` | Resumable prepared chapter delivery with atomic part creation |
+| `reader_story_status` | Cross-part scoped receipts; historical delivery differs from current text |
+| `reader_list_content_chapters` | Current structural chapter IDs, pinned to article version |
+| `reader_read_chapter` | Bounded current chapter text pages |
+| `reader_search_article` | Bounded case-sensitive literal search |
+
+Adapter 1.1.0 adds these M2 tools. See [M2 contracts](reader_agent_m2.md) for
+permissions, retry semantics, preparation quotas, exact wrapper/part counting,
+live status pagination and content offsets. Existing tools retain M1 semantics.
 
 Results include structured JSON and matching text content. Errors set MCP
 `isError` and return `outcome`, an allowlisted `code`, and `retryable`, without

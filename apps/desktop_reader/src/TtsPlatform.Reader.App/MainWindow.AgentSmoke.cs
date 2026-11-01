@@ -52,6 +52,16 @@ public partial class MainWindow
             {
                 throw new InvalidOperationException("The MCP article did not appear intact and editable in the ordinary Reader editor.");
             }
+            if (ChapterToolbar.Visibility != Visibility.Visible || _chapters.Count < 2 || ChapterComboBox.Items.Count != _chapters.Count)
+            {
+                throw new InvalidOperationException("The MCP article did not expose its ordinary chapter selector.");
+            }
+            var selectedChapter = _chapters[1];
+            ChapterComboBox.SelectedItem = selectedChapter;
+            if (_selectedChapterId != selectedChapter.Id || EditorTextBox.Text.Replace("\r\n", "\n", StringComparison.Ordinal) != scenario.ExpectedText)
+            {
+                throw new InvalidOperationException("The MCP article chapter selection changed or lost source text.");
+            }
             var block = _continuousDocument!.Blocks.First();
             var cursor = new ReaderCursor(document.Id, block.Id, block.Ordinal, 0, document.ContentRevision);
             var stream = new ReaderStreamClient(scenario.ServiceUrl, token);
@@ -91,7 +101,7 @@ public partial class MainWindow
             {
                 throw new InvalidOperationException("Revocation left usable connection files.");
             }
-            result = new { library_visible = true, editor_complete = true, ordinary_reader_stream = true, packets, source_spans = sourceSpans, revoked = true };
+            result = new { library_visible = true, editor_complete = true, chapter_selector = true, chapter_selection = true, ordinary_reader_stream = true, packets, source_spans = sourceSpans, revoked = true };
         }
         else
         {

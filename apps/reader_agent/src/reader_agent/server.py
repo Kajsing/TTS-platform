@@ -9,12 +9,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .client import AgentHttpClient, AgentServiceError
 from .config import AgentConfigurationError, AgentConnection
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 Title = Annotated[str, Field(min_length=1, max_length=500)]
 Text = Annotated[str, Field(min_length=1, max_length=200_000)]
 Identity = Annotated[str, Field(min_length=1, max_length=200)]
@@ -22,6 +22,20 @@ ArticleId = Annotated[str, Field(pattern=r"^[0-9a-fA-F-]{36}$")]
 Revision = Annotated[int, Field(strict=True, ge=1)]
 PageSize = Annotated[int, Field(strict=True, ge=1, le=100)]
 Offset = Annotated[int, Field(strict=True, ge=0)]
+
+
+class ImportChapter(BaseModel):
+    """Public chapter payload; no internal block offsets or backend fields."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    story_key: Identity
+    chapter_key: Identity
+    retry_key: Identity
+    source_url: Annotated[str, Field(min_length=1, max_length=2048)]
+    title: Title
+    text: Text
+    order_label: Annotated[str | None, Field(min_length=1, max_length=200)] = None
+    order_index: Annotated[int | None, Field(strict=True, ge=-(2**53 - 1), le=2**53 - 1)] = None
 
 
 def build_server(client: AgentHttpClient):
@@ -111,6 +125,15 @@ def build_server(client: AgentHttpClient):
         """
         return await invoke("create", title=title, text=text)
 
+    @server.tool(annotations=hints(retry=True))
+    async def reader_create_article_once(title: Title, text: Text, retry_key: Identity):
+        """Create once using a durable folder-scoped identity.
+
+        Reuse identical text/title/key after uncertain responses. Changed payload
+        conflicts; replay returns current metadata without restoring owner edits.
+        """
+        return await invoke("create_once", title=title, text=text, retry_key=retry_key)
+
     @server.tool(annotations=hints(edit=True))
     async def reader_rename_article(
         article_id: ArticleId, title: Title, expected_row_version: Revision
@@ -191,6 +214,99 @@ def build_server(client: AgentHttpClient):
             order_label=order_label,
             order_index=order_index,
         )
+
+    @server.tool(annotations=hints(read=True))
+    async def reader_list_content_chapters(
+        article_id: ArticleId, expected_row_version: Revision,
+        offset: Offset = 0, limit: PageSize = 50,
+    ):
+        """List current structural chapter IDs/titles; delivery receipts are separate.
+
+        Pin all pages to the current article row_version.
+        """
+        return await invoke(
+            "content_chapters", article_id=article_id, expected_row_version=expected_row_version,
+            offset=offset, limit=limit,
+        )
+
+    @server.tool(annotations=hints(read=True))
+    async def reader_read_chapter(
+        article_id: ArticleId,
+        chapter_id: Annotated[str, Field(min_length=1, max_length=100)],
+        expected_row_version: Revision,
+        offset: Offset = 0,
+        limit: Annotated[int, Field(strict=True, ge=1, le=20_000)] = 20_000,
+    ):
+        """Read current chapter text, pinned to row_version; follow next_offset.
+
+        Use a structural ID from reader_list_content_chapters, not a receipt ID.
+        Canonical trailing paragraph separators belong to the preceding chapter.
+        """
+        return await invoke(
+            "chapter_text", article_id=article_id, chapter_id=chapter_id,
+            expected_row_version=expected_row_version, offset=offset, limit=limit,
+        )
+
+    @server.tool(annotations=hints(read=True))
+    async def reader_search_article(
+        article_id: ArticleId,
+        query: Annotated[str, Field(min_length=1, max_length=200)],
+        expected_row_version: Revision,
+        offset: Offset = 0, limit: PageSize = 50,
+    ):
+        """Find exact case-sensitive literal matches, including overlapping matches.
+
+        Offsets count Unicode code points. Follow next_offset even on empty pages:
+        each call scans at most 100,000 candidate positions. No regex is executed.
+        """
+        return await invoke(
+            "search", article_id=article_id, query=query,
+            expected_row_version=expected_row_version, offset=offset, limit=limit,
+        )
+
+    @server.tool(annotations=hints(retry=True))
+    async def reader_preview_import(
+        title: Annotated[str, Field(min_length=1, max_length=470)],
+        chapters: Annotated[list[ImportChapter], Field(min_length=1, max_length=100)],
+        retry_key: Identity,
+        intro: Annotated[str, Field(max_length=200_000)] = "",
+        max_characters: Annotated[int, Field(strict=True, ge=1, le=1_000_000)] = 900_000,
+        max_blocks: Annotated[int, Field(strict=True, ge=1, le=20_000)] = 20_000,
+    ):
+        """Prepare a durable whole-chapter import preview; no library text is changed.
+
+        Reuse identical preview key/payload after uncertain responses. Max 100
+        chapters and 2 MiB request JSON per batch. Every batch starts new parts;
+        counts include the spoken title/intro wrapper, headings and separators.
+        Inspect the plan before sending its chapters in order. Preparation needs
+        the existing list/create/deliver permissions and stores no chapter bodies.
+        """
+        return await invoke(
+            "preview_import", title=title, intro=intro, retry_key=retry_key,
+            chapters=[chapter.model_dump() for chapter in chapters],
+            max_characters=max_characters, max_blocks=max_blocks,
+        )
+
+    @server.tool(annotations=hints(retry=True))
+    async def reader_deliver_import_chapter(plan_id: ArticleId, chapter: ImportChapter):
+        """Deliver one exact prepared chapter in order, creating its part atomically.
+
+        Repeat the same plan/chapter after a lost response. Changed inputs or
+        target revisions conflict; replay never restores owner-removed text.
+        Busy means wait, never stop playback. Follow next_index until complete.
+        """
+        return await invoke("import_chapter", plan_id=plan_id, chapter=chapter.model_dump())
+
+    @server.tool(annotations=hints(read=True))
+    async def reader_story_status(story_key: Identity, offset: Offset = 0, limit: PageSize = 50):
+        """List this folder's cross-part delivery receipts and current article versions.
+
+        Follow next_offset. Receipt history is not proof text remains after edits
+        or Undo. Numeric discontinuities are observations, not confirmed gaps.
+        Requires list/chapters permissions. Pages are live views, not a snapshot;
+        compare story_version for new deliveries and restart after known changes.
+        """
+        return await invoke("story_status", story_key=story_key, offset=offset, limit=limit)
 
     return server
 

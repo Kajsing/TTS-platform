@@ -30,11 +30,30 @@ class ReaderAgentService:
             "replace": self.store.replace_text,
             "chapters": self.store.list_chapters,
             "deliver": self.store.deliver_chapter,
+            "content_chapters": self.store.list_content_chapters,
+            "chapter_text": self.store.read_chapter,
+            "search": self.store.search_article,
+            "preview_import": self.store.preview_import,
+            "import_chapter": self.store.deliver_import_chapter,
+            "story_status": self.store.story_status,
         }
         if operation not in operations:
             raise AgentUnauthorizedError()
         document_id = arguments.get("document_id")
-        self.store.authorize(credential, operation, document_id)
+        permission = (
+            "read" if operation in {"content_chapters", "chapter_text", "search"} else operation
+        )
+        permission = {"preview_import": "create", "import_chapter": "deliver",
+                      "story_status": "chapters"}.get(permission, permission)
+        self.store.authorize(credential, permission, document_id)
+        if operation == "import_chapter":
+            target = self.store.import_target(
+                credential, arguments["plan_id"], arguments["delivery"].chapter_key
+            )
+            with self._leases.mutation(target) if target is not None else nullcontext():
+                return self.store.deliver_import_chapter(
+                    credential, **arguments, lease_document_id=target
+                )
         mutation = document_id is not None and operation in {
             "rename",
             "append",

@@ -2,6 +2,11 @@
 
 ## Target for 2026-11-01
 
+Implementation and isolated acceptance are complete. Runtime activation is
+pending a normal service restart; the live Reader/service were not stopped or
+deployed over. See [contracts and limits](reader_agent_m2.md) and
+[implementation evidence](../.logs/2026-11-01-reader-agent-m2.md).
+
 The owner requested a short plan and an active goal for the five MCP improvements
 reviewed in chat. M1 remains complete. This is an additive service/API/MCP slice;
 the Python service remains the sole persistence and authorization owner. Work
@@ -10,12 +15,12 @@ not permission to skip acceptance or claim incomplete work is complete.
 
 ## Execution order
 
-- [ ] **M2.1: Actionable busy responses.** Preserve distinct rate-limit,
+- [x] **M2.1: Actionable busy responses.** Preserve distinct rate-limit,
   playback-lock and database-busy reasons through MCP. Forward validated,
   bounded retry timing and budget identity when supplied by the service. Keep
   existing outcome/code/retryable compatibility where required; never invent
   a retry deadline for a playback lock or automatically replay ordinary writes.
-- [ ] **M2.2: Retry-safe creation and part planning/delivery.** Add durable
+- [x] **M2.2: Retry-safe creation and part planning/delivery.** Add durable
   creation identities so a lost response or concurrent retry creates one part.
   Provide a configurable, bounded preview with a 900,000-character default;
   count final normalized text, headings, introduction and separators in both
@@ -26,20 +31,20 @@ not permission to skip acceptance or claim incomplete work is complete.
   receipt and part assignment commit atomically; interrupted multi-part work
   resumes without duplicates, empty orphan parts or false completion. No claim
   that the whole import is one transaction.
-- [ ] **M2.3: Folder-scoped story status.** Return bounded, paginated part and
+- [x] **M2.3: Folder-scoped story status.** Return bounded, paginated part and
   chapter delivery status across a stable story identity. Protect against
   duplicate delivery into different managed parts under concurrency. Distinguish
   delivery receipts from current text after Undo/manual edits; report numeric
   discontinuities as observations, not proof of missing prose. Existing M1
   articles/history remain readable and unchanged; any legacy association or
   conflict requires an explicit, documented compatibility policy.
-- [ ] **M2.4: Chapter text and passage search.** Add bounded, revision-pinned
+- [x] **M2.4: Chapter text and passage search.** Add bounded, revision-pinned
   chapter reads and literal in-article search with paginated results. Resolve
   chapter text from current structure rather than treating receipts as text
   anchors. Return explicit unavailable/changed results when an edited chapter
   cannot be resolved safely. Reuse existing service search where appropriate,
   without granting access to broader owner endpoints.
-- [ ] **M2.5: Integration and publication.** Update API/MCP/import contracts,
+- [x] **M2.5: Integration and publication.** Update API/MCP/import contracts,
   workflow status and isolated Windows smoke. Validate and commit/push the
   completed slices; report runtime deployment separately from source completion.
 
@@ -79,3 +84,13 @@ requires returning to the owner. Optional bounded subagent reviews are authorize
 Chapter reads/search are sequenced after import reliability; this ordering does
 not drop them from the goal. Product-wide import UI and retroactive library
 repartition remain outside this MCP slice.
+
+Implemented local choices: each bounded batch starts new parts; no refill of old
+parts. Preparation retains at most 256 plans per folder and no chapter bodies.
+Managed operations require existing list/create/deliver permissions, status
+requires list/chapters, and chapter reads/search reuse read. Status pagination is
+a live view, not a multi-call snapshot. Independent subagents built/reviewed
+the bounded planner, chapter reads and retry handling; integration review fixed
+a public creation-key collision that could otherwise bypass a playback lease.
+The stage order was parallelized for independent read-only content work; import
+state/transaction integration remained coordinated. No major plan deviation.

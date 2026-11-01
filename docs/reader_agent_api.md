@@ -2,6 +2,9 @@
 
 This is the service contract for Reader Agent Access M1. The optional stdio
 adapter and Windows Options setup are documented in `reader_agent_mcp.md`.
+Additive M2 creation, managed-import, story-status and chapter/search contracts
+are documented in [reader_agent_m2.md](reader_agent_m2.md). Existing M1 request
+and result shapes remain supported; workspace exposes additive capabilities.
 An already-running pre-M1 service must be restarted to load these routes.
 
 ## Security boundary

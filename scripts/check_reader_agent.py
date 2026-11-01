@@ -84,14 +84,14 @@ def desktop(executable: Path, root: Path, **scenario) -> dict:
     return payload
 
 
-async def exercise(session: Client) -> tuple[str, dict, str]:
+async def exercise(session: Client) -> tuple[str, dict, str, dict]:
     async def call(name, **arguments):
         result = await session.call_tool("reader_" + name, arguments)
         assert not result.is_error, result.structured_content
         return result.structured_content
 
     tools = (await session.list_tools()).tools
-    assert len(tools) == 9
+    assert len(tools) == 16
     assert (await call("workspace"))["folder_id"]
     article = await call("create_article", title="MCP Windows smoke", text="An opening sentence.")
     identifier = article["id"]
@@ -151,7 +151,132 @@ async def exercise(session: Client) -> tuple[str, dict, str]:
     text = "".join(texts)
     assert text.count(chapter["text"]) == 1
     assert "The opening sentence." in text
-    return identifier, chapter, text
+    once = {"title": "Retry-safe creation", "text": "Kept.", "retry_key": "creation-smoke"}
+    created_once = await call("create_article_once", **once)
+    assert (await call("create_article_once", **once))["id"] == created_once["id"]
+    chapters = [
+        {"story_key": "managed-smoke", "chapter_key": str(index),
+         "retry_key": "managed-delivery-" + str(index),
+         "source_url": f"https://example.com/{index}", "title": f"Chapter {index}",
+         "text": f"Chapter {index}\n\nA source-faithful passage 😀.", "order_index": index}
+        for index in range(1, 4)
+    ]
+    preparation = {"title": "M2 smoke", "intro": "An introduction.",
+                   "retry_key": "managed-plan", "chapters": chapters, "max_characters": 120}
+    preview = await call("preview_import", **preparation)
+    assert len(preview["parts"]) == 2
+    assert (await call("preview_import", **preparation))["plan_id"] == preview["plan_id"]
+    deliveries = []
+    for item in chapters:
+        deliveries.append(await call(
+            "deliver_import_chapter", plan_id=preview["plan_id"], chapter=item
+        ))
+    assert deliveries[-1]["complete"]
+    status = await call("story_status", story_key="managed-smoke", limit=2)
+    assert len(status["items"]) == 2 and status["next_offset"] == 2
+    status_tail = await call("story_status", story_key="managed-smoke", offset=2, limit=2)
+    assert len(status_tail["items"]) == 1 and status_tail["next_offset"] is None
+    identifiers = list(dict.fromkeys(item["document_id"] for item in deliveries))
+    complete_texts = []
+    for part, article_id in zip(preview["parts"], identifiers, strict=True):
+        page = await call("read_article", article_id=article_id)
+        pinned = page["article"]["row_version"]
+        pieces = [page["text"]]
+        while page["next_offset"] is not None:
+            page = await call("read_article", article_id=article_id,
+                              offset=page["next_offset"], expected_row_version=pinned)
+            pieces.append(page["text"])
+        actual = "".join(pieces)
+        expected = "M2 smoke\n\nAn introduction." + "".join(
+            "\n\n" + item["text"]
+            for item in chapters if item["chapter_key"] in part["chapter_keys"]
+        )
+        assert actual == expected
+        assert len(actual) <= 120 and len(actual.encode("utf-16-le")) // 2 <= 120
+        catalog = await call("list_content_chapters", article_id=article_id,
+                             expected_row_version=pinned)
+        chapter_text = []
+        for marker in catalog["items"]:
+            content = await call("read_chapter", article_id=article_id, chapter_id=marker["id"],
+                                 expected_row_version=pinned)
+            chapter_text.append(content["text"])
+            assert content["next_offset"] is None
+        assert "".join(chapter_text) == actual
+        found = await call("search_article", article_id=article_id,
+                           expected_row_version=pinned, query="faithful")
+        assert found["items"]
+        complete_texts.append(actual)
+    return identifiers[0], chapter, complete_texts[0], {
+        "plan_id": preview["plan_id"], "chapter": chapters[-1]
+    }
+
+
+async def exercise_large_import(session: Client) -> dict:
+    """Verify >2 million source characters with the real default policy/budget."""
+    next_call = 0.0
+
+    async def call(name, **arguments):
+        nonlocal next_call
+        await asyncio.sleep(max(0.0, next_call - time.monotonic()))
+        next_call = time.monotonic() + 0.6
+        result = await session.call_tool("reader_" + name, arguments)
+        assert not result.is_error, result.structured_content
+        return result.structured_content
+
+    chapters = []
+    for index in range(1, 14):
+        prefix = f"Chapter {index}\n\n"
+        text = prefix + "x" * (170_000 - len(prefix) - 2) + "😀."
+        assert len(text) == 170_000
+        chapters.append({"story_key": "large-managed-smoke", "chapter_key": str(index),
+                         "retry_key": "large-" + str(index), "title": f"Chapter {index}",
+                         "source_url": f"https://example.com/large/{index}", "text": text,
+                         "order_index": index})
+    source = {chapter["chapter_key"]: chapter["text"] for chapter in chapters}
+    total_readback = 0
+    largest_part = 0
+    part_count = 0
+    for batch_number, batch in enumerate((chapters[:9], chapters[9:]), start=1):
+        preview = await call("preview_import", title="Large MCP fixture", intro="",
+                             retry_key=f"large-plan-{batch_number}", chapters=batch)
+        assert preview["policy"]["max_characters"] == 900_000
+        documents = {}
+        for chapter in batch:
+            delivered = await call("deliver_import_chapter", plan_id=preview["plan_id"],
+                                   chapter=chapter)
+            documents[delivered["part_number"]] = delivered["document_id"]
+        assert delivered["complete"]
+        for part in preview["parts"]:
+            identifier = documents[part["number"]]
+            page = await call("read_article", article_id=identifier)
+            pinned = page["article"]["row_version"]
+            pieces = [page["text"]]
+            while page["next_offset"] is not None:
+                page = await call("read_article", article_id=identifier,
+                                  expected_row_version=pinned, offset=page["next_offset"])
+                pieces.append(page["text"])
+            actual = "".join(pieces)
+            expected = "Large MCP fixture" + "".join(
+                "\n\n" + source[key] for key in part["chapter_keys"]
+            )
+            assert actual == expected
+            assert len(actual) == part["codepoints"] <= 900_000
+            assert len(actual.encode("utf-16-le")) // 2 == part["utf16_units"] <= 900_000
+            catalog = await call("list_content_chapters", article_id=identifier,
+                                 expected_row_version=pinned)
+            assert catalog["chapter_count"] == len(part["chapter_keys"]) + 1
+            total_readback += len(actual)
+            largest_part = max(largest_part, len(actual))
+            part_count += 1
+    status = await call("story_status", story_key="large-managed-smoke")
+    assert [item["receipt"]["chapter_key"] for item in status["items"]] == [
+        chapter["chapter_key"] for chapter in chapters
+    ]
+    assert status["next_offset"] is None
+    return {"source_characters": sum(len(item["text"]) for item in chapters),
+            "readback_characters": total_readback, "chapters": len(chapters),
+            "parts": part_count, "largest_part_characters": largest_part,
+            "all_text_exact": True, "default_policy": 900_000}
 
 
 async def run(executable: Path, root: Path) -> dict:
@@ -180,7 +305,7 @@ async def run(executable: Path, root: Path) -> dict:
             args=["-m", "reader_agent.server", "--config", provision["config_path"]],
         )
         async with Client(parameters) as session:
-            identifier, chapter, article_text = await exercise(session)
+            identifier, chapter, article_text, import_replay = await exercise(session)
         with httpx.Client(
             base_url=url, trust_env=False, headers={"Authorization": "Bearer " + credential}
         ) as restricted:
@@ -192,6 +317,10 @@ async def run(executable: Path, root: Path) -> dict:
         async with Client(parameters) as session:
             retry = await session.call_tool("reader_deliver_chapter", chapter)
             assert retry.structured_content["outcome"] == "already_imported"
+            resumed = await session.call_tool("reader_deliver_import_chapter", import_replay)
+            assert not resumed.is_error
+            assert resumed.structured_content["outcome"] == "already_imported"
+            large_import = await exercise_large_import(session)
             desktop_result = await asyncio.to_thread(
                 desktop,
                 executable,
@@ -218,7 +347,11 @@ async def run(executable: Path, root: Path) -> dict:
     return {
         "options_provision": provision["provisioned"],
         "dpapi_cross_language": provision["dpapi_cross_language"],
-        "stdio_mcp_tools": 9,
+        "stdio_mcp_tools": 16,
+        "retry_safe_creation": True,
+        "managed_parts_full_readback": True,
+        "chapter_text_and_literal_search": True,
+        "large_import": large_import,
         "article_crud": True,
         "chapter_concurrent_retry": True,
         "service_and_mcp_restart": True,

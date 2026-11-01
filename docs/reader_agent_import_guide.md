@@ -96,6 +96,15 @@ service setting or automatic repartitioning of existing articles.
 
 ## Preferred workflow
 
+With an M2-capable workspace, prefer `reader_preview_import` and
+`reader_deliver_import_chapter` for service-enforced whole-chapter part limits
+and resumable creation. Inspect the preview before delivery. Each bounded batch
+starts new parts, and legacy M1 articles remain unchanged. See
+[M2 contracts](reader_agent_m2.md) for the 2 MiB/100-chapter batch bound,
+permissions, stable preparation keys and conflict handling. Full normalized
+readback remains required. The manual M1 workflow below remains supported for
+older services; it does not gain automatic splitting merely by upgrading a skill.
+
 1. Confirm the requested story and observed chapter count/order. Confirm or reuse
    explicitly approved folder access; pass only the nonsecret scoped connection
    file to the import agent. Verify `reader_workspace` and search the destination

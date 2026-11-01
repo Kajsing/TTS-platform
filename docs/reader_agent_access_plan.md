@@ -25,6 +25,13 @@ delivery contract; website monitoring and cloud connectivity are later work.
 
 ## M1: Local MCP article workspace and chapter delivery
 
+The owner's 2026-11-01 M2 follow-up is implemented and isolated-tested: durable
+creation identities, bounded whole-chapter part preview/delivery, cross-part
+story status, current chapter text/literal search and actionable busy results.
+See [M2 plan](reader_agent_m2_plan.md) and [contracts](reader_agent_m2.md).
+Live service restart/deployment remains pending; M1 history and permissions are
+preserved. This does not activate U8 or background website monitoring.
+
 ### Ownership and connection
 
 - The Python service remains the sole owner of Reader persistence. MCP calls

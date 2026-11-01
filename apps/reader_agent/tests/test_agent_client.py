@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
@@ -181,3 +182,174 @@ def test_oversized_response_and_grant_mismatch_fail_closed(tmp_path):
             await client.close()
 
     asyncio.run(run())
+
+
+async def _response_error_payload(tmp_path, response, *, operation="list"):
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return response
+
+    client = AgentHttpClient(
+        AgentConnection("http://127.0.0.1:7777/", str(uuid4()), tmp_path),
+        credential_loader=lambda: "test-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(AgentServiceError) as error:
+            await client.call(operation, title="Private", text="Private")
+        assert len(requests) == 1
+        return error.value.payload()
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize(
+    "status,code,reason",
+    [
+        (429, "secret-type", "rate_limited"),
+        (409, "reader_document_locked", "reader_document_locked"),
+        (503, "reader_database_busy", "reader_database_busy"),
+    ],
+)
+def test_busy_reasons_preserve_legacy_code_without_raw_details(tmp_path, status, code, reason):
+    result = asyncio.run(
+        _response_error_payload(
+            tmp_path,
+            httpx.Response(
+                status,
+                json={
+                    "error": {
+                        "type": code,
+                        "message": "SECRET PRIVATE TEXT",
+                        "details": {"document_id": "private-identifier", "secret": "SECRET"},
+                    }
+                },
+            ),
+        )
+    )
+    assert result == {"outcome": "busy", "code": "reader_busy", "retryable": True, "reason": reason}
+
+
+@pytest.mark.parametrize(
+    "details,headers,expected",
+    [
+        ({"retry_after_seconds": 12}, {}, 12),
+        ({"retry_after_seconds": 1.1}, {}, 2),
+        ({"retry_after_seconds": 0}, {}, 0),
+        ({"retry_after_seconds": 86400}, {}, 86400),
+        ({}, {"Retry-After": "31"}, 31),
+        ({"retry_after_seconds": 40}, {"Retry-After": "31"}, 40),
+        ({"retry_after_seconds": 12}, {"Retry-After": "31"}, 31),
+        ({"retry_after_seconds": True}, {}, None),
+        ({"retry_after_seconds": "SECRET"}, {}, None),
+        ({"retry_after_seconds": -1}, {}, None),
+        ({"retry_after_seconds": 86401}, {}, None),
+        ({"retry_after_seconds": 2**1024}, {}, None),
+        ({"retry_after_seconds": float("inf")}, {}, None),
+        ({"retry_after_seconds": float("nan")}, {}, None),
+        ({"retry_after_seconds": {}}, {}, None),
+        ({"retry_after_seconds": []}, {}, None),
+        ({}, {"Retry-After": "-1"}, None),
+        ({}, {"Retry-After": "1.5"}, None),
+        ({}, {"Retry-After": "86401"}, None),
+        ({}, {"Retry-After": "SECRET PRIVATE TEXT"}, None),
+        ({}, {"Retry-After": "1" * 129}, None),
+    ],
+)
+def test_retry_timing_is_validated_and_uses_the_longer_supplied_delay(
+    tmp_path, details, headers, expected
+):
+    response = httpx.Response(
+        429,
+        headers=headers,
+        content=json.dumps({"error": {"type": "rate_limited", "details": details}}).encode(),
+    )
+    result = asyncio.run(_response_error_payload(tmp_path, response, operation="create"))
+    assert result.get("retry_after_seconds") == expected
+    assert set(result) <= {"outcome", "code", "retryable", "reason", "retry_after_seconds"}
+
+
+@pytest.mark.parametrize(
+    "header,expected",
+    [
+        ("Sun, 01 Nov 2026 12:00:31 GMT", 31),
+        ("Sun, 01 Nov 2026 11:59:59 GMT", 0),
+        ("Tue, 03 Nov 2026 12:00:00 GMT", None),
+        ("Sun, 01 Nov 2026 12:00:31", None),
+    ],
+)
+def test_retry_after_http_date_is_bounded_and_relative_to_now(
+    tmp_path, monkeypatch, header, expected
+):
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("reader_agent.client.datetime", FixedDatetime)
+    response = httpx.Response(429, headers={"Retry-After": header}, json={"error": {}})
+    result = asyncio.run(_response_error_payload(tmp_path, response))
+    assert result.get("retry_after_seconds") == expected
+
+
+@pytest.mark.parametrize(
+    "details,header,expected",
+    [
+        ({"request_budget": "agent"}, None, "agent"),
+        ({}, "background", "background"),
+        ({"request_budget": "playback"}, "playback", "playback"),
+        ({"request_budget": "agent"}, "playback", None),
+        ({"request_budget": "SECRET"}, "agent", "agent"),
+        ({"request_budget": {}}, "SECRET", None),
+        ({"request_budget": []}, None, None),
+    ],
+)
+def test_only_unambiguous_allowlisted_request_budgets_are_exposed(
+    tmp_path, details, header, expected
+):
+    headers = {"X-TTS-Request-Budget": header} if header is not None else {}
+    response = httpx.Response(429, headers=headers, json={"error": {"details": details}})
+    result = asyncio.run(_response_error_payload(tmp_path, response))
+    assert result.get("request_budget") == expected
+    assert "SECRET" not in str(result)
+
+
+def test_playback_lock_has_no_guessed_deadline_but_storage_can_supply_one(tmp_path):
+    headers = {"Retry-After": "20", "X-TTS-Request-Budget": "agent"}
+    details = {"retry_after_seconds": 10, "request_budget": "agent"}
+    playback = asyncio.run(
+        _response_error_payload(
+            tmp_path,
+            httpx.Response(
+                409,
+                headers=headers,
+                json={"error": {"type": "reader_document_locked", "details": details}},
+            ),
+        )
+    )
+    assert "retry_after_seconds" not in playback and "request_budget" not in playback
+    storage = asyncio.run(
+        _response_error_payload(
+            tmp_path,
+            httpx.Response(
+                503,
+                headers=headers,
+                json={"error": {"type": "reader_database_busy", "details": details}},
+            ),
+        )
+    )
+    assert storage["retry_after_seconds"] == 20 and storage["request_budget"] == "agent"
+
+
+@pytest.mark.parametrize("details", [None, [], "SECRET", True])
+def test_malformed_error_fields_never_escape_sanitization(tmp_path, details):
+    response = httpx.Response(429, json={"error": {"type": {"SECRET": []}, "details": details}})
+    result = asyncio.run(_response_error_payload(tmp_path, response))
+    assert result == {
+        "outcome": "busy",
+        "code": "reader_busy",
+        "retryable": True,
+        "reason": "rate_limited",
+    }

@@ -8,6 +8,7 @@ serialization order, even across separate service connections.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -33,6 +34,8 @@ from ..agent_access import (
 from ..errors import ReaderConflictError, ReaderNotFoundError, ReaderValidationError
 from ..models import DocumentPage, ReaderDocument, ReaderFolder, utc_now
 from ..services import ReaderLibrary
+from .agent_content import AgentContentMixin
+from .agent_imports import AgentImportsMixin
 from .repository import SqliteReaderRepository
 
 
@@ -61,7 +64,7 @@ class _TransactionRepository(SqliteReaderRepository):
             yield connection
 
 
-class SqliteReaderAgentRepository:
+class SqliteReaderAgentRepository(AgentContentMixin, AgentImportsMixin):
     def __init__(self, repository: SqliteReaderRepository) -> None:
         self._repository = repository
 
@@ -140,11 +143,15 @@ class SqliteReaderAgentRepository:
                 raise AgentUnauthorizedError()
             bound = _TransactionRepository(self._repository, connection)
             if document_id is not None:
-                try:
-                    document = bound.get_document(document_id)
-                except ReaderNotFoundError:
-                    raise AgentUnauthorizedError() from None
-                if document.folder_id != grant.folder_id or document.deleted_at is not None:
+                document = connection.execute(
+                    "SELECT folder_id, deleted_at FROM reader_documents WHERE id = ?",
+                    (document_id,),
+                ).fetchone()
+                if (
+                    document is None
+                    or document["folder_id"] != grant.folder_id
+                    or document["deleted_at"] is not None
+                ):
                     raise AgentUnauthorizedError()
             yield bound, connection, grant
 
@@ -228,15 +235,42 @@ class SqliteReaderAgentRepository:
                 length,
             )
 
-    def create_article(self, credential: str, *, title: str, text: str) -> ReaderDocument:
+    def create_article(
+        self, credential: str, *, title: str, text: str, retry_key: str | None = None
+    ) -> ReaderDocument:
         bounded_text(title, "title", 500)
         bounded_text(text, "text", MAX_AGENT_TEXT)
-        with self._scope(credential, "create") as (bound, _, grant):
-            return ReaderLibrary(bound).create_plain_text_document(
+        if retry_key is not None:
+            bounded_text(retry_key, "retry_key", 200)
+        fingerprint = hashlib.sha256(
+            json.dumps([title, text], ensure_ascii=True).encode("utf-8")
+        ).hexdigest()
+        with self._scope(credential, "create") as (bound, connection, grant):
+            if retry_key is not None:
+                previous = connection.execute(
+                    "SELECT * FROM reader_agent_creations WHERE folder_id = ? AND retry_key = ?",
+                    (grant.folder_id, retry_key),
+                ).fetchone()
+                if previous is not None:
+                    # Recheck destination scope even on a successful past creation.
+                    # Never recreate owner-removed or moved content on a retry.
+                    document = bound.get_document(previous["document_id"])
+                    if document.deleted_at is not None or document.folder_id != grant.folder_id:
+                        raise AgentUnauthorizedError()
+                    if previous["payload_hash"] != fingerprint:
+                        raise AgentConflictError("Creation identity has a different payload.")
+                    return document
+            document = ReaderLibrary(bound).create_plain_text_document(
                 title=title,
                 text=text,
                 folder_id=grant.folder_id,
             )
+            if retry_key is not None:
+                connection.execute(
+                    "INSERT INTO reader_agent_creations VALUES (?, ?, ?, ?)",
+                    (grant.folder_id, retry_key, fingerprint, document.id),
+                )
+            return document
 
     def rename_article(
         self,
@@ -331,7 +365,7 @@ class SqliteReaderAgentRepository:
         *,
         expected_row_version: int,
     ) -> ChapterReceipt:
-        with self._scope(credential, "deliver", document_id) as (bound, connection, _):
+        with self._scope(credential, "deliver", document_id) as (bound, connection, grant):
             fingerprint = delivery.fingerprint()
             retried = connection.execute(
                 "SELECT chapter.* FROM reader_agent_chapter_retries AS retry "
@@ -355,6 +389,25 @@ class SqliteReaderAgentRepository:
                 # since edited/undone the text. Never resurrect it on a retry.
                 self._record_retry(connection, document_id, delivery.retry_key, previous["id"])
                 return replace(_receipt(previous), outcome="already_imported")
+            managed_story = connection.execute(
+                "SELECT 1 FROM reader_agent_stories WHERE folder_id = ? AND story_key = ?",
+                (grant.folder_id, delivery.story_key),
+            ).fetchone()
+            if managed_story is not None:
+                duplicate = connection.execute(
+                    "SELECT 1 FROM reader_agent_chapters AS chapter "
+                    "JOIN reader_documents AS document ON document.id = chapter.document_id "
+                    "WHERE document.folder_id = ? AND chapter.story_key = ? "
+                    "AND chapter.chapter_key = ? LIMIT 1",
+                    (grant.folder_id, delivery.story_key, delivery.chapter_key),
+                ).fetchone()
+                assigned = connection.execute(
+                    "SELECT 1 FROM reader_agent_import_assignments "
+                    "WHERE folder_id = ? AND story_key = ? AND chapter_key = ?",
+                    (grant.folder_id, delivery.story_key, delivery.chapter_key),
+                ).fetchone()
+                if duplicate is not None or assigned is not None:
+                    raise AgentConflictError("Chapter already delivered elsewhere in this story.")
             warning = None
             if delivery.order_index is not None:
                 earlier = connection.execute(
@@ -406,6 +459,12 @@ class SqliteReaderAgentRepository:
                 ),
             )
             self._record_retry(connection, document_id, delivery.retry_key, receipt.id)
+            if managed_story is not None:
+                connection.execute(
+                    "UPDATE reader_agent_stories SET version = version + 1 "
+                    "WHERE folder_id = ? AND story_key = ?",
+                    (grant.folder_id, delivery.story_key),
+                )
             return receipt
 
     @staticmethod
